@@ -19,7 +19,7 @@ _TBD_
 ## Inherited from E-02
 
 - Margin drives the suggested retail price at receiving: `suggested_retail = round_up(list_price x (1 + supplier_margin))`. Note it is applied to the supplier's **pre-discount list price**, so supplier discounts are captured as margin.
-- **Employees can create suppliers but never set margins.** A supplier created during receiving therefore arrives with no margin — the system needs a defined behaviour for that state.
+- **Employees can create suppliers but never set margins.** A supplier created during receiving therefore arrives with no margin — the system needs a defined behavior for that state.
 
 ## Open questions
 

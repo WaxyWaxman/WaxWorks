@@ -35,7 +35,8 @@ Sourced from [`PRD.md`](PRD.md), the [`flows/`](flows/) documents, and
 | **Employee** | Front-line role. Capitalised when naming the role or an `Actor`. | "staff", "clerk", "cashier", "associate", generic "user" |
 | **Manager** | Elevated role; assumed superset of Employee for now. Capitalised. | "admin", "supervisor", "owner" (an owner/admin tier above Manager is an open question in M-04, not a synonym) |
 | **User** | An Employee or a Manager, scoped to a store. Use only when the statement is true for both roles. | "account", "login", "operator" |
-| **manager override** | The mechanism gating certain Employee actions (below-cost pricing, invoice adjustments beyond ±2%, voiding a finalized invoice). Lowercase in running text; its mechanics live in [M-04](flows/M-04-manage-users.md). | "manager approval", "supervisor sign-off", "elevated permission" |
+| **manager override** | The mechanism gating certain Employee actions — below-cost **shelf** pricing, Invoice adjustments beyond ±2%, voiding a finalized Invoice, and the rest of the gated list in [M-04](flows/M-04-manage-users.md). Performed in place by the Manager entering their initials, without displacing the Employee's session; both names are recorded. Lowercase in running text. | "manager approval", "supervisor sign-off", "elevated permission" |
+| **manager-only** | An action an Employee cannot perform even with an override present — a whole flow or function reserved to Managers (accounts payable, Undo End of Day, adjusting on hand). Distinct from a **manager override**, which unblocks an Employee's action in the moment. | using it interchangeably with "manager override" |
 
 ---
 
@@ -55,14 +56,27 @@ Entity names are **PascalCase with no space** when referring to the modelled thi
 | **Barcode** | A manufacturer UPC/EAN, or a store-generated internal barcode. Maps to a Record (new) or an individual InventoryItem (second-hand). | "SKU", "product code" |
 | **internal barcode** | Store-minted barcode for unbarcoded stock — UPC-A under GS1 number system `2`. | "internal SKU", "custom code", "house barcode" |
 | **Supplier** | Source of stock. Carries manager-set margin config. Employees may create one; only a Manager sets its margin. | "vendor", "distributor" (F.A.B. *is* a distributor, but the entity is Supplier), "wholesaler" |
-| **Invoice** | Inbound receiving document. `draft` or `finalized`; immutable once finalized. Keyed by `(supplier, invoice_number)`. Holds invoice-level freight / tax / misc. | "bill", "receipt" (a receipt is customer-facing — see §7), "PO" |
+| **Invoice** | Unqualified, this means the **supplier Invoice** — the inbound receiving document. `draft` or `finalized`; immutable once finalized. Keyed by `(supplier, invoice_number)`. Holds invoice-level freight / tax / misc. | "bill", "PO" |
+| **supplier Invoice** | The qualified form. Use it wherever an outbound document is also in play, so the direction is never ambiguous. | — |
+| **customer invoice** | An **outbound** business document: a Sale rendered for a business account, carrying their account number and terms, settled against their account balance rather than tendered at the till (E-07). Lowercase `invoice` — it is not the same entity as a supplier Invoice. | "receipt" (a receipt is the till document), "bill" |
 | **InvoiceLine** | One received item on an Invoice — links a Record, its cost (`Ext. Price`), accepted retail price, condition. | "line item", "order line" (OK as loose prose, but the entity is InvoiceLine) |
 | **InvoiceScan** | Photograph of the supplier's paperwork plus extracted invoice-level totals. Assistive only, never a source of truth. | "OCR result", "invoice import" |
 | **CostAdjustment** | The bounded ±2% reconciliation delta. A standalone line flowing into cost of goods; does not redistribute across item costs. | "rounding line", "correction", "write-off" |
 | **Backorder** | Units ordered but not shipped — the supplier's `Balance`. Tracked until fulfilled. | "backlog", "negative inventory" (a *different* concept — see §6) |
 | **PurchaseOrder** | Manager-created reorder (M-02). Triggers Discogs metadata prefetch. Abbreviate as `PO` / "purchase order" in prose. | "order", "restock request" |
 | **Sale** / **Transaction** | A completed checkout (E-05). | "order", "ticket" |
-| **Return** | Reversal of a Sale (E-06). A *customer* return. A supplier-side return is a "return or credit claim" — see §5. | "refund" (the refund is one outcome of a Return), "RMA" |
+| **SaleLine** | One line on a Sale. Snapshots price, discount, tax line, condition, and title at time of sale. | "line item" (OK as loose prose), "cart item" |
+| **Tender** | One payment against a Sale. A Sale may carry several. | "payment method" (OK in prose), "tender type" when a single payment is meant |
+| **Hold** | A Sale in the **Held** state — stock committed to a customer. | "reservation", "layaway" (layaway implies part-payment, which holds do not have) |
+| **Customer** | A person or business the store deals with. Optional on any Sale. Carries a signed account balance, global discount, and default tax line (E-07). | "client", "member", "account" (the account balance is a field *on* a Customer) |
+| **GiftCard** | A `GC`-prefixed code carrying a balance. Loaded as a SaleLine, redeemed as a Tender. | "voucher", "store card" |
+| **SupplierClaim** | A claim for credit against a supplier Invoice for short, damaged, or unshipped stock (E-04). `Pending` or `Credited`. | "supplier return", "chargeback", "RMA" |
+| **APPayment** | A payment recorded against a supplier Invoice — method, reference, amount, date (M-05). Recorded, never executed: this system moves no money. | "remittance", "settlement" |
+| **InventoryAdjustment** | A manager-only correction to stock, carrying a reason code, before/after counts, and attribution (E-04). | "stock edit", "write-off" (a write-off is one *reason code*, not the entity) |
+| **Section** | Top-level reporting category — `VINYL`, `MERCH`. Genres roll up into Sections (M-06). Uppercase when naming one. | "department", "category", "genre" (a genre is finer-grained and rolls up into a Section) |
+| **TaxLine** | A named, rated tax entry. Sellable things reference one rather than carrying a boolean. A zero-rate line is how exemption is expressed. | "tax rate" (OK in prose), "tax flag", "taxable Y/N" |
+| **CloseBatch** | One end-of-day close — identifier, timestamp, closing User, and the Sales it moved to Closed (M-03). | "day", "shift", "session" (a batch is not necessarily a calendar day) |
+| **Return** | Reversal of a Sale (E-06). A *customer* return, expressed as a negative-quantity SaleLine. A supplier-side return is a "return or credit claim" — see §5. | "refund" (the refund is one outcome of a Return), "RMA" |
 
 ### Catalog vs. copy
 
@@ -138,7 +152,18 @@ of one pressing **share a Record** but are **distinct InventoryItems**.
 | **Sale** / **Transaction** | A completed checkout. | "order", "purchase" (the customer purchases; the store records a Sale) |
 | **checkout** | The act of ringing up and taking payment. | "cash out", "sale process" |
 | **Return** | A *customer* bringing back a sold record for refund or exchange. Supplier-side is a "return or credit claim" (§5). | "refund" as the whole flow, "exchange" as the whole flow |
-| **receipt** | The customer-facing proof of Sale (E-05). Never used for inbound documents — those are Invoices. | "invoice" for the customer's copy |
+| **receipt** | The customer-facing proof of Sale printed at the till (E-05). Never used for an inbound document — that is a supplier Invoice. For a business account settled on terms, the outbound document is a **customer invoice** (§3). | "invoice" for the till document |
+| **Sale number** | The identifier on a Sale. **Globally unique** and ascending — unlike a supplier Invoice number, which is unique only per `(supplier, invoice_number)`. Retained when a Sale is voided. | "invoice number" for a Sale, "transaction ID", "receipt number" |
+| **hold reference** | The `H`-prefixed identifier a Held Sale carries until it is tendered (`H1`, `H2`…), so it is never mistaken for a completed Sale. | "hold number", "temporary invoice number" |
+| **Current** / **Held** / **Closed** / **Void** | The four Sale states. Capitalised when naming a state. `Closed` is the state after an end-of-day close — the word *finalized* belongs to Invoices, not Sales. | "open"/"complete"/"finalized"/"cancelled" as Sale states |
+| **close** / **end-of-day close** | Moving every Current Sale to Closed and producing the day's breakdown (M-03). | "cash up", "z-report", "settlement", "finalize" (that word is E-02's) |
+| **split tender** | Paying one Sale across more than one Tender. | "part payment", "mixed payment" |
+| **pay-out** | A Tender type: cash removed from the till for an expense, with a required note. | "petty cash", "cash drop" (a drop moves cash to a safe — different thing) |
+| **Used Credit** | The Tender type for buying second-hand stock over the counter. **A deliberate exception** to the second-hand-over-used rule in §4 — it is the phrase spoken at the counter. Capitalised as a tender name. | renaming it to "second-hand credit"; using it for anything other than the tender |
+| **store credit** | Value the store owes a Customer, held as a positive account balance and drawn down by the **Store Credit** tender. | "credit note" (that is supplier-side), "account credit", "AR"/"accounts receivable" (store credit is a *liability* — the store owes it) |
+| **account balance** | A Customer's single signed balance: positive means the store owes them (store credit), negative means they owe the store (an unpaid customer invoice). | "AR balance", "credit balance" (it runs both directions) |
+| **non-tracked item** | A sellable catalog entry with no stock count — freight, services, bulk goods. Never warns on negative inventory. | "misc SKU", "service item", "non-inventory" (OK loosely) |
+| **titlecard** | The screen showing one Record with all its copies, quantities, and order state. **A view, not an entity** — the data underneath is a Record and its InventoryItems. | using it as an entity name, "item card", "product page" |
 
 ---
 
@@ -168,7 +193,9 @@ of one pressing **share a Record** but are **distinct InventoryItems**.
 | **store code** | The 2-digit segment identifying the store within the internal barcode. | "store ID", "branch code" |
 | **check digit** | The trailing UPC-A mod-10 digit. | "checksum digit", "control digit" |
 | **symbology** | A barcode format (UPC-A, Code 128, DataMatrix, QR). | "barcode type" loosely, "encoding" |
-| **manufacturer UPC** / **UPC/EAN** | A barcode issued by the manufacturer and printed on the sleeve. | "retail barcode", "factory barcode" |
+| **manufacturer UPC** / **UPC/EAN** | A barcode issued by the manufacturer and printed on the sleeve. Resolves to a **Record**, so it is a lookup key rather than a unique identifier. | "retail barcode", "factory barcode" |
+| **picker** | The chooser shown when a manufacturer UPC resolves to more than one sellable copy, listing condition, price, and count. Same word as the Discogs multiple-match picker (§8). | "disambiguation dialog", "variant selector" |
+| **label text** | The human-readable condition grade and price printed on a store label alongside the symbol. The barcode itself stays opaque, so re-grading reprints a label rather than invalidating a code. | encoding condition *into* the barcode, "sticker text" |
 
 ---
 
@@ -223,10 +250,16 @@ prefer the first form:
 1. **"Wax Works" vs "WaxWorks".** The PRD and docs use *Wax Works* (two words); the root
    `README.md`, the repo, and the GitHub org use *WaxWorks*. Keep *Wax Works* for prose;
    treat *WaxWorks* as the code/repo identifier only.
-2. **"till" vs "register".** [E-01](flows/E-01-authenticate.md) uses *register*; the PRD
-   §4.3 and [E-05](flows/E-05-sell-a-record.md) use *till*. Pick one.
+2. ~~**"till" vs "register".**~~ **Resolved: *till*.** It is now used consistently in the
+   PRD, [E-01](flows/E-01-authenticate.md), [E-05](flows/E-05-sell-a-record.md), and
+   everything downstream. *Register* survives only where the physical machine is meant
+   rather than the selling position.
 3. **"second-hand" vs "used".** The PRD and E-02 standardise on *second-hand*;
    [E-04](flows/E-04-manage-inventory.md) and [E-06](flows/E-06-process-a-return.md) say
    *used records*. Prefer *second-hand*.
-4. **"behaviour"** appears once in [M-01](flows/M-01-supplier-margin.md); every other
-   spelling in the docs is American. Should be *behavior*.
+4. ~~**"behaviour"** appears once in [M-01](flows/M-01-supplier-margin.md).~~ **Resolved** —
+   corrected to *behavior*.
+
+5. **"Administrators"** appears in PRD goal G-2, where §2 of this lexicon says to avoid
+   *admin* for the **Manager** role. Left as-is for now since it reads as a generic
+   persona statement rather than the role, but worth a decision.

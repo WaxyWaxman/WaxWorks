@@ -98,6 +98,22 @@ Consequence to accept knowingly: per-item margin reporting reflects only supplie
 
 ---
 
+## Inherited from other flows
+
+**From [M-02](M-02-reorder-inventory.md):**
+
+- Receiving a **customer-attached** PurchaseOrder line automatically creates a **Held** Sale for that customer ([E-05](E-05-sell-a-record.md)), so the copy cannot be sold off the floor before they collect it. The hold's timeline starts at receipt.
+
+**From [E-05](E-05-sell-a-record.md):**
+
+- **Second-hand stock bought over the counter enters here.** The money side is a `Used Credit` tender at the till; the stock side is an ordinary second-hand intake. An optional cross-reference field links the Invoice to the Sale that paid for it, so a payout can be traced to the copies it bought.
+
+**From [M-05](M-05-accounts-payable.md):**
+
+- Accounts payable **consumes** the Invoice records finalized here — number, date, linked PurchaseOrder, and amount — and never creates one. An amendment against a finalized Invoice ([E-04](E-04-manage-inventory.md)) changes what is owed.
+
+---
+
 ## Resolved decisions
 
 | # | Decision |
@@ -126,7 +142,8 @@ Consequence to accept knowingly: per-item margin reporting reflects only supplie
 | 22 | Intake mode (New / Second-hand) is selected once per invoice — no mixed invoices |
 | 23 | Backorders are tracked by the system |
 | 24 | Manual catalog entry captures artist, album title, genre, **catalog number**, and **label** |
-| 25 | Payment and accounts-payable are out of scope |
+| 25 | Payment and accounts-payable are out of scope — **partially superseded, see 26** |
+| 26 | **Accounts payable is now in scope** ([M-05](M-05-accounts-payable.md)). Decision 25 stands as the record of what was decided at the time and is not rewritten; the half of it that still holds is payment *processing* — Wax Works integrates no payment processor, holds no card details, and moves no money |
 
 ---
 

@@ -1,31 +1,141 @@
 # M-02 — Re-order inventory
 
-**Actor:** Manager
-**Status:** Stub — awaiting flow
-**Related:** [E-02 Receive inventory](E-02-receive-inventory.md)
+**Actor:** Manager (Employees raise pending orders)
+**Status:** Specified
+**Related:** [E-02 Receive inventory](E-02-receive-inventory.md) · [E-04 Manage the inventory](E-04-manage-inventory.md) · [E-05 Sell a record](E-05-sell-a-record.md) · [M-01 Supplier margin](M-01-supplier-margin.md)
 
 **Job:** As a manager, I need to restock what's selling before it runs out.
 
 ---
 
-## Flow
+## Shape of the flow
 
-_TBD_
+Ordering is two-stage, matching who does what in the shop:
+
+- **Employees raise pending order lines** from a titlecard as they notice gaps or take customer requests. A pending line has no PurchaseOrder number and has not been sent anywhere.
+- **Managers process pending lines into PurchaseOrders** and send them to suppliers.
+
+---
+
+## Phase 1 — Raising a pending order line *(Employee, from [E-04](E-04-manage-inventory.md))*
+
+1. Employee selects **Order** on a titlecard.
+2. System prompts for:
+   - **quantity**;
+   - **supplier**, defaulting to the Record's preferred supplier but freely changeable — the supplier is recorded on the order line, not on the Record;
+   - **ordering separator** — a single optional letter, blank by default (see below);
+   - **selling price**, defaulting to the current shelf price;
+   - **customer**, optionally, making this a customer-attached line;
+   - **follow-up flag** — a number of days after which the line should be chased if it still hasn't arrived.
+3. The line joins that supplier's pending pile.
+
+### The ordering separator
+
+A single optional letter that splits one supplier's pending lines into parallel streams so they can be sent as separate PurchaseOrders. It exists so special-consideration orders can be broken out onto their own paperwork — a front-list-only order, a rush, a customer special — without disturbing the supplier's regular pending pile. Claims are batched by the same separator ([E-04](E-04-manage-inventory.md)).
+
+---
+
+## Phase 2 — Processing into a PurchaseOrder *(Manager)*
+
+4. The order processing screen lists **one line per supplier + separator**, showing:
+
+| Column | Source |
+|---|---|
+| Pending total | Count of lines in that stream |
+| Age of oldest line | When it was raised |
+| Order via | The supplier's configured method |
+| Customer-attached count | How many lines are spoken for |
+| Sell total | Sum of selling prices |
+| Estimated cost | Sell total less the supplier's discount |
+| Ready | Whether the supplier's minimum order quantity or minimum amount is met ([M-01](M-01-supplier-margin.md)) |
+
+Below the pending streams, previously placed PurchaseOrders are listed most-recent-first with their PO numbers.
+
+5. Manager may **View** a stream line by line before sending. Highlighting a line opens its titlecard, so a wrong supplier is caught before the order goes out.
+6. Manager **Processes** the stream. The system confirms the send method and:
+   - **Email** → composes and sends the order to the supplier's address, stating items, quantities, cancel-by date, and backorder policy.
+   - **Phone, fax, website, or rep** → produces a printable order document for the Manager to act on manually, then marks the stream placed.
+7. A **PO number** is offered — blank auto-generates the next unused ascending number; a Manager may enter one manually.
+8. On placement, the lines become **on order** and the Discogs metadata **prefetch** for those titles is queued (see Inherited).
+
+---
+
+## Phase 3 — Tracking what's on order
+
+9. The on-order screen lists individual outstanding lines, oldest first. Lines past their **follow-up flag** date show at the top, marked.
+10. Available actions:
+
+| Action | Notes |
+|---|---|
+| **Search** | Barcode scan or keyword |
+| **Sort** | Age, title, artist |
+| **Filter** | By PurchaseOrder or supplier |
+| **Re-flag** | Push the follow-up date out another *n* days — used both to chase the supplier and to warn a waiting customer |
+| **Set status** | Mark a line **Backordered** or **Cancelled** |
+
+11. **On receipt** ([E-02](E-02-receive-inventory.md)), a customer-attached line automatically creates a **Held** Sale for that customer, so the copy cannot be sold off the floor before they collect it. The hold's timeline begins there ([E-05](E-05-sell-a-record.md)).
+
+---
+
+## Cancelling and unwinding
+
+| Situation | Behavior |
+|---|---|
+| **Delete a pending line** | Low friction — a plain confirmation. If a customer is attached, the warning says so explicitly, because someone will need to be told. |
+| **Cancel a placed line** | Sets status Cancelled and warns clearly: **this does not cancel anything with the supplier.** A person still has to contact them. |
+| **Void a PurchaseOrder** | Manager-only. Returns all unreceived lines on that PO to pending, with the same warning — the paperwork is reversed here, not at the supplier. |
+| **Bulk status update** | Sets every unreceived line on a PO to Cancelled or Backordered at once, for when a supplier confirms a whole order is dead or delayed. |
+
+---
 
 ## Requirements
 
-_TBD_
+- The supplier is recorded **on the order line**, not on the Record. The same title may be bought from different suppliers over time without rewriting history.
+- Cancelling or deleting anything already sent must never imply the supplier has been told.
+- A customer-attached line must remain traceable to its customer through placement, receipt, and hold creation.
+- Reordering applies to titles a supplier can actually resupply. Second-hand and one-off stock can be ordered by hand where a supplier exists, but no automated resupply is implied.
 
-## Inherited from E-02
+---
 
-- **Discogs metadata prefetch happens here.** When a purchase order is placed, the system fetches catalog metadata for the ordered titles in bulk, so receiving mostly hits the local database instead of calling the API per scan.
-  - Note: Discogs has no bulk-barcode endpoint, so this is N calls throttled to ~60/min — a background job, not an instant operation. A 300-line PO takes roughly five minutes.
-  - The prefetch only covers stock ordered through the system. Second-hand buys, unsolicited items, and everything received before there is PO history will still miss, so live lookup at the receiving desk remains a supported fallback.
-- **Backorders are tracked.** The supplier's `Balance` column represents units owed; their lifecycle needs defining here.
+## Inherited from other flows
+
+**From [E-02](E-02-receive-inventory.md):**
+
+- **Discogs metadata prefetch happens here.** When a PurchaseOrder is placed, catalog metadata for the ordered titles is fetched in bulk so receiving mostly hits the local database rather than calling the API per scan.
+  - Discogs has no bulk-barcode endpoint, so this is *N* calls throttled to roughly 60/min — a background job, not an instant operation. A 300-line PO takes about five minutes.
+  - Prefetch only covers stock ordered through the system. Second-hand buys, unsolicited items, and anything received before there is PO history will still miss, so live lookup at the receiving desk remains a supported fallback.
+- **Backorders are tracked.** The supplier's `Balance` column is the source.
+
+**From [E-04](E-04-manage-inventory.md):**
+
+- Minimum on hand is informational in v1 and does **not** raise orders automatically.
+
+---
+
+## Resolved decisions
+
+| # | Decision |
+|---|---|
+| 1 | Ordering is two-stage: Employees raise pending lines, Managers process them into PurchaseOrders |
+| 2 | The **supplier is recorded on the order line**; a Record's supplier is only a default |
+| 3 | The **ordering separator** is a single optional letter splitting a supplier's pending lines into independently sendable streams |
+| 4 | Order processing groups by supplier + separator and shows age, counts, sell total, estimated cost, and readiness |
+| 5 | PO numbers auto-generate ascending and are unique; manual entry is permitted |
+| 6 | Email orders are composed and sent by the system; all other methods produce a printable document and are marked placed manually |
+| 7 | Reorder suggestion is **manual in v1** — the system does not propose reorders from velocity or minimum on hand |
+| 8 | Each order line carries a **follow-up flag** in days, re-flaggable, surfacing overdue lines at the top of the on-order screen |
+| 9 | A pending line may be deleted with a plain confirmation, with an explicit warning when a customer is attached |
+| 10 | Cancelling a placed line or voiding a PurchaseOrder **never** implies the supplier has been notified |
+| 11 | Voiding a PurchaseOrder returns its unreceived lines to pending |
+| 12 | Order lines carry a status including **Backordered** and **Cancelled**, settable individually or in bulk per PO |
+| 13 | Receiving a customer-attached line automatically creates a **Held** Sale for that customer |
+
+---
 
 ## Open questions
 
-- Does the system suggest reorders (reorder points, velocity-based), or is it manual?
-- Does it generate and send a purchase order to the supplier, or just produce a list?
-- Do backorders auto-match when they arrive on a later invoice? Can they be cancelled? Do they suppress duplicate reorder suggestions?
-- Used/one-off stock can't be reordered — does this apply only to new/distributed titles?
+- **Backorder auto-matching.** A `Balance` on one Invoice arriving on a later one is currently reconciled by eye. Whether the system should match it automatically, and whether an outstanding backorder should suppress duplicate reorder suggestions once suggestions exist, is unresolved.
+- **Cancel-by dates.** Suppliers carry a default cancel-by window ([M-01](M-01-supplier-margin.md)) and some support it contractually. Whether the system acts on it — auto-cancelling lines past the date — or merely records it, is undecided.
+- **Reorder suggestion.** v1 is manual. When suggestions arrive, the inputs (sales velocity, minimum on hand, season) and whether they auto-populate a pending stream need settling.
+- **Multi-store ordering.** Whether stores order independently or a Manager can place one PurchaseOrder covering several stores' needs.
+- **Order acknowledgements.** Nothing consumes a supplier's confirmation that they received the order.

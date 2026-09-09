@@ -31,7 +31,7 @@ Small and medium record do not have a way to manage their inventory. They don't 
 - NG-1: This is not an online store right now, but will be in the future. 
 - NG-2: There is no customer loyalty program.
 - NG-3: This system will not directly integrate with supplier systems.
-- NG-4: This system does not process credit card payments, there is no money exchange on this platform.
+- NG-4: This system does not integrate a payment processor. It never holds card details and never moves money. Tender types — including card — are **recorded** at the till for reconciliation and reporting ([E-05](flows/E-05-sell-a-record.md)), and cards are settled on a separate terminal.
 
 ---
 
@@ -68,21 +68,24 @@ Each flow is its own document. Status is tracked per flow so parallel work doesn
 
 | ID | Flow | Status |
 |---|---|---|
-| E-01 | [Authenticate to the platform](flows/E-01-authenticate.md) | Stub |
+| E-01 | [Authenticate to the platform](flows/E-01-authenticate.md) | In clarification |
 | E-02 | [Receive inventory](flows/E-02-receive-inventory.md) | **Specified** |
-| E-03 | [Search the inventory](flows/E-03-search-inventory.md) | Stub |
-| E-04 | [Manage the inventory](flows/E-04-manage-inventory.md) | Stub |
-| E-05 | [Sell a record](flows/E-05-sell-a-record.md) | Stub |
-| E-06 | [Process a return](flows/E-06-process-a-return.md) | Stub |
+| E-03 | [Search the inventory](flows/E-03-search-inventory.md) | **Specified** |
+| E-04 | [Manage the inventory](flows/E-04-manage-inventory.md) | **Specified** |
+| E-05 | [Sell a record](flows/E-05-sell-a-record.md) | **Specified** |
+| E-06 | [Process a return](flows/E-06-process-a-return.md) | **Specified** |
+| E-07 | [Manage customers](flows/E-07-manage-customers.md) | **Specified** |
 
 ### Manager
 
 | ID | Flow | Status |
 |---|---|---|
 | M-01 | [Set a supplier margin](flows/M-01-supplier-margin.md) | Stub |
-| M-02 | [Re-order inventory](flows/M-02-reorder-inventory.md) | Stub |
-| M-03 | [Daily summary of sales and inventory](flows/M-03-daily-summary.md) | Stub |
-| M-04 | [Add/remove employees or managers](flows/M-04-manage-users.md) | Stub |
+| M-02 | [Re-order inventory](flows/M-02-reorder-inventory.md) | **Specified** |
+| M-03 | [Daily summary of sales and inventory](flows/M-03-daily-summary.md) | **Specified** |
+| M-04 | [Add/remove employees or managers](flows/M-04-manage-users.md) | In clarification |
+| M-05 | [Accounts payable](flows/M-05-accounts-payable.md) | **Specified** |
+| M-06 | [Configure the store](flows/M-06-settings.md) | In clarification |
 
 ---
 
@@ -103,13 +106,28 @@ _Partially derived from E-02. Refine as further flows land._
 | **CostAdjustment** | The bounded ±2% reconciliation delta; flows into COGS. |
 | **Backorder** | Units ordered but not shipped (the supplier's `Balance`). Tracked until fulfilled. |
 | **PurchaseOrder** | Manager-created reorder (M-02). Triggers Discogs metadata prefetch. |
-| **Sale / Transaction** | A completed checkout (E-05). |
-| **Return** | Reversal of a sale (E-06). |
+| **Sale / Transaction** | A completed checkout (E-05). Carries a globally unique Sale number and one of four states: Current, Held, Closed, Void. |
+| **SaleLine** | One line on a Sale. Snapshots price, discount, tax line, condition, and title at time of sale. A negative quantity is a Return. |
+| **Tender** | One payment against a Sale. A Sale may carry several (split tender). Types in M-06. |
+| **Return** | Reversal of a sale (E-06). A negative-quantity SaleLine, not a separate document. |
+| **Hold** | A Sale in the **Held** state — stock committed to a customer, by reservation (E-04) or on receipt of a customer-attached order (M-02). |
+| **Customer** | A person or business the store deals with. Optional on any Sale. Carries a signed account balance, a global discount, and a default tax line (E-07). |
+| **GiftCard** | A `GC`-prefixed code carrying a balance. Loaded as a SaleLine, redeemed as a Tender (E-05). |
+| **SupplierClaim** | A claim for credit against a supplier Invoice for short, damaged, or unshipped stock (E-04). Pending or Credited. |
+| **APPayment** | A payment recorded against a supplier Invoice — method, reference, amount, date (M-05). |
+| **InventoryAdjustment** | A manager-only correction to stock, carrying a reason code, before/after counts, and attribution (E-04). |
+| **Section** | Top-level reporting category (`VINYL`, `MERCH`). Genres roll up into Sections (M-06). |
+| **TaxLine** | A named, rated tax entry. Sellable things reference one rather than carrying a boolean (M-06). |
+| **CloseBatch** | One end-of-day close — its identifier, timestamp, closing User, and the Sales it moved to Closed (M-03). |
 | **User** | Employee or Manager, scoped to a store. |
 
 ### 4.1 Catalog vs. copy
 
 A **Record** is the pressing; an **InventoryItem** is a physical copy. Two used copies of the same pressing share a Record but are distinct InventoryItems with independent condition and price.
+
+**On hand is derived**, not stored: it is the count of sellable InventoryItems for a Record, so a stock figure can never drift from the copies it claims to describe. Adjusting stock means adjusting copies, always with a reason code (E-04).
+
+The **titlecard** is the screen showing one Record with all of its copies, quantities, and order state. It is a view over Record + InventoryItems, not an entity of its own.
 
 ### 4.2 Condition grading
 
@@ -136,20 +154,38 @@ The 2-digit store code is load-bearing given the multi-store decision. Note a 7-
 
 Alternatives considered: Code 128 with a text prefix (flexible, human-readable, but not a retail product code so the scan handler must branch on format) and DataMatrix/QR (holds condition and cost in the symbol, but requires 2D imagers at every till).
 
-_Status: recommended, not yet ratified._
+**The label carries human-readable text alongside the symbol** — at minimum the condition grade and price. The barcode itself stays an opaque identifier, so re-grading or re-pricing a copy reprints a label rather than invalidating a code, and staff can still tell two copies apart on the shelf without a scanner.
+
+**Two resolution paths, both live.** A **manufacturer UPC** is a lookup key at the Record level: scanning one resolves directly when a single sellable copy matches, and presents a picker on condition, price, and count when several do. An **internal barcode** resolves to exactly one InventoryItem with no picker. Employees scan whatever the item physically carries (E-05).
+
+_Status: **ratified**._
 
 ---
 
 ## 5. Non-functional requirements
 
-_TBD. Prompts:_
+### Settled
 
-- **Offline behavior** — must the register keep selling if the internet drops?
-- **Platform** — web, desktop, tablet? What hardware is at the counter (barcode scanner, receipt printer, cash drawer, card reader)? Receiving needs a label printer.
-- **Scale** — how many stores? Inventory size? Transactions/day?
-- **Auditability** — what actions need an immutable trail?
-- **Data retention & backup**
-- **External dependencies** — Discogs API rate limits (~60 req/min authenticated) and terms of use for commercial data.
+**Platform.** A **web application**, delivered as a PWA so one codebase serves the counter, the receiving desk, the office, and a phone or tablet on the shop floor without separate native builds. It must be usable on both macOS and Windows, which is what rules out a desktop app.
+
+**Hardware.** Barcode scanners at the till and receiving desk (standard laser units reading UPC-A — see §4.3, which is why the internal scheme stays in that symbology). A label printer at the receiving desk. A receipt printer at the till. No card reader is driven by this system (NG-4); cards settle on a separate terminal. No cash drawer integration — the daily close does not reconcile the drawer (M-03 decision 8).
+
+**Auditability.** Attribution is required on every Sale, Return, void, hold cancellation, pay-out, inventory adjustment, override, Invoice finalization, and payment. Beyond attribution, four things are immutable or effectively so:
+
+- a finalized Invoice (E-02 decision 23);
+- SaleLine values, which are snapshotted at time of sale (E-05 decision 13);
+- a voided Sale's number, which is retained rather than reused (E-05 decision 4);
+- a User record, which is deactivated rather than deleted so historical attribution survives (M-04 decision 5).
+
+**External dependencies.** Discogs, at roughly 60 requests/min authenticated. Mitigated by bulk prefetch at PurchaseOrder time (M-02) and local-first resolution everywhere (E-02 decision 5). When Discogs is unavailable, local search and every till function continue to work and the degradation is visible rather than silent (E-03 decision 8).
+
+**Scale.** The schema is multi-store from the outset; v1 deploys a single store with no cross-store UI.
+
+### Still open
+
+- **Offline behavior** — must the till keep selling if the internet drops? A PWA makes a degraded offline mode *possible*, but nothing about it is specified: what stays available, how Sales queue, and how they reconcile on reconnection. For a shop whose card terminal is already independent of this system, the practical question is whether cash sales must continue during an outage.
+- **Data retention & backup** — untouched.
+- **Discogs terms of use** for commercial data — untouched, and worth checking before launch rather than after.
 
 ---
 
@@ -157,8 +193,12 @@ _TBD. Prompts:_
 
 ### Resolved
 
-- The system is **multi-store**.
+- The system is **multi-store**. The schema scopes every entity to a Store from the outset; v1 deploys one store with no cross-store UI.
 - **Discogs** is the external catalog metadata source.
+- **There is a Customer record** ([E-07](flows/E-07-manage-customers.md)) — holds, special orders, store credit, discounts, and receipt-less returns all need somewhere to hang.
+- **Multi-jurisdiction sales tax is in scope** on the outbound side, as a table of named tax lines referenced per item ([M-06](flows/M-06-settings.md)). Inbound tax treatment stays as E-02 decision 17 has it.
+- **Accounts payable is in scope** ([M-05](flows/M-05-accounts-payable.md)), superseding E-02 decision 25. Payment *processing* remains out (NG-4).
+- **The internal barcode scheme is ratified** — UPC-A under GS1 number system `2` (§4.3).
 
 ### Multi-store consequences
 
@@ -172,16 +212,22 @@ Worth settling as flows land:
 
 ### Still open
 
-1. Is there a customer record at all (for returns without a receipt, store credit, want-lists)?
+1. ~~Is there a customer record at all?~~ **Resolved** — see above, and [E-07](flows/E-07-manage-customers.md).
 2. Consignment — common in record stores. In scope?
 3. What's the migration story — is there existing inventory data to import?
-4. Currency and tax regime — the reference invoice is CAD with GST/QST. Is multi-jurisdiction tax in scope?
+4. ~~Currency and tax regime — is multi-jurisdiction tax in scope?~~ **Resolved for outbound tax** — see above. Currency conversion for supplier costs and payables is handled in [M-06](flows/M-06-settings.md); exchange gain/loss on payment is still unaddressed ([M-05](flows/M-05-accounts-payable.md)).
+5. **Accounts receivable.** [E-07](flows/E-07-manage-customers.md) lets a business customer owe the store money on an outbound customer invoice, but nothing chases it — no terms, no due dates, no aging.
+6. **Sleeve vs. vinyl grading** — §4.2's open question is unchanged, and now touches E-06, where a returned copy may need re-grading.
 
 ---
 
 ## 7. Out of scope / future
 
-- Payment processing and accounts-payable (E-02 decision 25).
+- **Payment processing** — no processor integration, no card details, no money moved (NG-4). Card tenders are recorded only.
+- Online store (NG-1) and customer loyalty (NG-2).
+- **Batch stock-take** — reason-coded single adjustments are in scope ([E-04](flows/E-04-manage-inventory.md)); counting a Section against the shelf in one reconciling pass is not.
+- **Reorder suggestion** — v1 ordering is manual ([M-02](flows/M-02-reorder-inventory.md) decision 7); minimum on hand is informational only.
+- **Trend and margin reporting** beyond the daily close — PRD goal G-2 wants it, and it is a reporting surface of its own rather than part of [M-03](flows/M-03-daily-summary.md).
 
 ---
 
