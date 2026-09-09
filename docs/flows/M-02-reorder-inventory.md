@@ -56,7 +56,7 @@ Below the pending streams, previously placed PurchaseOrders are listed most-rece
    - **Email** → composes and sends the order to the supplier's address, stating items, quantities, cancel-by date, and backorder policy.
    - **Phone, fax, website, or rep** → produces a printable order document for the Manager to act on manually, then marks the stream placed.
 7. A **PO number** is offered — blank auto-generates the next unused ascending number; a Manager may enter one manually.
-8. On placement, the lines become **on order** and the Discogs metadata **prefetch** for those titles is queued (see Inherited).
+8. On placement, the lines become **on order** and the catalog metadata **prefetch** for those titles is queued (see Inherited).
 
 ---
 
@@ -101,8 +101,8 @@ Below the pending streams, previously placed PurchaseOrders are listed most-rece
 
 **From [E-02](E-02-receive-inventory.md):**
 
-- **Discogs metadata prefetch happens here.** When a PurchaseOrder is placed, catalog metadata for the ordered titles is fetched in bulk so receiving mostly hits the local database rather than calling the API per scan.
-  - Discogs has no bulk-barcode endpoint, so this is *N* calls throttled to roughly 60/min — a background job, not an instant operation. A 300-line PO takes about five minutes.
+- **Catalog metadata prefetch happens here.** When a PurchaseOrder is placed, metadata for the ordered titles is fetched in bulk so receiving mostly hits the local database rather than calling the provider per scan.
+  - The provider is **MusicBrainz** (decision 14), whose search accepts **several barcodes per request** as a Lucene `OR` query — so a PO resolves in a handful of calls rather than one per line. Still a background job rather than an instant operation, but minutes shorter than the Discogs figure this note originally carried (*N* calls at roughly 60/min, about five minutes for a 300-line PO).
   - Prefetch only covers stock ordered through the system. Second-hand buys, unsolicited items, and anything received before there is PO history will still miss, so live lookup at the receiving desk remains a supported fallback.
 - **Backorders are tracked.** The supplier's `Balance` column is the source.
 
@@ -129,12 +129,14 @@ Below the pending streams, previously placed PurchaseOrders are listed most-rece
 | 11 | Voiding a PurchaseOrder returns its unreceived lines to pending |
 | 12 | Order lines carry a status including **Backordered** and **Cancelled**, settable individually or in bulk per PO |
 | 13 | Receiving a customer-attached line automatically creates a **Held** Sale for that customer |
+| 14 | **The catalog provider is MusicBrainz**, whose search batches several barcodes per request. **Amends the prefetch note** in Inherited, which was written against Discogs' per-barcode ceiling ([architecture](../architecture.md) A-12, A-12a) |
+| 15 | **An Invoice may span several PurchaseOrders**, so a PO line's outstanding quantity is derived from what has been received against it across every Invoice ([E-02](E-02-receive-inventory.md) d28, d30) |
 
 ---
 
 ## Open questions
 
-- **Backorder auto-matching.** A `Balance` on one Invoice arriving on a later one is currently reconciled by eye. Whether the system should match it automatically, and whether an outstanding backorder should suppress duplicate reorder suggestions once suggestions exist, is unresolved.
+- **Backorder auto-matching.** [E-02](E-02-receive-inventory.md) d30 makes the outstanding quantity derived, and d29's receiving worklist is where it surfaces — a backordered line from an earlier PO appears alongside everything else expected from that supplier, which is what makes a mixed box workable. What remains open is whether scanning an item should *automatically* attach it to a matching PO line, or whether the employee picks; and whether an outstanding backorder should suppress duplicate reorder suggestions once suggestions exist.
 - **Cancel-by dates.** Suppliers carry a default cancel-by window ([M-01](M-01-supplier-margin.md)) and some support it contractually. Whether the system acts on it — auto-cancelling lines past the date — or merely records it, is undecided.
 - **Reorder suggestion.** v1 is manual. When suggestions arrive, the inputs (sales velocity, minimum on hand, season) and whether they auto-populate a pending stream need settling.
 - **Multi-store ordering.** Whether stores order independently or a Manager can place one PurchaseOrder covering several stores' needs.
