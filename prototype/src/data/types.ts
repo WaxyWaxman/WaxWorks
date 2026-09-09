@@ -166,6 +166,7 @@ export interface SupplierClaim {
   supplierId: string;
   separator?: string; // same batching key as pending orders (M-02)
   status: ClaimStatus;
+  creditMemo?: string; // the supplier's own reference, captured on Credited
   lines: ClaimLine[];
   createdBy: string;
   createdAt: string;

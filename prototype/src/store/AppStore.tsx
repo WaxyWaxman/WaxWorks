@@ -164,7 +164,7 @@ interface AppContextValue extends AppState {
     note?: string,
   ) => { claimId: string; supplierName: string } | null;
   sendClaim: (claimId: string, claimNumber?: number) => { claimNumber: number } | null;
-  markClaimCredited: (claimId: string) => void;
+  markClaimCredited: (claimId: string, creditMemo: string) => void;
 
   reserve: (
     recordId: string,
@@ -652,12 +652,17 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
     return { claimNumber: num };
   };
 
-  const markClaimCredited: AppContextValue["markClaimCredited"] = (claimId) =>
+  const markClaimCredited: AppContextValue["markClaimCredited"] = (claimId, creditMemo) =>
     setS((prev) => ({
       ...prev,
       claims: prev.claims.map((c) =>
         c.id === claimId
-          ? { ...c, status: "Credited", log: [...c.log, { at: now(), text: "Marked Credited" }] }
+          ? {
+              ...c,
+              status: "Credited",
+              creditMemo,
+              log: [...c.log, { at: now(), text: `Marked Credited — supplier credit memo ${creditMemo}` }],
+            }
           : c,
       ),
     }));

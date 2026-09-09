@@ -14,6 +14,7 @@ export function Claims() {
   const pending = app.claims.filter((c) => c.status === "Pending");
   const credited = app.claims.filter((c) => c.status === "Credited");
   const [sending, setSending] = useState<SupplierClaim | null>(null);
+  const [crediting, setCrediting] = useState<SupplierClaim | null>(null);
 
   return (
     <div>
@@ -45,7 +46,7 @@ export function Claims() {
         empty="No claims currently pending a supplier's response."
         claims={pending}
         renderAction={(c) => (
-          <button className="btn sm" onClick={() => app.markClaimCredited(c.id)}>
+          <button className="btn sm" onClick={() => setCrediting(c)}>
             Mark Credited
           </button>
         )}
@@ -54,6 +55,7 @@ export function Claims() {
       <ClaimSection title="Credited" empty="No credited claims yet." claims={credited} />
 
       {sending && <SendClaimModal claim={sending} onClose={() => setSending(null)} />}
+      {crediting && <MarkCreditedModal claim={crediting} onClose={() => setCrediting(null)} />}
     </div>
   );
 }
@@ -86,6 +88,11 @@ function ClaimSection({
                   {c.separator && (
                     <span className="badge" style={{ marginLeft: "var(--sp-2)" }}>
                       sep {c.separator}
+                    </span>
+                  )}
+                  {c.creditMemo && (
+                    <span className="badge ok" style={{ marginLeft: "var(--sp-2)" }}>
+                      credit memo {c.creditMemo}
                     </span>
                   )}
                 </span>
@@ -188,6 +195,54 @@ function SendClaimModal({ claim, onClose }: { claim: SupplierClaim; onClose: () 
           <input type="number" value={raw} onChange={(e) => setRaw(e.target.value)} />
         </label>
         {taken && <div className="callout danger">Claim number already in use — pick another.</div>}
+      </div>
+    </Modal>
+  );
+}
+
+function MarkCreditedModal({ claim, onClose }: { claim: SupplierClaim; onClose: () => void }) {
+  const app = useApp();
+  const supplier = app.supplierFor(claim.supplierId);
+  const [memo, setMemo] = useState("");
+  const ready = memo.trim().length > 0;
+
+  return (
+    <Modal
+      title={`Mark Credited — Claim #${claim.claimNumber} — ${supplier?.name ?? "supplier"}`}
+      onClose={onClose}
+      foot={
+        <>
+          <button className="btn ghost" onClick={onClose}>
+            Cancel
+          </button>
+          <button
+            className="btn primary"
+            disabled={!ready}
+            onClick={() => {
+              app.markClaimCredited(claim.id, memo.trim());
+              onClose();
+            }}
+          >
+            Mark Credited
+          </button>
+        </>
+      }
+    >
+      <div className="stack">
+        <p className="small">
+          The supplier's own reference for this credit — needed to reconcile it later against their
+          statement or an invoice deduction.
+        </p>
+        <label className="field">
+          <span>Supplier credit memo #</span>
+          <input
+            type="text"
+            autoFocus
+            value={memo}
+            onChange={(e) => setMemo(e.target.value)}
+            placeholder="e.g. CM-5521"
+          />
+        </label>
       </div>
     </Modal>
   );
