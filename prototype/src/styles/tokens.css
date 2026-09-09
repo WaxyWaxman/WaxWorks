@@ -1,0 +1,53 @@
+/*
+ * Design tokens — the single place to make "style" decisions during review.
+ * Change a value here and it propagates everywhere.
+ */
+:root {
+  /* Brand + surfaces */
+  --c-bg: #f4f1ec;
+  --c-surface: #ffffff;
+  --c-surface-2: #faf8f4;
+  --c-ink: #1c1a17;
+  --c-ink-soft: #57514a;
+  --c-ink-faint: #8b8379;
+  --c-border: #e2dcd2;
+  --c-border-strong: #cfc7b8;
+
+  --c-accent: #7b2d26;         /* oxblood — record-store leaning */
+  --c-accent-ink: #ffffff;
+  --c-accent-soft: #f3e4e2;
+
+  --c-ok: #2f6f4f;
+  --c-ok-soft: #e3f0e8;
+  --c-warn: #9a6b00;
+  --c-warn-soft: #f8ecd2;
+  --c-danger: #a3271f;
+  --c-danger-soft: #f6e1df;
+
+  /* Typography */
+  --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  --font-mono: ui-monospace, "SF Mono", "Cascadia Mono", "Roboto Mono", Menlo, Consolas, monospace;
+  --fs-xs: 11px;
+  --fs-sm: 12.5px;
+  --fs-base: 14px;
+  --fs-md: 16px;
+  --fs-lg: 20px;
+  --fs-xl: 27px;
+  --lh: 1.45;
+
+  /* Space + shape */
+  --sp-1: 4px;
+  --sp-2: 8px;
+  --sp-3: 12px;
+  --sp-4: 16px;
+  --sp-5: 24px;
+  --sp-6: 32px;
+  --sp-7: 48px;
+  --radius: 8px;
+  --radius-sm: 5px;
+  --radius-lg: 14px;
+  --shadow-1: 0 1px 2px rgba(28, 26, 23, 0.06), 0 1px 3px rgba(28, 26, 23, 0.1);
+  --shadow-2: 0 8px 24px rgba(28, 26, 23, 0.14);
+
+  --maxw: 1180px;
+}

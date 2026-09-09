@@ -10,6 +10,7 @@ Point-of-sale and inventory management for independent vinyl record stores.
 | [lexicon.md](lexicon.md) | Controlled vocabulary — the canonical term for each concept, and what not to call it |
 | [flows/](flows/) | One document per user flow — the detailed specs |
 | [reference/](reference/) | Worked examples and external-system notes |
+| [prototype.md](prototype.md) | The clickable prototype — what it's for, how to run it, flow ↔ screen map |
 
 ## Flows
 
