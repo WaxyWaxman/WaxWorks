@@ -12,26 +12,26 @@ This document is the spine: product context, users, domain model, and cross-cutt
 
 ### 1.1 Summary
 
-Wax Works is a point-of-sale (POS) and inventory management system for independent vinyl record stores. It handles the front-of-counter selling workflow and the back-of-house stock workflow in one system, and serves **multiple stores**.
+Wax Works is a point-of-sale (POS) and inventory management system for small, independent vinyl record stores. It handles the front-of-counter selling workflow and the back-of-house stock workflow in one system, and serves **multiple stores**.
 
 ### 1.2 Problem statement
 
-_TBD — what breaks today? (e.g. generic POS systems don't model record condition/pressing, inventory drifts from reality, reordering is guesswork.)_
+Small and medium record do not have a way to manage their inventory. They don't know what stock they have, if it is selling, or the shrinkage. This prohibits selling online, determining market trends, or finding a record in store for a customer. 
 
 ### 1.3 Goals
 
-_TBD — what does success look like? Suggest 3–5 measurable goals._
-
-- G-1:
-- G-2:
-- G-3:
+- G-1: Employees know what is in stock so they can help a customer buy a vinyl or order one to the store for the customer to pick up later.
+- G-2: Administrators know what stock is selling so they can analyze market trends and ensure top sellers are stocked at a good price.
+- G-3: Employees can easily process new vinyl to get them on the floor quickly and resolve any issues with order - like poor condition, a missing vinyl, or other supplier mistakes.
+- G-4: Admins can enforce vinyl pricing across time to ensure a predictable margin and review individual customer behavior to provide incentives and credit. 
+- G-5: Employees can look-up a customer to help them return an item without a receipt, place holds for them, or provide in-store credit.
 
 ### 1.4 Non-goals
 
-_TBD — explicitly out of scope for v1. Candidates: e-commerce storefront, accounting/GL integration, customer loyalty program._
-
-- NG-1:
-- NG-2:
+- NG-1: This is not an online store right now, but will be in the future. 
+- NG-2: There is no customer loyalty program.
+- NG-3: This system will not directly integrate with supplier systems.
+- NG-4: This system does not process credit card payments, there is no money exchange on this platform.
 
 ---
 
@@ -39,13 +39,22 @@ _TBD — explicitly out of scope for v1. Candidates: e-commerce storefront, acco
 
 ### 2.1 Employee
 
-_TBD — describe the persona. Who are they, what's their day like, what's their technical comfort level?_
+Employees are members of staff that work at the record store. They have high agency, there are only a few Manager only tasks. Their Jobs to Be Done include, but are not limited to:
+- Searching the store inventory to determine if a vinyl is in stock, on back-order, or out of stock. 
+- Processing a vinyl sale in person
+- Helping a customer retrieve a vinyl that they have placed a "hold" on via phone or email
+- Inventory receiving, including but not limited to: scanning in new vinyl, pricing vinyl, checking that the inventory is correct for a given invoice, restocking, initiating re-ordering, and initiating a refund request from a supplier for an issue.
 
 ### 2.2 Manager
 
-_TBD — describe the persona._
+The Manager aims to empower their employees to help make good decisions and sometimes needs to provide an override. They also need to look at inventory and customer trends so they can make business decisions. Their Jobs to Be Done include, but are not limited to: 
+- Setting a default suggested supplier margin for a given vinyl
+- Administering the system
+- Reviewing all of the pending re-orders that are initiated by employees to confirm the final order to the supplier.
+- Reviewing trends in inventory sales to determine top selling vinyl, genres, or artists.
+- Reviewing trends in customer behavior to determine who their top customers are by quantity or life-time value. 
 
-**Open question:** Does a Manager inherit all Employee capabilities (superset), or is it a distinct role with its own separate permissions? Assumed superset for now.
+The Manager inherits all Employee capabilities (superset).
 
 **Manager override** is a recurring mechanism — several employee actions are gated behind it (below-cost pricing, invoice adjustments beyond ±2%, voiding a finalized invoice). Its mechanics are defined in [M-04](flows/M-04-manage-users.md).
 
