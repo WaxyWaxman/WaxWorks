@@ -31,7 +31,7 @@ Small and medium record do not have a way to manage their inventory. They don't 
 - NG-1: This is not an online store right now, but will be in the future. 
 - NG-2: There is no customer loyalty program.
 - NG-3: This system will not directly integrate with supplier systems.
-- NG-4: This system does not integrate a payment processor. It never holds card details and never moves money. Tender types — including card — are **recorded** at the till for reconciliation and reporting ([E-05](flows/E-05-sell-a-record.md)), and cards are settled on a separate terminal.
+- NG-4: This system does not integrate a **third-party payment processing system** — Square, Stripe, or equivalent. It never captures card data, never authorizes or settles a card transaction, and never moves money. Cards are settled on a separate terminal. **Recording** payment is in scope and always was: tender types, including card, are captured at the till for reconciliation and reporting ([E-05](flows/E-05-sell-a-record.md)), and what the store owes suppliers is tracked and settled in [M-05](flows/M-05-accounts-payable.md).
 
 ---
 
@@ -197,7 +197,7 @@ _Status: **ratified**._
 - **Discogs** is the external catalog metadata source.
 - **There is a Customer record** ([E-07](flows/E-07-manage-customers.md)) — holds, special orders, store credit, discounts, and receipt-less returns all need somewhere to hang.
 - **Multi-jurisdiction sales tax is in scope** on the outbound side, as a table of named tax lines referenced per item ([M-06](flows/M-06-settings.md)). Inbound tax treatment stays as E-02 decision 17 has it.
-- **Accounts payable is in scope** ([M-05](flows/M-05-accounts-payable.md)), superseding E-02 decision 25. Payment *processing* remains out (NG-4).
+- **Payment recording and accounts payable are in scope** — tenders captured at the till ([E-05](flows/E-05-sell-a-record.md)), supplier balances settled in [M-05](flows/M-05-accounts-payable.md). Formalized as E-02 decision 26, superseding decision 25. The only exclusion is integration with a third-party payment processing system such as Square or Stripe (NG-4).
 - **The internal barcode scheme is ratified** — UPC-A under GS1 number system `2` (§4.3).
 
 ### Multi-store consequences
@@ -223,7 +223,7 @@ Worth settling as flows land:
 
 ## 7. Out of scope / future
 
-- **Payment processing** — no processor integration, no card details, no money moved (NG-4). Card tenders are recorded only.
+- **Integration with a third-party payment processing system** — Square, Stripe, or equivalent (NG-4). Recording tenders and running accounts payable are both **in scope**; what is excluded is capturing card data, authorizing or settling a card transaction, and moving money.
 - Online store (NG-1) and customer loyalty (NG-2).
 - **Batch stock-take** — reason-coded single adjustments are in scope ([E-04](flows/E-04-manage-inventory.md)); counting a Section against the shelf in one reconciling pass is not.
 - **Reorder suggestion** — v1 ordering is manual ([M-02](flows/M-02-reorder-inventory.md) decision 7); minimum on hand is informational only.

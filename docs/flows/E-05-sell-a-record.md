@@ -72,7 +72,7 @@ A **voided** Sale keeps its Sale number. Gaps in the sequence would read as miss
 | Tender | Notes |
 |---|---|
 | **Cash** | Calculates change owed. |
-| **Credit Card** | **Recorded only.** The system does not integrate a payment processor and does not move money; the card is settled on a separate terminal and the tender records that it happened. |
+| **Credit Card** | **Recorded only.** The card is settled on a separate terminal; the tender records that it happened, for reconciliation and the M-03 tender breakdown. Wax Works integrates no third-party payment processing system — Square, Stripe, or equivalent — and never captures card data. |
 | **Store Credit** | Drawn against the Customer's accounts-receivable balance. Requires a Customer on the Sale. |
 | **Gift Card** | Redeemed against a `GC` balance. |
 | **Pay-out** | Cash removed from the till for an expense. Requires a note describing the purpose. Appears as a negative cash line in the M-03 close. |
@@ -170,7 +170,7 @@ Held copies count against **available** stock but remain on hand.
 | 6 | Cancelling a hold is a distinct action from voiding a Sale, and is logged rather than erased |
 | 7 | Holds do not expire; the hold log records creation, customer contact, and age |
 | 8 | A Sale may be split across multiple tenders; each tender is recorded individually |
-| 9 | Card payments are **recorded only** — no payment-processor integration, no money moved by this system |
+| 9 | Card payments are **recorded only** — no integration with a third-party payment processing system (Square, Stripe, or equivalent), no card data captured, no money moved (E-02 decision 26) |
 | 10 | Gift cards: **loading** one is a line item; **redeeming** one is a tender |
 | 11 | A price of `0.00` prompts the Employee for a price as the line is added |
 | 12 | An Employee may price a line below cost at the till **without** a manager override. (E-02 decision 10's below-cost guardrail governs shelf pricing at receiving and is unaffected) |

@@ -142,8 +142,8 @@ Consequence to accept knowingly: per-item margin reporting reflects only supplie
 | 22 | Intake mode (New / Second-hand) is selected once per invoice — no mixed invoices |
 | 23 | Backorders are tracked by the system |
 | 24 | Manual catalog entry captures artist, album title, genre, **catalog number**, and **label** |
-| 25 | Payment and accounts-payable are out of scope — **partially superseded, see 26** |
-| 26 | **Accounts payable is now in scope** ([M-05](M-05-accounts-payable.md)). Decision 25 stands as the record of what was decided at the time and is not rewritten; the half of it that still holds is payment *processing* — Wax Works integrates no payment processor, holds no card details, and moves no money |
+| 25 | Payment and accounts-payable are out of scope — **superseded by 26** |
+| 26 | **Payment recording and accounts payable are in scope.** Tenders are recorded at the till ([E-05](E-05-sell-a-record.md)) and supplier balances are settled in [M-05](M-05-accounts-payable.md). What stays out of scope is **integration with a third-party payment processing system such as Square or Stripe**: Wax Works never captures card data, never authorizes or settles a card transaction, and never moves money. Decision 25 stands unrewritten as the record of what was decided at the time |
 
 ---
 

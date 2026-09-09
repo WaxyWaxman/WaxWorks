@@ -31,7 +31,7 @@ The list of tenders offered at the till ([E-05](E-05-sell-a-record.md)), each wi
 | Tender | Behavior |
 |---|---|
 | Cash | Calculates change |
-| Credit Card | Recorded only — no processor integration |
+| Credit Card | Recorded only — settled on a separate terminal, no processor integration |
 | Store Credit | Draws against a Customer's account balance |
 | Gift Card | Redeems a `GC` balance |
 | Pay-out | Cash out for an expense; requires a note |

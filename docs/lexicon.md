@@ -24,7 +24,8 @@ Sourced from [`PRD.md`](PRD.md), the [`flows/`](flows/) documents, and
 | **inventory management** | Back-of-house stock workflow. | "stock control", "warehouse management" |
 | **independent vinyl record store** | The customer. | "record shop", "music store" |
 | **multi-store** / **multiple stores** | The system serves more than one store; every entity scopes to one. Adjective is `multi-store`; the fact is stated as "the system is **multi-store**" or "serves **multiple stores**". | "multi-tenant" in prose (it *is* the mechanism, but the docs say multi-store), "multi-branch", "chain" |
-| **till** | The physical register position where a sale is rung up. | Pick one of `till` / `register` project-wide — currently both appear (see §10). |
+| **till** | The physical register position where a sale is rung up. | `register`, except where the physical machine is meant (§13). |
+| **payment processing** | The **excluded** capability: integrating a third-party payment processing system — Square, Stripe, or equivalent — to capture card data, authorize or settle a card transaction, or move money (NG-4, E-02 decision 26). Distinguish sharply from **recording** a payment, which is in scope everywhere. | using "payments are out of scope" as shorthand — payment *recording* and accounts payable are both in scope; only processor integration is not |
 
 ---
 

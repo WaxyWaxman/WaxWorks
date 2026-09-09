@@ -6,7 +6,7 @@
 
 **Job:** As a manager, I need to see what the store owes, settle supplier invoices, and get credit for stock that arrived short or damaged.
 
-**Scope note:** this flow **supersedes E-02 decision 25**, which put accounts payable out of scope. See the note at the foot of this document.
+**Scope note:** accounts payable is **in scope**, formalized as [E-02](E-02-receive-inventory.md) decision 26. See the note at the foot of this document for what remains excluded.
 
 ---
 
@@ -86,7 +86,7 @@ Loading and redeeming happen at the till ([E-05](E-05-sell-a-record.md)); this i
 
 | # | Decision |
 |---|---|
-| 1 | Accounts payable is **in scope**, superseding E-02 decision 25 |
+| 1 | Accounts payable is **in scope** (E-02 decision 26). The only exclusion is integration with a third-party payment processing system such as Square or Stripe |
 | 2 | The flow is manager-only in its entirety |
 | 3 | Outstanding Invoices and Pending claims are shown in **one combined list** per supplier, because what is owed is the net of both |
 | 4 | **Partial payment is supported**; an Invoice tracks original amount, paid to date, and balance owing |
@@ -99,13 +99,13 @@ Loading and redeeming happen at the till ([E-05](E-05-sell-a-record.md)); this i
 
 ---
 
-## Note on E-02 decision 25
+## What "in scope" means here
 
-E-02 decision 25 reads *"Payment and accounts-payable are out of scope."* That decision is **superseded by this flow**, deliberately and with the store owner's agreement.
+Payment recording and accounts payable are in scope, per [E-02](E-02-receive-inventory.md) decision 26. Decision 25, which had put them out, stands unrewritten in E-02's table as the record of what was decided at the time — the repository convention is to append rather than renumber.
 
-Per the repository convention, the original decision is not renumbered or rewritten — it stands in E-02's table as the record of what was decided at the time. This document is where the scope changed.
+The exclusion that remains is **integration with a third-party payment processing system** such as Square or Stripe. Wax Works never captures card data, never authorizes or settles a card transaction, and never moves money.
 
-The half of decision 25 that **still holds** is payment *processing*: Wax Works does not integrate a payment processor, does not take card details, and does not move money. Card tenders at the till are recorded only ([E-05](E-05-sell-a-record.md) d9), and payments recorded here are the Manager writing down what they paid and how — not the system paying anyone.
+The distinction is between recording and executing. A payment recorded here is a Manager writing down what they paid and how — a cheque number, a card reference — so the store's obligations reconcile against a bank statement. Nothing in this flow instructs a bank, a processor, or anyone else to move funds. The same distinction governs the till: card tenders are recorded and settled on a separate terminal ([E-05](E-05-sell-a-record.md) d9).
 
 ---
 
