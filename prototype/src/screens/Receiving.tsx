@@ -175,20 +175,12 @@ function NewInvoiceModal({ onClose, onCreated }: { onClose: () => void; onCreate
   const [statedSubtotal, setStatedSubtotal] = useState("0.00");
   const [tax, setTax] = useState("0.00");
   const [freight, setFreight] = useState("0.00");
-  const [extracted, setExtracted] = useState(false);
 
   const numKey = invoiceNumber.trim().toLowerCase();
   const collision = app.invoices.find(
     (iv) => iv.supplierId === supplierId && iv.invoiceNumber.trim().toLowerCase() === numKey,
   );
   const [proceedAnyway, setProceedAnyway] = useState(false);
-
-  const simulateExtraction = () => {
-    setStatedSubtotal("25.00");
-    setTax("1.25");
-    setFreight("5.00");
-    setExtracted(true);
-  };
 
   const canSubmit =
     supplierId && invoiceNumber.trim() && receivedDate.trim() && (!collision || proceedAnyway);
@@ -299,22 +291,9 @@ function NewInvoiceModal({ onClose, onCreated }: { onClose: () => void; onCreate
           </label>
         </div>
 
-        <div className="callout">
-          <div className="row wrap" style={{ justifyContent: "space-between" }}>
-            <span>
-              Photograph the invoice — extracts <strong>totals only</strong>, not per-line costs
-              (decision 15). No camera here, so:
-            </span>
-            <button className="btn sm" onClick={simulateExtraction}>
-              Simulate photo extraction
-            </button>
-          </div>
-          {extracted && <div className="xsmall muted" style={{ marginTop: 4 }}>Extracted — every field below stays editable, never a source of truth.</div>}
-        </div>
-
         <div className="grid cols-3">
           <label className="field">
-            <span>Stated subtotal</span>
+            <span>Stated subtotal (from paperwork)</span>
             <input type="number" step="0.01" value={statedSubtotal} onChange={(e) => setStatedSubtotal(e.target.value)} />
           </label>
           <label className="field">

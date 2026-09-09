@@ -55,10 +55,11 @@ Style changes are cheap: design tokens are centralised in
 - Suppliers are two seeded rows with a name, email, and a fixed margin — enough to demo Supplier
   Claims batching and E-02's suggested-retail formula; setting/changing a margin is M-01, not
   built.
-- Receiving's "photograph the invoice" step has no camera or OCR behind it — a button fills in a
-  canned example, standing in for extraction. Barcode-to-record matching is local-only (no live
-  Discogs call, no multi-match picker); a code with no local match goes straight to the
-  search-or-create fallback. Backorder mechanics are unmodelled, per E-02's own open question.
+- Receiving's photograph/OCR step (decision 15) isn't modelled at all — stated subtotal, tax, and
+  freight are plain manually-entered fields, full stop, with no camera or extraction simulation
+  standing in for it. Barcode-to-record matching is local-only (no live Discogs call, no
+  multi-match picker); a code with no local match goes straight to the search-or-create fallback.
+  Backorder mechanics are unmodelled, per E-02's own open question.
 - Receiving's Orders panel is backed by a thin `PendingOrderLine` scaffold (supplier, PO #,
   record, expected cost/discount, qty) — enough to look one up and receive against it, seeded with
   a handful of rows. It is not M-02: there is no way to place an order from here, no reorder
