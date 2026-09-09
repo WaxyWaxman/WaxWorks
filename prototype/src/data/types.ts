@@ -115,6 +115,7 @@ export interface Sale {
   state: SaleState;
   saleNumber?: number;
   holdRef?: string;
+  po?: string;
   customerId?: string;
   lines: SaleLine[];
   tenders: Tender[];

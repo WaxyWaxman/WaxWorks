@@ -129,7 +129,7 @@ export function TitlecardPanel({
                           </button>
                           {c.status === "sellable" && (
                             <button className="btn sm" onClick={() => setReserveFor(c)}>
-                              Reserve
+                              Put on hold
                             </button>
                           )}
                         </div>

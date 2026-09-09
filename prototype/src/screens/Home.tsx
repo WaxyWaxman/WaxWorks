@@ -8,7 +8,7 @@ const BUILT = [
     title: "Search & the titlecard",
     blurb:
       "One screen: grouped results, catalog-only rows, Discogs-down degradation, click a Record " +
-      "to open its titlecard above — every copy, stock + order state, Reserve, re-price (guardrail).",
+      "to open its titlecard above — every copy, stock + order state, Put on hold, re-price (guardrail).",
   },
   {
     id: "E-05",
@@ -98,9 +98,9 @@ export function Home() {
         <li>
           <strong>E-03/E-04 Search</strong> — search “blue”. Check the grouping (one row per
           Record, copies nested), the catalog-only rows, and how it reads when Discogs is down.
-          Click the Joni Mitchell — Blue row (or its Reserve button) to see the titlecard above
-          update in place. Try <em>Reserve</em> for Ramona, and <em>Edit price</em> below cost to
-          see the guardrail + override.
+          Click the Joni Mitchell — Blue row (or its Put on hold button) to see the titlecard above
+          update in place. Try <em>Put on hold</em> for Ramona twice under the same PO (watch it
+          merge onto one hold), and <em>Edit price</em> below cost to see the guardrail + override.
         </li>
         <li>
           <strong>E-05 Sell</strong> — new sale, attach Ramona (watch discount + tax pre-fill),

@@ -165,7 +165,7 @@ export function Search() {
                                 setReserveRecord(r);
                               }}
                             >
-                              Reserve
+                              Put on hold
                             </button>
                           )}
                         </div>

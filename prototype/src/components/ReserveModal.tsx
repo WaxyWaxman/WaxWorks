@@ -24,14 +24,24 @@ export function ReserveModal({
   const [itemId, setItemId] = useState(initialItemId ?? items[0]?.id ?? "");
   const [customerId, setCustomerId] = useState(app.customers[0]?.id ?? "");
   const [qty, setQty] = useState(1);
+  const [po, setPo] = useState("");
   const item = items.find((i) => i.id === itemId);
+
+  // Holds for the same customer under the same PO (blank counts as a PO of
+  // its own) merge onto one Held Sale as extra lines instead of piling up
+  // separate tickets for what's really one pickup.
+  const poKey = po.trim();
+  const existingHold = app.sales.find(
+    (x) => x.state === "Held" && x.customerId === customerId && (x.po ?? "").trim() === poKey,
+  );
 
   const commit = () => {
     const cust = app.customerFor(customerId);
-    const { holdRef } = app.reserve(record.id, itemId, customerId, qty);
+    const { holdRef } = app.reserve(record.id, itemId, customerId, qty, po);
     onDone(
-      `On hold — ${holdRef} for ${cust?.name ?? "customer"}: ${record.artist} — ${record.title} ` +
-        `(${item?.grade ?? ""}, qty ${qty}). Open at the till when they're ready to tender.`,
+      `On hold — ${holdRef} for ${cust?.name ?? "customer"}${poKey ? ` (PO ${poKey})` : ""}: ` +
+        `${record.artist} — ${record.title} (${item?.grade ?? ""}, qty ${qty}). Open at the till ` +
+        `when they're ready to tender.`,
     );
   };
 
@@ -97,6 +107,22 @@ export function ReserveModal({
             onChange={(e) => setQty(Math.max(1, Number(e.target.value)))}
           />
         </label>
+        <label className="field">
+          <span>PO (optional)</span>
+          <input
+            type="text"
+            value={po}
+            onChange={(e) => setPo(e.target.value)}
+            placeholder="leave blank if the customer doesn't have one"
+          />
+        </label>
+        {existingHold && (
+          <div className="callout ok small">
+            Adds to existing hold <strong>{existingHold.holdRef}</strong> for this customer
+            {poKey ? ` under PO ${poKey}` : " (no PO)"} — {existingHold.lines.length} item
+            {existingHold.lines.length === 1 ? "" : "s"} on it already.
+          </div>
+        )}
       </div>
     </Modal>
   );

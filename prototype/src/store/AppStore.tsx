@@ -149,6 +149,7 @@ interface AppContextValue extends AppState {
     itemId: string,
     customerId: string,
     qty: number,
+    po?: string,
   ) => { id: string; holdRef: string };
   setCopyPrice: (itemId: string, price: number, overrideBy?: string) => void;
   routeReturnLine: (
@@ -507,12 +508,11 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
   const addLog: AppContextValue["addLog"] = (saleId, text) =>
     patchSale(saleId, (sale) => ({ ...sale, log: [...sale.log, { at: now(), text }] }));
 
-  const reserve: AppContextValue["reserve"] = (recordId, itemId, customerId, qty) => {
-    const id = uid("sale");
+  const reserve: AppContextValue["reserve"] = (recordId, itemId, customerId, qty, po) => {
     const rec = s.records.find((r) => r.id === recordId)!;
     const item = s.inventory.find((i) => i.id === itemId)!;
     const cust = s.customers.find((c) => c.id === customerId);
-    const ref = `H${s.nextHold}`;
+    const poKey = (po ?? "").trim();
     const line: SaleLine = {
       id: uid("line"),
       kind: "item",
@@ -525,17 +525,58 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
       discountPct: cust?.globalDiscountPct ?? 0,
       taxLineId: cust?.defaultTaxLineId ?? DEFAULT_TAX_LINE,
     };
+
+    // Repeat holds for the same customer under the same PO merge onto one Held
+    // Sale as extra lines, rather than piling up separate hold tickets for what
+    // is really one pickup. A blank PO is still a shared key — it just means
+    // "this customer's holds with no PO given" instead of a named one.
+    const existing = s.sales.find(
+      (x) => x.state === "Held" && x.customerId === customerId && (x.po ?? "").trim() === poKey,
+    );
+
+    if (existing) {
+      const holdRef = existing.holdRef!;
+      setS((prev) => ({
+        ...prev,
+        sales: prev.sales.map((x) =>
+          x.id === existing.id
+            ? {
+                ...x,
+                lines: [...x.lines, line],
+                log: [
+                  ...x.log,
+                  {
+                    at: now(),
+                    text: `Added to hold ${holdRef} — ${qty} copy of ${rec.title} for ${cust?.name ?? "customer"}`,
+                  },
+                ],
+              }
+            : x,
+        ),
+        inventory: prev.inventory.map((i) =>
+          i.id === itemId ? { ...i, status: "held", heldByCustomerId: customerId } : i,
+        ),
+      }));
+      return { id: existing.id, holdRef };
+    }
+
+    const id = uid("sale");
+    const ref = `H${s.nextHold}`;
     const sale: Sale = {
       id,
       state: "Held",
       holdRef: ref,
+      po: poKey || undefined,
       customerId,
       createdBy: CURRENT_USER,
       createdAt: now(),
       lines: [line],
       tenders: [],
       log: [
-        { at: now(), text: `Hold created from titlecard — ${qty} copy reserved for ${cust?.name ?? "customer"}` },
+        {
+          at: now(),
+          text: `Hold created from titlecard — ${qty} copy reserved for ${cust?.name ?? "customer"}${poKey ? ` (PO ${poKey})` : ""}`,
+        },
       ],
     };
     setS((prev) => ({
