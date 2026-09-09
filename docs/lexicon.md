@@ -36,8 +36,12 @@ Sourced from [`PRD.md`](PRD.md), the [`flows/`](flows/) documents, and
 | **Employee** | Front-line role. Capitalised when naming the role or an `Actor`. | "staff", "clerk", "cashier", "associate", generic "user" |
 | **Manager** | Elevated role; assumed superset of Employee for now. Capitalised. | "admin", "supervisor", "owner" (an owner/admin tier above Manager is an open question in M-04, not a synonym) |
 | **User** | An Employee or a Manager, scoped to a store. Use only when the statement is true for both roles. | "account", "login", "operator" |
-| **manager override** | The mechanism gating certain Employee actions — below-cost **shelf** pricing, Invoice adjustments beyond ±2%, voiding a finalized Invoice, and the rest of the gated list in [M-04](flows/M-04-manage-users.md). Performed in place by the Manager entering their initials, without displacing the Employee's session; both names are recorded. Lowercase in running text. | "manager approval", "supervisor sign-off", "elevated permission" |
-| **manager-only** | An action an Employee cannot perform even with an override present — a whole flow or function reserved to Managers (accounts payable, Undo End of Day, adjusting on hand). Distinct from a **manager override**, which unblocks an Employee's action in the moment. | using it interchangeably with "manager override" |
+| **terminal enrollment** / **enroll** | Binding a terminal to a Store once, using a one-time code. It is what scopes everything the terminal can reach; it is **not** a staff sign-in ([E-01](flows/E-01-authenticate.md) d9). | "registration", "pairing", "activation", "login" |
+| **session** | A staff session on an enrolled terminal, opened with initials and lapsing after 15 minutes idle. Distinct from the terminal's enrollment, which does not lapse. | conflating it with enrollment |
+| ~~**manager override**~~ | **Retired** by [M-04](flows/M-04-manage-users.md) d8. The actions it used to gate now proceed and raise a **ReviewFlag**. Do not use the term for new work; it remains readable in superseded decisions. | using it for current behavior — say **ReviewFlag** or **manager-only** as appropriate |
+| **ReviewFlag** / **review flag** | A record that an Employee took an action worth a Manager's later attention — below-cost **shelf** pricing, an Invoice adjustment beyond ±2%, an accepted subtotal discrepancy, a Sale driving stock negative, a broken sale lock. Written in the same transaction as the action, so the two can never disagree. **Acknowledged, never deleted.** Entity is PascalCase; "review flag" in running prose. | "warning", "alert", "exception", "override" |
+| **review queue** | The Manager's list of unacknowledged ReviewFlags. | "audit log" (broader), "approvals", "inbox" |
+| **manager-only** | An action an Employee cannot perform at all — a whole flow or function reserved to Managers (accounts payable, Undo End of Day, adjusting on hand, voiding a finalized Invoice). A Manager authorizes in place by entering their own initials; both names are recorded. Distinct from a **ReviewFlag**, which lets the Employee proceed and tells the Manager afterward. | using it interchangeably with "review flag"; "manager override" |
 
 ---
 
@@ -61,11 +65,12 @@ Entity names are **PascalCase with no space** when referring to the modelled thi
 | **supplier Invoice** | The qualified form. Use it wherever an outbound document is also in play, so the direction is never ambiguous. | — |
 | **customer invoice** | An **outbound** business document: a Sale rendered for a business account, carrying their account number and terms, settled against their account balance rather than tendered at the till (E-07). Lowercase `invoice` — it is not the same entity as a supplier Invoice. | "receipt" (a receipt is the till document), "bill" |
 | **InvoiceLine** | One received item on an Invoice — links a Record, its cost (`Ext. Price`), accepted retail price, condition. | "line item", "order line" (OK as loose prose, but the entity is InvoiceLine) |
-| **InvoiceScan** | Photograph of the supplier's paperwork plus extracted invoice-level totals. Assistive only, never a source of truth. | "OCR result", "invoice import" |
-| **CostAdjustment** | The bounded ±2% reconciliation delta. A standalone line flowing into cost of goods; does not redistribute across item costs. | "rounding line", "correction", "write-off" |
-| **Backorder** | Units ordered but not shipped — the supplier's `Balance`. Tracked until fulfilled. | "backlog", "negative inventory" (a *different* concept — see §6) |
-| **PurchaseOrder** | Manager-created reorder (M-02). Triggers Discogs metadata prefetch. Abbreviate as `PO` / "purchase order" in prose. | "order", "restock request" |
-| **Sale** / **Transaction** | A completed checkout (E-05). | "order", "ticket" |
+| ~~**InvoiceScan**~~ | **Retired** by [E-02](flows/E-02-receive-inventory.md) d27 — there is no invoice photography and no document extraction. Invoice-level totals are entered manually. | using it at all in new work |
+| **CostAdjustment** | The ±2% reconciliation delta. A standalone line flowing into cost of goods; does not redistribute across item costs. Beyond ±2% it proceeds and raises a **ReviewFlag**. | "rounding line", "correction", "write-off" |
+| **Backorder** | Units ordered but not shipped — the supplier's `Balance`. **Derived**, not stored: ordered minus received against that PurchaseOrder line across every Invoice ([E-02](flows/E-02-receive-inventory.md) d30). | "backlog", "negative inventory" (a *different* concept — see §6) |
+| **PurchaseOrder** | Manager-created reorder (M-02). Triggers catalog metadata prefetch. **An Invoice may span several POs**, so the link lives on the InvoiceLine ([E-02](flows/E-02-receive-inventory.md) d28). Abbreviate as `PO` / "purchase order" in prose. | "order", "restock request" |
+| **Sale** / **Transaction** | A checkout (E-05), in one of five states — **Open**, Current, Held, Closed, Void. | "order", "ticket" |
+| **sale lock** | An **Open** Sale is locked to the Employee who opened it. Handoff is via Hold; re-opening transfers the lock; tender attributes to the lock holder ([E-05](flows/E-05-sell-a-record.md) d23). | "checked out", "claimed", "assigned" |
 | **SaleLine** | One line on a Sale. Snapshots price, discount, tax line, condition, and title at time of sale. | "line item" (OK as loose prose), "cart item" |
 | **Tender** | One payment against a Sale. A Sale may carry several. | "payment method" (OK in prose), "tender type" when a single payment is meant |
 | **Hold** | A Sale in the **Held** state — stock committed to a customer. | "reservation", "layaway" (layaway implies part-payment, which holds do not have) |
@@ -91,23 +96,27 @@ of one pressing **share a Record** but are **distinct InventoryItems**.
 | Canonical | Meaning | Avoid |
 |---|---|---|
 | **receive** / **receiving** / **inbound receiving** | The E-02 workflow: intake a shipment, identify each record, price it, reconcile against the supplier's invoice. | "intake" as the flow name (OK as a verb), "goods-in", "check-in" |
+| **receiving worklist** | The screen receiving opens on: outstanding PurchaseOrder lines **across all open POs**, searchable and filterable. Spans POs because suppliers ship several in one box ([E-02](flows/E-02-receive-inventory.md) d29). | "expected deliveries", "inbox", "to-receive list" |
+| **receiving history** | Past Invoices, browsable and searchable, opening **as they were finalized**. Immutability is what makes "as-was" trivially true (d36). | "audit trail", "receiving log", "archive" |
 | **intake mode** | The New-stock / Second-hand choice, made once per Invoice. No mixed invoices. | "receiving type", "stock type" |
 | **New stock** / **New mode** / **New** | Intake mode for newly distributed records. Capital `N`. Condition defaults to Mint/Sealed; accepted price becomes the Record's sticky price. | "new inventory", lowercase "new" when the mode is meant |
 | **Second-hand** / **Second-hand mode** | Intake mode for pre-owned copies. Hyphenated; capital `S` at sentence start, `second-hand` mid-sentence. Condition graded per copy; never sets a sticky price. | "used" as the canonical term (`used copy` is tolerated in loose prose), "pre-owned", "secondhand" (no hyphen), "trade-in" |
-| **shipment** | The physical delivery from a supplier. | "consignment" (that word means something specific and out-of-scope), "delivery", "parcel" |
+| **shipment** | The physical delivery from a supplier. | "consignment" (that word means something specific — see below), "delivery", "parcel" |
+| **consignment** | Stock the store sells on the supplier's behalf rather than having bought. A Supplier carries a **consignment flag**, copied onto each InventoryItem at finalize ([E-02](flows/E-02-receive-inventory.md) d33). The flag exists in v1; the program built on it does not. | using it loosely for a shipment or delivery |
 | **reconcile** / **reconciliation** | Checking the received batch against the supplier's invoice totals. | "balance", "audit", "match up" |
 | **draft** | Invoice state before finalize. Persists immediately; abandonable and resumable. Lowercase. | "pending", "in progress", "unsaved" |
 | **finalize** / **finalized** | Committing the Invoice: all lines become sellable inventory, the Invoice is written to the invoices database, a letter-size summary prints. American spelling. | "finalise", "close", "submit", "post", "commit" |
 | **immutable** | A finalized Invoice cannot be edited. Voids and amendments are manager-only and appended as a separate artifact against the original record. | "locked", "read-only", "frozen" |
 | **void** | Manager-only cancellation of a finalized Invoice (handled in E-04). | "delete" (a *draft* is deleted; a *finalized* Invoice is voided), "cancel", "reverse" |
 | **amend** / **amendment** | Manager-only change to a finalized Invoice, appended as a separate artifact — never an in-place edit. | "edit", "correct", "revise" |
-| **discrepancy warning** | Raised when the derived subtotal ≠ the supplier's stated subtotal. Employee may override. | "mismatch error", "validation error", "alert" |
+| **discrepancy warning** | Raised when the derived subtotal ≠ the supplier's stated subtotal. The Employee may accept it, which raises a **ReviewFlag**. | "mismatch error", "validation error", "alert" |
 | **return or credit claim** | Flag an Employee can set on an Invoice during receiving; the handling lives in E-04. Distinct from a customer **Return** (§3). | "supplier return", "RMA", "chargeback" |
 | **sellable** / **sellable inventory** | The state a line reaches only on Invoice finalization. | "available", "live", "active", "in stock" (an item can be in stock and not yet sellable) |
 | **receiving desk** | Physical station where scanning happens; has a label printer. | "goods-in bench", "intake station" |
 | **label printer** | Prints internal barcodes at the receiving desk. | "barcode printer" (OK), "sticker printer" |
-| **letter-size summary** | The printout produced on finalize. | "receipt", "report", "A4 summary" (it is letter, not A4) |
-| **negative inventory** | Selling a physical copy before its Invoice is finalized drives the count below zero; E-05 must allow it, E-04 reconciles it. | "oversell", "backorder" (§3), "stock-out" |
+| **letter-size summary** | The printout produced on finalize, printed from the browser in v1 ([architecture](architecture.md) §4). | "receipt", "report", "A4 summary" (it is letter, not A4) |
+| **negative inventory** | Selling a physical copy before its Invoice is finalized drives the count below zero; E-05 must allow it, E-04 reconciles it. Raises a **ReviewFlag**. | "oversell", "backorder" (§3), "stock-out" |
+| **oversold item** | The InventoryItem minted when a Sale outruns stock — the concrete row that makes negative inventory a real count rather than a special case, and the thing E-04 clears when the physical copy arrives ([architecture](architecture.md) §5.1). | "phantom", "virtual item", "placeholder" |
 
 ---
 
@@ -121,17 +130,17 @@ of one pressing **share a Record** but are **distinct InventoryItems**.
 | **supplier margin** | Manager-set markup for a Supplier. In formulas: `supplier_margin`. | "markup rate", "margin percentage", "uplift" (uplift is a candidate *mechanism* in M-01, not a synonym) |
 | **suggested retail** / **suggested retail price** | `round_up(list_price x (1 + supplier_margin))`. Priced off the **pre-discount list price**, so supplier discounts are captured as margin. | "recommended price", "auto price", "calculated price" |
 | **sticky retail price** / **sticky price** | The retail price stored on a Record and pre-filled on the next receipt. **New stock only.** Always visible and editable; never applied silently. | "saved price", "default price", "last price" |
-| **shelf price** | Any customer-facing price. Always ends in `.50` or `.99`, always rounded up. | "retail price" when the rounding rule is the point, "display price" |
-| **round up** / `round_up` | Rounding is always upward, to the next `.50` or `.99`. | "round", "round to nearest" |
-| **below-cost pricing** | Setting a shelf price under cost. Blocked for Employees; requires a manager override. | "loss pricing", "negative margin" |
-| **guardrail** | The rule that an Employee cannot price below cost. | "validation", "limit" |
-| **cost of goods** / **COGS** | Where cost, tax, and the CostAdjustment land. | "cost of sales", "landed cost" (§ below) |
+| **shelf price** | Any customer-facing price. **Suggested** as ending in `.50` or `.99`, rounded up — a default, not a rule ([E-02](flows/E-02-receive-inventory.md) d32). | "retail price" when the rounding rule is the point, "display price" |
+| **round up** / `round_up` | The suggestion is always upward, to the next `.50` or `.99`. Advisory — any amount is accepted. | "round", "round to nearest"; describing it as enforced |
+| **below-cost pricing** | Setting a shelf price under cost. **Permitted**; raises a ReviewFlag ([E-02](flows/E-02-receive-inventory.md) d35). | "loss pricing", "negative margin"; describing it as blocked |
+| **guardrail** | A threshold at which an action raises a ReviewFlag rather than being refused — below cost, or beyond ±2%. | "validation", "limit"; implying it blocks |
+| **cost of goods** / **COGS** | Where cost, freight, misc, and the CostAdjustment land. **Inbound tax is excluded** ([E-02](flows/E-02-receive-inventory.md) d34) — it is a recoverable Input Tax Credit, not a cost. | "cost of sales", "landed cost" (§ below); including inbound tax |
 | **landed cost** | The allocation of freight/tax/misc down to items — **explicitly not done**. Say "there is no landed-cost calculation". | using "landed cost" to mean plain cost |
 | **freight** | Invoice-level shipping charge. Often unlabeled on the paperwork; derivable as `Total − Sub-Total − Tax`. Lowercase. | "shipping", "postage", "carriage" |
 | **tax** | Invoice-level. On the reference invoice this is Canadian **GST** + **QST**. | "VAT", "sales tax" when GST/QST is meant |
 | **miscellaneous** / **misc** | Invoice-level manual cost bucket. | "other", "adjustments" |
 | **subtotal** | Sum of line costs. Distinguish **derived subtotal** (our sum of entered costs) from the supplier's **stated subtotal** (`Sub-Total` on their paperwork). | "net total", "goods total" without the derived/stated qualifier |
-| **±2%** | The bounded tolerance on the Invoice total adjustment. Beyond it → manager override. Write it as `±2%`. | "2 percent", "small adjustment", "rounding tolerance" |
+| **±2%** | The tolerance on the Invoice total adjustment. Beyond it the adjustment proceeds and raises a **ReviewFlag** — a threshold at which a Manager is told, not a wall. Write it as `±2%`. | "2 percent", "small adjustment", "rounding tolerance"; describing it as a hard limit |
 
 ---
 
@@ -140,7 +149,8 @@ of one pressing **share a Record** but are **distinct InventoryItems**.
 | Canonical | Meaning | Avoid |
 |---|---|---|
 | **Goldmine scale** | The grading standard. Grades, highest to lowest: **M, NM, VG+, VG, G+, G, F, P**. Use these exact abbreviations. | "Discogs grading", spelled-out "Very Good Plus", other scales |
-| **condition grade** / **grade** | The per-copy Goldmine value. Required for every Second-hand item. | "quality", "rating", "state" |
+| **condition grade** / **grade** | The per-copy Goldmine value. **One grade per copy**, not separate sleeve and vinyl grades (PRD §4.2). Required for every Second-hand item. | "quality", "rating", "state"; sleeve/vinyl split grading |
+| **condition note** | Free text alongside the grade for specifics — "sleeve has ring wear", "seam split". | putting specifics in the grade itself |
 | **Mint/Sealed** | The condition a New-stock item defaults to. Written with the slash. | "Mint", "Sealed", "New" used as a grade |
 | **sleeve** / **vinyl** | The two parts a grade may (open question) apply to separately. | "jacket" for sleeve, "disc"/"record" for vinyl |
 
@@ -168,19 +178,22 @@ of one pressing **share a Record** but are **distinct InventoryItems**.
 
 ---
 
-## 8. Catalog metadata and Discogs
+## 8. Catalog metadata and the catalog provider
 
 | Canonical | Meaning | Avoid |
 |---|---|---|
-| **Discogs** | The external catalog metadata source. Capital `D`. Referenced as "the Discogs API". | "discogs", "the catalog service" |
+| **catalog provider** | The external catalog metadata source, reached through an adapter so it can be swapped. **MusicBrainz** in v1, with **Cover Art Archive** for artwork ([E-03](flows/E-03-search-inventory.md) d10). Use this term in specifications; name the implementation only when the specific service is the point. | "the catalog service", "the metadata API" |
+| **MusicBrainz** | The v1 catalog provider implementation. Capitalised as one word with a capital `B`. | "Musicbrainz", "MB" |
+| **Discogs** | A second, implemented provider, **off by default**. Capital `D`. Historic references in superseded decisions read as "the catalog provider". | treating it as *the* source; "discogs" |
 | **catalog** | Record metadata as a whole. American spelling throughout. | "catalogue" |
 | **catalog number** | Metadata field captured in manual entry (label's release number, e.g. `JAG485`). | "cat no." inconsistently, "catalogue number" |
-| **local-first** | Barcode resolution checks the local database before calling Discogs. Outcomes are a **local hit** or a **local miss**. | "cache-first", "offline-first" |
+| **local-first** | Barcode resolution checks the local database before calling the provider. Outcomes are a **local hit** or a **local miss**. | "cache-first", "offline-first" |
+| **release cache** | The provider responses shared **across stores**, sitting underneath the per-store catalogs. Sharing the cache is not sharing the catalog — Stores still own and edit their own Records ([architecture](architecture.md) A-6). | "shared catalog", "global records" |
 | **resolve** / **resolver** | Turning a scanned Barcode into a catalog Record. | "look up" as the noun, "match" |
-| **prefetch** | Bulk fetch of Discogs metadata at PO time so receiving hits locally. One word, no hyphen. | "pre-fetch", "pre-load", "sync", "bulk import" |
+| **prefetch** | Bulk fetch of catalog metadata at PO time so receiving hits locally. Batched several barcodes per request. One word, no hyphen. | "pre-fetch", "pre-load", "sync", "bulk import" |
 | **manual entry fallback** / **manual catalog entry** | Operator types metadata when there is no match: **artist, album title, genre, catalog number, label**. | "manual override", "free-text entry" |
-| **picker** | The chooser shown when Discogs returns multiple matches. | "disambiguation dialog", "selector" |
-| **cover art** | Captured once at receiving as a snapshot; **not re-synced**. | "artwork sync", "album image" |
+| **picker** | The chooser shown when the provider returns multiple matches. | "disambiguation dialog", "selector" |
+| **cover art** | Captured once at receiving as a snapshot; **not re-synced**. Stored as a URL in v1 ([architecture](architecture.md) A-14). | "artwork sync", "album image" |
 
 ---
 
@@ -195,7 +208,7 @@ of one pressing **share a Record** but are **distinct InventoryItems**.
 | **check digit** | The trailing UPC-A mod-10 digit. | "checksum digit", "control digit" |
 | **symbology** | A barcode format (UPC-A, Code 128, DataMatrix, QR). | "barcode type" loosely, "encoding" |
 | **manufacturer UPC** / **UPC/EAN** | A barcode issued by the manufacturer and printed on the sleeve. Resolves to a **Record**, so it is a lookup key rather than a unique identifier. | "retail barcode", "factory barcode" |
-| **picker** | The chooser shown when a manufacturer UPC resolves to more than one sellable copy, listing condition, price, and count. Same word as the Discogs multiple-match picker (§8). | "disambiguation dialog", "variant selector" |
+| **picker** | The chooser shown when a manufacturer UPC resolves to more than one sellable copy, listing condition, price, and count. Same word as the provider multiple-match picker (§8). | "disambiguation dialog", "variant selector" |
 | **label text** | The human-readable condition grade and price printed on a store label alongside the symbol. The barcode itself stays opaque, so re-grading reprints a label rather than invalidating a code. | encoding condition *into* the barcode, "sticker text" |
 
 ---

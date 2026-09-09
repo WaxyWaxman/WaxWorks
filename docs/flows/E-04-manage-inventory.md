@@ -16,7 +16,7 @@ It shows:
 
 | Group | Contents |
 |---|---|
-| Catalog | Artist, album title, label, catalog number, format, year, country, genre, Section, cover art, manufacturer UPC, Discogs identifiers |
+| Catalog | Artist, album title, label, catalog number, format, year, country, genre, Section, cover art, manufacturer UPC, catalog provider identifiers |
 | Copies | Each InventoryItem or identically-priced group: condition grade, price, cost, internal barcode |
 | Stock | On hand, available on hand, in backroom, held, minimum on hand |
 | Orders | Pending order, on order, available on order, backordered |
@@ -41,7 +41,7 @@ It shows:
 
 ### Pricing outside receiving
 
-An Employee may change a copy's price on the titlecard. The **below-cost guardrail from E-02 decision 10 still applies**: setting a *shelf* price below cost requires a manager override, wherever that price is set. This is distinct from a discount taken at the till, which needs no override (E-05 decision 12) — the difference is that a shelf price persists and a till discount is a one-off on a single Sale.
+An Employee may change a copy's price on the titlecard. The **below-cost guardrail still applies**, wherever a *shelf* price is set — but it now **raises a ReviewFlag rather than blocking** ([E-02](E-02-receive-inventory.md) d35, decision 16 below). This remains distinct from a discount taken at the till, which raises nothing (E-05 decision 12) — the difference is that a shelf price persists and a till discount is a one-off on a single Sale.
 
 The `.50`/`.99` rounding rule (E-02 decision 9) applies to shelf prices set here, as it does at receiving.
 
@@ -106,7 +106,7 @@ An optional cross-reference links the two, so a payout can be traced to the copi
 - **Void or amend a finalized Invoice** — manager-only, appended as a separate artifact against the original record.
 - **Return or credit claim against an Invoice** — an Employee may flag an Invoice during receiving; the handling lives here.
 - **Deferred line problems** — an Employee may skip a problem item during receiving and resolve it here.
-- **Below-cost pricing requires a manager override** (decision 10), which applies to shelf prices set here as well as at receiving.
+- **Below-cost pricing raises a ReviewFlag** ([E-02](E-02-receive-inventory.md) d35, amending its decision 10), which applies to shelf prices set here as well as at receiving.
 
 **From [E-05](E-05-sell-a-record.md):**
 
@@ -134,6 +134,9 @@ An optional cross-reference links the two, so a payout can be traced to the copi
 | 13 | **Minimum on hand is informational in v1** — reported, never auto-ordering |
 | 14 | Counter buying needs no third intake path: money via E-05 `Used Credit`, stock via E-02 second-hand intake, linked by an optional cross-reference |
 | 15 | Deleting a Record does not alter past Sales, whose line values are snapshotted |
+| 16 | **Below-cost shelf pricing raises a ReviewFlag rather than blocking.** **Amends decision 7**, following [E-02](E-02-receive-inventory.md) d35 and [M-04](M-04-manage-users.md) d8 |
+| 17 | **`.50`/`.99` rounding is a suggestion, not a rule.** **Amends decision 8**, following [E-02](E-02-receive-inventory.md) d32 |
+| 18 | **Reconciling negative inventory clears the oversold InventoryItem** the Sale minted — either by finalizing the Invoice that brings the real copy in, or by a reason-coded adjustment. Makes decision 6 concrete ([architecture](../architecture.md) §5.1) |
 
 ---
 

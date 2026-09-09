@@ -85,14 +85,16 @@ Pay-outs are the one cash movement that is captured, because money leaving the t
 | 9 | Pay-outs are captured with their notes, being otherwise invisible cash movements |
 | 10 | Records below minimum on hand are reported here |
 | 11 | Margin figures carry the E-02 unallocated-cost caveat |
+| 12 | **Held Sales are absent from the close.** The close touches only Current Sales — a Hold is not revenue until tendered. Held copies still reduce *available* stock, so the stock position reflects them. Closes the Held-Sale open question ([architecture](../architecture.md) A-23) |
+| 13 | **The summary is stored on the batch and printable.** `close_batches.summary` holds the computed breakdown at close time; a print route renders it. Storing rather than recomputing means an Undo End of Day cycle can never quietly restate a past day. Closes the delivery open question (A-30) |
 
 ---
 
 ## Open questions
 
-- **Delivery.** In-app only, emailed at close, printed at the till, or all three. E-02 prints a letter-size summary on finalize; whether the close does the same is unsettled.
-- **Arbitrary date ranges.** The close is per batch. Whether the same breakdown can be run over a week or a month — and whether that means summing batches or querying Sales directly — is undecided.
-- **Per-employee breakdown.** Depends on E-05's open question about which Employee a Sale belongs to when one rings it and another tenders it.
+- ~~**Delivery**~~ — **Resolved** by decision 13: stored on the batch and printable, both.
+- **Arbitrary date ranges.** The close is per batch. Whether the same breakdown can be run over a week or a month — and whether that means summing batches or querying Sales directly — is undecided. Decision 13's stored summaries make summing batches the cheaper of the two.
+- ~~**Per-employee breakdown**~~ — **Unblocked** by [E-05](E-05-sell-a-record.md) d23: a Sale belongs to whoever held the lock at tender. Whether the summary presents that breakdown is a reporting choice, deferred with the rest of trend reporting.
 - **Top sellers and trend reporting.** PRD goal G-2 wants market-trend analysis, which is a reporting surface well beyond a daily close. Probably its own flow.
-- **Multi-store.** Whether a Manager closes per store, and whether anyone sees a consolidated position across stores.
-- **What happens to a Held Sale at close?** Holds persist across closes by design, but they represent committed stock and arguably belong in the summary as a liability figure.
+- **Multi-store.** Whether a Manager closes per store, and whether anyone sees a consolidated position across stores. Deferred — v1 deploys one store with no cross-store UI.
+- ~~**What happens to a Held Sale at close?**~~ — **Resolved** by decision 12: nothing. A Hold is untouched by the close and absent from the summary.
