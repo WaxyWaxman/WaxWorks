@@ -33,7 +33,7 @@ Start on the **Flow map**; it carries a suggested review path.
 | [E-06](flows/E-06-process-a-return.md) | Specified | Return | Negative-qty line, prior-Sale link, refund default, cash/store-credit, stock routing. Entered only from Sell's **+ New Return** (`/return/:saleId`) — mirrors `/sell/:saleId` in never being its own nav item, since a Return is a Sale with `isReturn` set. |
 | [E-07](flows/E-07-manage-customers.md) | Specified | Customers | Lookup, signed balance, discount + default tax line, attach to Sale |
 | E-04 §"Supplier claims" | Specified (part of E-04) | Supplier Claims (`/claims`) | Not a numbered flow of its own. Claiming credit from a supplier for short/damaged/unshipped stock — distinct from a customer Return. Raised from a titlecard's **Claim vs. supplier** button; claims to the same supplier + separator merge onto one Draft, sent together with an auto-generated claim number. Suppliers are modeled only as far as this needs — full supplier management is M-01, still not in this pass. |
-| [E-02](flows/E-02-receive-inventory.md) | Specified | Receiving (`/receiving`) | The three phases in one screen: open an invoice (supplier, intake mode, invoice #, collision check, simulated photo extraction), scan/identify each record and price it (sticky price, suggested retail off the supplier's margin, below-cost guardrail, auto-accept toggle), then reconcile (derived-vs-stated subtotal warning, ±2%-bounded total override) and finalize — lines aren't sellable InventoryItems until then. A finalized copy is immediately claimable from its titlecard. |
+| [E-02](flows/E-02-receive-inventory.md) | Specified | Receiving (`/receiving`) | The three phases in one screen: open an invoice (supplier, intake mode, invoice #, collision check, simulated photo extraction), then an always-present fillable row at the bottom of Lines — scanning or typing a barcode there resolves it against this supplier's pending orders first, then the local catalog (a catalog-only Discogs match pulls in, same as E-03 decision 6), or opens Lookup on a miss — followed by pricing, then reconcile (derived-vs-stated subtotal warning, ±2%-bounded total override) and finalize — lines aren't sellable InventoryItems until then. A committed line's pencil re-opens it inline for correction. A finalized copy is immediately claimable from its titlecard. |
 | E-01, M-01–M-06 | — | *stubbed* | Added once the counter core is signed off |
 
 ## Turning a review into a decision
@@ -59,3 +59,14 @@ Style changes are cheap: design tokens are centralised in
   canned example, standing in for extraction. Barcode-to-record matching is local-only (no live
   Discogs call, no multi-match picker); a code with no local match goes straight to the
   search-or-create fallback. Backorder mechanics are unmodelled, per E-02's own open question.
+- Receiving's Orders panel is backed by a thin `PendingOrderLine` scaffold (supplier, PO #,
+  record, expected cost/discount, qty) — enough to look one up and receive against it, seeded with
+  a handful of rows. It is not M-02: there is no way to place an order from here, no reorder
+  suggestions, and no backorder lifecycle once a line isn't fully received.
+- On the line-entry row, "Cost" is the pre-discount figure off the paperwork and "Sell price"
+  replaces "Accepted price" — Disc% and Margin% are new. This is a deliberate departure from how
+  [E-02](flows/E-02-receive-inventory.md) decision 7 currently defines "cost" (there, cost *is*
+  the post-discount Ext. Price); the derived Ext. Price still drives the below-cost guardrail and
+  everything downstream (InventoryItem.cost, Supplier Claims), it's just no longer the field
+  labeled "Cost" in this screen. Worth a decision either amending E-02 decision 7 or documenting
+  the UI/spec vocabulary as deliberately different.

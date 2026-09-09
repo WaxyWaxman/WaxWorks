@@ -3,6 +3,7 @@ import type {
   GiftCard,
   InventoryItem,
   NonTrackedItem,
+  PendingOrderLine,
   RecordEntry,
   Supplier,
   TaxLine,
@@ -20,6 +21,15 @@ export const DEFAULT_TAX_LINE = "tx-std";
 export const SUPPLIERS: Supplier[] = [
   { id: "sup-fab", shortName: "FAB1", name: "F.A.B. Distribution", email: "claims@fabdist.example", marginPct: 60 },
   { id: "sup-indie", shortName: "INDI", name: "Indie Direct Supply", email: "returns@indiedirect.example", marginPct: 50 },
+];
+
+// ---- Pending orders (thin — just enough for Receiving's Orders lookup; full
+// M-02 — placing orders, reorder suggestions, backorders — is not in this pass) ----
+export const PENDING_ORDERS: PendingOrderLine[] = [
+  { id: "po-line-1", supplierId: "sup-fab", poNumber: "PO-1042", recordId: "r-kind", scannedCode: "888751545519", qty: 2, expectedListPrice: 22.0, expectedDiscountPct: 15, createdAt: "2026-09-02 10:15:00" },
+  { id: "po-line-2", supplierId: "sup-fab", poNumber: "PO-1042", recordId: "r-purple", scannedCode: "075992511018", qty: 3, expectedListPrice: 24.0, expectedDiscountPct: 10, createdAt: "2026-09-02 10:15:00" },
+  { id: "po-line-3", supplierId: "sup-fab", recordId: "r-blue", scannedCode: "081227971609", qty: 2, expectedListPrice: 27.99, expectedDiscountPct: 10, createdAt: "2026-09-05 14:30:00" },
+  { id: "po-line-4", supplierId: "sup-indie", poNumber: "PO-77", recordId: "r-horses", scannedCode: "060758004321", qty: 1, expectedListPrice: 20.0, expectedDiscountPct: 0, customerId: "c-theo", createdAt: "2026-09-06 09:00:00" },
 ];
 
 // ---- Records ----

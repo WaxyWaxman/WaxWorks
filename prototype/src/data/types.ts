@@ -185,12 +185,31 @@ export type InvoiceStatus = "Draft" | "Finalized";
 export interface InvoiceLine {
   id: string;
   recordId: string;
-  listPrice: number; // pre-discount — the basis for suggested retail
-  cost: number; // Ext. Price — post-discount, what we actually paid
-  acceptedPrice: number; // shelf price accepted for this line
+  scannedCode?: string; // what was scanned/matched to identify this line
+  listPrice: number; // "Cost" in the UI — pre-discount, what's on the paperwork
+  discountPct: number; // % off list the supplier gave us
+  cost: number; // derived: listPrice x (1 - discountPct/100) — Ext. Price, decision 7
+  acceptedPrice: number; // "Sell price" in the UI
   grade: Grade;
   qty: number; // one InventoryItem is minted per unit on finalize
   itemIds?: string[]; // populated on finalize — not sellable before then
+  fromOrderId?: string; // the PendingOrderLine this was received against, if any
+}
+
+// A supplier order not yet received — thin scaffold for the Orders lookup in
+// Receiving. Not M-02 (no PO creation, no reorder suggestions, no backorder
+// lifecycle) — just enough to look one up and receive against it.
+export interface PendingOrderLine {
+  id: string;
+  supplierId: string;
+  poNumber?: string;
+  recordId: string;
+  scannedCode?: string;
+  qty: number;
+  expectedListPrice?: number;
+  expectedDiscountPct?: number;
+  customerId?: string;
+  createdAt: string;
 }
 
 export interface Invoice {

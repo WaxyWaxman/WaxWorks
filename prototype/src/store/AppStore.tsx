@@ -6,6 +6,7 @@ import {
   type ReactNode,
 } from "react";
 import { money } from "../lib/money";
+import { round2 } from "../lib/totals";
 import {
   CURRENT_USER,
   CUSTOMERS,
@@ -13,6 +14,7 @@ import {
   GIFT_CARDS,
   INVENTORY,
   NON_TRACKED,
+  PENDING_ORDERS,
   RECORDS,
   SUPPLIERS,
   TAX_LINES,
@@ -27,6 +29,7 @@ import type {
   Invoice,
   InvoiceLine,
   NonTrackedItem,
+  PendingOrderLine,
   RecordEntry,
   Sale,
   SaleLine,
@@ -52,6 +55,7 @@ interface AppState {
   sales: Sale[];
   claims: SupplierClaim[];
   invoices: Invoice[];
+  pendingOrders: PendingOrderLine[];
   activeSaleId: string | null;
   nextSaleNumber: number;
   nextHold: number;
@@ -126,6 +130,7 @@ const seed: AppState = {
   ],
   claims: [],
   invoices: [],
+  pendingOrders: PENDING_ORDERS,
   activeSaleId: null,
   nextSaleNumber: 100241,
   nextHold: 2,
@@ -216,12 +221,20 @@ interface AppContextValue extends AppState {
     invoiceId: string,
     line: {
       recordId: string;
+      scannedCode?: string;
       listPrice: number;
-      cost: number;
+      discountPct: number;
       acceptedPrice: number;
       grade: Grade;
       qty: number;
+      fromOrderId?: string;
     },
+    priceOverrideBy?: string,
+  ) => void;
+  updateInvoiceLine: (
+    invoiceId: string,
+    lineId: string,
+    patch: Partial<Pick<InvoiceLine, "listPrice" | "discountPct" | "acceptedPrice" | "grade" | "qty">>,
     priceOverrideBy?: string,
   ) => void;
   removeInvoiceLine: (invoiceId: string, lineId: string) => void;
@@ -231,6 +244,9 @@ interface AppContextValue extends AppState {
   ) => void;
   setInvoiceTotalOverride: (invoiceId: string, value?: number, overrideBy?: string) => void;
   finalizeInvoice: (invoiceId: string) => { itemCount: number } | null;
+
+  pendingOrderFor: (id?: string) => PendingOrderLine | undefined;
+  receivePendingOrderLine: (id: string) => PendingOrderLine | null;
 }
 
 const Ctx = createContext<AppContextValue | null>(null);
@@ -896,7 +912,8 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
   const addInvoiceLine: AppContextValue["addInvoiceLine"] = (invoiceId, line, priceOverrideBy) => {
     const invoice = s.invoices.find((iv) => iv.id === invoiceId);
     if (!invoice || invoice.status !== "Draft") return;
-    const newLine: InvoiceLine = { id: uid("invline"), ...line };
+    const cost = round2(line.listPrice * (1 - line.discountPct / 100));
+    const newLine: InvoiceLine = { id: uid("invline"), ...line, cost };
     setS((prev) => ({
       ...prev,
       // E-03 decision 6 — receiving a catalog-only Record pulls it into local
@@ -929,6 +946,38 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
       ),
     }));
   };
+
+  const updateInvoiceLine: AppContextValue["updateInvoiceLine"] = (
+    invoiceId,
+    lineId,
+    patch,
+    priceOverrideBy,
+  ) =>
+    setS((prev) => ({
+      ...prev,
+      invoices: prev.invoices.map((iv) =>
+        iv.id === invoiceId
+          ? {
+              ...iv,
+              lines: iv.lines.map((l) => {
+                if (l.id !== lineId) return l;
+                const merged = { ...l, ...patch };
+                return {
+                  ...merged,
+                  cost: round2(merged.listPrice * (1 - merged.discountPct / 100)),
+                };
+              }),
+              log: [
+                ...iv.log,
+                {
+                  at: now(),
+                  text: "Line edited" + (priceOverrideBy ? ` (below-cost override by ${priceOverrideBy})` : ""),
+                },
+              ],
+            }
+          : iv,
+      ),
+    }));
 
   const removeInvoiceLine: AppContextValue["removeInvoiceLine"] = (invoiceId, lineId) =>
     setS((prev) => ({
@@ -1018,6 +1067,19 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
     return { itemCount: newItems.length };
   };
 
+  const pendingOrderFor = (id?: string) => s.pendingOrders.find((o) => o.id === id);
+
+  // Clicking an order in Receiving's Orders panel "moves" it into the current
+  // invoice's lines — here that just means it stops being pending. The Invoice
+  // side (adding the actual InvoiceLine) is the caller's job, since it needs
+  // the invoiceId this function doesn't have.
+  const receivePendingOrderLine: AppContextValue["receivePendingOrderLine"] = (id) => {
+    const order = s.pendingOrders.find((o) => o.id === id);
+    if (!order) return null;
+    setS((prev) => ({ ...prev, pendingOrders: prev.pendingOrders.filter((o) => o.id !== id) }));
+    return order;
+  };
+
   const value = useMemo<AppContextValue>(
     () => ({
       ...s,
@@ -1055,10 +1117,13 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
       startInvoice,
       createRecordManual,
       addInvoiceLine,
+      updateInvoiceLine,
       removeInvoiceLine,
       updateInvoiceTotals,
       setInvoiceTotalOverride,
       finalizeInvoice,
+      pendingOrderFor,
+      receivePendingOrderLine,
     }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [s],
