@@ -142,6 +142,7 @@ interface AppContextValue extends AppState {
   holdSale: (saleId: string) => string;
   voidSale: (saleId: string) => void;
   cancelHold: (saleId: string) => void;
+  releaseHoldLine: (itemId: string) => { holdRef: string; holdClosed: boolean } | null;
   addLog: (saleId: string, text: string) => void;
 
   reserve: (
@@ -505,6 +506,45 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
       ),
     }));
 
+  // Removes one copy from whichever Held sale it's on — since a hold can now
+  // carry several copies (same customer + PO), this is finer-grained than
+  // cancelHold. If it was the last line, the hold closes the same way a full
+  // cancelHold does; otherwise the sale stays Held with the remaining lines.
+  const releaseHoldLine: AppContextValue["releaseHoldLine"] = (itemId) => {
+    const sale = s.sales.find(
+      (x) => x.state === "Held" && x.lines.some((l) => l.inventoryItemId === itemId),
+    );
+    if (!sale) return null;
+    const holdRef = sale.holdRef!;
+    const remaining = sale.lines.filter((l) => l.inventoryItemId !== itemId);
+    const holdClosed = remaining.length === 0;
+    setS((prev) => ({
+      ...prev,
+      inventory: prev.inventory.map((i) =>
+        i.id === itemId ? { ...i, status: "sellable", heldByCustomerId: undefined } : i,
+      ),
+      sales: prev.sales.map((x) =>
+        x.id === sale.id
+          ? {
+              ...x,
+              lines: remaining,
+              state: holdClosed ? "Void" : x.state,
+              log: [
+                ...x.log,
+                {
+                  at: now(),
+                  text: holdClosed
+                    ? "Hold cancelled — last copy released to sellable stock"
+                    : "Copy released from hold — remaining items stay on hold",
+                },
+              ],
+            }
+          : x,
+      ),
+    }));
+    return { holdRef, holdClosed };
+  };
+
   const addLog: AppContextValue["addLog"] = (saleId, text) =>
     patchSale(saleId, (sale) => ({ ...sale, log: [...sale.log, { at: now(), text }] }));
 
@@ -662,6 +702,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
       holdSale,
       voidSale,
       cancelHold,
+      releaseHoldLine,
       addLog,
       reserve,
       setCopyPrice,

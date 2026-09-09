@@ -22,6 +22,10 @@ export function Search() {
   const [term, setTerm] = useState("blue");
   const [statusMsg, setStatusMsg] = useState<string | null>(null);
   const [reserveRecord, setReserveRecord] = useState<RecordEntry | null>(null);
+  // Cost is hidden by default — a customer standing at the counter can read
+  // this screen too. One toggle (in the titlecard's Copies card) covers both
+  // the panel above and the nested cost figures in the results table below.
+  const [showCost, setShowCost] = useState(false);
 
   const results = useMemo(() => {
     const q = term.trim().toLowerCase();
@@ -67,7 +71,12 @@ export function Search() {
   return (
     <div>
       {selectedRecord ? (
-        <TitlecardPanel recordId={selectedRecord.id} onReserved={setStatusMsg} />
+        <TitlecardPanel
+          recordId={selectedRecord.id}
+          onStatus={setStatusMsg}
+          showCost={showCost}
+          onToggleShowCost={() => setShowCost((v) => !v)}
+        />
       ) : (
         <div className="callout">No item selected yet — search for something below.</div>
       )}
@@ -184,7 +193,7 @@ export function Search() {
                           <span className="mono muted"> {c.internalBarcode}</span>
                           {c.conditionNote && <div className="xsmall muted">{c.conditionNote}</div>}
                         </td>
-                        <td className="small muted">cost {money(c.cost)}</td>
+                        <td className="small muted">cost {showCost ? money(c.cost) : "••••"}</td>
                         <td className="num" colSpan={3}>
                           {money(c.price)}
                         </td>

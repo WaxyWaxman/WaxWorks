@@ -2,7 +2,7 @@ import { useState } from "react";
 import { ManagerOverride } from "../components/ManagerOverride";
 import { Modal } from "../components/Modal";
 import { ReserveModal } from "../components/ReserveModal";
-import type { InventoryItem } from "../data/types";
+import type { InventoryItem, RecordEntry } from "../data/types";
 import { money, roundUpShelf } from "../lib/money";
 import {
   availableOnHand,
@@ -18,20 +18,36 @@ import { useApp } from "../store/AppStore";
 // stock/orders/history, Reserve, and the below-cost guardrail.
 export function TitlecardPanel({
   recordId,
-  onReserved,
+  onStatus,
+  showCost,
+  onToggleShowCost,
 }: {
   recordId: string;
-  onReserved: (confirmation: string) => void;
+  onStatus: (confirmation: string) => void;
+  showCost: boolean;
+  onToggleShowCost: () => void;
 }) {
   const app = useApp();
   const record = app.recordFor(recordId);
   const [reserveFor, setReserveFor] = useState<InventoryItem | null>(null);
   const [priceEdit, setPriceEdit] = useState<InventoryItem | null>(null);
+  const [labelFor, setLabelFor] = useState<InventoryItem | null>(null);
 
   if (!record) return <p className="muted">Unknown Record.</p>;
   const copies = app.inventory.filter((i) => i.recordId === record.id && i.status !== "sold");
   const oh = onHand(record.id, app.inventory);
   const belowMin = oh < record.minOnHand;
+
+  const doRemoveHold = (c: InventoryItem) => {
+    const res = app.releaseHoldLine(c.id);
+    if (!res) return;
+    const what = `${record.artist} — ${record.title} (${c.grade})`;
+    onStatus(
+      res.holdClosed
+        ? `Hold ${res.holdRef} cancelled — ${what} released back to sellable stock.`
+        : `Removed from hold ${res.holdRef} — ${what} released back to sellable stock; other items on ${res.holdRef} are unaffected.`,
+    );
+  };
 
   return (
     <div>
@@ -87,8 +103,17 @@ export function TitlecardPanel({
           <div className="card">
             <div className="card-head">
               Copies
-              <span className="muted xsmall">
-                each InventoryItem — grade, price, cost, internal barcode
+              <span className="row" style={{ gap: "var(--sp-3)" }}>
+                <span className="muted xsmall">
+                  each InventoryItem — grade, price, cost, internal barcode
+                </span>
+                <button
+                  className="btn ghost sm"
+                  onClick={onToggleShowCost}
+                  title="Cost is visible on this screen — a customer standing at the counter can see it too"
+                >
+                  {showCost ? "🔓 Cost shown" : "🔒 Cost hidden"}
+                </button>
               </span>
             </div>
             <div className="card-body" style={{ padding: 0 }}>
@@ -110,7 +135,15 @@ export function TitlecardPanel({
                         <span className="badge grade">{c.grade}</span>
                       </td>
                       <td className="mono small">{c.internalBarcode}</td>
-                      <td className="num">{money(c.cost)}</td>
+                      <td className="num">
+                        {showCost ? (
+                          money(c.cost)
+                        ) : (
+                          <span className="muted mono" title="Cost hidden — click Cost shown/hidden above to reveal">
+                            ••••
+                          </span>
+                        )}
+                      </td>
                       <td className="num">{money(c.price)}</td>
                       <td className="small">
                         {c.status === "held" ? (
@@ -127,9 +160,17 @@ export function TitlecardPanel({
                           <button className="btn sm" onClick={() => setPriceEdit(c)}>
                             Edit price
                           </button>
+                          <button className="btn sm" onClick={() => setLabelFor(c)}>
+                            Print label
+                          </button>
                           {c.status === "sellable" && (
                             <button className="btn sm" onClick={() => setReserveFor(c)}>
                               Put on hold
+                            </button>
+                          )}
+                          {c.status === "held" && (
+                            <button className="btn sm danger" onClick={() => doRemoveHold(c)}>
+                              Remove hold
                             </button>
                           )}
                         </div>
@@ -220,11 +261,19 @@ export function TitlecardPanel({
           onClose={() => setReserveFor(null)}
           onDone={(confirmation) => {
             setReserveFor(null);
-            onReserved(confirmation);
+            onStatus(confirmation);
           }}
         />
       )}
       {priceEdit && <PriceEditModal item={priceEdit} onClose={() => setPriceEdit(null)} />}
+      {labelFor && (
+        <PrintLabelModal
+          item={labelFor}
+          record={record}
+          onClose={() => setLabelFor(null)}
+          onDone={onStatus}
+        />
+      )}
     </div>
   );
 }
@@ -237,6 +286,67 @@ function Row({ k, v }: { k: string; v: string }) {
       </td>
       <td>{v}</td>
     </tr>
+  );
+}
+
+function PrintLabelModal({
+  item,
+  record,
+  onClose,
+  onDone,
+}: {
+  item: InventoryItem;
+  record: RecordEntry;
+  onClose: () => void;
+  onDone: (confirmation: string) => void;
+}) {
+  const [qty, setQty] = useState(1);
+
+  const commit = () => {
+    onDone(
+      `Printed ${qty} label${qty === 1 ? "" : "s"} — ${item.internalBarcode} ` +
+        `(${item.grade}, ${money(item.price)}).`,
+    );
+    onClose();
+  };
+
+  return (
+    <Modal
+      title={`Print label — ${record.artist} — ${record.title}`}
+      onClose={onClose}
+      foot={
+        <>
+          <button className="btn ghost" onClick={onClose}>
+            Cancel
+          </button>
+          <button className="btn primary" disabled={qty < 1} onClick={commit}>
+            Print {qty} label{qty === 1 ? "" : "s"}
+          </button>
+        </>
+      }
+    >
+      <div className="stack">
+        <p className="small">
+          A Code 128 store label for this copy, with condition and price printed as human-readable
+          text alongside the code — legible without a scanner, and the code itself stays an opaque
+          ID so re-grading or re-pricing later doesn't require a reprint. <em>(PRD §4.3.)</em>
+        </p>
+        <div className="small muted">
+          <span className="badge grade">{item.grade}</span> {money(item.price)} ·{" "}
+          <span className="mono">{item.internalBarcode}</span>
+        </div>
+        <label className="field">
+          <span>Number of copies</span>
+          <input
+            className="inline-num"
+            type="number"
+            min={1}
+            value={qty}
+            onChange={(e) => setQty(Math.max(1, Number(e.target.value)))}
+          />
+        </label>
+      </div>
+    </Modal>
   );
 }
 
