@@ -15,16 +15,19 @@ Point-of-sale and inventory management for independent vinyl record stores.
 
 | ID | Flow | Actor | Status |
 |---|---|---|---|
-| E-01 | [Authenticate to the platform](flows/E-01-authenticate.md) | Employee | Stub |
+| E-01 | [Authenticate to the platform](flows/E-01-authenticate.md) | Employee | In clarification |
 | E-02 | [Receive inventory](flows/E-02-receive-inventory.md) | Employee | **Specified** |
-| E-03 | [Search the inventory](flows/E-03-search-inventory.md) | Employee | Stub |
-| E-04 | [Manage the inventory](flows/E-04-manage-inventory.md) | Employee | Stub |
-| E-05 | [Sell a record](flows/E-05-sell-a-record.md) | Employee | Stub |
-| E-06 | [Process a return](flows/E-06-process-a-return.md) | Employee | Stub |
+| E-03 | [Search the inventory](flows/E-03-search-inventory.md) | Employee | **Specified** |
+| E-04 | [Manage the inventory](flows/E-04-manage-inventory.md) | Employee | **Specified** |
+| E-05 | [Sell a record](flows/E-05-sell-a-record.md) | Employee | **Specified** |
+| E-06 | [Process a return](flows/E-06-process-a-return.md) | Employee | **Specified** |
+| E-07 | [Manage customers](flows/E-07-manage-customers.md) | Employee | **Specified** |
 | M-01 | [Set a supplier margin](flows/M-01-supplier-margin.md) | Manager | Stub |
-| M-02 | [Re-order inventory](flows/M-02-reorder-inventory.md) | Manager | Stub |
-| M-03 | [Daily summary](flows/M-03-daily-summary.md) | Manager | Stub |
-| M-04 | [Add/remove employees or managers](flows/M-04-manage-users.md) | Manager | Stub |
+| M-02 | [Re-order inventory](flows/M-02-reorder-inventory.md) | Manager | **Specified** |
+| M-03 | [Daily summary](flows/M-03-daily-summary.md) | Manager | **Specified** |
+| M-04 | [Add/remove employees or managers](flows/M-04-manage-users.md) | Manager | In clarification |
+| M-05 | [Accounts payable](flows/M-05-accounts-payable.md) | Manager | **Specified** |
+| M-06 | [Configure the store](flows/M-06-settings.md) | Manager | In clarification |
 
 ## Conventions
 
