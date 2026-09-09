@@ -1,14 +1,24 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { useNavigate, useParams } from "react-router-dom";
 import { Modal } from "../components/Modal";
 import { GRADES, type Grade } from "../data/types";
 import { money } from "../lib/money";
 import { balanceDue, saleTotals } from "../lib/totals";
 import { useApp } from "../store/AppStore";
 
-export function Return() {
+// Entered exclusively from E-05 Sell → + New Return (mirrors how /sell/:saleId
+// is never itself a nav item). A Return is a Sale with isReturn set, so a
+// stray /sell/:id link to one, or a /return/:id link to an ordinary Sale,
+// redirects to the screen that actually knows how to edit it.
+export function ReturnScreen() {
   const app = useApp();
-  const [saleId, setSaleId] = useState<string | null>(null);
-  const sale = app.sales.find((s) => s.id === saleId) ?? null;
+  const nav = useNavigate();
+  const { saleId } = useParams<{ saleId: string }>();
+  const sale = app.sales.find((s) => s.id === saleId);
+
+  useEffect(() => {
+    if (sale && !sale.isReturn) nav(`/sell/${sale.id}`, { replace: true });
+  }, [sale, nav]);
 
   return (
     <div>
@@ -24,18 +34,13 @@ export function Return() {
         </div>
       </div>
 
-      {!sale && (
-        <div className="card">
-          <div className="card-body stack">
-            <p className="small">Start a Return the same way as a Sale (E-05), optionally attaching the Customer.</p>
-            <button className="btn primary" onClick={() => setSaleId(app.newSale({ isReturn: true }))}>
-              Start a Return
-            </button>
-          </div>
-        </div>
+      {!sale && <p className="muted">Unknown Return — start one from E-05 Sell → + New Return.</p>}
+      {sale && sale.isReturn && (
+        <ReturnEditor
+          saleId={sale.id}
+          onRestart={() => nav(`/return/${app.newSale({ isReturn: true })}`)}
+        />
       )}
-
-      {sale && <ReturnEditor saleId={sale.id} onRestart={() => setSaleId(app.newSale({ isReturn: true }))} />}
     </div>
   );
 }

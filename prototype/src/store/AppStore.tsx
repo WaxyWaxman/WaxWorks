@@ -13,9 +13,11 @@ import {
   INVENTORY,
   NON_TRACKED,
   RECORDS,
+  SUPPLIERS,
   TAX_LINES,
 } from "../data/seed";
 import type {
+  ClaimReason,
   Customer,
   GiftCard,
   Grade,
@@ -24,6 +26,8 @@ import type {
   RecordEntry,
   Sale,
   SaleLine,
+  Supplier,
+  SupplierClaim,
   TaxLine,
   Tender,
 } from "../data/types";
@@ -36,13 +40,16 @@ interface AppState {
   records: RecordEntry[];
   inventory: InventoryItem[];
   customers: Customer[];
+  suppliers: Supplier[];
   giftCards: GiftCard[];
   taxLines: TaxLine[];
   nonTracked: NonTrackedItem[];
   sales: Sale[];
+  claims: SupplierClaim[];
   activeSaleId: string | null;
   nextSaleNumber: number;
   nextHold: number;
+  nextClaimNumber: number;
   /** E-03 decision 8 — toggle to demo graceful degradation when Discogs is down */
   discogsUp: boolean;
 }
@@ -51,6 +58,7 @@ const seed: AppState = {
   records: RECORDS,
   inventory: INVENTORY,
   customers: CUSTOMERS,
+  suppliers: SUPPLIERS,
   giftCards: GIFT_CARDS,
   taxLines: TAX_LINES,
   nonTracked: NON_TRACKED,
@@ -109,9 +117,11 @@ const seed: AppState = {
       ],
     },
   ],
+  claims: [],
   activeSaleId: null,
   nextSaleNumber: 100241,
   nextHold: 2,
+  nextClaimNumber: 12,
   discogsUp: true,
 };
 
@@ -120,6 +130,7 @@ interface AppContextValue extends AppState {
   recordFor: (id?: string) => RecordEntry | undefined;
   customerFor: (id?: string) => Customer | undefined;
   itemFor: (id?: string) => InventoryItem | undefined;
+  supplierFor: (id?: string) => Supplier | undefined;
 
   newSale: (opts?: { isReturn?: boolean }) => string;
   setActiveSale: (id: string | null) => void;
@@ -144,6 +155,16 @@ interface AppContextValue extends AppState {
   cancelHold: (saleId: string) => void;
   releaseHoldLine: (itemId: string) => { holdRef: string; holdClosed: boolean } | null;
   addLog: (saleId: string, text: string) => void;
+
+  raiseClaim: (
+    itemId: string,
+    reason: ClaimReason,
+    qty: number,
+    separator?: string,
+    note?: string,
+  ) => { claimId: string; supplierName: string } | null;
+  sendClaim: (claimId: string, claimNumber?: number) => { claimNumber: number } | null;
+  markClaimCredited: (claimId: string) => void;
 
   reserve: (
     recordId: string,
@@ -178,6 +199,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
   const recordFor = (id?: string) => s.records.find((r) => r.id === id);
   const customerFor = (id?: string) => s.customers.find((c) => c.id === id);
   const itemFor = (id?: string) => s.inventory.find((i) => i.id === id);
+  const supplierFor = (id?: string) => s.suppliers.find((sup) => sup.id === id);
 
   const applyCustomerDefaults = (
     customerId: string | undefined,
@@ -548,6 +570,98 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
   const addLog: AppContextValue["addLog"] = (saleId, text) =>
     patchSale(saleId, (sale) => ({ ...sale, log: [...sale.log, { at: now(), text }] }));
 
+  // Claims raised against the same supplier + separator merge onto one Draft
+  // claim as extra lines — the same batching key pending orders use (M-02) —
+  // rather than becoming N separate claims that all have to be sent one by
+  // one. E-04 §"Supplier claims".
+  const raiseClaim: AppContextValue["raiseClaim"] = (itemId, reason, qty, separator, note) => {
+    const item = s.inventory.find((i) => i.id === itemId);
+    if (!item?.supplierId) return null;
+    const supplier = s.suppliers.find((sup) => sup.id === item.supplierId)!;
+    const sepKey = (separator ?? "").trim();
+    const line = {
+      id: uid("claimline"),
+      recordId: item.recordId,
+      itemId: item.id,
+      invoiceNumber: item.arrivedOnInvoice,
+      reason,
+      note,
+      cost: item.cost,
+      qty,
+    };
+
+    const existing = s.claims.find(
+      (c) =>
+        c.status === "Draft" &&
+        c.supplierId === supplier.id &&
+        (c.separator ?? "").trim() === sepKey,
+    );
+
+    if (existing) {
+      setS((prev) => ({
+        ...prev,
+        claims: prev.claims.map((c) =>
+          c.id === existing.id
+            ? {
+                ...c,
+                lines: [...c.lines, line],
+                log: [...c.log, { at: now(), text: `Line added — ${reason} (qty ${qty})` }],
+              }
+            : c,
+        ),
+      }));
+      return { claimId: existing.id, supplierName: supplier.name };
+    }
+
+    const id = uid("claim");
+    const claim: SupplierClaim = {
+      id,
+      supplierId: supplier.id,
+      separator: sepKey || undefined,
+      status: "Draft",
+      lines: [line],
+      createdBy: CURRENT_USER,
+      createdAt: now(),
+      log: [{ at: now(), text: `Claim opened — ${reason} (qty ${qty})` }],
+    };
+    setS((prev) => ({ ...prev, claims: [claim, ...prev.claims] }));
+    return { claimId: id, supplierName: supplier.name };
+  };
+
+  const sendClaim: AppContextValue["sendClaim"] = (claimId, claimNumber) => {
+    const claim = s.claims.find((c) => c.id === claimId);
+    if (!claim || claim.status !== "Draft") return null;
+    const supplier = s.suppliers.find((sup) => sup.id === claim.supplierId)!;
+    const used = new Set(s.claims.map((c) => c.claimNumber).filter(Boolean));
+    let num = claimNumber ?? s.nextClaimNumber;
+    while (used.has(num)) num++;
+    setS((prev) => ({
+      ...prev,
+      nextClaimNumber: Math.max(prev.nextClaimNumber, num + 1),
+      claims: prev.claims.map((c) =>
+        c.id === claimId
+          ? {
+              ...c,
+              status: "Pending",
+              claimNumber: num,
+              log: [...c.log, { at: now(), text: `Claim ${num} sent to ${supplier.email}` }],
+            }
+          : c,
+      ),
+    }));
+    return { claimNumber: num };
+  };
+
+  const markClaimCredited: AppContextValue["markClaimCredited"] = (claimId) =>
+    setS((prev) => ({
+      ...prev,
+      claims: prev.claims.map((c) =>
+        c.id === claimId
+          ? { ...c, status: "Credited", log: [...c.log, { at: now(), text: "Marked Credited" }] }
+          : c,
+      ),
+    }));
+
   const reserve: AppContextValue["reserve"] = (recordId, itemId, customerId, qty, po) => {
     const rec = s.records.find((r) => r.id === recordId)!;
     const item = s.inventory.find((i) => i.id === itemId)!;
@@ -686,6 +800,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
       recordFor,
       customerFor,
       itemFor,
+      supplierFor,
       newSale,
       setActiveSale,
       attachCustomer,
@@ -704,6 +819,9 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
       cancelHold,
       releaseHoldLine,
       addLog,
+      raiseClaim,
+      sendClaim,
+      markClaimCredited,
       reserve,
       setCopyPrice,
       routeReturnLine,

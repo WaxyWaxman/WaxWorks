@@ -30,8 +30,9 @@ Start on the **Flow map**; it carries a suggested review path.
 | [E-03](flows/E-03-search-inventory.md) | Specified | Search | Grouping, catalog-only rows, scan-to-resolve, Discogs-down toggle. Selecting a Record (click a row, Reserve, or a resolved scan) opens its titlecard inline above the results — see E-04. |
 | [E-04](flows/E-04-manage-inventory.md) | Specified | *(embedded in Search)* | Copies, derived on-hand math, Reserve → Held Sale, below-cost guardrail + manager override. Not a separate route — the titlecard is a view, not a screen of its own (E-04 decision 1), so it lives in Search's `TitlecardPanel` and updates as the selected Record changes. `/search/:recordId` deep-links to a specific one. |
 | [E-05](flows/E-05-sell-a-record.md) | Specified | Sell | Barcode resolver, multi-copy picker, customer pre-fill, `0.00` prompt, negative inventory, split tender, hold/void, receipt |
-| [E-06](flows/E-06-process-a-return.md) | Specified | Return | Negative-qty line, prior-Sale link, refund default, cash/store-credit, stock routing |
+| [E-06](flows/E-06-process-a-return.md) | Specified | Return | Negative-qty line, prior-Sale link, refund default, cash/store-credit, stock routing. Entered only from Sell's **+ New Return** (`/return/:saleId`) — mirrors `/sell/:saleId` in never being its own nav item, since a Return is a Sale with `isReturn` set. |
 | [E-07](flows/E-07-manage-customers.md) | Specified | Customers | Lookup, signed balance, discount + default tax line, attach to Sale |
+| E-04 §"Supplier claims" | Specified (part of E-04) | Supplier Claims (`/claims`) | Not a numbered flow of its own. Claiming credit from a supplier for short/damaged/unshipped stock — distinct from a customer Return. Raised from a titlecard's **Claim vs. supplier** button; claims to the same supplier + separator merge onto one Draft, sent together with an auto-generated claim number. Suppliers are modeled only as far as this needs — full supplier management is M-01, still not in this pass. |
 | E-01, E-02, M-01–M-06 | — | *stubbed* | Added once the counter core is signed off |
 
 ## Turning a review into a decision
@@ -50,3 +51,5 @@ Style changes are cheap: design tokens are centralised in
 - Tax is a flat rate per named line; real multi-jurisdiction handling (M-06) is not modelled.
 - Manager override is initials-only with no real auth.
 - Open questions in the flow docs are surfaced in the UI but not resolved.
+- Suppliers are two seeded rows with a name and email — enough to demo Supplier Claims batching by
+  supplier; margins, ordering, and everything else in M-01 aren't modelled.

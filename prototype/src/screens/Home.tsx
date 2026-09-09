@@ -18,15 +18,25 @@ const BUILT = [
   },
   {
     id: "E-06",
-    to: "/return",
+    to: "/sell",
     title: "Process a return",
-    blurb: "Negative-quantity line, refund default, stock routing.",
+    blurb:
+      "Click + New Return on E-05 Sell to open it — negative-quantity line, refund default, " +
+      "stock routing. Distinct from a supplier claim (below).",
   },
   {
     id: "E-07",
     to: "/customers",
     title: "Manage customers",
     blurb: "Lookup, signed balance, discount + tax-line defaults.",
+  },
+  {
+    id: "CLAIMS",
+    to: "/claims",
+    title: "Supplier claims",
+    blurb:
+      "Credit from a supplier for short/damaged/unshipped stock — not a customer return. Raised " +
+      "from a titlecard's Claim vs. supplier button, batched by supplier, sent with a claim number.",
   },
 ];
 
@@ -51,11 +61,16 @@ export function Home() {
           <h1>Wax Works — clickable prototype</h1>
           <p className="sub">
             Counter-core flows built for review: <strong>E-03 → E-04 → E-05 → E-06</strong>, with{" "}
-            <strong>E-07</strong> supporting. E-03 and E-04 share one screen — search, then open a
-            Record's titlecard inline. Every screen is wired to a shared in-memory store, so a hold
-            placed on the titlecard shows up at the till, a sale consumes stock, and a return puts it
-            back. Use it to make calls on style, content, flow, and behavior — then record them as
-            numbered decisions in the flow docs.
+            <strong>E-07</strong> supporting and <strong>Supplier Claims</strong> (from E-04)
+            alongside. E-03 and E-04 share one screen — search, then open a Record's titlecard
+            inline. A <strong>Return</strong> (customer refund) starts from E-05 Sell's{" "}
+            <em>+ New Return</em> and opens the E-06 editor; a <strong>Supplier Claim</strong> (credit
+            from a supplier for short/damaged stock) is a different thing entirely, raised from a
+            titlecard and sent from its own screen. Every screen is wired to a shared in-memory
+            store, so a hold placed on the titlecard shows up at the till, a sale consumes stock, a
+            return puts it back, and a claim lands in Supplier Claims to batch and send. Use it to
+            make calls on style, content, flow, and behavior — then record them as numbered
+            decisions in the flow docs.
           </p>
         </div>
       </div>
@@ -108,8 +123,15 @@ export function Home() {
           split the tender across gift card + cash, then hold or tender.
         </li>
         <li>
-          <strong>E-06 Return</strong> — start a return, scan a copy, link it to a prior sale, set
-          the refund, then route the returned copy.
+          <strong>E-06 Return</strong> — on E-05 Sell, click <em>+ New Return</em> (opens the E-06
+          editor, not the Sale one). Scan a copy, link it to a prior sale, set the refund, then
+          route the returned copy.
+        </li>
+        <li>
+          <strong>Supplier Claims</strong> — open the Joni Mitchell — Blue titlecard (it arrived on
+          a F.A.B. invoice) and click <em>Claim vs. supplier</em>. Raise a couple of claims under
+          the same supplier and separator to see them merge onto one Draft, then send it from the{" "}
+          <strong>Supplier Claims</strong> screen and mark it Credited.
         </li>
       </ol>
 

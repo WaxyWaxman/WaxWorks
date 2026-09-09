@@ -15,13 +15,23 @@ export function Sell() {
   const nav = useNavigate();
   const { saleId } = useParams();
 
+  // A Return is a Sale with isReturn set, but it's edited at E-06's own
+  // screen (return-specific fields: link to a prior Sale, refund, stock
+  // routing) — this is the counterpart to ReturnScreen's redirect the other
+  // way, so a stray /sell/:id link to a Return lands somewhere useful.
   useEffect(() => {
+    const target = app.sales.find((s) => s.id === saleId);
+    if (target?.isReturn) {
+      nav(`/return/${target.id}`, { replace: true });
+      return;
+    }
     if (saleId && saleId !== app.activeSaleId) app.setActiveSale(saleId);
-  }, [saleId]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [saleId, app.sales]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const sale = app.activeSale;
-  const openSales = app.sales.filter((s) => s.state === "Current" && !s.saleNumber);
-  const heldSales = app.sales.filter((s) => s.state === "Held");
+  const openSales = app.sales.filter((s) => s.state === "Current" && !s.saleNumber && !s.isReturn);
+  const heldSales = app.sales.filter((s) => s.state === "Held" && !s.isReturn);
+  const openReturns = app.sales.filter((s) => s.isReturn && s.state === "Current" && !s.saleNumber);
 
   return (
     <div>
@@ -29,7 +39,11 @@ export function Sell() {
         <span className="flow-id">E-05</span>
         <div>
           <h1>Sell a record</h1>
-          <p className="sub">Ring up a Sale and take payment. Split tender, holds, negative inventory, gift cards.</p>
+          <p className="sub">
+            Ring up a Sale and take payment. Split tender, holds, negative inventory, gift cards.
+            Returns start here too — <strong>+ New Return</strong> opens the E-06 editor, which
+            handles the refund and stock routing.
+          </p>
         </div>
       </div>
 
@@ -38,7 +52,7 @@ export function Sell() {
           <button className="btn primary" onClick={() => nav(`/sell/${app.newSale()}`)}>
             + New Sale
           </button>
-          <button className="btn" onClick={() => nav(`/sell/${app.newSale({ isReturn: true })}`)}>
+          <button className="btn" onClick={() => nav(`/return/${app.newSale({ isReturn: true })}`)}>
             + New Return
           </button>
           <span className="muted xsmall">Open:</span>
@@ -49,9 +63,19 @@ export function Sell() {
               className={"btn sm" + (s.id === sale?.id ? " primary" : "")}
               onClick={() => nav(`/sell/${s.id}`)}
             >
-              {s.isReturn ? "Return" : "Sale"} · {s.lines.length} line{s.lines.length !== 1 ? "s" : ""}
+              Sale · {s.lines.length} line{s.lines.length !== 1 ? "s" : ""}
             </button>
           ))}
+          {openReturns.length > 0 && (
+            <>
+              <span className="muted xsmall">Open returns:</span>
+              {openReturns.map((s) => (
+                <button key={s.id} className="btn sm" onClick={() => nav(`/return/${s.id}`)}>
+                  Return · {s.lines.length} line{s.lines.length !== 1 ? "s" : ""}
+                </button>
+              ))}
+            </>
+          )}
           <span className="muted xsmall">Held:</span>
           {heldSales.map((s) => (
             <button
@@ -66,7 +90,7 @@ export function Sell() {
       </div>
 
       {!sale && <div className="callout">Start a new Sale or pick one above.</div>}
-      {sale && <SaleEditor key={sale.id} />}
+      {sale && !sale.isReturn && <SaleEditor key={sale.id} />}
     </div>
   );
 }
@@ -121,7 +145,7 @@ function SaleEditor() {
       <div className="stack">
         <div className="card">
           <div className="card-head">
-            {sale.isReturn ? "Return" : "Sale"} —{" "}
+            Sale —{" "}
             {sale.saleNumber ? (
               <>#{sale.saleNumber} <span className="badge ok">Tendered</span></>
             ) : sale.state === "Held" ? (

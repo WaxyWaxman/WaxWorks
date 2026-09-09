@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { ClaimModal } from "../components/ClaimModal";
 import { ManagerOverride } from "../components/ManagerOverride";
 import { Modal } from "../components/Modal";
 import { ReserveModal } from "../components/ReserveModal";
@@ -32,6 +33,7 @@ export function TitlecardPanel({
   const [reserveFor, setReserveFor] = useState<InventoryItem | null>(null);
   const [priceEdit, setPriceEdit] = useState<InventoryItem | null>(null);
   const [labelFor, setLabelFor] = useState<InventoryItem | null>(null);
+  const [claiming, setClaiming] = useState(false);
 
   if (!record) return <p className="muted">Unknown Record.</p>;
   const copies = app.inventory.filter((i) => i.recordId === record.id && i.status !== "sold");
@@ -90,7 +92,9 @@ export function TitlecardPanel({
                     <button className="btn sm" title="M-02 — not in this pass">
                       Order
                     </button>
-                    <button className="btn sm">Claim vs. supplier</button>
+                    <button className="btn sm" onClick={() => setClaiming(true)}>
+                      Claim vs. supplier
+                    </button>
                     <button className="btn sm" title="Manager only">
                       Adjust on hand (Mgr)
                     </button>
@@ -271,6 +275,14 @@ export function TitlecardPanel({
           item={labelFor}
           record={record}
           onClose={() => setLabelFor(null)}
+          onDone={onStatus}
+        />
+      )}
+      {claiming && (
+        <ClaimModal
+          record={record}
+          items={copies}
+          onClose={() => setClaiming(false)}
           onDone={onStatus}
         />
       )}

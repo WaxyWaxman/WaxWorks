@@ -39,6 +39,16 @@ export interface InventoryItem {
   status: ItemStatus;
   heldByCustomerId?: string;
   arrivedOnInvoice?: string;
+  supplierId?: string; // set when arrivedOnInvoice traces to a Supplier — claimable
+}
+
+// Suppliers are modeled only as far as Supplier Claims needs them — full
+// supplier management (margins, ordering) is M-01, not in this pass.
+export interface Supplier {
+  id: string;
+  shortName: string;
+  name: string;
+  email: string;
 }
 
 export interface NonTrackedItem {
@@ -122,5 +132,42 @@ export interface Sale {
   createdBy: string;
   createdAt: string;
   isReturn?: boolean;
+  log: { at: string; text: string }[];
+}
+
+// ---- Supplier Claims (E-04 §"Supplier claims") ----
+// Distinct from a customer Return (E-06) — this is claiming credit from a
+// supplier for stock that arrived short, damaged, or not at all.
+export const CLAIM_REASONS = [
+  "Billed / not shipped",
+  "Received damaged",
+  "Short shipped",
+  "Wrong item",
+  "Other",
+] as const;
+export type ClaimReason = (typeof CLAIM_REASONS)[number];
+
+export type ClaimStatus = "Draft" | "Pending" | "Credited";
+
+export interface ClaimLine {
+  id: string;
+  recordId: string;
+  itemId?: string;
+  invoiceNumber?: string;
+  reason: ClaimReason;
+  note?: string;
+  cost: number;
+  qty: number;
+}
+
+export interface SupplierClaim {
+  id: string;
+  claimNumber?: number; // assigned on send — E-04 decision 10
+  supplierId: string;
+  separator?: string; // same batching key as pending orders (M-02)
+  status: ClaimStatus;
+  lines: ClaimLine[];
+  createdBy: string;
+  createdAt: string;
   log: { at: string; text: string }[];
 }

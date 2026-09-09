@@ -4,6 +4,7 @@ import type {
   InventoryItem,
   NonTrackedItem,
   RecordEntry,
+  Supplier,
   TaxLine,
 } from "./types";
 
@@ -14,6 +15,12 @@ export const TAX_LINES: TaxLine[] = [
   { id: "tx-exempt", name: "Exempt (0%)", rate: 0 },
 ];
 export const DEFAULT_TAX_LINE = "tx-std";
+
+// ---- Suppliers (thin — just enough for Supplier Claims; full M-01 is not in this pass) ----
+export const SUPPLIERS: Supplier[] = [
+  { id: "sup-fab", shortName: "FAB1", name: "F.A.B. Distribution", email: "claims@fabdist.example" },
+  { id: "sup-indie", shortName: "INDI", name: "Indie Direct Supply", email: "returns@indiedirect.example" },
+];
 
 // ---- Records ----
 export const RECORDS: RecordEntry[] = [
@@ -152,20 +159,20 @@ export const RECORDS: RecordEntry[] = [
 // ---- Inventory items (physical copies) ----
 export const INVENTORY: InventoryItem[] = [
   // Blue — one new-ish copy + two used at different grades (UPC picker case)
-  { id: "i-blue-1", recordId: "r-blue", grade: "NM", price: 28.99, cost: 12.4, internalBarcode: "200000001236", status: "sellable", arrivedOnInvoice: "F.A.B. 55021" },
+  { id: "i-blue-1", recordId: "r-blue", grade: "NM", price: 28.99, cost: 12.4, internalBarcode: "200000001236", status: "sellable", arrivedOnInvoice: "F.A.B. 55021", supplierId: "sup-fab" },
   { id: "i-blue-2", recordId: "r-blue", grade: "VG+", price: 21.5, cost: 6.0, internalBarcode: "200000001243", status: "sellable" },
   { id: "i-blue-3", recordId: "r-blue", grade: "VG", price: 16.99, cost: 4.0, internalBarcode: "200000001250", status: "sellable", conditionNote: "Light seam wear, plays clean" },
 
   // Rumours — New stock, sticky price; 3 sealed copies share condition/price
-  { id: "i-rum-1", recordId: "r-rumours", grade: "M", price: 34.99, cost: 18.75, internalBarcode: "200000002234", status: "sellable", arrivedOnInvoice: "F.A.B. 55021" },
-  { id: "i-rum-2", recordId: "r-rumours", grade: "M", price: 34.99, cost: 18.75, internalBarcode: "200000002241", status: "sellable", arrivedOnInvoice: "F.A.B. 55021" },
-  { id: "i-rum-3", recordId: "r-rumours", grade: "M", price: 34.99, cost: 18.75, internalBarcode: "200000002258", status: "held", heldByCustomerId: "c-ramona", arrivedOnInvoice: "F.A.B. 55021" },
+  { id: "i-rum-1", recordId: "r-rumours", grade: "M", price: 34.99, cost: 18.75, internalBarcode: "200000002234", status: "sellable", arrivedOnInvoice: "F.A.B. 55021", supplierId: "sup-fab" },
+  { id: "i-rum-2", recordId: "r-rumours", grade: "M", price: 34.99, cost: 18.75, internalBarcode: "200000002241", status: "sellable", arrivedOnInvoice: "F.A.B. 55021", supplierId: "sup-fab" },
+  { id: "i-rum-3", recordId: "r-rumours", grade: "M", price: 34.99, cost: 18.75, internalBarcode: "200000002258", status: "held", heldByCustomerId: "c-ramona", arrivedOnInvoice: "F.A.B. 55021", supplierId: "sup-fab" },
 
   // Kind of Blue — single used copy (resolves with no picker)
   { id: "i-kob-1", recordId: "r-kind", grade: "VG+", price: 24.0, cost: 9.5, internalBarcode: "200000003231", status: "sellable" },
 
   // Purple Rain — New stock, 1 on hand, below min
-  { id: "i-pr-1", recordId: "r-purple", grade: "M", price: 32.99, cost: 17.25, internalBarcode: "200000004238", status: "sellable" },
+  { id: "i-pr-1", recordId: "r-purple", grade: "M", price: 32.99, cost: 17.25, internalBarcode: "200000004238", status: "sellable", arrivedOnInvoice: "INDI-3390", supplierId: "sup-indie" },
 
   // Illmatic — used, backroom
   { id: "i-ill-1", recordId: "r-illmatic", grade: "VG", price: 45.0, cost: 20.0, internalBarcode: "200000005235", status: "sellable", backroom: true, conditionNote: "Backroom — sought after, keep behind counter" },
