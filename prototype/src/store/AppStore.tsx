@@ -144,7 +144,12 @@ interface AppContextValue extends AppState {
   cancelHold: (saleId: string) => void;
   addLog: (saleId: string, text: string) => void;
 
-  reserve: (recordId: string, itemId: string, customerId: string, qty: number) => string;
+  reserve: (
+    recordId: string,
+    itemId: string,
+    customerId: string,
+    qty: number,
+  ) => { id: string; holdRef: string };
   setCopyPrice: (itemId: string, price: number, overrideBy?: string) => void;
   routeReturnLine: (
     saleId: string,
@@ -541,7 +546,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
         i.id === itemId ? { ...i, status: "held", heldByCustomerId: customerId } : i,
       ),
     }));
-    return id;
+    return { id, holdRef: ref };
   };
 
   const setCopyPrice: AppContextValue["setCopyPrice"] = (itemId, price) =>

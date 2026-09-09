@@ -20,7 +20,7 @@ export function Search() {
   const nav = useNavigate();
   const { recordId } = useParams();
   const [term, setTerm] = useState("blue");
-  const [scanMsg, setScanMsg] = useState<string | null>(null);
+  const [statusMsg, setStatusMsg] = useState<string | null>(null);
   const [reserveRecord, setReserveRecord] = useState<RecordEntry | null>(null);
 
   const results = useMemo(() => {
@@ -50,24 +50,24 @@ export function Search() {
   const doScan = (code: string) => {
     const res = resolveScan(code, app);
     if (res.kind === "internal") {
-      setScanMsg(`Internal barcode → one copy: ${res.record.title} (${res.item.grade}).`);
+      setStatusMsg(`Internal barcode → one copy: ${res.record.title} (${res.item.grade}).`);
       select(res.record.id);
     } else if (res.kind === "upc-single" || res.kind === "upc-multi") {
-      setScanMsg(`Manufacturer UPC → Record: ${res.record.title}.`);
+      setStatusMsg(`Manufacturer UPC → Record: ${res.record.title}.`);
       select(res.record.id);
     } else if (res.kind === "giftcard") {
-      setScanMsg(`Gift card ${res.card.code} — balance ${money(res.card.balance)}. (Handled at the till, not search.)`);
+      setStatusMsg(`Gift card ${res.card.code} — balance ${money(res.card.balance)}. (Handled at the till, not search.)`);
     } else if (res.kind === "nontracked") {
-      setScanMsg(`Non-tracked item ${res.item.code}. (Handled at the till, not search.)`);
+      setStatusMsg(`Non-tracked item ${res.item.code}. (Handled at the till, not search.)`);
     } else {
-      setScanMsg(`No match for “${code}”.`);
+      setStatusMsg(`No match for “${code}”.`);
     }
   };
 
   return (
     <div>
       {selectedRecord ? (
-        <TitlecardPanel recordId={selectedRecord.id} onReserved={(id) => nav(`/sell/${id}`)} />
+        <TitlecardPanel recordId={selectedRecord.id} onReserved={setStatusMsg} />
       ) : (
         <div className="callout">No item selected yet — search for something below.</div>
       )}
@@ -87,7 +87,7 @@ export function Search() {
             />
           </label>
           <BarcodeInput onScan={doScan} placeholder="…or scan a barcode to resolve directly" />
-          {scanMsg && <div className="callout ok">{scanMsg}</div>}
+          {statusMsg && <div className="callout ok">{statusMsg}</div>}
           {!app.discogsUp && (
             <div className="callout danger">
               Discogs is unreachable — catalog-only rows are hidden. Local inventory and every till
@@ -258,9 +258,9 @@ export function Search() {
             (i) => i.recordId === reserveRecord.id && i.status === "sellable",
           )}
           onClose={() => setReserveRecord(null)}
-          onDone={(saleId) => {
+          onDone={(confirmation) => {
             setReserveRecord(null);
-            nav(`/sell/${saleId}`);
+            setStatusMsg(confirmation);
           }}
         />
       )}

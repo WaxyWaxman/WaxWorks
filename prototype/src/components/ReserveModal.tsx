@@ -18,7 +18,7 @@ export function ReserveModal({
   items: InventoryItem[];
   initialItemId?: string;
   onClose: () => void;
-  onDone: (saleId: string) => void;
+  onDone: (confirmation: string) => void;
 }) {
   const app = useApp();
   const [itemId, setItemId] = useState(initialItemId ?? items[0]?.id ?? "");
@@ -26,30 +26,37 @@ export function ReserveModal({
   const [qty, setQty] = useState(1);
   const item = items.find((i) => i.id === itemId);
 
+  const commit = () => {
+    const cust = app.customerFor(customerId);
+    const { holdRef } = app.reserve(record.id, itemId, customerId, qty);
+    onDone(
+      `On hold — ${holdRef} for ${cust?.name ?? "customer"}: ${record.artist} — ${record.title} ` +
+        `(${item?.grade ?? ""}, qty ${qty}). Open at the till when they're ready to tender.`,
+    );
+  };
+
   return (
     <Modal
-      title={`Reserve — ${record.artist} — ${record.title}`}
+      title={`Put on hold — ${record.artist} — ${record.title}`}
       onClose={onClose}
       foot={
         <>
           <button className="btn ghost" onClick={onClose}>
             Cancel
           </button>
-          <button
-            className="btn primary"
-            disabled={!customerId || !itemId || qty < 1}
-            onClick={() => onDone(app.reserve(record.id, itemId, customerId, qty))}
-          >
-            Reserve &amp; open at till
+          <button className="btn primary" disabled={!customerId || !itemId || qty < 1} onClick={commit}>
+            Put on hold
           </button>
         </>
       }
     >
       <div className="stack">
         <p className="small">
-          Reserving stock on hand creates a <strong>Held</strong> Sale (E-05) with an{" "}
-          <span className="mono">H</span>-prefixed hold reference. The copy stays on hand but leaves
-          available stock. <em>(E-04 → E-05 inherited.)</em>
+          Sets the copy aside without ringing it up — the common case is a customer calling ahead,
+          not standing at the counter. Creates a <strong>Held</strong> Sale (E-05) with an{" "}
+          <span className="mono">H</span>-prefixed hold reference; it stays on hand but leaves
+          available stock, and is tendered later from <strong>E-05 Sell</strong>.{" "}
+          <em>(E-04 → E-05 inherited.)</em>
         </p>
         {items.length > 1 ? (
           <label className="field">

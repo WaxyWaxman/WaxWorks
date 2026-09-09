@@ -21,7 +21,7 @@ export function TitlecardPanel({
   onReserved,
 }: {
   recordId: string;
-  onReserved: (saleId: string) => void;
+  onReserved: (confirmation: string) => void;
 }) {
   const app = useApp();
   const record = app.recordFor(recordId);
@@ -218,9 +218,9 @@ export function TitlecardPanel({
           items={[reserveFor]}
           initialItemId={reserveFor.id}
           onClose={() => setReserveFor(null)}
-          onDone={(saleId) => {
+          onDone={(confirmation) => {
             setReserveFor(null);
-            onReserved(saleId);
+            onReserved(confirmation);
           }}
         />
       )}
