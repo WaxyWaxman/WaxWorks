@@ -38,11 +38,19 @@ const BUILT = [
       "Credit from a supplier for short/damaged/unshipped stock — not a customer return. Raised " +
       "from a titlecard's Claim vs. supplier button, batched by supplier, sent with a claim number.",
   },
+  {
+    id: "E-02",
+    to: "/receiving",
+    title: "Receive inventory",
+    blurb:
+      "Open an invoice, scan/identify each record, price it against the supplier's margin " +
+      "(sticky price, below-cost guardrail), then reconcile and finalize — nothing's sellable " +
+      "before that.",
+  },
 ];
 
 const NOT_BUILT = [
   ["E-01", "Authenticate"],
-  ["E-02", "Receive inventory"],
   ["M-01", "Supplier margin"],
   ["M-02", "Re-order inventory"],
   ["M-03", "Daily summary"],
@@ -60,17 +68,18 @@ export function Home() {
         <div>
           <h1>Wax Works — clickable prototype</h1>
           <p className="sub">
-            Counter-core flows built for review: <strong>E-03 → E-04 → E-05 → E-06</strong>, with{" "}
-            <strong>E-07</strong> supporting and <strong>Supplier Claims</strong> (from E-04)
+            Counter-core flows built for review: <strong>E-02 → E-03 → E-04 → E-05 → E-06</strong>,
+            with <strong>E-07</strong> supporting and <strong>Supplier Claims</strong> (from E-04)
             alongside. E-03 and E-04 share one screen — search, then open a Record's titlecard
             inline. A <strong>Return</strong> (customer refund) starts from E-05 Sell's{" "}
             <em>+ New Return</em> and opens the E-06 editor; a <strong>Supplier Claim</strong> (credit
             from a supplier for short/damaged stock) is a different thing entirely, raised from a
             titlecard and sent from its own screen. Every screen is wired to a shared in-memory
-            store, so a hold placed on the titlecard shows up at the till, a sale consumes stock, a
-            return puts it back, and a claim lands in Supplier Claims to batch and send. Use it to
-            make calls on style, content, flow, and behavior — then record them as numbered
-            decisions in the flow docs.
+            store, so a copy received on E-02 is what you'll find when you search for it, a hold
+            placed on the titlecard shows up at the till, a sale consumes stock, a return puts it
+            back, and a claim lands in Supplier Claims to batch and send. Use it to make calls on
+            style, content, flow, and behavior — then record them as numbered decisions in the flow
+            docs.
           </p>
         </div>
       </div>
@@ -110,6 +119,14 @@ export function Home() {
 
       <h2>Suggested review path</h2>
       <ol className="small stack">
+        <li>
+          <strong>E-02 Receiving</strong> — start a New-stock intake from F.A.B. Distribution.
+          Scan the Blue UPC (a local hit — Blue's already stocked) at list $27.99 to see the
+          suggested-retail worked example ($44.99, 60% margin); scan it again and the sticky
+          price it just set takes over. Then scan Horses's UPC to watch a catalog-only title pull
+          in — try an accepted price below cost for the override, and reconcile the total beyond
+          ±2% for that guardrail too. Finalize, then go find your new copies in Search.
+        </li>
         <li>
           <strong>E-03/E-04 Search</strong> — search “blue”. Check the grouping (one row per
           Record, copies nested), the catalog-only rows, and how it reads when Discogs is down.

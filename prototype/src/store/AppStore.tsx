@@ -5,6 +5,7 @@ import {
   useState,
   type ReactNode,
 } from "react";
+import { money } from "../lib/money";
 import {
   CURRENT_USER,
   CUSTOMERS,
@@ -21,11 +22,15 @@ import type {
   Customer,
   GiftCard,
   Grade,
+  IntakeMode,
   InventoryItem,
+  Invoice,
+  InvoiceLine,
   NonTrackedItem,
   RecordEntry,
   Sale,
   SaleLine,
+  Section,
   Supplier,
   SupplierClaim,
   TaxLine,
@@ -46,10 +51,12 @@ interface AppState {
   nonTracked: NonTrackedItem[];
   sales: Sale[];
   claims: SupplierClaim[];
+  invoices: Invoice[];
   activeSaleId: string | null;
   nextSaleNumber: number;
   nextHold: number;
   nextClaimNumber: number;
+  nextInternalBarcode: number;
   /** E-03 decision 8 — toggle to demo graceful degradation when Discogs is down */
   discogsUp: boolean;
 }
@@ -118,10 +125,12 @@ const seed: AppState = {
     },
   ],
   claims: [],
+  invoices: [],
   activeSaleId: null,
   nextSaleNumber: 100241,
   nextHold: 2,
   nextClaimNumber: 12,
+  nextInternalBarcode: 9000,
   discogsUp: true,
 };
 
@@ -183,6 +192,45 @@ interface AppContextValue extends AppState {
     price?: number,
   ) => void;
   toggleDiscogs: () => void;
+
+  invoiceFor: (id?: string) => Invoice | undefined;
+  startInvoice: (input: {
+    supplierId: string;
+    intakeMode: IntakeMode;
+    invoiceNumber: string;
+    invoiceDate: string;
+    receivedDate: string;
+    statedSubtotal: number;
+    tax: number;
+    freight: number;
+  }) => string;
+  createRecordManual: (input: {
+    artist: string;
+    title: string;
+    genre: string;
+    catalogNo: string;
+    label: string;
+    section: Section;
+  }) => string;
+  addInvoiceLine: (
+    invoiceId: string,
+    line: {
+      recordId: string;
+      listPrice: number;
+      cost: number;
+      acceptedPrice: number;
+      grade: Grade;
+      qty: number;
+    },
+    priceOverrideBy?: string,
+  ) => void;
+  removeInvoiceLine: (invoiceId: string, lineId: string) => void;
+  updateInvoiceTotals: (
+    invoiceId: string,
+    patch: Partial<Pick<Invoice, "statedSubtotal" | "tax" | "freight" | "misc">>,
+  ) => void;
+  setInvoiceTotalOverride: (invoiceId: string, value?: number, overrideBy?: string) => void;
+  finalizeInvoice: (invoiceId: string) => { itemCount: number } | null;
 }
 
 const Ctx = createContext<AppContextValue | null>(null);
@@ -798,6 +846,178 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
 
   const toggleDiscogs = () => setS((prev) => ({ ...prev, discogsUp: !prev.discogsUp }));
 
+  const invoiceFor = (id?: string) => s.invoices.find((iv) => iv.id === id);
+
+  const startInvoice: AppContextValue["startInvoice"] = (input) => {
+    const id = uid("inv");
+    const invoice: Invoice = {
+      id,
+      ...input,
+      misc: 0,
+      status: "Draft",
+      lines: [],
+      createdBy: CURRENT_USER,
+      createdAt: now(),
+      log: [
+        {
+          at: now(),
+          text: `Invoice opened — ${input.intakeMode} intake, invoice ${input.invoiceNumber}`,
+        },
+      ],
+    };
+    setS((prev) => ({ ...prev, invoices: [invoice, ...prev.invoices] }));
+    return id;
+  };
+
+  // Manual catalog entry (E-02 decision 24) — only the fields decision 24
+  // actually names. Format/year/country are placeholders: an employee
+  // filling this in has no barcode and no Discogs match, so genuinely
+  // doesn't know them yet; editable later from the titlecard (E-04).
+  const createRecordManual: AppContextValue["createRecordManual"] = (input) => {
+    const id = uid("rec");
+    const rec: RecordEntry = {
+      id,
+      artist: input.artist,
+      title: input.title,
+      label: input.label,
+      catalogNo: input.catalogNo,
+      format: "—",
+      year: new Date().getFullYear(),
+      country: "—",
+      genre: input.genre,
+      section: input.section,
+      art: "💿",
+      minOnHand: 0,
+    };
+    setS((prev) => ({ ...prev, records: [...prev.records, rec] }));
+    return id;
+  };
+
+  const addInvoiceLine: AppContextValue["addInvoiceLine"] = (invoiceId, line, priceOverrideBy) => {
+    const invoice = s.invoices.find((iv) => iv.id === invoiceId);
+    if (!invoice || invoice.status !== "Draft") return;
+    const newLine: InvoiceLine = { id: uid("invline"), ...line };
+    setS((prev) => ({
+      ...prev,
+      // E-03 decision 6 — receiving a catalog-only Record pulls it into local
+      // stock. E-02 decision 12 — New mode sets the sticky retail price.
+      records: prev.records.map((r) =>
+        r.id === line.recordId
+          ? {
+              ...r,
+              catalogOnly: false,
+              ...(invoice.intakeMode === "New" ? { stickyPrice: line.acceptedPrice } : {}),
+            }
+          : r,
+      ),
+      invoices: prev.invoices.map((iv) =>
+        iv.id === invoiceId
+          ? {
+              ...iv,
+              lines: [...iv.lines, newLine],
+              log: [
+                ...iv.log,
+                {
+                  at: now(),
+                  text:
+                    `Line added — qty ${line.qty} at ${money(line.acceptedPrice)}` +
+                    (priceOverrideBy ? ` (below-cost override by ${priceOverrideBy})` : ""),
+                },
+              ],
+            }
+          : iv,
+      ),
+    }));
+  };
+
+  const removeInvoiceLine: AppContextValue["removeInvoiceLine"] = (invoiceId, lineId) =>
+    setS((prev) => ({
+      ...prev,
+      invoices: prev.invoices.map((iv) =>
+        iv.id === invoiceId
+          ? {
+              ...iv,
+              lines: iv.lines.filter((l) => l.id !== lineId),
+              log: [...iv.log, { at: now(), text: "Line removed before finalizing" }],
+            }
+          : iv,
+      ),
+    }));
+
+  const updateInvoiceTotals: AppContextValue["updateInvoiceTotals"] = (invoiceId, patch) =>
+    setS((prev) => ({
+      ...prev,
+      invoices: prev.invoices.map((iv) => (iv.id === invoiceId ? { ...iv, ...patch } : iv)),
+    }));
+
+  const setInvoiceTotalOverride: AppContextValue["setInvoiceTotalOverride"] = (
+    invoiceId,
+    value,
+    overrideBy,
+  ) =>
+    setS((prev) => ({
+      ...prev,
+      invoices: prev.invoices.map((iv) =>
+        iv.id === invoiceId ? { ...iv, totalOverride: value, totalOverrideBy: overrideBy } : iv,
+      ),
+    }));
+
+  // On finalize: every line's qty becomes that many sellable InventoryItems
+  // (E-02 decision 20 — not sellable before this), each minted its own
+  // internal barcode and traced back to this Invoice/Supplier so a Supplier
+  // Claim can be raised against it later.
+  const finalizeInvoice: AppContextValue["finalizeInvoice"] = (invoiceId) => {
+    const invoice = s.invoices.find((iv) => iv.id === invoiceId);
+    if (!invoice || invoice.status !== "Draft" || invoice.lines.length === 0) return null;
+    const supplier = s.suppliers.find((sup) => sup.id === invoice.supplierId)!;
+    const newItems: InventoryItem[] = [];
+    let barcodeSeq = s.nextInternalBarcode;
+    const updatedLines = invoice.lines.map((line) => {
+      const itemIds: string[] = [];
+      for (let i = 0; i < line.qty; i++) {
+        const itemId = uid("item");
+        const code = `29${String(barcodeSeq).padStart(10, "0")}`;
+        barcodeSeq++;
+        itemIds.push(itemId);
+        newItems.push({
+          id: itemId,
+          recordId: line.recordId,
+          grade: line.grade,
+          price: line.acceptedPrice,
+          cost: line.cost,
+          internalBarcode: code,
+          status: "sellable",
+          arrivedOnInvoice: `${supplier.shortName} ${invoice.invoiceNumber}`,
+          supplierId: supplier.id,
+        });
+      }
+      return { ...line, itemIds };
+    });
+    setS((prev) => ({
+      ...prev,
+      nextInternalBarcode: barcodeSeq,
+      inventory: [...prev.inventory, ...newItems],
+      invoices: prev.invoices.map((iv) =>
+        iv.id === invoiceId
+          ? {
+              ...iv,
+              status: "Finalized",
+              lines: updatedLines,
+              finalizedAt: now(),
+              log: [
+                ...iv.log,
+                {
+                  at: now(),
+                  text: `Finalized — ${newItems.length} cop${newItems.length === 1 ? "y" : "ies"} now sellable`,
+                },
+              ],
+            }
+          : iv,
+      ),
+    }));
+    return { itemCount: newItems.length };
+  };
+
   const value = useMemo<AppContextValue>(
     () => ({
       ...s,
@@ -831,6 +1051,14 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
       setCopyPrice,
       routeReturnLine,
       toggleDiscogs,
+      invoiceFor,
+      startInvoice,
+      createRecordManual,
+      addInvoiceLine,
+      removeInvoiceLine,
+      updateInvoiceTotals,
+      setInvoiceTotalOverride,
+      finalizeInvoice,
     }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [s],

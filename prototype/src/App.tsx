@@ -6,6 +6,7 @@ import { Sell } from "./screens/Sell";
 import { ReturnScreen } from "./screens/Return";
 import { Claims } from "./screens/Claims";
 import { Customers } from "./screens/Customers";
+import { Receiving } from "./screens/Receiving";
 
 const NAV = [
   { to: "/", label: "Flow map", end: true },
@@ -13,6 +14,7 @@ const NAV = [
   { to: "/sell", label: "E-05 Sell" },
   { to: "/claims", label: "Supplier Claims" },
   { to: "/customers", label: "E-07 Customers" },
+  { to: "/receiving", label: "E-02 Receiving" },
 ];
 
 export function App() {
@@ -53,6 +55,7 @@ export function App() {
           <Route path="/return/:saleId" element={<ReturnScreen />} />
           <Route path="/claims" element={<Claims />} />
           <Route path="/customers" element={<Customers />} />
+          <Route path="/receiving" element={<Receiving />} />
         </Routes>
       </main>
     </div>

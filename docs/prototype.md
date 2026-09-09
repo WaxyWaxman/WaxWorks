@@ -33,7 +33,8 @@ Start on the **Flow map**; it carries a suggested review path.
 | [E-06](flows/E-06-process-a-return.md) | Specified | Return | Negative-qty line, prior-Sale link, refund default, cash/store-credit, stock routing. Entered only from Sell's **+ New Return** (`/return/:saleId`) — mirrors `/sell/:saleId` in never being its own nav item, since a Return is a Sale with `isReturn` set. |
 | [E-07](flows/E-07-manage-customers.md) | Specified | Customers | Lookup, signed balance, discount + default tax line, attach to Sale |
 | E-04 §"Supplier claims" | Specified (part of E-04) | Supplier Claims (`/claims`) | Not a numbered flow of its own. Claiming credit from a supplier for short/damaged/unshipped stock — distinct from a customer Return. Raised from a titlecard's **Claim vs. supplier** button; claims to the same supplier + separator merge onto one Draft, sent together with an auto-generated claim number. Suppliers are modeled only as far as this needs — full supplier management is M-01, still not in this pass. |
-| E-01, E-02, M-01–M-06 | — | *stubbed* | Added once the counter core is signed off |
+| [E-02](flows/E-02-receive-inventory.md) | Specified | Receiving (`/receiving`) | The three phases in one screen: open an invoice (supplier, intake mode, invoice #, collision check, simulated photo extraction), scan/identify each record and price it (sticky price, suggested retail off the supplier's margin, below-cost guardrail, auto-accept toggle), then reconcile (derived-vs-stated subtotal warning, ±2%-bounded total override) and finalize — lines aren't sellable InventoryItems until then. A finalized copy is immediately claimable from its titlecard. |
+| E-01, M-01–M-06 | — | *stubbed* | Added once the counter core is signed off |
 
 ## Turning a review into a decision
 
@@ -51,5 +52,10 @@ Style changes are cheap: design tokens are centralised in
 - Tax is a flat rate per named line; real multi-jurisdiction handling (M-06) is not modelled.
 - Manager override is initials-only with no real auth.
 - Open questions in the flow docs are surfaced in the UI but not resolved.
-- Suppliers are two seeded rows with a name and email — enough to demo Supplier Claims batching by
-  supplier; margins, ordering, and everything else in M-01 aren't modelled.
+- Suppliers are two seeded rows with a name, email, and a fixed margin — enough to demo Supplier
+  Claims batching and E-02's suggested-retail formula; setting/changing a margin is M-01, not
+  built.
+- Receiving's "photograph the invoice" step has no camera or OCR behind it — a button fills in a
+  canned example, standing in for extraction. Barcode-to-record matching is local-only (no live
+  Discogs call, no multi-match picker); a code with no local match goes straight to the
+  search-or-create fallback. Backorder mechanics are unmodelled, per E-02's own open question.

@@ -16,10 +16,10 @@ export const TAX_LINES: TaxLine[] = [
 ];
 export const DEFAULT_TAX_LINE = "tx-std";
 
-// ---- Suppliers (thin — just enough for Supplier Claims; full M-01 is not in this pass) ----
+// ---- Suppliers (thin — just enough for Supplier Claims and Receiving; full M-01 is not in this pass) ----
 export const SUPPLIERS: Supplier[] = [
-  { id: "sup-fab", shortName: "FAB1", name: "F.A.B. Distribution", email: "claims@fabdist.example" },
-  { id: "sup-indie", shortName: "INDI", name: "Indie Direct Supply", email: "returns@indiedirect.example" },
+  { id: "sup-fab", shortName: "FAB1", name: "F.A.B. Distribution", email: "claims@fabdist.example", marginPct: 60 },
+  { id: "sup-indie", shortName: "INDI", name: "Indie Direct Supply", email: "returns@indiedirect.example", marginPct: 50 },
 ];
 
 // ---- Records ----
@@ -134,6 +134,7 @@ export const RECORDS: RecordEntry[] = [
     genre: "Art Punk",
     section: "VINYL",
     art: "🐎",
+    manufacturerUpc: "060758004321",
     discogsId: "377464",
     minOnHand: 0,
     catalogOnly: true,

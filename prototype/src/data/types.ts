@@ -42,13 +42,15 @@ export interface InventoryItem {
   supplierId?: string; // set when arrivedOnInvoice traces to a Supplier — claimable
 }
 
-// Suppliers are modeled only as far as Supplier Claims needs them — full
-// supplier management (margins, ordering) is M-01, not in this pass.
+// Suppliers are modeled only as far as Supplier Claims and Receiving need
+// them — margin is a fixed seeded value here since M-01 (setting/changing
+// it) is still not in this pass.
 export interface Supplier {
   id: string;
   shortName: string;
   name: string;
   email: string;
+  marginPct: number; // E-02 decision 8 — read-only in this pass, M-01 sets it
 }
 
 export interface NonTrackedItem {
@@ -170,5 +172,44 @@ export interface SupplierClaim {
   lines: ClaimLine[];
   createdBy: string;
   createdAt: string;
+  log: { at: string; text: string }[];
+}
+
+// ---- Receiving (E-02) ----
+// A supplier Invoice — the inbound receiving document. Distinct from a
+// customer's receipt (E-05) and from a customer invoice (E-07). Immutable
+// once finalized (decision 23); voids/amendments are E-04, not in this pass.
+export type IntakeMode = "New" | "Second-hand";
+export type InvoiceStatus = "Draft" | "Finalized";
+
+export interface InvoiceLine {
+  id: string;
+  recordId: string;
+  listPrice: number; // pre-discount — the basis for suggested retail
+  cost: number; // Ext. Price — post-discount, what we actually paid
+  acceptedPrice: number; // shelf price accepted for this line
+  grade: Grade;
+  qty: number; // one InventoryItem is minted per unit on finalize
+  itemIds?: string[]; // populated on finalize — not sellable before then
+}
+
+export interface Invoice {
+  id: string;
+  supplierId: string;
+  invoiceNumber: string;
+  intakeMode: IntakeMode;
+  invoiceDate: string;
+  receivedDate: string;
+  statedSubtotal: number; // from the invoice photo/manual entry — decision 15
+  tax: number;
+  freight: number;
+  misc: number;
+  totalOverride?: number; // reconciling to the paper total — bounded ±2%, decision 19
+  totalOverrideBy?: string; // manager initials if beyond ±2%
+  status: InvoiceStatus;
+  lines: InvoiceLine[];
+  createdBy: string;
+  createdAt: string;
+  finalizedAt?: string;
   log: { at: string; text: string }[];
 }

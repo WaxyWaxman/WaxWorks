@@ -1,7 +1,10 @@
 import { useState } from "react";
 
 // Sample codes surfaced as chips so a reviewer can "scan" without a scanner.
-const SAMPLES: { code: string; label: string }[] = [
+// Defaults to the POS-oriented set; a screen with a different scanning
+// context (e.g. Receiving, which never sees gift cards or existing internal
+// barcodes) passes its own via `samples`.
+const POS_SAMPLES: { code: string; label: string }[] = [
   { code: "081227971609", label: "UPC · Blue (3 grades → picker)" },
   { code: "075992751612", label: "UPC · Rumours (New, 2 sellable)" },
   { code: "888751545519", label: "UPC · Kind of Blue (1 copy)" },
@@ -17,9 +20,11 @@ const SAMPLES: { code: string; label: string }[] = [
 export function BarcodeInput({
   onScan,
   placeholder = "Scan or type a barcode…",
+  samples = POS_SAMPLES,
 }: {
   onScan: (code: string) => void;
   placeholder?: string;
+  samples?: { code: string; label: string }[];
 }) {
   const [v, setV] = useState("");
   const submit = () => {
@@ -43,7 +48,7 @@ export function BarcodeInput({
       </div>
       <div className="row wrap xsmall">
         <span className="muted">Quick scan:</span>
-        {SAMPLES.map((s) => (
+        {samples.map((s) => (
           <button
             key={s.code}
             className="btn sm"
