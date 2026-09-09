@@ -7,6 +7,7 @@ Point-of-sale and inventory management for independent vinyl record stores.
 | Document | What it covers |
 |---|---|
 | [PRD.md](PRD.md) | Product context, users, domain model, cross-cutting concerns |
+| [lexicon.md](lexicon.md) | Controlled vocabulary — the canonical term for each concept, and what not to call it |
 | [flows/](flows/) | One document per user flow — the detailed specs |
 | [reference/](reference/) | Worked examples and external-system notes |
 
@@ -48,6 +49,8 @@ Point-of-sale and inventory management for independent vinyl record stores.
 - **Open questions** — what's still undecided
 
 **Decisions are numbered and cited.** Referring to "E-02 decision 8" should be unambiguous, so don't renumber an existing decision — append instead.
+
+**Use the [lexicon](lexicon.md)'s canonical terms.** In flow documents, the PRD, reference material, commit messages, and any prompt written to drive an LLM against this project, use the exact term the lexicon prescribes rather than a synonym.
 
 **Cross-flow dependencies go in "Inherited from other flows"** in the receiving document, not only in the flow that raised them. If E-02 needs something from E-05, it gets written into E-05.
 

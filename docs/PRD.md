@@ -4,7 +4,7 @@
 **Last updated:** 2026-09-08
 **Owners:** sr-talbot, WaxyWaxman
 
-This document is the spine: product context, users, domain model, and cross-cutting concerns. Individual user flows live in [`flows/`](flows/) — see §3.
+This document is the spine: product context, users, domain model, and cross-cutting concerns. Individual user flows live in [`flows/`](flows/) — see §3. The controlled vocabulary lives in [`lexicon.md`](lexicon.md) — use its canonical terms here and in every flow.
 
 ---
 
@@ -187,4 +187,5 @@ Worth settling as flows land:
 
 ## Reference material
 
+- [Lexicon](lexicon.md) — controlled vocabulary; the canonical term for each concept
 - [Anatomy of a supplier invoice](reference/supplier-invoice-fab.md) — F.A.B. Distribution, worked example
