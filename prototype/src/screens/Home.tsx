@@ -3,16 +3,12 @@ import { useApp } from "../store/AppStore";
 
 const BUILT = [
   {
-    id: "E-03",
-    to: "/search",
-    title: "Search the inventory",
-    blurb: "Grouped results, catalog-only rows, Discogs-down degradation.",
-  },
-  {
-    id: "E-04",
-    to: "/titlecard/r-blue",
-    title: "The titlecard",
-    blurb: "One Record, every copy, stock + order state. Reserve, re-price (guardrail).",
+    id: "E-03 / E-04",
+    to: "/search/r-blue",
+    title: "Search & the titlecard",
+    blurb:
+      "One screen: grouped results, catalog-only rows, Discogs-down degradation, click a Record " +
+      "to open its titlecard above — every copy, stock + order state, Reserve, re-price (guardrail).",
   },
   {
     id: "E-05",
@@ -55,10 +51,11 @@ export function Home() {
           <h1>Wax Works — clickable prototype</h1>
           <p className="sub">
             Counter-core flows built for review: <strong>E-03 → E-04 → E-05 → E-06</strong>, with{" "}
-            <strong>E-07</strong> supporting. Every screen is wired to a shared in-memory store, so a
-            hold placed on the titlecard shows up at the till, a sale consumes stock, and a return
-            puts it back. Use it to make calls on style, content, flow, and behaviour — then record
-            them as numbered decisions in the flow docs.
+            <strong>E-07</strong> supporting. E-03 and E-04 share one screen — search, then open a
+            Record's titlecard inline. Every screen is wired to a shared in-memory store, so a hold
+            placed on the titlecard shows up at the till, a sale consumes stock, and a return puts it
+            back. Use it to make calls on style, content, flow, and behavior — then record them as
+            numbered decisions in the flow docs.
           </p>
         </div>
       </div>
@@ -99,12 +96,11 @@ export function Home() {
       <h2>Suggested review path</h2>
       <ol className="small stack">
         <li>
-          <strong>E-03 Search</strong> — search “blue”. Check the grouping (one row per Record,
-          copies nested), the catalog-only rows, and how it reads when Discogs is down.
-        </li>
-        <li>
-          <strong>E-04 Titlecard</strong> — open Joni Mitchell — Blue. Try <em>Reserve</em> for
-          Ramona, and <em>Edit price</em> below cost to see the guardrail + override.
+          <strong>E-03/E-04 Search</strong> — search “blue”. Check the grouping (one row per
+          Record, copies nested), the catalog-only rows, and how it reads when Discogs is down.
+          Click the Joni Mitchell — Blue row (or its Reserve button) to see the titlecard above
+          update in place. Try <em>Reserve</em> for Ramona, and <em>Edit price</em> below cost to
+          see the guardrail + override.
         </li>
         <li>
           <strong>E-05 Sell</strong> — new sale, attach Ramona (watch discount + tax pre-fill),

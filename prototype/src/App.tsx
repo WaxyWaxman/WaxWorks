@@ -2,15 +2,13 @@ import { NavLink, Route, Routes } from "react-router-dom";
 import { CURRENT_USER } from "./data/seed";
 import { Home } from "./screens/Home";
 import { Search } from "./screens/Search";
-import { Titlecard } from "./screens/Titlecard";
 import { Sell } from "./screens/Sell";
 import { Return } from "./screens/Return";
 import { Customers } from "./screens/Customers";
 
 const NAV = [
   { to: "/", label: "Flow map", end: true },
-  { to: "/search", label: "E-03 Search" },
-  { to: "/titlecard/r-blue", label: "E-04 Titlecard" },
+  { to: "/search", label: "E-03/E-04 Search" },
   { to: "/sell", label: "E-05 Sell" },
   { to: "/return", label: "E-06 Return" },
   { to: "/customers", label: "E-07 Customers" },
@@ -37,7 +35,7 @@ export function App() {
         <Routes>
           <Route path="/" element={<Home />} />
           <Route path="/search" element={<Search />} />
-          <Route path="/titlecard/:recordId" element={<Titlecard />} />
+          <Route path="/search/:recordId" element={<Search />} />
           <Route path="/sell" element={<Sell />} />
           <Route path="/sell/:saleId" element={<Sell />} />
           <Route path="/return" element={<Return />} />

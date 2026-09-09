@@ -1,17 +1,27 @@
 import { useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useParams } from "react-router-dom";
 import { BarcodeInput } from "../components/BarcodeInput";
+import { ReserveModal } from "../components/ReserveModal";
+import { TitlecardPanel } from "../components/TitlecardPanel";
 import type { RecordEntry } from "../data/types";
 import { resolveScan } from "../lib/resolve";
 import { money } from "../lib/money";
 import { availableOnHand, heldCount, onHand } from "../lib/totals";
 import { useApp } from "../store/AppStore";
 
+// E-03 Search and E-04 Titlecard share one screen: the titlecard for the
+// selected Record sits at the top, search + results below it to find or
+// switch to a different one. Selection is carried in the URL (recordId) so
+// it's deep-linkable and independent of what the search box currently
+// filters — picking a new Record doesn't lose your place if you go on to
+// type a different search term.
 export function Search() {
   const app = useApp();
   const nav = useNavigate();
+  const { recordId } = useParams();
   const [term, setTerm] = useState("blue");
   const [scanMsg, setScanMsg] = useState<string | null>(null);
+  const [reserveRecord, setReserveRecord] = useState<RecordEntry | null>(null);
 
   const results = useMemo(() => {
     const q = term.trim().toLowerCase();
@@ -29,14 +39,22 @@ export function Search() {
     return { held, catalogOnly: app.discogsUp ? catalogOnly : [] };
   }, [term, app.records, app.inventory, app.discogsUp]);
 
+  // Selection defaults to the last-searched/added item (E-04) — the top
+  // result — but a URL recordId always wins, so a selection survives typing
+  // a new search term into the box below.
+  const selectedId = recordId ?? results.held[0]?.id ?? results.catalogOnly[0]?.id;
+  const selectedRecord = app.recordFor(selectedId);
+
+  const select = (id: string) => nav(`/search/${id}`, { replace: true });
+
   const doScan = (code: string) => {
     const res = resolveScan(code, app);
     if (res.kind === "internal") {
-      setScanMsg(`Internal barcode → one copy: ${res.record.title} (${res.item.grade}). Opening titlecard.`);
-      nav(`/titlecard/${res.record.id}`);
+      setScanMsg(`Internal barcode → one copy: ${res.record.title} (${res.item.grade}).`);
+      select(res.record.id);
     } else if (res.kind === "upc-single" || res.kind === "upc-multi") {
-      setScanMsg(`Manufacturer UPC → Record: ${res.record.title}. Opening titlecard.`);
-      nav(`/titlecard/${res.record.id}`);
+      setScanMsg(`Manufacturer UPC → Record: ${res.record.title}.`);
+      select(res.record.id);
     } else if (res.kind === "giftcard") {
       setScanMsg(`Gift card ${res.card.code} — balance ${money(res.card.balance)}. (Handled at the till, not search.)`);
     } else if (res.kind === "nontracked") {
@@ -48,16 +66,13 @@ export function Search() {
 
   return (
     <div>
-      <div className="page-head">
-        <span className="flow-id">E-03</span>
-        <div>
-          <h1>Search the inventory</h1>
-          <p className="sub">
-            “Do you have this?” — local + Discogs, local-first, one row per Record with copies
-            nested. A scanned barcode short-circuits to resolution.
-          </p>
-        </div>
-      </div>
+      {selectedRecord ? (
+        <TitlecardPanel recordId={selectedRecord.id} onReserved={(id) => nav(`/sell/${id}`)} />
+      ) : (
+        <div className="callout">No item selected yet — search for something below.</div>
+      )}
+
+      <hr className="hr" style={{ margin: "var(--sp-5) 0" }} />
 
       <div className="card" style={{ marginBottom: "var(--sp-4)" }}>
         <div className="card-body stack">
@@ -104,9 +119,14 @@ export function Search() {
             <tbody>
               {results.held.map((r) => {
                 const copies = app.inventory.filter((i) => i.recordId === r.id && i.status !== "sold");
+                const sellable = copies.filter((c) => c.status === "sellable");
+                const isSelected = r.id === selectedId;
                 return (
                   <FragmentRow key={r.id}>
-                    <tr className="group-row">
+                    <tr
+                      className={"group-row row-click" + (isSelected ? " selected" : "")}
+                      onClick={() => select(r.id)}
+                    >
                       <td>
                         <div className="row">
                           <span className="cover" style={{ width: 34, height: 34, fontSize: 16 }}>
@@ -129,13 +149,34 @@ export function Search() {
                       <td className="num">{availableOnHand(r.id, app.inventory)}</td>
                       <td className="num">{heldCount(r.id, app.inventory)}</td>
                       <td className="num">
-                        <button className="btn sm" onClick={() => nav(`/titlecard/${r.id}`)}>
-                          Titlecard →
-                        </button>
+                        <div className="btn-row" style={{ justifyContent: "flex-end" }}>
+                          <button
+                            className="btn sm"
+                            title="M-02 — not in this pass"
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            Order
+                          </button>
+                          {sellable.length > 0 && (
+                            <button
+                              className="btn sm"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setReserveRecord(r);
+                              }}
+                            >
+                              Reserve
+                            </button>
+                          )}
+                        </div>
                       </td>
                     </tr>
                     {copies.map((c) => (
-                      <tr key={c.id} className="nested">
+                      <tr
+                        key={c.id}
+                        className={"nested row-click" + (isSelected ? " selected" : "")}
+                        onClick={() => select(r.id)}
+                      >
                         <td className="small">
                           <span className="badge grade">{c.grade}</span>{" "}
                           {c.backroom && <span className="badge warn">Backroom</span>}{" "}
@@ -151,7 +192,10 @@ export function Search() {
                       </tr>
                     ))}
                     {copies.length === 0 && (
-                      <tr className="nested">
+                      <tr
+                        className={"nested row-click" + (isSelected ? " selected" : "")}
+                        onClick={() => select(r.id)}
+                      >
                         <td colSpan={6} className="small muted">
                           No copies on hand — orderable. (On order / pending order would show here.)
                         </td>
@@ -161,40 +205,65 @@ export function Search() {
                 );
               })}
 
-              {results.catalogOnly.map((r) => (
-                <tr key={r.id}>
-                  <td>
-                    <div className="row">
-                      <span className="cover" style={{ width: 34, height: 34, fontSize: 16, filter: "grayscale(1)" }}>
-                        {r.art}
-                      </span>
-                      <div>
+              {results.catalogOnly.map((r) => {
+                const isSelected = r.id === selectedId;
+                return (
+                  <tr
+                    key={r.id}
+                    className={"row-click" + (isSelected ? " selected" : "")}
+                    onClick={() => select(r.id)}
+                  >
+                    <td>
+                      <div className="row">
+                        <span className="cover" style={{ width: 34, height: 34, fontSize: 16, filter: "grayscale(1)" }}>
+                          {r.art}
+                        </span>
                         <div>
-                          {r.artist} — {r.title} <span className="badge warn">Not in stock</span>
-                        </div>
-                        <div className="xsmall muted">
-                          Discogs match · {r.label} · {r.year} — “no, but we can order it”
+                          <div>
+                            {r.artist} — {r.title} <span className="badge warn">Not in stock</span>
+                          </div>
+                          <div className="xsmall muted">
+                            Discogs match · {r.label} · {r.year} — “no, but we can order it”
+                          </div>
                         </div>
                       </div>
-                    </div>
-                  </td>
-                  <td className="small">
-                    {r.format} · {r.year}
-                  </td>
-                  <td className="num">—</td>
-                  <td className="num">—</td>
-                  <td className="num">—</td>
-                  <td className="num">
-                    <button className="btn sm" onClick={() => nav(`/titlecard/${r.id}`)}>
-                      Stock / order →
-                    </button>
-                  </td>
-                </tr>
-              ))}
+                    </td>
+                    <td className="small">
+                      {r.format} · {r.year}
+                    </td>
+                    <td className="num">—</td>
+                    <td className="num">—</td>
+                    <td className="num">—</td>
+                    <td className="num">
+                      <button
+                        className="btn sm"
+                        title="M-02 — not in this pass"
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        Order
+                      </button>
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>
       </div>
+
+      {reserveRecord && (
+        <ReserveModal
+          record={reserveRecord}
+          items={app.inventory.filter(
+            (i) => i.recordId === reserveRecord.id && i.status === "sellable",
+          )}
+          onClose={() => setReserveRecord(null)}
+          onDone={(saleId) => {
+            setReserveRecord(null);
+            nav(`/sell/${saleId}`);
+          }}
+        />
+      )}
     </div>
   );
 }

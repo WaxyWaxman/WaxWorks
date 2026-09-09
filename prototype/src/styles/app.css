@@ -105,6 +105,9 @@ table.data td { padding: var(--sp-2) var(--sp-3); border-bottom: 1px solid var(-
 table.data tr:last-child td { border-bottom: none; }
 table.data tr.group-row td { background: var(--c-surface-2); font-weight: 700; }
 table.data tr.nested td:first-child { padding-left: var(--sp-6); }
+table.data tr.row-click { cursor: pointer; }
+table.data tr.row-click:hover td { background: var(--c-accent-soft); }
+table.data tr.selected td { background: var(--c-accent-soft); box-shadow: inset 3px 0 0 var(--c-accent); }
 .num { text-align: right; font-variant-numeric: tabular-nums; font-family: var(--font-mono); }
 
 /* ---- Badges / chips ---- */

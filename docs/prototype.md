@@ -27,8 +27,8 @@ Start on the **Flow map**; it carries a suggested review path.
 
 | Flow | Status in docs | Prototype screen | Notes |
 |---|---|---|---|
-| [E-03](flows/E-03-search-inventory.md) | Specified | Search | Grouping, catalog-only rows, scan-to-resolve, Discogs-down toggle |
-| [E-04](flows/E-04-manage-inventory.md) | Specified | Titlecard | Copies, derived on-hand math, Reserve → Held Sale, below-cost guardrail + manager override |
+| [E-03](flows/E-03-search-inventory.md) | Specified | Search | Grouping, catalog-only rows, scan-to-resolve, Discogs-down toggle. Selecting a Record (click a row, Reserve, or a resolved scan) opens its titlecard inline above the results — see E-04. |
+| [E-04](flows/E-04-manage-inventory.md) | Specified | *(embedded in Search)* | Copies, derived on-hand math, Reserve → Held Sale, below-cost guardrail + manager override. Not a separate route — the titlecard is a view, not a screen of its own (E-04 decision 1), so it lives in Search's `TitlecardPanel` and updates as the selected Record changes. `/search/:recordId` deep-links to a specific one. |
 | [E-05](flows/E-05-sell-a-record.md) | Specified | Sell | Barcode resolver, multi-copy picker, customer pre-fill, `0.00` prompt, negative inventory, split tender, hold/void, receipt |
 | [E-06](flows/E-06-process-a-return.md) | Specified | Return | Negative-qty line, prior-Sale link, refund default, cash/store-credit, stock routing |
 | [E-07](flows/E-07-manage-customers.md) | Specified | Customers | Lookup, signed balance, discount + default tax line, attach to Sale |

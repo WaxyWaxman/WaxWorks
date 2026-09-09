@@ -1,7 +1,7 @@
 import { useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
 import { ManagerOverride } from "../components/ManagerOverride";
 import { Modal } from "../components/Modal";
+import { ReserveModal } from "../components/ReserveModal";
 import type { InventoryItem } from "../data/types";
 import { money, roundUpShelf } from "../lib/money";
 import {
@@ -12,32 +12,29 @@ import {
 } from "../lib/totals";
 import { useApp } from "../store/AppStore";
 
-export function Titlecard() {
-  const { recordId } = useParams();
-  const nav = useNavigate();
+// The titlecard is a view, not a route of its own (E-04 decision 1) — it's
+// embedded in the Search screen (E-03), which owns the outer page chrome.
+// Given a Record, this renders everything E-04 specifies: catalog, copies,
+// stock/orders/history, Reserve, and the below-cost guardrail.
+export function TitlecardPanel({
+  recordId,
+  onReserved,
+}: {
+  recordId: string;
+  onReserved: (saleId: string) => void;
+}) {
   const app = useApp();
   const record = app.recordFor(recordId);
   const [reserveFor, setReserveFor] = useState<InventoryItem | null>(null);
   const [priceEdit, setPriceEdit] = useState<InventoryItem | null>(null);
 
-  if (!record) return <p>Unknown Record.</p>;
+  if (!record) return <p className="muted">Unknown Record.</p>;
   const copies = app.inventory.filter((i) => i.recordId === record.id && i.status !== "sold");
   const oh = onHand(record.id, app.inventory);
   const belowMin = oh < record.minOnHand;
 
   return (
     <div>
-      <div className="page-head">
-        <span className="flow-id">E-04</span>
-        <div>
-          <h1>Titlecard</h1>
-          <p className="sub">
-            One Record, every copy, its stock and order state. A view, not an entity — on hand is
-            derived from sellable copies.
-          </p>
-        </div>
-      </div>
-
       {record.catalogOnly && (
         <div className="callout">
           This is a <strong>Discogs catalog match we don’t hold</strong>. Acting on it — ordering,
@@ -49,7 +46,12 @@ export function Titlecard() {
       <div className="grid cols-2">
         <div className="stack">
           <div className="card">
-            <div className="card-head">Catalog</div>
+            <div className="card-head">
+              Catalog
+              <span className="flow-id" style={{ marginTop: 0 }}>
+                E-04
+              </span>
+            </div>
             <div className="card-body">
               <div className="row" style={{ alignItems: "flex-start", gap: "var(--sp-4)" }}>
                 <span className="cover lg">{record.art}</span>
@@ -69,7 +71,9 @@ export function Titlecard() {
                   </table>
                   <div className="btn-row">
                     <button className="btn sm">Edit catalog</button>
-                    <button className="btn sm">Order</button>
+                    <button className="btn sm" title="M-02 — not in this pass">
+                      Order
+                    </button>
                     <button className="btn sm">Claim vs. supplier</button>
                     <button className="btn sm" title="Manager only">
                       Adjust on hand (Mgr)
@@ -210,11 +214,13 @@ export function Titlecard() {
 
       {reserveFor && (
         <ReserveModal
-          item={reserveFor}
+          record={record}
+          items={[reserveFor]}
+          initialItemId={reserveFor.id}
           onClose={() => setReserveFor(null)}
           onDone={(saleId) => {
             setReserveFor(null);
-            nav(`/sell/${saleId}`);
+            onReserved(saleId);
           }}
         />
       )}
@@ -231,68 +237,6 @@ function Row({ k, v }: { k: string; v: string }) {
       </td>
       <td>{v}</td>
     </tr>
-  );
-}
-
-function ReserveModal({
-  item,
-  onClose,
-  onDone,
-}: {
-  item: InventoryItem;
-  onClose: () => void;
-  onDone: (saleId: string) => void;
-}) {
-  const app = useApp();
-  const [customerId, setCustomerId] = useState(app.customers[0]?.id ?? "");
-  const [qty, setQty] = useState(1);
-  return (
-    <Modal
-      title="Reserve — creates a Held Sale"
-      onClose={onClose}
-      foot={
-        <>
-          <button className="btn ghost" onClick={onClose}>
-            Cancel
-          </button>
-          <button
-            className="btn primary"
-            disabled={!customerId || qty < 1}
-            onClick={() => onDone(app.reserve(item.recordId, item.id, customerId, qty))}
-          >
-            Reserve &amp; open at till
-          </button>
-        </>
-      }
-    >
-      <div className="stack">
-        <p className="small">
-          Reserving stock on hand creates a <strong>Held</strong> Sale (E-05) with an{" "}
-          <span className="mono">H</span>-prefixed hold reference. The copy stays on hand but leaves
-          available stock. <em>(E-04 → E-05 inherited.)</em>
-        </p>
-        <label className="field">
-          <span>Customer</span>
-          <select value={customerId} onChange={(e) => setCustomerId(e.target.value)}>
-            {app.customers.map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.name} ({c.accountNumber})
-              </option>
-            ))}
-          </select>
-        </label>
-        <label className="field">
-          <span>Quantity</span>
-          <input
-            className="inline-num"
-            type="number"
-            min={1}
-            value={qty}
-            onChange={(e) => setQty(Math.max(1, Number(e.target.value)))}
-          />
-        </label>
-      </div>
-    </Modal>
   );
 }
 
