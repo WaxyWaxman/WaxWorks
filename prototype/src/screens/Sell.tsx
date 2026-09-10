@@ -303,7 +303,7 @@ function SaleEditor() {
               <button
                 className="btn primary lg"
                 disabled={
-                  (sale.lines.length > 0 && Math.abs(due) > 0.001) ||
+                  (sale.lines.length > 0 && due > 0.001) ||
                   (sale.lines.length === 0 && sale.tenders.length === 0)
                 }
                 onClick={() => setReceipt(app.completeSale(sale.id))}
