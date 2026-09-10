@@ -98,6 +98,7 @@ Several decisions here amend flow documents. Every one is listed in §9 and has 
 | A-7 | **A `jobs` table drained by Vercel Cron** carries outbound email and catalog prefetch. Durable and resumable; a rate ceiling falls out of the batch size. |
 | A-9 | **Tailwind + shadcn/ui.** The [prototype](prototype.md)'s design tokens map onto Tailwind theme variables. |
 | A-10 | **Supabase runs locally in Docker; migrations are committed.** `supabase db reset` gives a reproducible database, which matters when business logic lives in database functions. |
+| A-31 | **The agent configuration is version-controlled.** `.claude/skills/`, `.claude/agents/`, `settings.json` and `launch.json` are tracked; per-machine session state — `settings.local.json`, `worktrees/`, `todos/` and the rest — stays ignored. The skills encode this project's conventions (append-only decision numbering, status in three places, [lexicon](lexicon.md) compliance, propose-don't-ratify), so they are project facts belonging under review alongside `scripts/check_docs.py`, not personal configuration. Same reasoning as A-10: version control is what makes a working environment reproducible. The motivating failure is concrete — skills kept locally drift silently, and an agent enforcing a superseded decision reports correct work as broken. Accepted consequences: two people editing one skill can conflict, and the repository carries opinions about a specific tool that would be cruft if we changed tools. |
 
 ---
 
