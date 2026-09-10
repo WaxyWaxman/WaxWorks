@@ -1,4 +1,4 @@
-import type { InventoryItem, Sale, SaleLine, TaxLine } from "../data/types";
+import type { InventoryItem, PendingOrderLine, Sale, SaleLine, Supplier, TaxLine } from "../data/types";
 
 export const lineGross = (l: SaleLine): number => l.qty * l.price;
 export const lineNet = (l: SaleLine): number =>
@@ -54,3 +54,36 @@ export const heldCount = (recordId: string, inv: InventoryItem[]): number =>
 
 export const backroomCount = (recordId: string, inv: InventoryItem[]): number =>
   inv.filter((i) => i.recordId === recordId && i.status === "sellable" && i.backroom).length;
+
+// ---- Ordering (M-02): a stream is "ready to place" once it hits the
+// Supplier's minimum — units first, falling back to a dollar minimum priced
+// at whichever basis the Supplier names (decision 4, doc comment on
+// Supplier.minOrderQty).
+export function orderReady(
+  supplier: Pick<Supplier, "minOrderQty" | "minOrderAmount" | "minOrderAmountBasis">,
+  totalQty: number,
+  sellTotal: number,
+  estCost: number,
+): boolean {
+  if (supplier.minOrderQty > 0) return totalQty >= supplier.minOrderQty;
+  if (supplier.minOrderAmount > 0) {
+    const basisTotal = supplier.minOrderAmountBasis === "Net" ? estCost : sellTotal;
+    return basisTotal >= supplier.minOrderAmount;
+  }
+  return true;
+}
+
+// Every separator currently in use across a Supplier's still-pending lines
+// (key "" = no separator / the regular pile) — drives a Sep dropdown's
+// options and the merge check, wherever one appears: raising a line (Phase
+// 1), Order Processing's pending table (a whole-stream shift), and View's
+// per-line dropdown.
+export function separatorCounts(pendingOrders: PendingOrderLine[], supplierId: string): Map<string, number> {
+  const counts = new Map<string, number>();
+  for (const o of pendingOrders) {
+    if (o.supplierId !== supplierId || o.poNumber) continue;
+    const key = o.separator ?? "";
+    counts.set(key, (counts.get(key) ?? 0) + 1);
+  }
+  return counts;
+}

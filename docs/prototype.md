@@ -36,7 +36,8 @@ Start on the **Flow map**; it carries a suggested review path.
 | [E-02](flows/E-02-receive-inventory.md) | Specified | Receiving (`/receiving`) | The three phases in one screen: open an invoice (supplier, intake mode, invoice #, collision check, simulated photo extraction), then an always-present fillable row at the bottom of Lines — scanning or typing a barcode there resolves it against this supplier's pending orders first, then the local catalog (a catalog-only match pulls in, same as E-03 decision 6), or opens Lookup on a miss — followed by pricing, then reconcile (derived-vs-stated subtotal warning, ±2%-bounded total override) and finalize — lines aren't sellable InventoryItems until then. A committed line's pencil re-opens it inline for correction. A finalized copy is immediately claimable from its titlecard. |
 | [M-01](flows/M-01-supplier-margin.md) | Specified | Suppliers (`/suppliers`) | Search, New/Edit/Copy/Delete/Merge, opens on the most recently searched card. Nothing is gated — Delete/Merge are labeled Admin-only by convention only. Full field set (order terms, discount vs. margin, rep contacts, etc.), all logged. |
 | [M-03](flows/M-03-daily-summary.md) | Specified | *(embedded in Point of Sale)* | Not a screen of its own — surfaced under Point of Sale's **Other Functions**. The close is a real state transition (Current → Closed, batched), with Undo End of Day (Admin-labeled) reverting a batch. Breakdown covers gross/returns/net, by Section, by tender, tax, movements (voids/holds/pay-outs), and stock below minimum. |
-| E-01, M-02, M-04, M-05, M-06 | — | *stubbed* | Added once the counter core is signed off. `markInvoicePaid` exists as a store action, called from Receiving — there's no Accounts Payable screen yet to move it to. |
+| [M-02](flows/M-02-reorder-inventory.md) | Specified | Order Processing (`/orders`), + a titlecard's **Order** button | **Phases 1 and 2.** Order (titlecard, E-04) raises a pending line — quantity, Supplier (defaults to the Record's preferred Supplier), separator, selling price (defaults to shelf price), an optional Customer (customer-attached), and an optional follow-up-flag day count — and joins that Supplier's pending pile; the titlecard's Orders card shows the Record's own Pending/On order unit counts, derived live. Order Processing lists one line per Supplier + separator: pending total, oldest age, order via, customer-attached count, sell total, estimated cost, Ready (against the Supplier's minimum) — every row, in both tables, opens **View** on a click anywhere in it (no separate button). The pending table's own Sep column is a dropdown ("+ New…" for an unused letter) that mass-shifts every line in that stream at once — a merge prompt when the target separator is already in use for that Supplier (decision 17), otherwise a plain move. View opens a stream's lines — live, not a snapshot — with the selected line's titlecard below, so a wrong Supplier is caught before sending; it leads with a "meeting the minimum" panel (qty / retail value / estimated cost against the Supplier's configured minimum) and, for a still-pending stream, lets each line's qty, sell price, and separator be edited in place (same dropdown, one line at a time), and the line deleted (plain confirmation, explicit warning when a Customer is attached — decision 9). Process confirms the send method — an Email Supplier gets a composed preview (items/qty, cancel-by, backorder policy); anything else states a printable document is produced — then assigns a PO number (blank auto-mints the next unused ascending number, same pattern as Supplier Claims' claim number) and appends a summary to the Supplier's log. Previously placed POs list below, most recent first, read-only. **Phase 3** — the on-order tracking screen (search/sort/filter, re-flag, Backordered/Cancelled status, void a PO) — still isn't built. |
+| E-01, M-04, M-05, M-06 | — | *stubbed* | Added once the counter core is signed off. `markInvoicePaid` exists as a store action, called from Receiving — there's no Accounts Payable screen yet to move it to. |
 
 ## Turning a review into a decision
 
@@ -75,10 +76,15 @@ Style changes are cheap: design tokens are centralised in
   standing in for it. Barcode-to-record matching is local-only (no live catalog-provider call, no
   multi-match picker); a code with no local match goes straight to the search-or-create fallback.
   Backorder mechanics are unmodelled, per E-02's own open question.
-- Receiving's Orders panel is backed by a thin `PendingOrderLine` scaffold (supplier, PO #,
-  record, expected cost/discount, qty) — enough to look one up and receive against it, seeded with
-  a handful of rows. It is not M-02: there is no way to place an order from here, no reorder
-  suggestions, and no backorder lifecycle once a line isn't fully received.
+- Receiving's Orders panel and Order Processing (M-02) now share one `PendingOrderLine` array —
+  `poNumber` unset means still pending, set means already placed, which is what Receiving looks up
+  against. There is no reorder suggestion and no backorder lifecycle once a line isn't fully
+  received.
+- **Order Processing (M-02) is Phases 1 and 2 only.** Phase 3 — the on-order tracking screen
+  (search/sort/filter, re-flag, Backordered/Cancelled status, void a PO) — isn't built; a stream
+  simply moves from Pending to Previously placed once Processed, and the follow-up-flag day count
+  captured at raise time is stored but not yet consumed by anything. Sending an Email order is
+  simulated as a composed preview plus a Supplier log entry, not a real send.
 - On the line-entry row, "List price" is the pre-discount figure off the paperwork and "Sell
   price" replaces "Accepted price" — Disc% and Margin% are new. **Resolved:** the row used to
   label the pre-discount figure "Cost", clashing with [E-02](flows/E-02-receive-inventory.md)

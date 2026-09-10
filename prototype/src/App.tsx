@@ -7,6 +7,7 @@ import { ReturnScreen } from "./screens/Return";
 import { Claims } from "./screens/Claims";
 import { Customers } from "./screens/Customers";
 import { Receiving } from "./screens/Receiving";
+import { OrderProcessing } from "./screens/OrderProcessing";
 import { Suppliers } from "./screens/Suppliers";
 import { ReviewQueueBadge } from "./components/ReviewQueue";
 
@@ -17,6 +18,7 @@ const NAV = [
   { to: "/claims", label: "Supplier Claims" },
   { to: "/customers", label: "E-07 Customers" },
   { to: "/receiving", label: "E-02 Receiving" },
+  { to: "/orders", label: "M-02 Order Processing" },
   { to: "/suppliers", label: "M-01 Suppliers" },
 ];
 
@@ -60,6 +62,7 @@ export function App() {
           <Route path="/claims" element={<Claims />} />
           <Route path="/customers" element={<Customers />} />
           <Route path="/receiving" element={<Receiving />} />
+          <Route path="/orders" element={<OrderProcessing />} />
           <Route path="/suppliers" element={<Suppliers />} />
         </Routes>
       </main>

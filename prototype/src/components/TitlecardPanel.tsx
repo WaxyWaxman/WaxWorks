@@ -2,6 +2,7 @@ import { useState } from "react";
 import { ClaimModal } from "../components/ClaimModal";
 import { ManagerOverride } from "../components/ManagerOverride";
 import { Modal } from "../components/Modal";
+import { OrderModal } from "../components/OrderModal";
 import { ReserveModal } from "../components/ReserveModal";
 import type { InventoryItem, RecordEntry } from "../data/types";
 import { money, roundUpShelf } from "../lib/money";
@@ -34,6 +35,7 @@ export function TitlecardPanel({
   const [priceEdit, setPriceEdit] = useState<InventoryItem | null>(null);
   const [labelFor, setLabelFor] = useState<InventoryItem | null>(null);
   const [claiming, setClaiming] = useState(false);
+  const [ordering, setOrdering] = useState(false);
   const [adjusting, setAdjusting] = useState(false);
 
   if (!record) return <p className="muted">Unknown Record.</p>;
@@ -43,6 +45,9 @@ export function TitlecardPanel({
   const outstandingOversold = app.inventory.filter(
     (i) => i.recordId === record.id && i.oversold && !i.oversoldReconciledAt,
   );
+  const recordOrders = app.pendingOrders.filter((o) => o.recordId === record.id);
+  const pendingOrderQty = recordOrders.filter((o) => !o.poNumber).reduce((n, o) => n + o.qty, 0);
+  const onOrderQty = recordOrders.filter((o) => o.poNumber).reduce((n, o) => n + o.qty, 0);
   const saleFor = (itemId: string) => app.sales.find((sale) => sale.lines.some((l) => l.inventoryItemId === itemId));
 
   const doRemoveHold = (c: InventoryItem) => {
@@ -113,7 +118,7 @@ export function TitlecardPanel({
                   </table>
                   <div className="btn-row">
                     <button className="btn sm">Edit catalog</button>
-                    <button className="btn sm" title="M-02 — not in this pass">
+                    <button className="btn sm" onClick={() => setOrdering(true)}>
                       Order
                     </button>
                     <button className="btn sm" onClick={() => setClaiming(true)}>
@@ -293,21 +298,22 @@ export function TitlecardPanel({
 
           <div className="card">
             <div className="card-head">Orders</div>
-            <div className="card-body small muted">
+            <div className="card-body small">
               <div className="totals-row">
                 <span>Pending order</span>
-                <span className="num">0</span>
+                <span className="num">{pendingOrderQty}</span>
               </div>
               <div className="totals-row">
                 <span>On order</span>
-                <span className="num">0</span>
+                <span className="num">{onOrderQty}</span>
               </div>
               <div className="totals-row">
-                <span>Backordered</span>
-                <span className="num">0</span>
+                <span className="muted">Backordered</span>
+                <span className="num muted">0</span>
               </div>
-              <p className="xsmall" style={{ marginTop: "var(--sp-2)" }}>
-                Populated by M-02 (Re-order) — not in this pass.
+              <p className="xsmall muted" style={{ marginTop: "var(--sp-2)" }}>
+                Backorder status isn't modelled yet (Phase 3). See{" "}
+                <strong>Order Processing</strong> for the full pending/placed detail.
               </p>
             </div>
           </div>
@@ -349,6 +355,9 @@ export function TitlecardPanel({
           onClose={() => setClaiming(false)}
           onDone={onStatus}
         />
+      )}
+      {ordering && (
+        <OrderModal record={record} onClose={() => setOrdering(false)} onDone={onStatus} />
       )}
       {adjusting && (
         <ManagerOverride

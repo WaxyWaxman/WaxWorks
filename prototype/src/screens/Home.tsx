@@ -47,12 +47,21 @@ const BUILT = [
       "(sticky price, below-cost guardrail), then reconcile and finalize — nothing's sellable " +
       "before that.",
   },
+  {
+    id: "M-02",
+    to: "/orders",
+    title: "Order Processing",
+    blurb:
+      "Phases 1 and 2. Raise a pending line from a titlecard's Order button (supplier/separator/qty/price/" +
+      "customer/follow-up). Order Processing lists one line per supplier + separator — click a row to View " +
+      "its lines and titlecards, edit qty/price/separator, or Process it into a PurchaseOrder (auto PO number, " +
+      "email or printable). Phase 3 (on-order tracking) isn't built.",
+  },
 ];
 
 const NOT_BUILT = [
   ["E-01", "Authenticate"],
   ["M-01", "Supplier margin"],
-  ["M-02", "Re-order inventory"],
   ["M-03", "Daily summary"],
   ["M-04", "Manage users"],
   ["M-05", "Accounts payable"],
@@ -152,6 +161,18 @@ export function Home() {
           a F.A.B. invoice) and click <em>Claim vs. supplier</em>. Raise a couple of claims under
           the same supplier and separator to see them merge onto one Draft, then send it from the{" "}
           <strong>Supplier Claims</strong> screen and mark it Credited.
+        </li>
+        <li>
+          <strong>M-02 Order Processing</strong> — from the Joni Mitchell — Blue titlecard, click{" "}
+          <em>Order</em> to raise a pending line (try attaching Ramona as the customer). Then open{" "}
+          <strong>Order Processing</strong>: F.A.B. Distribution's stream now includes it — click
+          anywhere on the row to <em>View</em>, check the titlecard, edit a qty or sell price
+          inline, then <em>Process</em> and leave the PO number blank to watch it auto-assign. Crate
+          Digger Wholesale (Order via <em>Email</em>) has two streams — its default stream and a
+          rush "R" stream that alone already meets the 10-unit minimum (
+          <span className="badge ok">Ready</span>) — try the Sep dropdown to merge them, then
+          Process the Email one to see the composed order preview. Previously placed POs (F.A.B.'s
+          PO-1042, Indie Direct's PO-77) sit below, most recent first.
         </li>
       </ol>
 
