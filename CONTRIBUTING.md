@@ -28,6 +28,9 @@ other change.
 Anything you want configured for yourself alone (personal permissions, model
 choice) goes in `.claude/settings.local.json`, which is gitignored.
 
+Tracking the agent configuration rather than keeping it per-machine is a recorded
+decision — [architecture.md](docs/architecture.md) §2.7, **A-31**.
+
 ## The loop
 
 ```bash
