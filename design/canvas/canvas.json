@@ -1,0 +1,98 @@
+{
+  "pages": [
+    { "id": "page-2", "name": "Two combined" },
+    { "id": "page-1", "name": "Five directions" }
+  ],
+  "artboards": [
+    { "file": "Main.dc.html", "title": "Read me first", "page": "page-2", "x": 0, "y": 0, "w": 1100, "h": 880 },
+
+    { "file": "PaperPOS.dc.html", "title": "1 · Paper — Point of Sale", "page": "page-2", "x": 0, "y": 1020, "w": 1280, "h": 800 },
+    { "file": "PaperReceiving.dc.html", "title": "1 · Paper — Receiving", "page": "page-2", "x": 1360, "y": 1020, "w": 1280, "h": 800 },
+    { "file": "PaperFind.dc.html", "title": "1 · Paper — Find", "page": "page-2", "x": 2720, "y": 1020, "w": 1280, "h": 800 },
+
+    { "file": "SignalPOS.dc.html", "title": "2 · Signal — Point of Sale", "page": "page-2", "x": 0, "y": 1940, "w": 1280, "h": 800 },
+    { "file": "SignalReceiving.dc.html", "title": "2 · Signal — Receiving", "page": "page-2", "x": 1360, "y": 1940, "w": 1280, "h": 800 },
+    { "file": "SignalFind.dc.html", "title": "2 · Signal — Find", "page": "page-2", "x": 2720, "y": 1940, "w": 1280, "h": 800 },
+
+    { "file": "Matrix.dc.html", "title": "Side by side", "page": "page-1", "x": 1080, "y": 0, "w": 1600, "h": 860 },
+
+    { "file": "LedgerPOS.dc.html", "title": "A · Ledger — Point of Sale", "page": "page-1", "x": 0, "y": 1000, "w": 1280, "h": 800 },
+    { "file": "LedgerReceiving.dc.html", "title": "A · Ledger — Receiving", "page": "page-1", "x": 1360, "y": 1000, "w": 1280, "h": 800 },
+    { "file": "LedgerSearch.dc.html", "title": "A · Ledger — Search", "page": "page-1", "x": 2720, "y": 1000, "w": 1280, "h": 800 },
+
+    { "file": "CounterPOS.dc.html", "title": "B · Counter — Point of Sale", "page": "page-1", "x": 0, "y": 1920, "w": 1280, "h": 800 },
+    { "file": "CounterReceiving.dc.html", "title": "B · Counter — Receiving", "page": "page-1", "x": 1360, "y": 1920, "w": 1280, "h": 800 },
+    { "file": "CounterSearch.dc.html", "title": "B · Counter — Search", "page": "page-1", "x": 2720, "y": 1920, "w": 1280, "h": 800 },
+
+    { "file": "CratePOS.dc.html", "title": "C · Crate — Point of Sale", "page": "page-1", "x": 0, "y": 2840, "w": 1280, "h": 800 },
+    { "file": "CrateReceiving.dc.html", "title": "C · Crate — Receiving", "page": "page-1", "x": 1360, "y": 2840, "w": 1280, "h": 800 },
+    { "file": "CrateSearch.dc.html", "title": "C · Crate — Search", "page": "page-1", "x": 2720, "y": 2840, "w": 1280, "h": 800 },
+
+    { "file": "ConsolePOS.dc.html", "title": "D · Console — Point of Sale", "page": "page-1", "x": 0, "y": 3760, "w": 1280, "h": 800 },
+    { "file": "ConsoleReceiving.dc.html", "title": "D · Console — Receiving", "page": "page-1", "x": 1360, "y": 3760, "w": 1280, "h": 800 },
+    { "file": "ConsoleSearch.dc.html", "title": "D · Console — Search", "page": "page-1", "x": 2720, "y": 3760, "w": 1280, "h": 800 },
+
+    { "file": "WorkbenchPOS.dc.html", "title": "E · Workbench — Point of Sale", "page": "page-1", "x": 0, "y": 4680, "w": 1280, "h": 800 },
+    { "file": "WorkbenchReceiving.dc.html", "title": "E · Workbench — Receiving", "page": "page-1", "x": 1360, "y": 4680, "w": 1280, "h": 800 },
+    { "file": "WorkbenchSearch.dc.html", "title": "E · Workbench — Search", "page": "page-1", "x": 2720, "y": 4680, "w": 1280, "h": 800 }
+  ],
+  "annotations": [
+    {
+      "id": "note-paper",
+      "x": -640,
+      "y": 1050,
+      "w": 560,
+      "page": "page-2",
+      "text": "1 · PAPER — C supplies the voice\n\nWarm paper ground, a serif for record titles, oxblood for the primary action. B's till structure and E's rails are rendered in that palette rather than in their own.\n\nWhat it gets you — the shop's own character in the chrome, not only in the cover art, and the best version of the moment you flagged earlier: the screen turns, and a customer sees a record shop's till rather than a warehouse system. Serif titles at 19–22px are genuinely easier to scan down a receiving table than the same text set in a UI sans.\n\nWhat it costs — the serif and the 44px art thumbs put 8 lines on the Receiving screen against Signal's 11, so a 100-line invoice takes about 12 screens against 9. It is also the harder of the two to keep disciplined: warm palettes drift decorative, and every new screen is a chance to add another texture.\n\nWatch for — the review-flag row. In this voice a flagged line is a tinted band with a sentence in it, which reads well but eats a full row of height on a screen that has none to spare."
+    },
+    {
+      "id": "note-signal",
+      "x": -640,
+      "y": 1970,
+      "w": 560,
+      "page": "page-2",
+      "text": "2 · SIGNAL — B supplies the voice\n\nAchromatic chrome — black, white, four greys. One orange, spent once per screen on the thing you press to finish. Colour otherwise appears only on state (green here, amber coming, red flagged) and on cover art.\n\nWhat it gets you — the sleeve is the brightest object on screen, so art carries the shop's character without the chrome competing for it. Density: 11 receiving lines against Paper's 8. And because colour means something, the below-cost flag and the held copy read instantly instead of blending into a warm field.\n\nWhat it costs — turned toward a customer this looks like software, not like a record shop. It is also less forgiving: with no decorative warmth to fall back on, spacing and alignment carry the whole design, and sloppy implementation shows immediately.\n\nWatch for — how little the orange is used. If it starts appearing on secondary buttons the system stops working, because its whole job is to be the only one."
+    },
+    {
+      "id": "note-ledger",
+      "x": -640,
+      "y": 1030,
+      "w": 560,
+      "page": "page-1",
+      "text": "A · LEDGER — data-first\n\nPremise: the store is a book of accounts. Tables everywhere, hairline rules, tabular figures, 23–26px rows, no cards. Navigation is a text menu bar; the screen belongs to the data.\n\nPro — Receiving is the screen this option is built for. About 18 lines fit here at 1280 wide, and 35 on a real 24\" display, so a 50–100 line invoice is one or two screens, not eight. Your stable crew will learn the column order in a week and stop reading the headers. Suits the scanner-and-keyboard half of the work.\n\nCon — nothing on it is presentable. Cost and margin sit in plain sight, which is exactly what you do NOT want when the screen is turned to the customer. There is no visual anchor for a new hire, and it collapses badly to a phone: nine numeric columns have nowhere to go."
+    },
+    {
+      "id": "note-counter",
+      "x": -640,
+      "y": 1950,
+      "w": 560,
+      "page": "page-1",
+      "text": "B · COUNTER — task-first\n\nPremise: one screen, one job. A huge scan field, 46–74px controls, a 64px total, and very little visible at once. Navigation is five mode buttons.\n\nPro — the POS screen is free money. A 3–6 line sale never needed density, so the space buys legibility instead: the total is readable across the counter, the 0.00 prompt is impossible to miss, and the review-flag warning reads as a sentence rather than a red cell. It is also the only option that degrades gracefully to the phone, because it is already a single column.\n\nCon — Receiving is punished. The one-line-at-a-time wizard drawn here is honest about it: six committed lines visible, roughly 13 screens to review 100. On a 24\" desktop this wastes most of the display, and your crew are not the people who need this much hand-holding."
+    },
+    {
+      "id": "note-crate",
+      "x": -640,
+      "y": 2870,
+      "w": 560,
+      "page": "page-1",
+      "text": "C · CRATE — content-first\n\nPremise: the sleeve is the interface. Cover art leads every row, warm paper ground, an editorial serif for titles. Descends from the palette already in the prototype.\n\nPro — this is the option built for the moment you described: the screen turns, and what the customer sees is a record, not a spreadsheet. Staff also recognise a sleeve faster than a catalogue number, which is a real speed gain on Search. It looks like a record shop rather than a database.\n\nCon — art costs vertical space everywhere, including where it earns nothing: Receiving drops to 8 lines a screen. And A-14 stores cover art as a URL from MusicBrainz, so misses are common — half the rows here are drawn as empty placeholders on purpose. An art-led design whose art is missing is worse than one that never promised it."
+    },
+    {
+      "id": "note-console",
+      "x": -640,
+      "y": 3790,
+      "w": 560,
+      "page": "page-1",
+      "text": "D · CONSOLE — command-first\n\nPremise: one always-focused input takes a barcode, a search term, or a command (/cust, /disc 10, /tender cash 40). Every screen is that field's output. Dark ground, monospace, a shortcut legend along the bottom.\n\nPro — the highest speed ceiling of the five, and it fits E-05 exactly: the resolver already accepts four different things in one field, so a command line is the honest expression of that design. A whole receiving line can be typed in one go. Your stable crew can grow into it for years.\n\nCon — you told me the back-office half is mouse-driven form filling, and commands do nothing for those people. Discoverability is poor on the screens even a regular touches rarely (M-05, M-06). And it is the worst of the five to turn toward a customer — cost and margin in monospace on black reads as the back office, because it is."
+    },
+    {
+      "id": "note-workbench",
+      "x": -640,
+      "y": 4710,
+      "w": 560,
+      "page": "page-1",
+      "text": "E · WORKBENCH — structure-first\n\nPremise: one skeleton on every screen — a list rail on the left, the thing itself in the middle, a pinned context rail on the right. Neutral tool aesthetic. Learn the shape once, use it everywhere.\n\nPro — the most consistent of the five, and the reconcile panel earning its keep is a genuine win: derived-vs-stated stays on screen while 100 lines scroll past it, which is precisely where E-02 goes wrong on paper. Search gets the titlecard as a pane rather than a screen, which is what E-04 decision 1 says it is. Cost and margin can live in the right rail, leaving the middle column safe to turn toward a customer.\n\nCon — the two rails cost roughly nine columns of table width, so Receiving fits 16 lines where Ledger fits 18–35. It is also the option whose main advantage is simultaneity, and you said you don't need it: you finish or hold the sale and go look. Paying three columns for a benefit you declined is the question to put to this one."
+    }
+  ],
+  "launch": { "view": "canvas", "page": "page-2" }
+}

@@ -222,6 +222,46 @@ export const RECORDS: RecordEntry[] = [
     manufacturerUpc: "200000000017",
     minOnHand: 5,
   },
+  // Stocked before, none on hand right now — E-03 lists "titles we've held
+  // before" as in scope for search, and the stock states in lib/stockState
+  // need a Record in that condition to be reviewable at all. Both have a
+  // completed Sale behind them (see AppStore's seeded sales) and no copies.
+  {
+    id: "r-madvillainy",
+    artist: "Madvillain",
+    title: "Madvillainy",
+    label: "Stones Throw",
+    catalogNo: "STH2065",
+    format: "LP, Album",
+    year: 2004,
+    country: "US",
+    genre: "Hip Hop",
+    section: "VINYL",
+    art: "🎭",
+    manufacturerUpc: "659457206512",
+    discogsId: "213144",
+    stickyPrice: 32.99,
+    minOnHand: 2,
+    preferredSupplierId: "sup-fab",
+  },
+  {
+    id: "r-astral",
+    artist: "Van Morrison",
+    title: "Astral Weeks",
+    label: "Warner Bros.",
+    catalogNo: "WS 1768",
+    format: "LP, Album",
+    year: 1968,
+    country: "US",
+    genre: "Folk Rock",
+    section: "VINYL",
+    art: "🌌",
+    manufacturerUpc: "075992745215",
+    discogsId: "1425988",
+    stickyPrice: 27.5,
+    minOnHand: 0,
+  },
+
   // Catalog-only (a catalog match we do not hold) — E-03 decision 5
   {
     id: "r-horses",

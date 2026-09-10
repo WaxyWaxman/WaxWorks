@@ -1,0 +1,91 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+  <style>
+    body { margin: 0; font-family: "IBM Plex Sans", ui-sans-serif, system-ui, sans-serif; background: #fbfaf8; color: #16161a; }
+    a { color: #1f4d3a; } a:hover { color: #143528; }
+    .m { font-family: "IBM Plex Mono", ui-monospace, monospace; font-variant-numeric: tabular-nums; }
+    .th { font-size: 10px; letter-spacing: 0.07em; text-transform: uppercase; color: #7a766e; font-weight: 600; }
+    .rw { display: grid; grid-template-columns: 18px 1fr 82px 58px 44px 62px 62px 76px; align-items: center; height: 25px; border-bottom: 1px solid #eeebe5; font-size: 12.5px; }
+    .rw > div { padding: 0 6px; overflow: hidden; white-space: nowrap; }
+    .n { text-align: right; }
+    .btn { border: 1px solid #c9c5bc; background: #fff; padding: 4px 9px; font-size: 11.5px; color: #2c2a26; }
+  </style>
+</helmet>
+<div style="width: 1280px; height: 800px; box-sizing: border-box; background: #fbfaf8; display: flex; flex-direction: column;">
+
+  <div style="height: 30px; background: #16161a; color: #eae7e1; display: flex; align-items: center; gap: 22px; padding: 0 14px; font-size: 12px;">
+    <span class="m" style="font-weight: 600; letter-spacing: 0.12em; font-size: 11px;">WAX WORKS</span>
+    <span style="color: #a09b93;">Point of Sale</span>
+    <span style="border-bottom: 2px solid #6fae8e; padding-bottom: 1px;">Search</span>
+    <span style="color: #a09b93;">Receiving</span>
+    <span style="color: #a09b93;">Customers</span>
+    <span style="color: #a09b93;">Suppliers</span>
+    <span style="color: #a09b93;">Claims</span>
+  </div>
+
+  <div style="display: flex; align-items: center; gap: 12px; padding: 8px 14px; border-bottom: 1px solid #d5d2cc; background: #f7f5f1;">
+    <span class="th">Find</span>
+    <span class="m" style="flex: 1; max-width: 420px; border: 1px solid #16161a; background: #fff; height: 26px; display: flex; align-items: center; padding: 0 8px; font-size: 13px;">alice coltrane<span style="width: 1px; height: 15px; background: #16161a; margin-left: 2px;"></span></span>
+    <span class="m" style="font-size: 11px; color: #7a766e;">artist &middot; title &middot; track &middot; label &middot; cat no. &middot; UPC &middot; internal &middot; section &middot; genre</span>
+    <span style="margin-left: auto; font-size: 11px; color: #9a6b00; border: 1px solid #e0cfa4; background: #fdf6e6; padding: 3px 8px;">Catalogue provider unreachable &mdash; local results only</span>
+  </div>
+
+  <div style="border-bottom: 2px solid #16161a; background: #f2efe9; padding: 10px 14px; display: flex; gap: 16px;">
+    <div style="width: 72px; height: 72px; border: 1px solid #c9c5bc; background: repeating-linear-gradient(135deg, #e8e4dc 0 5px, #f2efe9 5px 10px); flex: none;"></div>
+    <div style="flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px;">
+      <div style="display: flex; align-items: baseline; gap: 10px;">
+        <span style="font-size: 17px; font-weight: 600;">Alice Coltrane &mdash; Journey in Satchidananda</span>
+        <span class="m" style="font-size: 11px; color: #7a766e;">Impulse! AS-9203 &middot; 1971 &middot; LP &middot; Spiritual Jazz &middot; VINYL</span>
+      </div>
+      <div style="display: flex; gap: 22px; font-size: 12px;" class="m">
+        <span><span class="th">On hand</span> <strong>4</strong></span>
+        <span><span class="th">Held</span> 1</span>
+        <span><span class="th">Available</span> 3</span>
+        <span><span class="th">On order</span> 2 &nbsp;<span style="color: #7a766e;">PO-1147</span></span>
+        <span><span class="th">Min on hand</span> 2</span>
+        <span><span class="th">Sticky retail</span> 31.00</span>
+      </div>
+      <div style="display: flex; gap: 5px; margin-top: 3px;">
+        <span class="btn">Reserve &rarr; Hold</span><span class="btn">Add to Sale</span><span class="btn">Print label</span><span class="btn">Claim vs. supplier</span><span class="btn" style="color: #7a766e;">Adjust on hand &nbsp;<span style="font-size: 10px;">ADMIN</span></span><span class="btn">Sold history</span>
+      </div>
+    </div>
+  </div>
+
+  <div style="flex: 1; overflow: hidden; display: flex; flex-direction: column;">
+    <div class="rw th" style="border-bottom: 1px solid #b9b4aa; background: #f0ede8; height: 22px;">
+      <div></div><div>Record / copy</div><div>Barcode</div><div>Cond</div><div class="n">Qty</div><div class="n">Price</div><div class="n">Cost</div><div>Status</div>
+    </div>
+
+    <div class="rw" style="background: #f4f2ee; font-weight: 600;"><div>&#9662;</div><div>Alice Coltrane &mdash; Journey in Satchidananda</div><div class="m" style="color: #7a766e;">602517</div><div>&mdash;</div><div class="n m">4</div><div class="n m">31.00</div><div class="n m">14.20</div><div style="color: #1f4d3a;">On hand</div></div>
+    <div class="rw"><div></div><div style="padding-left: 30px; color: #4a463f;">copy &middot; internal 200000012902</div><div class="m">&#8230;12902</div><div>NM</div><div class="n m">1</div><div class="n m">34.00</div><div class="n m">14.20</div><div style="color: #5d594f;">Available</div></div>
+    <div class="rw"><div></div><div style="padding-left: 30px; color: #4a463f;">copy &middot; internal 200000012903</div><div class="m">&#8230;12903</div><div>VG+</div><div class="n m">2</div><div class="n m">31.00</div><div class="n m">14.20</div><div style="color: #5d594f;">Available</div></div>
+    <div class="rw"><div></div><div style="padding-left: 30px; color: #4a463f;">copy &middot; internal 200000012905</div><div class="m">&#8230;12905</div><div>VG</div><div class="n m">1</div><div class="n m">26.00</div><div class="n m">14.20</div><div style="color: #9a6b00;">Held &middot; H14 &middot; M. Ellison</div></div>
+    <div class="rw" style="background: #f4f2ee; font-weight: 600;"><div>&#9656;</div><div>Alice Coltrane &mdash; Ptah, the El Daoud</div><div class="m" style="color: #7a766e;">602519</div><div>&mdash;</div><div class="n m">1</div><div class="n m">29.99</div><div class="n m">13.80</div><div style="color: #1f4d3a;">On hand</div></div>
+    <div class="rw" style="background: #f4f2ee; font-weight: 600;"><div>&#9656;</div><div>Alice Coltrane &mdash; World Galaxy</div><div class="m" style="color: #7a766e;">602522</div><div>&mdash;</div><div class="n m">0</div><div class="n m">&mdash;</div><div class="n m">&mdash;</div><div style="color: #9a6b00;">On order &middot; 3 &middot; PO-1151</div></div>
+    <div class="rw" style="color: #8f8a81;"><div></div><div>Alice Coltrane &mdash; Universal Consciousness &nbsp;<span style="font-size: 10px; border: 1px solid #cfcbc2; padding: 1px 4px;">CATALOGUE ONLY</span></div><div class="m">602524</div><div>&mdash;</div><div class="n m">0</div><div class="n m">&mdash;</div><div class="n m">&mdash;</div><div>Not in stock</div></div>
+    <div class="rw" style="color: #8f8a81;"><div></div><div>Alice Coltrane &mdash; Turiya Sings &nbsp;<span style="font-size: 10px; border: 1px solid #cfcbc2; padding: 1px 4px;">CATALOGUE ONLY</span></div><div class="m">602531</div><div>&mdash;</div><div class="n m">0</div><div class="n m">&mdash;</div><div class="n m">&mdash;</div><div>Not in stock</div></div>
+    <div class="rw" style="color: #8f8a81;"><div></div><div>Pharoah Sanders &mdash; Journey to the One &nbsp;<span style="font-size: 10px; border: 1px solid #cfcbc2; padding: 1px 4px;">CATALOGUE ONLY</span></div><div class="m">602545</div><div>&mdash;</div><div class="n m">0</div><div class="n m">&mdash;</div><div class="n m">&mdash;</div><div>Not in stock</div></div>
+    <div class="rw" style="color: #cbc7bf;"><div></div><div></div><div></div><div></div><div></div><div></div><div></div><div></div></div>
+    <div class="rw" style="color: #cbc7bf;"><div></div><div></div><div></div><div></div><div></div><div></div><div></div><div></div></div>
+    <div class="rw" style="color: #cbc7bf;"><div></div><div></div><div></div><div></div><div></div><div></div><div></div><div></div></div>
+    <div class="rw" style="color: #cbc7bf;"><div></div><div></div><div></div><div></div><div></div><div></div><div></div><div></div></div>
+    <div class="rw" style="color: #cbc7bf;"><div></div><div></div><div></div><div></div><div></div><div></div><div></div><div></div></div>
+  </div>
+
+  <div style="height: 22px; border-top: 1px solid #d5d2cc; background: #f0ede8; display: flex; align-items: center; gap: 18px; padding: 0 14px; font-size: 10.5px; color: #6d685f;" class="m">
+    <span>&uarr;&darr; move</span><span>&rarr; expand copies</span><span>ENTER open titlecard</span><span>R reserve</span><span>S add to sale</span>
+    <span style="margin-left: auto;">A &middot; LEDGER &mdash; Search + titlecard (E-03 / E-04)</span>
+  </div>
+
+</div>
+</x-dc>
+</body>
+</html>

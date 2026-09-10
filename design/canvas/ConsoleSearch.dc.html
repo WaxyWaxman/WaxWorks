@@ -1,0 +1,98 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Space+Grotesk:wght@400;500;700&display=swap">
+  <style>
+    body { margin: 0; font-family: "Space Grotesk", ui-sans-serif, system-ui, sans-serif; background: #12141a; color: #e4e6ea; }
+    a { color: #58c98a; } a:hover { color: #3aa96c; }
+    .m { font-family: "JetBrains Mono", ui-monospace, monospace; font-variant-numeric: tabular-nums; }
+    .dim { color: #6d7480; }
+    .k { font-family: "JetBrains Mono", monospace; font-size: 10.5px; color: #12141a; background: #58c98a; padding: 1px 5px; }
+    .rw { display: grid; grid-template-columns: 26px 1fr 90px 46px 40px 74px 120px; align-items: center; height: 26px; font-size: 12.5px; border-bottom: 1px solid #1a1d24; }
+    .rw > div { padding: 0 8px; overflow: hidden; white-space: nowrap; }
+    .n { text-align: right; }
+  </style>
+</helmet>
+<div style="width: 1280px; height: 800px; box-sizing: border-box; background: #12141a; display: flex; flex-direction: column;">
+
+  <div style="height: 28px; border-bottom: 1px solid #232732; display: flex; align-items: center; gap: 20px; padding: 0 16px; font-size: 11.5px;" class="m">
+    <span style="color: #58c98a; font-weight: 700; letter-spacing: 0.14em;">WAXWORKS</span>
+    <span class="dim">find</span><span class="dim">store/main</span><span class="dim">clerk/SRT</span>
+    <span style="margin-left: auto; color: #d9a441;">catalogue provider unreachable &mdash; local only</span>
+  </div>
+
+  <div style="padding: 16px 16px 12px; border-bottom: 1px solid #232732; background: #171a21;">
+    <div style="display: flex; align-items: center; gap: 12px;" class="m">
+      <span style="color: #58c98a; font-size: 20px; font-weight: 700;">&rsaquo;</span>
+      <span style="font-size: 20px;">/find alice coltrane</span>
+      <span style="width: 9px; height: 20px; background: #58c98a;"></span>
+      <span style="margin-left: auto; font-size: 11px;" class="dim">9 results &middot; 42 ms local</span>
+    </div>
+  </div>
+
+  <div style="flex: 1; display: flex; min-height: 0;">
+
+    <div style="flex: 1; min-width: 0; display: flex; flex-direction: column;">
+      <div class="rw m" style="color: #6d7480; font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase; border-bottom: 1px solid #2c313d; height: 22px;">
+        <div></div><div>record</div><div>code</div><div>cond</div><div class="n">qty</div><div class="n">price</div><div>state</div>
+      </div>
+
+      <div class="rw" style="background: #182b21; border-left: 2px solid #58c98a;"><div class="m" style="color: #58c98a;">&rsaquo;</div><div style="font-weight: 500;">Alice Coltrane &mdash; Journey in Satchidananda</div><div class="m dim">602517</div><div class="m dim">&mdash;</div><div class="n m">4</div><div class="n m">31.00</div><div style="color: #58c98a;">on hand</div></div>
+      <div class="rw"><div></div><div class="dim" style="padding-left: 28px;">copy &middot; 2000&#8230;12902</div><div class="m dim">&#8230;12902</div><div class="m">NM</div><div class="n m">1</div><div class="n m">34.00</div><div class="dim">available</div></div>
+      <div class="rw"><div></div><div class="dim" style="padding-left: 28px;">copy &middot; 2000&#8230;12903</div><div class="m dim">&#8230;12903</div><div class="m">VG+</div><div class="n m">2</div><div class="n m">31.00</div><div class="dim">available</div></div>
+      <div class="rw"><div></div><div class="dim" style="padding-left: 28px;">copy &middot; 2000&#8230;12905</div><div class="m dim">&#8230;12905</div><div class="m">VG</div><div class="n m">1</div><div class="n m">26.00</div><div style="color: #d9a441;">held H14</div></div>
+      <div class="rw"><div class="dim m">&#9656;</div><div>Alice Coltrane &mdash; Ptah, the El Daoud</div><div class="m dim">602519</div><div class="m dim">&mdash;</div><div class="n m">1</div><div class="n m">29.99</div><div style="color: #58c98a;">on hand</div></div>
+      <div class="rw"><div class="dim m">&#9656;</div><div>Alice Coltrane &mdash; World Galaxy</div><div class="m dim">602522</div><div class="m dim">&mdash;</div><div class="n m">0</div><div class="n m dim">&mdash;</div><div style="color: #d9a441;">on order 3</div></div>
+      <div class="rw" style="color: #6d7480;"><div></div><div>Alice Coltrane &mdash; Universal Consciousness</div><div class="m">602524</div><div class="m">&mdash;</div><div class="n m">0</div><div class="n m">&mdash;</div><div>catalogue</div></div>
+      <div class="rw" style="color: #6d7480;"><div></div><div>Alice Coltrane &mdash; Turiya Sings</div><div class="m">602531</div><div class="m">&mdash;</div><div class="n m">0</div><div class="n m">&mdash;</div><div>catalogue</div></div>
+      <div class="rw" style="color: #6d7480;"><div></div><div>Pharoah Sanders &mdash; Journey to the One</div><div class="m">602545</div><div class="m">&mdash;</div><div class="n m">0</div><div class="n m">&mdash;</div><div>catalogue</div></div>
+
+      <div style="margin-top: auto; border-top: 1px solid #232732; padding: 12px 16px;" class="m">
+        <div style="font-size: 11.5px; color: #6d7480; margin-bottom: 6px;">acting on the selected row</div>
+        <div style="display: flex; gap: 8px; flex-wrap: wrap; font-size: 11.5px;" class="dim">
+          <span style="border: 1px solid #2c313d; padding: 3px 8px;">r &mdash; reserve</span>
+          <span style="border: 1px solid #2c313d; padding: 3px 8px;">s &mdash; add to sale</span>
+          <span style="border: 1px solid #2c313d; padding: 3px 8px;">l &mdash; print label</span>
+          <span style="border: 1px solid #2c313d; padding: 3px 8px;">c &mdash; claim vs. supplier</span>
+          <span style="border: 1px solid #2c313d; padding: 3px 8px;">o &mdash; order in</span>
+          <span style="border: 1px solid #2c313d; padding: 3px 8px;">h &mdash; sold history</span>
+        </div>
+      </div>
+    </div>
+
+    <div style="width: 340px; border-left: 1px solid #232732; background: #151820; padding: 18px; display: flex; flex-direction: column; gap: 14px;">
+      <div style="width: 100%; height: 150px; background: repeating-linear-gradient(135deg, #1b1f28 0 6px, #212630 6px 12px); border: 1px solid #2c313d;"></div>
+      <div>
+        <div style="font-size: 19px; font-weight: 500; line-height: 1.2;">Journey in Satchidananda</div>
+        <div class="dim" style="font-size: 13px; margin-top: 2px;">Alice Coltrane</div>
+      </div>
+      <div class="m" style="font-size: 12px; display: flex; flex-direction: column; gap: 4px; border-top: 1px solid #232732; padding-top: 12px;">
+        <div style="display: flex; justify-content: space-between;"><span class="dim">label</span><span>Impulse! AS-9203</span></div>
+        <div style="display: flex; justify-content: space-between;"><span class="dim">year</span><span>1971</span></div>
+        <div style="display: flex; justify-content: space-between;"><span class="dim">genre</span><span>Spiritual Jazz</span></div>
+        <div style="display: flex; justify-content: space-between;"><span class="dim">on hand</span><span>4</span></div>
+        <div style="display: flex; justify-content: space-between;"><span class="dim">available</span><span>3</span></div>
+        <div style="display: flex; justify-content: space-between;"><span class="dim">on order</span><span>2 &middot; PO-1147</span></div>
+        <div style="display: flex; justify-content: space-between;"><span class="dim">min on hand</span><span>2</span></div>
+        <div style="display: flex; justify-content: space-between;"><span class="dim">sticky retail</span><span>31.00</span></div>
+        <div style="display: flex; justify-content: space-between;"><span class="dim">cost</span><span>14.20</span></div>
+      </div>
+      <div class="m dim" style="margin-top: auto; font-size: 11px; line-height: 1.5;">Cost and margin are on screen by default. If the display is turned toward a customer, this panel is what they read.</div>
+    </div>
+  </div>
+
+  <div style="height: 26px; background: #0d0f14; border-top: 1px solid #232732; display: flex; align-items: center; gap: 14px; padding: 0 16px; font-size: 10.5px;" class="m dim">
+    <span><span class="k">j k</span> move</span><span><span class="k">&rarr;</span> copies</span><span><span class="k">&crarr;</span> open</span><span><span class="k">^K</span> palette</span><span><span class="k">esc</span> back</span>
+    <span style="margin-left: auto;">D &middot; CONSOLE &mdash; Search + titlecard (E-03 / E-04)</span>
+  </div>
+
+</div>
+</x-dc>
+</body>
+</html>

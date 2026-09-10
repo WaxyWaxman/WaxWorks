@@ -122,6 +122,55 @@ const seed: AppState = {
         },
       ],
     },
+    // Two older Sales of titles we no longer hold a copy of. Without these,
+    // the "had before" stock state in Search has nothing to describe — every
+    // seeded Record is either on the floor, on order, or catalog-only. The
+    // dates are deliberately far apart so the recency stamp shows both a
+    // recent sell-out and a long-cold one.
+    {
+      id: "sale-hist-2",
+      state: "Closed",
+      saleNumber: 100241,
+      createdBy: CURRENT_USER,
+      createdAt: "2026-08-21 16:40:00",
+      tenders: [{ id: "t-hist-2", type: "Cash", amount: 69.28 }],
+      log: [{ at: "2026-08-21 16:40:00", text: "Tendered — Sale number 100241 assigned" }],
+      lines: [
+        {
+          id: "l-hist-2",
+          kind: "item",
+          recordId: "r-madvillainy",
+          title: "Madvillain — Madvillainy",
+          grade: "M",
+          qty: 2,
+          price: 32.99,
+          discountPct: 0,
+          taxLineId: DEFAULT_TAX_LINE,
+        },
+      ],
+    },
+    {
+      id: "sale-hist-3",
+      state: "Closed",
+      saleNumber: 100177,
+      createdBy: CURRENT_USER,
+      createdAt: "2026-03-14 12:12:00",
+      tenders: [{ id: "t-hist-3", type: "Credit Card", amount: 28.87 }],
+      log: [{ at: "2026-03-14 12:12:00", text: "Tendered — Sale number 100177 assigned" }],
+      lines: [
+        {
+          id: "l-hist-3",
+          kind: "item",
+          recordId: "r-astral",
+          title: "Van Morrison — Astral Weeks",
+          grade: "VG+",
+          qty: 1,
+          price: 27.5,
+          discountPct: 0,
+          taxLineId: DEFAULT_TAX_LINE,
+        },
+      ],
+    },
     // one pre-existing Held sale so E-05's "select an existing Held sale" is real
     {
       id: "sale-held-1",

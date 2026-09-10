@@ -1,0 +1,105 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Space+Grotesk:wght@400;500;700&display=swap">
+  <style>
+    body { margin: 0; font-family: "Space Grotesk", ui-sans-serif, system-ui, sans-serif; background: #12141a; color: #e4e6ea; }
+    a { color: #58c98a; } a:hover { color: #3aa96c; }
+    .m { font-family: "JetBrains Mono", ui-monospace, monospace; font-variant-numeric: tabular-nums; }
+    .dim { color: #6d7480; }
+    .k { font-family: "JetBrains Mono", monospace; font-size: 10.5px; color: #12141a; background: #58c98a; padding: 1px 5px; }
+    .row { display: grid; grid-template-columns: 30px 116px 1fr 44px 34px 76px 52px 86px; align-items: center; height: 27px; font-size: 13px; border-bottom: 1px solid #1c1f27; }
+    .row > div { padding: 0 8px; overflow: hidden; white-space: nowrap; }
+    .n { text-align: right; }
+  </style>
+</helmet>
+<div style="width: 1280px; height: 800px; box-sizing: border-box; background: #12141a; display: flex; flex-direction: column;">
+
+  <div style="height: 28px; border-bottom: 1px solid #232732; display: flex; align-items: center; gap: 20px; padding: 0 16px; font-size: 11.5px;" class="m">
+    <span style="color: #58c98a; font-weight: 700; letter-spacing: 0.14em;">WAXWORKS</span>
+    <span class="dim">store/main</span><span class="dim">term/2</span><span class="dim">clerk/SRT</span>
+    <span style="color: #58c98a;">sale:open</span>
+    <span class="dim">cust/mara-ellison &middot; disc 10 &middot; tax B</span>
+    <span style="margin-left: auto; color: #d9a441;">flags/2</span>
+  </div>
+
+  <div style="padding: 18px 16px 12px; border-bottom: 1px solid #232732; background: #171a21;">
+    <div style="display: flex; align-items: center; gap: 12px;" class="m">
+      <span style="color: #58c98a; font-size: 20px; font-weight: 700;">&rsaquo;</span>
+      <span style="font-size: 20px; letter-spacing: 0.02em;">200000012457</span>
+      <span style="width: 9px; height: 20px; background: #58c98a;"></span>
+      <span style="margin-left: auto; font-size: 11px;" class="dim">one field &mdash; barcode, gift card, item code, or a command</span>
+    </div>
+    <div style="margin-top: 10px; display: flex; gap: 8px; flex-wrap: wrap; font-size: 11.5px;" class="m dim">
+      <span style="border: 1px solid #2c313d; padding: 3px 8px;">/cust &lt;name&gt;</span>
+      <span style="border: 1px solid #2c313d; padding: 3px 8px;">/disc 10</span>
+      <span style="border: 1px solid #2c313d; padding: 3px 8px;">/qty 3</span>
+      <span style="border: 1px solid #2c313d; padding: 3px 8px;">/hold</span>
+      <span style="border: 1px solid #2c313d; padding: 3px 8px;">/void</span>
+      <span style="border: 1px solid #2c313d; padding: 3px 8px;">/tender cash 40</span>
+      <span style="border: 1px solid #2c313d; padding: 3px 8px;">/find alice coltrane</span>
+      <span style="border: 1px solid #2c313d; padding: 3px 8px;">/close</span>
+    </div>
+  </div>
+
+  <div style="flex: 1; display: flex; min-height: 0;">
+
+    <div style="flex: 1; min-width: 0; display: flex; flex-direction: column;">
+      <div class="row m" style="color: #6d7480; font-size: 10.5px; letter-spacing: 0.08em; text-transform: uppercase; border-bottom: 1px solid #2c313d; height: 24px;">
+        <div>#</div><div>code</div><div>record</div><div>cond</div><div class="n">qty</div><div class="n">price</div><div class="n">disc</div><div class="n">ext</div>
+      </div>
+
+      <div class="row"><div class="m dim">01</div><div class="m dim">7245001188</div><div>Bill Evans Trio &mdash; Sunday at the Village Vanguard</div><div class="m">NM</div><div class="n m">1</div><div class="n m">42.99</div><div class="n m dim">10%</div><div class="n m">38.69</div></div>
+      <div class="row"><div class="m dim">02</div><div class="m dim">2000&#8230;12457</div><div>Sade &mdash; Diamond Life</div><div class="m">VG+</div><div class="n m">1</div><div class="n m">24.50</div><div class="n m dim">10%</div><div class="n m">22.05</div></div>
+      <div class="row" style="background: #182b21; border-left: 2px solid #58c98a;"><div class="m dim">03</div><div class="m dim">2000&#8230;12902</div><div>Alice Coltrane &mdash; Journey in Satchidananda</div><div class="m">VG</div><div class="n m">1</div><div class="n m">31.00</div><div class="n m dim">10%</div><div class="n m">27.90</div></div>
+      <div class="row"><div class="m dim">04</div><div class="m dim">FREIGHT</div><div>Mail order postage <span class="dim" style="font-size: 11px;">non-tracked</span></div><div class="m dim">&mdash;</div><div class="n m">1</div><div class="n m">12.00</div><div class="n m dim">&mdash;</div><div class="n m">12.00</div></div>
+      <div class="row"><div class="m dim">05</div><div class="m dim">GC-4471</div><div>Gift card load</div><div class="m dim">&mdash;</div><div class="n m">1</div><div class="n m">50.00</div><div class="n m dim">&mdash;</div><div class="n m">50.00</div></div>
+      <div class="row" style="border-bottom: none;"><div class="m" style="color: #58c98a;">06</div><div class="m" style="color: #58c98a;">_</div><div class="dim" style="font-size: 12px;">waiting for the next scan</div><div></div><div></div><div></div><div></div><div></div></div>
+
+      <div style="margin-top: auto; border-top: 1px solid #232732; padding: 12px 16px; display: flex; flex-direction: column; gap: 6px;">
+        <div class="m" style="font-size: 11.5px; color: #6d7480;">recent</div>
+        <div class="m" style="font-size: 12px;"><span style="color: #58c98a;">&rsaquo;</span> /cust mara <span class="dim">&rarr; 1 match &mdash; attached, discount 10% applied to 3 lines</span></div>
+        <div class="m" style="font-size: 12px;"><span style="color: #58c98a;">&rsaquo;</span> 7245001188 <span class="dim">&rarr; 2 copies &mdash; picked NM 42.99</span></div>
+        <div class="m" style="font-size: 12px;"><span style="color: #d9a441;">&rsaquo;</span> /tender gift GC-1180 20 <span class="dim">&rarr; applied, 143.92 remaining</span></div>
+      </div>
+    </div>
+
+    <div style="width: 320px; border-left: 1px solid #232732; background: #151820; padding: 18px 18px; display: flex; flex-direction: column; gap: 16px;">
+      <div>
+        <div class="m" style="font-size: 10.5px; letter-spacing: 0.1em; text-transform: uppercase; color: #6d7480;">due</div>
+        <div class="m" style="font-size: 46px; font-weight: 500; line-height: 1.05; color: #58c98a; letter-spacing: -0.02em;">163.92</div>
+      </div>
+      <div class="m" style="font-size: 12.5px; display: flex; flex-direction: column; gap: 4px; border-top: 1px solid #232732; border-bottom: 1px solid #232732; padding: 12px 0;">
+        <div style="display: flex; justify-content: space-between;"><span class="dim">gross</span><span>160.49</span></div>
+        <div style="display: flex; justify-content: space-between;"><span class="dim">disc</span><span>&minus;9.86</span></div>
+        <div style="display: flex; justify-content: space-between;"><span class="dim">tax B 9.975</span><span>8.85</span></div>
+        <div style="display: flex; justify-content: space-between;"><span class="dim">tax A 5.000</span><span>4.44</span></div>
+      </div>
+      <div class="m" style="font-size: 12.5px; display: flex; flex-direction: column; gap: 4px;">
+        <div class="dim" style="font-size: 10.5px; letter-spacing: 0.1em; text-transform: uppercase;">tenders</div>
+        <div style="display: flex; justify-content: space-between;"><span>gift GC-1180</span><span>20.00</span></div>
+        <div style="display: flex; justify-content: space-between;"><span>cash</span><span>40.00</span></div>
+        <div style="display: flex; justify-content: space-between; color: #d9a441;"><span>remaining</span><span>103.92</span></div>
+      </div>
+      <div style="margin-top: auto; display: flex; flex-direction: column; gap: 8px;">
+        <div class="m" style="border: 1px solid #58c98a; color: #58c98a; text-align: center; padding: 10px; font-size: 13.5px;">/tender &lt;type&gt; &lt;amount&gt;</div>
+        <div class="m dim" style="font-size: 11px; text-align: center;">or press <span class="k">F12</span> for the tender pad</div>
+      </div>
+    </div>
+  </div>
+
+  <div style="height: 26px; background: #0d0f14; border-top: 1px solid #232732; display: flex; align-items: center; gap: 14px; padding: 0 16px; font-size: 10.5px;" class="m dim">
+    <span><span class="k">/</span> command</span><span><span class="k">&uarr;</span> history</span><span><span class="k">^K</span> palette</span><span><span class="k">F2</span> qty</span><span><span class="k">F3</span> price</span><span><span class="k">F8</span> hold</span><span><span class="k">F12</span> tender</span>
+    <span style="margin-left: auto;">D &middot; CONSOLE &mdash; Point of Sale (E-05)</span>
+  </div>
+
+</div>
+</x-dc>
+</body>
+</html>
