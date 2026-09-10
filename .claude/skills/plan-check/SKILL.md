@@ -31,8 +31,10 @@ grep -rn "<term>" docs/
 ```
 
 Read `docs/PRD.md` §4 and §6, the decision tables of every related flow, and any
-ADR in `docs/decisions/`. Read the actual rows — do not rely on memory of them from
-earlier in the conversation.
+A-n decision in `docs/architecture.md` §2. Check §9 too: an A-n may already have
+amended the flow decision you are about to cite. Read the actual rows — do not rely
+on memory of them from earlier in the conversation, and check `docs/lexicon.md` for
+terms marked retired.
 
 ### 3. Classify every claim
 

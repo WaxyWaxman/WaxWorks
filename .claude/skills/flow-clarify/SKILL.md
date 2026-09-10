@@ -1,6 +1,6 @@
 ---
 name: flow-clarify
-description: Interrogate a WaxWorks user flow to close its gaps and drive it from Stub toward Specified. Use when the user names a flow ID (E-01..E-06, M-01..M-04) and wants to work through it, flesh it out, clarify it, answer its open questions, or "spec it out". Also use when they describe a new capability that belongs to an existing flow.
+description: Interrogate a WaxWorks user flow to close its gaps and drive it from Stub toward Specified. Use when the user names a flow ID (E-nn or M-nn) and wants to work through it, flesh it out, clarify it, answer its open questions, or "spec it out". Also use when they describe a new capability that belongs to an existing flow.
 ---
 
 # Clarify a flow
@@ -44,7 +44,9 @@ Go step by step. For each one, work the checklist below and raise only the quest
 that actually bite for that step — a generic checklist dump is noise.
 
 - **Actor and permission.** Who does this? Can an Employee, or is a Manager needed?
-  Does it need a manager override, and if so what is the mechanism (M-04)?
+  Is it reserved to a Manager, or does it proceed and get recorded for review?
+  Check the current governance model in `docs/architecture.md` §2 and the terms in
+  `docs/lexicon.md` rather than assuming — this has already changed once.
 - **Preconditions.** What must already be true? What if it isn't?
 - **Identity and collision.** What identifies the thing being acted on? What happens
   when two of them collide, or when the same action runs twice?
@@ -88,7 +90,8 @@ stop at any point and keep what was settled.
 - Update the `Status:` line, and the matching rows in `docs/README.md` and
   `docs/PRD.md` §3. All three must agree.
 - If the flow settled something cross-cutting (a rule that will bind flows not yet
-  written), raise it to `docs/PRD.md` §6 or propose an ADR via `/architecture`.
+  written), raise it via `/architecture` as a candidate **A-n** decision in
+  `docs/architecture.md` §2.
 - Tell the user what is still open, and what the next flow to work is and why.
 
 ## Promotion rules

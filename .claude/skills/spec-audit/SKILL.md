@@ -69,6 +69,11 @@ depends on appears in §4. Flows invent entities faster than the PRD absorbs the
 
 ### 8. Stale placeholders
 List remaining `_TBD_` markers and unanswered open questions, grouped by flow.
+
+### 9. Retired vocabulary
+Terms `docs/lexicon.md` marks retired, used as current outside a superseded
+decision. Each hit is a candidate contradiction, because a retired term usually
+means the behaviour behind it changed.
 These are the backlog, not defects.
 
 ## Report

@@ -10,7 +10,7 @@ no edits and propose no requirements — you report what the documents say and w
 they disagree.
 
 Read `docs/README.md` for the conventions, then `docs/PRD.md`, then every file under
-`docs/flows/`, `docs/decisions/`, and `docs/architecture/`. Read them in full; these
+`docs/flows/`, `docs/architecture.md`, and `docs/lexicon.md`. Read them in full; these
 are short documents and partial reads produce false findings.
 
 Then check, in this order:
@@ -28,9 +28,14 @@ Then check, in this order:
 5. **Cross-references** — relative links resolve; `Related:` lines are reciprocal;
    every flow file has a row in both index tables and vice versa.
 6. **Contradictions** — rules stated in more than one place, especially pricing and
-   rounding, permissions and manager override, immutability, store scoping, tax.
+   rounding, what is reserved to a Manager, immutability, store scoping, tax. Check
+   each side against `docs/architecture.md` §9 before calling it a contradiction — an
+   A-n decision may have amended one of them already.
 7. **Domain model drift** — entities in PRD §4 versus entities the flows actually use.
 8. **Placeholders** — remaining `_TBD_` markers and open questions, grouped by flow.
+9. **Retired vocabulary** — terms `docs/lexicon.md` marks retired, still used as
+   current outside a superseded decision. A retired term usually means the behaviour
+   behind it changed too, so each hit is a candidate contradiction.
 
 Report findings ordered by consequence: contradictions first (quote both sides
 verbatim with file and line), then unpropagated commitments, then status drift, then

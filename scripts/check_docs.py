@@ -220,6 +220,33 @@ for path in MD_FILES:
 
 
 # --------------------------------------------------------------------------
+# 4b. A-n architecture decisions -- every citation resolves
+# --------------------------------------------------------------------------
+
+ARCH = os.path.join(ROOT, "docs", "architecture.md")
+arch_ids: set[str] = set()
+if os.path.exists(ARCH):
+    for line in read(ARCH).splitlines():
+        m = re.match(r"^\|\s*(A-\d+[a-z]?)\s*\|", line.strip())
+        if m:
+            arch_ids.add(m.group(1))
+else:
+    err("docs/architecture.md is missing")
+
+if arch_ids:
+    for path in MD_FILES:
+        if rel(path) == "docs/architecture.md":
+            continue
+        for lineno, line in enumerate(read(path).splitlines(), 1):
+            for cited in re.findall(r"(?<![\w-])(A-\d+[a-z]?)(?![\w-])", line):
+                if cited not in arch_ids:
+                    err(
+                        f"{rel(path)}:{lineno}: cites {cited}, which is not a "
+                        "decision in docs/architecture.md"
+                    )
+
+
+# --------------------------------------------------------------------------
 # 5. Relative links resolve
 # --------------------------------------------------------------------------
 

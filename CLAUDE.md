@@ -1,8 +1,8 @@
 # WaxWorks — working agreements
 
-This repository is in the **requirements phase**. There is no application code yet;
-the deliverables are specification documents under `docs/`. Treat writing and
-interrogating specs as the primary work, not as preamble to code.
+The deliverables are the specification documents under `docs/` and, increasingly,
+the code that implements them. Treat writing and interrogating specs as real work,
+not as preamble to code.
 
 Two people work here in parallel — `sr-talbot` and `WaxyWaxman`. Everything below
 exists so that two humans and their agents can edit at the same time without
@@ -14,10 +14,11 @@ colliding or quietly contradicting each other.
 |---|---|
 | `docs/PRD.md` | The spine — product context, users, domain model, cross-cutting concerns |
 | `docs/flows/` | One document per user flow. The detailed specs. |
-| `docs/architecture/` | System architecture, once flows are specified enough to constrain it |
-| `docs/decisions/` | ADRs — cross-cutting decisions that outlive any single flow |
+| `docs/architecture.md` | The architecture, and the numbered **A-n** decisions (§2). §9 lists every amendment an A-n made elsewhere |
+| `docs/lexicon.md` | Controlled vocabulary — the canonical term for each concept |
+| `docs/prototype.md` | The clickable prototype and its flow ↔ screen map |
 | `docs/reference/` | Worked examples and external-system notes |
-| `docs/templates/` | Starting points for new flows and ADRs |
+| `docs/templates/` | Starting point for a new flow document |
 | `.claude/skills/` | The planning skills (see below) |
 
 `docs/README.md` is the authoritative statement of the documentation conventions.
@@ -37,6 +38,12 @@ Read it before editing anything under `docs/`.
   Change one, change all three.
 - **`_TBD_` is a real marker.** Leave it in place rather than inventing content
   to fill a section. An honest gap is more useful than a plausible guess.
+- **A superseded decision stays in the table**, struck through, pointing at what
+  replaced it. So a row existing does not mean it is live — read the row, and check
+  `docs/architecture.md` §9 for amendments before citing anything as current.
+- **Use the lexicon's canonical terms** — in documents, commit messages, and any
+  prompt written to drive an agent against this project. A term the lexicon marks
+  retired usually means the behaviour behind it changed too.
 
 ## How to behave in this repo
 
@@ -78,8 +85,8 @@ would flood the conversation.
 
 | Entry point | Use it to |
 |---|---|
-| `/architecture` | Derive architecture docs and ADRs; security and reliability review |
-| `architect` | Read-only structural and security review; drafts ADR text, ratifies nothing |
+| `/architecture` | Derive the architecture and its A-n decisions; security and reliability review |
+| `architect` | Read-only structural and security review; drafts A-n text, ratifies nothing |
 
 ### 3. QA
 
@@ -115,12 +122,14 @@ invention is more expensive here than a gap: gaps get noticed, inventions get bu
 - **Separate what is written, what you infer, and what you recommend.** Never let a
   recommendation read as a recorded decision. Unratified proposals are marked
   `_Status: recommended, not yet ratified._`
-- **Propose, don't ratify.** ADRs land at `Status: Proposed`. A human moves them to
-  `Accepted`.
+- **Propose, don't ratify.** A newly drafted A-n decision is not binding until the
+  user confirms it, and is not cited elsewhere as settled before then.
 - **Deterministic checks before model judgement.** `python scripts/check_docs.py`
   answers the mechanical questions; do not re-derive its output by hand.
 - **Read the file, don't recall it.** Re-read decision tables before citing them,
-  even if they appeared earlier in the conversation.
+  even if they appeared earlier in the conversation — and never carry a domain fact
+  in from a previous session or from an agent's own prompt. This project supersedes
+  decisions often; a snapshot enforced as current is worse than no knowledge.
 - **Report outcomes as they happened.** Failing tests are reported failing, with the
   output. Never infer a pass from reading code.
 
