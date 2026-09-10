@@ -25,6 +25,7 @@ const blankSupplier: Omit<Supplier, "id" | "log"> = {
   repName: "",
   repPhone: "",
   mainPhone: "",
+  consignment: false,
 };
 
 // M-01 — nothing here is gated; New/Edit/Copy are open to any Employee.
@@ -155,6 +156,10 @@ export function Suppliers() {
                   <Row k="Currency" v={sel.currency} />
                   <Row k="Type" v={sel.type} />
                   <Row k="Backorders allowed" v={sel.backordersAllowed ? "Yes" : "No"} />
+                  <Row
+                    k="Consignment — default Invoice type in Accounts Payable"
+                    v={sel.consignment ? "Yes" : "No"}
+                  />
                   <Row k="Email" v={sel.email} />
                   <Row k="Rep" v={[sel.repName, sel.repPhone].filter(Boolean).join(" · ") || "—"} />
                   <Row k="Main phone" v={sel.mainPhone || "—"} />
@@ -358,6 +363,10 @@ function SupplierFormModal({
         <label className="row" style={{ alignItems: "center" }}>
           <input type="checkbox" checked={f.backordersAllowed} onChange={(e) => set("backordersAllowed", e.target.checked)} />
           <span>Backorders allowed</span>
+        </label>
+        <label className="row" style={{ alignItems: "center" }}>
+          <input type="checkbox" checked={!!f.consignment} onChange={(e) => set("consignment", e.target.checked)} />
+          <span>Consignment — Invoices from this Supplier default to Consignment in Accounts Payable</span>
         </label>
         <label className="field">
           <span>Email — where orders/claims are sent</span>

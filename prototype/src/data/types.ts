@@ -88,6 +88,7 @@ export interface Supplier {
   // when Second-hand intake is chosen; there's no dedicated single supplier,
   // any Supplier can carry second-hand invoices, this just picks which one
   // to suggest first.
+  consignment?: boolean; // M-05 — a real Receiving Invoice from this Supplier displays as "Consignment" rather than "Invoice" in Accounts Payable
   log: { at: string; text: string }[];
 }
 
@@ -237,6 +238,12 @@ export interface SupplierClaim {
   status: ClaimStatus;
   creditMemo?: string; // the supplier's own reference, captured on Credited
   lines: ClaimLine[];
+  // M-05 — once Credited, applying the credit settles that much of the
+  // Supplier's overall balance without money moving; it isn't earmarked to
+  // one Invoice (decision 11) and is only ever applied once, in full.
+  applied?: boolean;
+  appliedAt?: string;
+  appliedBy?: string;
   createdBy: string;
   createdAt: string;
   log: { at: string; text: string }[];
@@ -299,6 +306,49 @@ export interface PendingOrderLine {
   createdAt: string;
 }
 
+// ---- Accounts payable (M-05) ----
+export type PaymentMethod = "Cheque" | "Credit Card" | "EFT" | "Cash";
+export const PAYMENT_METHODS: PaymentMethod[] = ["Cheque", "Credit Card", "EFT", "Cash"];
+
+// One thing a PaymentBatch's money went against — a real Invoice (E-02) or a
+// manually-entered PayableEntry. "kind" plus "id" together address it, since
+// the two live in different arrays.
+export type PayableTargetKind = "invoice" | "entry";
+export interface PaymentTarget {
+  kind: PayableTargetKind;
+  id: string;
+  amount: number;
+}
+
+// One Record-Payment action — paying several Invoices/Entries with one
+// cheque is one PaymentBatch with several targets, not several payment
+// records that merely share a reference (M-05 open question "Payment
+// batches", resolved this way). Browsed as one row per batch, oldest/newest
+// first, opened to see its targets — not nested per-Invoice.
+export interface PaymentBatch {
+  id: string;
+  supplierId: string;
+  method: PaymentMethod;
+  reference: string; // free text — "Cheque 101", "Credit card 1278" — what reconciles against the bank statement
+  date: string;
+  recordedBy: string;
+  createdAt: string;
+  targets: PaymentTarget[];
+}
+
+// One slice of a Credited claim's amount landing on this Invoice. A claim's
+// credit isn't earmarked to one Invoice the Manager picks — applying it nets
+// against the whole Supplier balance, auto-distributed across their
+// outstanding Invoices (oldest received first), which is why one claim can
+// produce several of these, one per Invoice it touched (M-05 decision 11).
+export interface AppliedCredit {
+  id: string;
+  claimId: string;
+  amount: number;
+  appliedAt: string;
+  appliedBy: string;
+}
+
 export interface Invoice {
   id: string;
   supplierId: string;
@@ -313,11 +363,54 @@ export interface Invoice {
   totalOverride?: number; // reconciling to the paper total — beyond ±2% raises a ReviewFlag
   status: InvoiceStatus;
   lines: InvoiceLine[];
+  creditsApplied: AppliedCredit[]; // balance is derived from this plus matching PaymentBatch targets, never edited directly
   createdBy: string;
   createdAt: string;
   finalizedAt?: string;
   paidAt?: string;
   paidBy?: string;
+  log: { at: string; text: string }[];
+}
+
+// A manually-entered Accounts Payable line — not sourced from Receiving
+// (E-02) or Supplier Claims (E-04), and not tied to any InventoryItem: a
+// lump total/tax/freight/misc only, "the remaining balance just being
+// inventory unlinked to items for now." Covers things those two flows don't:
+// a supplier bill entered without itemizing it through Receiving, a
+// bookkeeping correction, a standalone credit memo, or a claim logged before
+// it's worth raising through the full titlecard-based Supplier Claims flow.
+//
+// Sign convention (entered as a plain positive dollar figure — the type
+// decides the direction, so nobody types a negative number): Invoice and
+// Consignment always increase what's owed; Credit always decreases it;
+// Adjustment goes whichever way `adjustmentDirection` says; Claim is a
+// placeholder that does NOT count toward the balance at all until it's
+// cleared against a matching Credit (see `clearedWith`) — same as a Pending
+// Supplier Claim not yet counting until it's actually Credited.
+export type PayableEntryType = "Invoice" | "Claim" | "Credit" | "Adjustment" | "Consignment";
+export const PAYABLE_ENTRY_TYPES: PayableEntryType[] = ["Invoice", "Claim", "Credit", "Adjustment", "Consignment"];
+
+export interface PayableEntry {
+  id: string;
+  supplierId: string;
+  type: PayableEntryType;
+  reference: string; // free text — a bill #, a memo #, a note on what the adjustment is for
+  date: string;
+  subtotal: number;
+  tax: number;
+  freight: number;
+  misc: number;
+  adjustmentDirection?: "increase" | "decrease"; // Adjustment only — which way it moves the balance
+  // Manual reconciliation (not automatic): when a set of entries' signed
+  // amounts sum to zero — a placeholder Claim matched against the Credit
+  // that eventually replaced it, say — a Manager can mark them Cleared
+  // against each other. Cleared entries stay in the ledger (never deleted)
+  // but drop out of what still needs attention.
+  clearedWith?: string[]; // ids of the other PayableEntry rows cleared alongside this one
+  clearedAt?: string;
+  clearedBy?: string;
+  createdBy: string;
+  createdAt: string;
   log: { at: string; text: string }[];
 }
 

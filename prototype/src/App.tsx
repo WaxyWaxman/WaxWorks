@@ -10,6 +10,7 @@ import { Receiving } from "./screens/Receiving";
 import { OrderProcessing } from "./screens/OrderProcessing";
 import { WhatsOnOrder } from "./screens/WhatsOnOrder";
 import { Suppliers } from "./screens/Suppliers";
+import { AccountsPayable } from "./screens/AccountsPayable";
 import { ReviewQueueBadge } from "./components/ReviewQueue";
 
 const NAV = [
@@ -22,6 +23,7 @@ const NAV = [
   { to: "/orders", label: "M-02 Order Processing" },
   { to: "/on-order", label: "M-02 What's on Order" },
   { to: "/suppliers", label: "M-01 Suppliers" },
+  { to: "/payable", label: "M-05 Accounts Payable" },
 ];
 
 export function App() {
@@ -67,6 +69,7 @@ export function App() {
           <Route path="/orders" element={<OrderProcessing />} />
           <Route path="/on-order" element={<WhatsOnOrder />} />
           <Route path="/suppliers" element={<Suppliers />} />
+          <Route path="/payable" element={<AccountsPayable />} />
         </Routes>
       </main>
     </div>
