@@ -302,7 +302,10 @@ function SaleEditor() {
             <div className="card-body btn-row">
               <button
                 className="btn primary lg"
-                disabled={sale.lines.length === 0 || Math.abs(due) > 0.001}
+                disabled={
+                  (sale.lines.length > 0 && Math.abs(due) > 0.001) ||
+                  (sale.lines.length === 0 && sale.tenders.length === 0)
+                }
                 onClick={() => setReceipt(app.completeSale(sale.id))}
               >
                 Tender &amp; finish
@@ -310,7 +313,7 @@ function SaleEditor() {
               {sale.state !== "Held" && (
                 <button
                   className="btn"
-                  disabled={sale.lines.length === 0}
+                  disabled={sale.lines.length === 0 && sale.tenders.length === 0}
                   onClick={() => app.holdSale(sale.id)}
                 >
                   Hold
@@ -636,13 +639,20 @@ function TenderModal({
 }: {
   due: number;
   hasCustomer: boolean;
-  onAdd: (t: { type: TenderType; amount: number; note?: string; reference?: string }) => void;
+  onAdd: (t: {
+    type: TenderType;
+    amount: number;
+    note?: string;
+    reference?: string;
+    accountDirection?: "add" | "draw";
+  }) => void;
   onClose: () => void;
 }) {
   const [type, setType] = useState<TenderType>("Cash");
   const [raw, setRaw] = useState(String(Math.max(0, due).toFixed(2)));
   const [note, setNote] = useState("");
   const [reference, setReference] = useState("");
+  const [acctDirection, setAcctDirection] = useState<"add" | "draw">("draw");
   const amount = Number(raw) || 0;
 
   const needsCustomer = type === "Account Balance" && !hasCustomer;
@@ -667,6 +677,7 @@ function TenderModal({
                 amount: isNegativeType ? -Math.abs(amount) : amount,
                 note: note.trim() || undefined,
                 reference: reference.trim() || undefined,
+                accountDirection: type === "Account Balance" ? acctDirection : undefined,
               })
             }
           >
@@ -708,10 +719,37 @@ function TenderModal({
           </label>
         )}
         {type === "Account Balance" && (
-          <div className={"callout" + (needsCustomer ? " danger" : "")}>
-            Draws against the Customer’s account balance — requires a Customer on the Sale.
-            {needsCustomer && " No Customer attached."}
-          </div>
+          <>
+            <label className="field">
+              <span>Direction</span>
+              <div className="row">
+                <label className="row">
+                  <input
+                    type="radio"
+                    checked={acctDirection === "draw"}
+                    onChange={() => setAcctDirection("draw")}
+                  />
+                  <span>Draw down — customer pays with existing balance</span>
+                </label>
+              </div>
+              <div className="row">
+                <label className="row">
+                  <input
+                    type="radio"
+                    checked={acctDirection === "add"}
+                    onChange={() => setAcctDirection("add")}
+                  />
+                  <span>Add to balance — a deposit or credit</span>
+                </label>
+              </div>
+            </label>
+            <div className={"callout" + (needsCustomer ? " danger" : "")}>
+              {acctDirection === "draw"
+                ? "Draws against the Customer's account balance."
+                : "Adds to the Customer's account balance — a deposit on a line-less Sale, or crediting a refund (E-05 decision 25)."}
+              {" "}Requires a Customer on the Sale.{needsCustomer && " No Customer attached."}
+            </div>
+          </>
         )}
         {type === "Used Credit" && (
           <div className="callout">

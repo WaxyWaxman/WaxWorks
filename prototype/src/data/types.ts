@@ -123,6 +123,10 @@ export interface Tender {
   amount: number;
   note?: string;
   reference?: string;
+  // Account Balance only — which way it moves the Customer's balance.
+  // Undefined behaves as "draw" (the original, draw-down-only behavior),
+  // so nothing else that sets a Tender needs to know this field exists.
+  accountDirection?: "add" | "draw";
 }
 
 export interface Sale {

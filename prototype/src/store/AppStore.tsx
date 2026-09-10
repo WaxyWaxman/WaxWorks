@@ -533,7 +533,12 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
             );
           }
           if ((t.type === "Account Balance" || t.type === "Used Credit") && sale.customerId) {
-            const delta = t.type === "Account Balance" ? -t.amount : Math.abs(t.amount);
+            const delta =
+              t.type === "Used Credit"
+                ? Math.abs(t.amount)
+                : t.accountDirection === "add"
+                  ? Math.abs(t.amount)
+                  : -t.amount;
             customers = customers.map((c) =>
               c.id === sale.customerId ? { ...c, balance: c.balance + delta } : c,
             );
