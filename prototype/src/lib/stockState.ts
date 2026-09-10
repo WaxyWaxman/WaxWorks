@@ -36,7 +36,10 @@ export interface StockFacts {
   onHand: number;
   available: number;
   held: number;
+  /** Units on a PLACED order line (poNumber set) — genuinely on the way. */
   onOrder: number;
+  /** Units raised into a supplier stream but not yet placed (M-02 Phase 1-2). */
+  raised: number;
   /** ISO-ish timestamp of the most recent completed sale of this Record. */
   lastSoldAt?: string;
   /** How many copies we have ever sold. */
@@ -59,9 +62,16 @@ export function stockFacts(record: RecordEntry, input: StockInput): StockFacts {
   const held = heldCount(record.id, input.inventory);
   const available = availableOnHand(record.id, input.inventory);
   const total = onHand(record.id, input.inventory);
-  const onOrder = input.pendingOrders
-    .filter((o) => o.recordId === record.id)
-    .reduce((sum, o) => sum + o.qty, 0);
+  // "On the way" means PLACED, not merely raised. M-02 splits a pending line's
+  // life in two: raised into a supplier stream (no poNumber) is still Order
+  // Processing's job and nobody has told the supplier anything; placed
+  // (poNumber set) is a real order. Counting raised lines here would have an
+  // employee telling a customer their record is on its way when no order
+  // exists — so only placed lines count, and raised ones are reported
+  // separately.
+  const forRecord = input.pendingOrders.filter((o) => o.recordId === record.id);
+  const onOrder = forRecord.filter((o) => o.poNumber).reduce((sum, o) => sum + o.qty, 0);
+  const raised = forRecord.filter((o) => !o.poNumber).reduce((sum, o) => sum + o.qty, 0);
 
   let everSold = 0;
   let lastSoldAt: string | undefined;
@@ -85,7 +95,7 @@ export function stockFacts(record: RecordEntry, input: StockInput): StockFacts {
   else if (everSold > 0 || input.inventory.some((i) => i.recordId === record.id)) state = "before";
   else state = "never";
 
-  return { state, onHand: total, available, held, onOrder, lastSoldAt, everSold };
+  return { state, onHand: total, available, held, onOrder, raised, lastSoldAt, everSold };
 }
 
 // Sort key so results group by state in the order above — E-03 decision 4

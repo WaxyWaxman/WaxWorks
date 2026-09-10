@@ -27,7 +27,7 @@ Start on the **Flow map**; it carries a suggested review path.
 
 | Flow | Status in docs | Prototype screen | Notes |
 |---|---|---|---|
-| [E-03](flows/E-03-search-inventory.md) | Specified | Search | Four stock states (here now / on the way / had before / never stocked) banding one ranked list, with a recency stamp per row and filter chips — E-03 decisions 11 and 12. Grouping, catalog-only rows, scan-to-resolve, catalog-provider-down toggle. Selecting a Record (click a row, Reserve, or a resolved scan) opens its titlecard inline above the results — see E-04. |
+| [E-03](flows/E-03-search-inventory.md) | Specified | Search | Four stock states (here now / on the way / had before / never stocked) banding one ranked list, with a recency stamp per row and filter chips — E-03 decisions 11, 12 and 13. *On the way* counts only PLACED order lines; units merely raised into a supplier stream show as “being ordered” and never change a Record's state (decision 13). Grouping, catalog-only rows, scan-to-resolve, catalog-provider-down toggle. Selecting a Record (click a row, Reserve, or a resolved scan) opens its titlecard inline above the results — see E-04. |
 | [E-04](flows/E-04-manage-inventory.md) | Specified | *(embedded in Search)* | Copies, derived on-hand math, Reserve → Held Sale, below-cost pricing proceeds and raises a review flag (M-04 decision 8) rather than blocking on a manager override. Not a separate route — the titlecard is a view, not a screen of its own (E-04 decision 1), so it lives in Search's `TitlecardPanel` and updates as the selected Record changes. `/search/:recordId` deep-links to a specific one. |
 | [E-05](flows/E-05-sell-a-record.md) | Specified | Point of Sale | Barcode resolver, multi-copy picker, customer pre-fill (with inline create-on-no-match), `0.00` prompt, negative inventory, split tender, hold/void, receipt, PO field, 2-digit discount. Also carries Edit (void-and-duplicate for Current, open for Held), Copy, Search (barcode → item sale history), and M-03's close under **Other Functions** (View Subtotal / Total Today's Sales / Undo End of Day, Admin-labeled). |
 | [E-06](flows/E-06-process-a-return.md) | Specified | Return | Negative-qty line, prior-Sale link, refund default, cash/store-credit, stock routing. Entered only from Point of Sale's **+ New Return** (`/return/:saleId`) — mirrors `/sell/:saleId` in never being its own nav item, since a Return is a Sale with `isReturn` set. |
@@ -36,7 +36,9 @@ Start on the **Flow map**; it carries a suggested review path.
 | [E-02](flows/E-02-receive-inventory.md) | Specified | Receiving (`/receiving`) | The three phases in one screen: open an invoice (supplier, intake mode, invoice #, collision check, simulated photo extraction), then an always-present fillable row at the bottom of Lines — scanning or typing a barcode there resolves it against this supplier's pending orders first, then the local catalog (a catalog-only match pulls in, same as E-03 decision 6), or opens Lookup on a miss — followed by pricing, then reconcile (derived-vs-stated subtotal warning, ±2%-bounded total override) and finalize — lines aren't sellable InventoryItems until then. A committed line's pencil re-opens it inline for correction. A finalized copy is immediately claimable from its titlecard. |
 | [M-01](flows/M-01-supplier-margin.md) | Specified | Suppliers (`/suppliers`) | Search, New/Edit/Copy/Delete/Merge, opens on the most recently searched card. Nothing is gated — Delete/Merge are labeled Admin-only by convention only. Full field set (order terms, discount vs. margin, rep contacts, etc.), all logged. |
 | [M-03](flows/M-03-daily-summary.md) | Specified | *(embedded in Point of Sale)* | Not a screen of its own — surfaced under Point of Sale's **Other Functions**. The close is a real state transition (Current → Closed, batched), with Undo End of Day (Admin-labeled) reverting a batch. Breakdown covers gross/returns/net, by Section, by tender, tax, movements (voids/holds/pay-outs), and stock below minimum. |
-| E-01, M-02, M-04, M-05, M-06 | — | *stubbed* | Added once the counter core is signed off. `markInvoicePaid` exists as a store action, called from Receiving — there's no Accounts Payable screen yet to move it to. |
+| [M-02](flows/M-02-reorder-inventory.md) | Specified | Order Processing (`/orders`), What's on Order (`/on-order`), + a titlecard's **Order** button | **Phases 1, 2, and part of 3.** Order (titlecard, E-04) raises a pending line — quantity, Supplier (defaults to the Record's preferred Supplier), separator, selling price (defaults to shelf price), an optional Customer (customer-attached), and an optional follow-up-flag day count — and joins that Supplier's pending pile; the titlecard's Orders card shows the Record's own Pending/On order unit counts, derived live. Order Processing lists one line per Supplier + separator: pending total, oldest age, order via, customer-attached count, sell total, estimated cost, Ready (against the Supplier's minimum) — every row, in both tables, opens **View** on a click anywhere in it (no separate button). The pending table's own Sep column is a dropdown ("+ New…" for an unused letter) that mass-shifts every line in that stream at once — a merge prompt when the target separator is already in use for that Supplier (decision 17), otherwise a plain move. View opens a stream's lines — live, not a snapshot — with the selected line's titlecard below, so a wrong Supplier is caught before sending; it leads with a "meeting the minimum" panel (qty / retail value / estimated cost against the Supplier's configured minimum) and, for a still-pending stream, lets each line's qty, sell price, and separator be edited in place (same dropdown, one line at a time), and the line deleted (plain confirmation, explicit warning when a Customer is attached — decision 9). Process confirms the send method — an Email Supplier gets a composed preview (items/qty, cancel-by, backorder policy); anything else states a printable document is produced — then assigns a PO number (blank auto-mints the next unused ascending number, same pattern as Supplier Claims' claim number) and appends a summary to the Supplier's log. Previously placed POs list below, most recent first, read-only. **What's on Order** is every placed line not yet received, oldest first — lines past their follow-up flag surface at the top in red (step 9); Search (keyword or a UPC scan), Sort (age/title/artist), Filter (Supplier/PO), and **Re-flag** (pushes the follow-up window out *n* days from today, restarting rather than extending it) are built. **Set status** (Backordered/Cancelled) and **voiding a PO** — the rest of Phase 3 — still aren't built. |
+| [M-05](flows/M-05-accounts-payable.md) | Specified | Accounts Payable (`/payable`) | Manager-only, in its entirety (decision 2). A lookup box finds any Supplier regardless of balance; below it, suppliers carrying a balance (sorted by name) plus a Settled section so a zero-balance Supplier's history stays reachable. Selecting one shows outstanding Invoices, Pending/Credited-unapplied Supplier Claims, and manual ledger entries in one combined list (decision 3), since what's owed is the net of all of it. **Create new** logs a manual Invoice/Claim/Credit/Adjustment/Consignment entry — a lump subtotal/tax/freight/misc, not sourced from Receiving or Supplier Claims and not tied to any InventoryItem; defaults to Consignment when the Supplier carries that flag. A Claim entry is a placeholder that doesn't affect the balance at all until **Clear selected** matches it against a Credit whose amount nets to zero (manual reconciliation only, never automatic — both stay in the ledger as history). **Record payment** selects any mix of Invoices and payable-type entries and records one PaymentBatch, partial amounts supported per target. **Apply credit** is a single click, not an invoice picker — a Credited Supplier Claim's full amount nets against the supplier's whole balance, auto-distributed across their outstanding Invoices oldest-received-first (decision 11), and its Type column relabels from Claim to Credit once Credited. A target whose balance reaches zero — by payment, credit, or both — is marked Paid/settled, the same transition that locks a real Invoice (E-02 §Inherited). **Payment history** is one row per PaymentBatch, newest first, opened to see exactly which Invoices/entries it covered and how much each got. The gift-card liability registry lists every card, its balance, and its attached Customer. |
+| E-01, M-04, M-06 | — | *stubbed* | Added once the counter core is signed off. |
 
 ## Turning a review into a decision
 
@@ -61,6 +63,14 @@ implements.
 | Point of Sale | Large scan field, large line rows, a total readable across the counter |
 | Receiving | Worklist rail on the left, art-led line table, reconcile as a footer strip |
 | Search | Results rail, titlecard, actions rail |
+
+**Known strain: the menu band was designed for five destinations, and there are
+now ten.** They fit at 1440px (94px a segment) and the band scrolls sideways
+below 1180px rather than clipping a label, but the segments are tight and every
+new screen makes them tighter. The reviewed design's own answer was a **MORE**
+segment holding the back office; that is not implemented, because hiding half
+the screens behind a menu makes a *review* prototype harder to review. Worth
+revisiting when the eleventh screen lands.
 
 The rule that makes it work, and the one to hold the line on: **the chrome is
 achromatic, and colour means exactly two things** — the primary action (one
@@ -101,13 +111,27 @@ that is a separate question nobody has answered yet._
   standing in for it. Barcode-to-record matching is local-only (no live catalog-provider call, no
   multi-match picker); a code with no local match goes straight to the search-or-create fallback.
   Backorder mechanics are unmodelled, per E-02's own open question.
-- Receiving's Orders panel is backed by a thin `PendingOrderLine` scaffold (supplier, PO #,
-  record, expected cost/discount, qty) — enough to look one up and receive against it, seeded with
-  a handful of rows. It is not M-02: there is no way to place an order from here, no reorder
-  suggestions, and no backorder lifecycle once a line isn't fully received.
+- Receiving's Orders panel and Order Processing (M-02) now share one `PendingOrderLine` array —
+  `poNumber` unset means still pending, set means already placed, which is what Receiving looks up
+  against. There is no reorder suggestion and no backorder lifecycle once a line isn't fully
+  received.
+- **Order Processing (M-02) is Phases 1 and 2, plus part of Phase 3.** A stream moves from
+  Pending to Previously placed once Processed, then to What's on Order until it's received —
+  tracking, search/sort/filter, and re-flag are built there. **Set status** (Backordered/Cancelled)
+  and **voiding a PO** aren't. Sending an Email order is simulated as a composed preview plus a
+  Supplier log entry, not a real send.
 - On the line-entry row, "List price" is the pre-discount figure off the paperwork and "Sell
   price" replaces "Accepted price" — Disc% and Margin% are new. **Resolved:** the row used to
   label the pre-discount figure "Cost", clashing with [E-02](flows/E-02-receive-inventory.md)
   decision 7's "cost" (the post-discount Ext. Price) — renamed to "List price" so "cost" means
   one thing everywhere: the net, post-discount figure that drives the below-cost guardrail and
   everything downstream (InventoryItem.cost, Supplier Claims).
+- **Accounts Payable (M-05)** has no currency conversion — an Invoice in a Supplier's own
+  currency shows that currency's code, not a store-currency equivalent, since the exchange rate
+  it would need is a setting from M-06, which isn't built (open question, "Currency movement").
+  The GiftCard record doesn't carry an issue date or a last-used date, so the liability registry
+  omits those two columns from the spec's field list rather than fabricating them. A claim's
+  credit is applied once, in full, against the supplier's balance as a whole (decision 11) — it
+  can land across several Invoices in one apply, but a claim itself is never partially applied
+  over separate actions; per-claim partial credit is explicitly out of scope for v1 (open
+  question, "Deeper reconciliation").

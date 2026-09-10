@@ -47,15 +47,46 @@ const BUILT = [
       "(sticky price, below-cost guardrail), then reconcile and finalize — nothing's sellable " +
       "before that.",
   },
+  {
+    id: "M-02",
+    to: "/orders",
+    title: "Order Processing",
+    blurb:
+      "Phases 1 and 2. Raise a pending line from a titlecard's Order button (supplier/separator/qty/price/" +
+      "customer/follow-up). Order Processing lists one line per supplier + separator — click a row to View " +
+      "its lines and titlecards, edit qty/price/separator, or Process it into a PurchaseOrder (auto PO number, " +
+      "email or printable).",
+  },
+  {
+    id: "M-02",
+    to: "/on-order",
+    title: "What's on Order",
+    blurb:
+      "Phase 3 tracking. Every placed line not yet received, oldest first, overdue follow-up flags surfaced " +
+      "in red at the top. Search (keyword or scan), sort (age/title/artist), filter (supplier/PO), and " +
+      "Re-flag. Set status (Backordered/Cancelled) and voiding a PO aren't built.",
+  },
+  {
+    id: "M-01",
+    to: "/suppliers",
+    title: "Suppliers",
+    blurb: "Search, New/Edit/Copy/Delete/Merge, full field set — nothing gated.",
+  },
+  {
+    id: "M-05",
+    to: "/payable",
+    title: "Accounts payable",
+    blurb:
+      "Outstanding Invoices and Pending/Credited Supplier Claims per supplier, since what's owed is the " +
+      "net of both. Record a payment (partial supported, one record per Invoice sharing a reference), " +
+      "apply a claim credit, and the gift-card liability registry.",
+  },
 ];
 
 const NOT_BUILT = [
   ["E-01", "Authenticate"],
-  ["M-01", "Supplier margin"],
-  ["M-02", "Re-order inventory"],
   ["M-03", "Daily summary"],
   ["M-04", "Manage users"],
-  ["M-05", "Accounts payable"],
   ["M-06", "Configure the store"],
 ];
 
@@ -152,6 +183,35 @@ export function Home() {
           a F.A.B. invoice) and click <em>Claim vs. supplier</em>. Raise a couple of claims under
           the same supplier and separator to see them merge onto one Draft, then send it from the{" "}
           <strong>Supplier Claims</strong> screen and mark it Credited.
+        </li>
+        <li>
+          <strong>M-02 Order Processing</strong> — from the Joni Mitchell — Blue titlecard, click{" "}
+          <em>Order</em> to raise a pending line (try attaching Ramona as the customer). Then open{" "}
+          <strong>Order Processing</strong>: F.A.B. Distribution's stream now includes it — click
+          anywhere on the row to <em>View</em>, check the titlecard, edit a qty or sell price
+          inline, then <em>Process</em> and leave the PO number blank to watch it auto-assign. Crate
+          Digger Wholesale (Order via <em>Email</em>) has two streams — its default stream and a
+          rush "R" stream that alone already meets the 10-unit minimum (
+          <span className="badge ok">Ready</span>) — try the Sep dropdown to merge them, then
+          Process the Email one to see the composed order preview. Previously placed POs (F.A.B.'s
+          PO-1042, Indie Direct's PO-77) sit below, most recent first.
+        </li>
+        <li>
+          <strong>M-02 What's on Order</strong> — both of those placed POs now show up here, oldest
+          line first. PO-1042's Kind of Blue line and PO-77's Horses line (Theo's waiting on it) are
+          both past their follow-up flag and sit at the top in red; Purple Rain's flag isn't due yet.
+          Try the search box with "PO-77" or a supplier name, scan Horses's UPC to filter straight to
+          it, sort by Title, filter to F.A.B. Distribution, then <em>Re-flag</em> Theo's line to push
+          it out another few days.
+        </li>
+        <li>
+          <strong>M-05 Accounts payable</strong> — F.A.B. Distribution and Indie Direct Supply both
+          carry a seeded Finalized invoice. Select F.A.B.'s and open it: a Credited claim (#9, $12.40)
+          sits alongside it — <em>Apply credit</em> is one click, no invoice to pick, and nets
+          straight against F.A.B.'s balance. Then <em>Record payment</em> for the rest (try a
+          partial amount first, then the remainder to watch it flip to Paid and drop into Payment
+          history). Crate Digger Wholesale's CD-777 is already settled, for the history view; the
+          gift-card liability registry sits below.
         </li>
       </ol>
 

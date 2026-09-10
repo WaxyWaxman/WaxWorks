@@ -43,9 +43,17 @@ code, .mono { font-family: var(--font-mono); font-size: 0.92em; }
 .topbar nav a {
   flex: 1; min-width: 0; display: flex; flex-direction: column;
   align-items: center; justify-content: center; gap: 1px;
-  padding: 0 var(--sp-2); border-right: 1px solid var(--c-border-strong);
+  padding: 0 var(--sp-1); border-right: 1px solid var(--c-border-strong);
   color: var(--c-ink-soft); font-size: var(--fs-sm); font-weight: 600;
-  letter-spacing: 0.05em; text-transform: uppercase; text-align: center;
+  letter-spacing: 0.03em; text-transform: uppercase; text-align: center;
+  white-space: nowrap; overflow: hidden;
+}
+/* Ten destinations is more than the reviewed design's five. Below this the
+   band would clip its own labels, so it scrolls sideways instead — the
+   segments keep their size and none of them silently disappears. */
+@media (max-width: 1180px) {
+  .topbar nav { overflow-x: auto; }
+  .topbar nav a { flex: 0 0 auto; min-width: 96px; }
 }
 .topbar nav a .flow {
   font-family: var(--font-mono); font-size: 9.5px; font-weight: 500;
@@ -130,6 +138,7 @@ table.data tr.row-click { cursor: pointer; }
 table.data tr.row-click:hover td { background: var(--c-surface-2); }
 table.data tr.selected td { background: var(--c-accent-soft); box-shadow: inset 3px 0 0 var(--c-accent); }
 table.data tr.selected.nested td { background: var(--c-surface-2); box-shadow: none; }
+table.data tr.overdue td { background: var(--c-danger-soft); }
 .num { text-align: right; font-variant-numeric: tabular-nums; font-family: var(--font-mono); }
 
 /* ---- Badges / chips ---- */

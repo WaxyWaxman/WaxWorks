@@ -7,20 +7,29 @@ import { ReturnScreen } from "./screens/Return";
 import { Claims } from "./screens/Claims";
 import { Customers } from "./screens/Customers";
 import { Receiving } from "./screens/Receiving";
+import { OrderProcessing } from "./screens/OrderProcessing";
+import { WhatsOnOrder } from "./screens/WhatsOnOrder";
 import { Suppliers } from "./screens/Suppliers";
+import { AccountsPayable } from "./screens/AccountsPayable";
 import { ReviewQueueBadge } from "./components/ReviewQueue";
 
 // The top menu is one band of equal segments (design review — Signal). The
 // short word is what staff read; the flow ID stays underneath it because this
 // is a review prototype and every screen has to stay citable.
 const NAV = [
+  // Counter work first, then the back office, which is the order the day
+  // happens in. Ten destinations is more than the reviewed design's five, and
+  // the band is tight at this width — see docs/prototype.md.
   { to: "/", label: "Home", flow: "flow map", end: true },
   { to: "/sell", label: "Sell", flow: "E-05" },
   { to: "/search", label: "Find", flow: "E-03/04" },
   { to: "/receiving", label: "Receive", flow: "E-02" },
+  { to: "/orders", label: "Orders", flow: "M-02" },
+  { to: "/on-order", label: "On order", flow: "M-02" },
   { to: "/customers", label: "Customers", flow: "E-07" },
   { to: "/suppliers", label: "Suppliers", flow: "M-01" },
   { to: "/claims", label: "Claims", flow: "E-04" },
+  { to: "/payable", label: "Payable", flow: "M-05" },
 ];
 
 export function App() {
@@ -65,7 +74,10 @@ export function App() {
           <Route path="/claims" element={<Claims />} />
           <Route path="/customers" element={<Customers />} />
           <Route path="/receiving" element={<Receiving />} />
+          <Route path="/orders" element={<OrderProcessing />} />
+          <Route path="/on-order" element={<WhatsOnOrder />} />
           <Route path="/suppliers" element={<Suppliers />} />
+          <Route path="/payable" element={<AccountsPayable />} />
         </Routes>
       </main>
     </div>

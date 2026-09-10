@@ -51,7 +51,7 @@ A single optional letter that splits one supplier's pending lines into parallel 
 
 Below the pending streams, previously placed PurchaseOrders are listed most-recent-first with their PO numbers.
 
-5. Manager may **View** a stream line by line before sending. Highlighting a line opens its titlecard, so a wrong supplier is caught before the order goes out.
+5. Manager may **View** a stream line by line before sending. Highlighting a line opens its titlecard, so a wrong supplier is caught before the order goes out. View also shows the stream's progress toward the Supplier's minimum (qty, retail value, and estimated cost against whichever one the Supplier's minimum actually names) and, while the stream is still pending, is where a line's **quantity**, **selling price**, and **separator** are edited, and where a line is deleted (decision 9's mechanism).
 6. Manager **Processes** the stream. The system confirms the send method and:
    - **Email** → composes and sends the order to the supplier's address, stating items, quantities, cancel-by date, and backorder policy.
    - **Phone, fax, website, or rep** → produces a printable order document for the Manager to act on manually, then marks the stream placed.
@@ -131,6 +131,10 @@ Below the pending streams, previously placed PurchaseOrders are listed most-rece
 | 13 | Receiving a customer-attached line automatically creates a **Held** Sale for that customer |
 | 14 | **The catalog provider is MusicBrainz**, whose search batches several barcodes per request. **Amends the prefetch note** in Inherited, which was written against Discogs' per-barcode ceiling ([architecture](../architecture.md) A-12, A-12a) |
 | 15 | **An Invoice may span several PurchaseOrders**, so a PO line's outstanding quantity is derived from what has been received against it across every Invoice ([E-02](E-02-receive-inventory.md) d28, d30) |
+| 16 | **PO auto-numbering starts ascending from 0** and skips any number already in use, including a manually entered one — the same pattern as the Supplier Claim number (E-04 §"Supplier claims"). A manually entered PO number is free-text and need not be numeric. |
+| 17 | **Changing a separator that lands on one already in use for that Supplier prompts to merge**, warning it can't be undone — separators exist to keep streams deliberately apart (decision 3), so recombining them is treated as a real, one-way action rather than a quiet field edit. Applies both to retargeting one still-pending line (from View) and to mass-shifting an entire pending stream at once (the pending table's own Sep dropdown). Landing on an unused separator (including a freshly typed letter) just moves it, no prompt. |
+| 18 | **Re-flag sets a fresh due date — `today + n days`, replacing whatever was there — rather than adding to the old deadline.** "Push the follow-up date out another *n* days" (step 10) was ambiguous between the two; restarting the window is what makes sense for both stated purposes (chasing the supplier again, or telling a waiting customer "n more days") — an *additive* extension would let an already-overdue line's new due date still land in the past. |
+| 19 | **An overdue line always sorts to the top of the on-order screen, but the on-order and overdue groups are each sorted by whatever the current Sort is** (Age/Title/Artist) — overdue-first is a fixed grouping, not a separate sort mode of its own. |
 
 ---
 

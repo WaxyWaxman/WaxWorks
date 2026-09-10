@@ -7,13 +7,14 @@ import {
 } from "react";
 import { computeDayBreakdown, type DayBreakdown } from "../lib/dayBreakdown";
 import { money } from "../lib/money";
-import { round2 } from "../lib/totals";
+import { claimTotal, invoiceBalance, payableEntrySignedAmount, round2 } from "../lib/totals";
 import {
   CURRENT_USER,
   CUSTOMERS,
   DEFAULT_TAX_LINE,
   GIFT_CARDS,
   INVENTORY,
+  MANAGER_NAME,
   NON_TRACKED,
   PENDING_ORDERS,
   RECORDS,
@@ -30,6 +31,12 @@ import type {
   Invoice,
   InvoiceLine,
   NonTrackedItem,
+  PayableEntry,
+  PayableEntryType,
+  PayableTargetKind,
+  PaymentBatch,
+  PaymentMethod,
+  PaymentTarget,
   PendingOrderLine,
   RecordEntry,
   ReviewFlag,
@@ -45,7 +52,11 @@ import type {
 
 let seq = 100;
 const uid = (p: string) => `${p}-${++seq}`;
-const now = () => new Date().toLocaleString("en-CA", { hour12: false });
+// en-CA formats as "YYYY-MM-DD, HH:MM:SS" (with a comma) — every parse site
+// (daysAgo, the follow-up-flag math, PointOfSale's age calc) assumes the
+// plain space-separated form seed data uses, so strip the comma here rather
+// than patch every `.replace(" ", "T")` call site.
+const now = () => new Date().toLocaleString("en-CA", { hour12: false }).replace(",", "");
 
 interface AppState {
   records: RecordEntry[];
@@ -59,6 +70,8 @@ interface AppState {
   closeBatches: CloseBatch[]; // M-03 — Total Today's Sales / Undo End of Day
   claims: SupplierClaim[];
   invoices: Invoice[];
+  payableEntries: PayableEntry[]; // M-05 — manual ledger entries: Invoice/Claim/Credit/Adjustment/Consignment, not sourced from Receiving or Supplier Claims
+  paymentBatches: PaymentBatch[]; // M-05 — one row per Record-Payment action, across both Invoices and PayableEntries
   pendingOrders: PendingOrderLine[];
   reviewFlags: ReviewFlag[];
   activeSaleId: string | null;
@@ -67,6 +80,7 @@ interface AppState {
   nextSaleNumber: number;
   nextHold: number;
   nextClaimNumber: number;
+  nextPoNumber: number; // M-02 decision 16 — ascending from 0
   nextInternalBarcode: number;
   nextInvoiceRef: number;
   nextCustomerPrimaryId: number;
@@ -187,8 +201,189 @@ const seed: AppState = {
     },
   ],
   closeBatches: [],
-  claims: [],
-  invoices: [],
+  // Seeded Finalized so Accounts Payable (M-05) has real outstanding balances
+  // without first walking a Receiving session — lines mirror the InventoryItems
+  // INVENTORY already seeds as "arrived on" these same invoice numbers.
+  claims: [
+    {
+      id: "claim-seed-1",
+      claimNumber: 9,
+      supplierId: "sup-fab",
+      status: "Credited",
+      creditMemo: "CM-2201",
+      lines: [
+        {
+          id: "cl-seed-1",
+          recordId: "r-blue",
+          itemId: "i-blue-1",
+          invoiceNumber: "55021",
+          reason: "Received damaged",
+          note: "Corner ding on jacket, sleeve only",
+          cost: 12.4,
+          qty: 1,
+        },
+      ],
+      createdBy: MANAGER_NAME,
+      createdAt: "2026-09-01 09:00:00",
+      log: [
+        { at: "2026-09-01 09:00:00", text: "Claim opened — Received damaged (qty 1)" },
+        { at: "2026-09-02 09:15:00", text: "Claim 9 sent to claims@fabdist.example" },
+        { at: "2026-09-03 11:30:00", text: "Marked Credited — supplier credit memo CM-2201" },
+      ],
+    },
+  ],
+  invoices: [
+    {
+      id: "inv-seed-fab",
+      supplierId: "sup-fab",
+      invoiceNumber: "55021",
+      intakeMode: "New",
+      invoiceDate: "2026-08-27",
+      receivedDate: "2026-08-28",
+      statedSubtotal: 68.65,
+      tax: 0,
+      freight: 0,
+      misc: 0,
+      status: "Finalized",
+      lines: [
+        {
+          id: "invline-seed-1",
+          recordId: "r-blue",
+          listPrice: 15.5,
+          discountPct: 20,
+          cost: 12.4,
+          acceptedPrice: 28.99,
+          grade: "NM",
+          qty: 1,
+          itemIds: ["i-blue-1"],
+        },
+        {
+          id: "invline-seed-2",
+          recordId: "r-rumours",
+          listPrice: 25.0,
+          discountPct: 25,
+          cost: 18.75,
+          acceptedPrice: 34.99,
+          grade: "M",
+          qty: 3,
+          itemIds: ["i-rum-1", "i-rum-2", "i-rum-3"],
+        },
+      ],
+      creditsApplied: [],
+      createdBy: CURRENT_USER,
+      createdAt: "2026-08-28 09:00:00",
+      finalizedAt: "2026-08-28 10:00:00",
+      log: [
+        { at: "2026-08-28 09:00:00", text: "Invoice opened — New intake, invoice 55021" },
+        { at: "2026-08-28 10:00:00", text: "Finalized — 4 copies now sellable" },
+      ],
+    },
+    {
+      id: "inv-seed-indie",
+      supplierId: "sup-indie",
+      invoiceNumber: "3390",
+      intakeMode: "New",
+      invoiceDate: "2026-08-30",
+      receivedDate: "2026-08-31",
+      statedSubtotal: 17.25,
+      tax: 0,
+      freight: 0,
+      misc: 0,
+      status: "Finalized",
+      lines: [
+        {
+          id: "invline-seed-3",
+          recordId: "r-purple",
+          listPrice: 34.5,
+          discountPct: 50,
+          cost: 17.25,
+          acceptedPrice: 32.99,
+          grade: "M",
+          qty: 1,
+          itemIds: ["i-pr-1"],
+        },
+      ],
+      creditsApplied: [],
+      createdBy: CURRENT_USER,
+      createdAt: "2026-08-31 09:00:00",
+      finalizedAt: "2026-08-31 09:30:00",
+      log: [
+        { at: "2026-08-31 09:00:00", text: "Invoice opened — New intake, invoice 3390" },
+        { at: "2026-08-31 09:30:00", text: "Finalized — 1 copy now sellable" },
+      ],
+    },
+    // Already settled — gives Accounts Payable's payment history something to show.
+    {
+      id: "inv-seed-crate-paid",
+      supplierId: "sup-crate",
+      invoiceNumber: "CD-777",
+      intakeMode: "Second-hand",
+      invoiceDate: "2026-08-18",
+      receivedDate: "2026-08-19",
+      statedSubtotal: 20.0,
+      tax: 0,
+      freight: 0,
+      misc: 0,
+      status: "Paid",
+      lines: [
+        {
+          id: "invline-seed-4",
+          recordId: "r-illmatic",
+          listPrice: 25.0,
+          discountPct: 20,
+          cost: 20.0,
+          acceptedPrice: 45.0,
+          grade: "VG",
+          qty: 1,
+          itemIds: [],
+        },
+      ],
+      creditsApplied: [],
+      createdBy: CURRENT_USER,
+      createdAt: "2026-08-19 09:00:00",
+      finalizedAt: "2026-08-19 09:30:00",
+      paidAt: "2026-08-20 14:00:00",
+      paidBy: MANAGER_NAME,
+      log: [
+        { at: "2026-08-19 09:00:00", text: "Invoice opened — Second-hand intake, invoice CD-777" },
+        { at: "2026-08-19 09:30:00", text: "Finalized — 1 copy now sellable" },
+        { at: "2026-08-20 14:00:00", text: `Payment recorded — EFT EFT-88214 ${money(20)} by ${MANAGER_NAME}` },
+        { at: "2026-08-20 14:00:00", text: `Balance settled — marked paid by ${MANAGER_NAME}` },
+      ],
+    },
+  ],
+  payableEntries: [
+    // A manual Adjustment — a freight correction Indie Direct Supply billed
+    // separately from the Invoice, demonstrating a ledger entry that isn't
+    // sourced from Receiving or Supplier Claims.
+    {
+      id: "entry-seed-adj",
+      supplierId: "sup-indie",
+      type: "Adjustment",
+      reference: "Freight correction — INDI-3390",
+      date: "2026-09-02",
+      subtotal: 6.5,
+      tax: 0,
+      freight: 0,
+      misc: 0,
+      adjustmentDirection: "increase",
+      createdBy: MANAGER_NAME,
+      createdAt: "2026-09-02 10:00:00",
+      log: [{ at: "2026-09-02 10:00:00", text: "Adjustment entered — Freight correction — INDI-3390" }],
+    },
+  ],
+  paymentBatches: [
+    {
+      id: "batch-seed-1",
+      supplierId: "sup-crate",
+      method: "EFT",
+      reference: "EFT-88214",
+      date: "2026-08-20",
+      recordedBy: MANAGER_NAME,
+      createdAt: "2026-08-20 14:00:00",
+      targets: [{ kind: "invoice", id: "inv-seed-crate-paid", amount: 20.0 }],
+    },
+  ],
   pendingOrders: PENDING_ORDERS,
   reviewFlags: [],
   activeSaleId: null,
@@ -197,6 +392,7 @@ const seed: AppState = {
   nextSaleNumber: 100241,
   nextHold: 2,
   nextClaimNumber: 12,
+  nextPoNumber: 0,
   nextInternalBarcode: 9000,
   nextInvoiceRef: 1,
   nextCustomerPrimaryId: CUSTOMERS.length + 1,
@@ -329,8 +525,92 @@ interface AppContextValue extends AppState {
   finalizeInvoice: (invoiceId: string) => { itemCount: number } | null;
   markInvoicePaid: (invoiceId: string, by: string) => void;
 
+  // M-05 — Accounts Payable. One PaymentBatch per Record-Payment action,
+  // covering whatever mix of Invoices and PayableEntries it was paying,
+  // sharing one method/reference/date (the "Record payment" modal's
+  // multi-select). An Invoice whose balance reaches zero is marked Paid the
+  // same way markInvoicePaid does — that's the "manager settles the
+  // balance" moment that locks it (E-02 §Inherited).
+  recordPayment: (
+    targets: { kind: PayableTargetKind; id: string }[],
+    input: { supplierId: string; method: PaymentMethod; reference: string; date: string; amounts: Record<string, number> },
+    by: string,
+  ) => void;
+  // Applies a Credited, not-yet-applied claim's full amount against its
+  // Supplier's whole outstanding balance (decision 11) — not one Invoice the
+  // Manager picks. Returns null if the claim isn't eligible or the Supplier
+  // has nothing outstanding to apply it against.
+  applyClaimCredit: (claimId: string, by: string) => { applied: boolean } | null;
+
+  payableEntryFor: (id?: string) => PayableEntry | undefined;
+  // M-05 "Create new" — a manual ledger line unlinked to any InventoryItem.
+  // Defaults to Consignment instead of Invoice when the Supplier carries
+  // that flag.
+  addPayableEntry: (input: {
+    supplierId: string;
+    type: PayableEntryType;
+    reference: string;
+    date: string;
+    subtotal: number;
+    tax: number;
+    freight: number;
+    misc: number;
+    adjustmentDirection?: "increase" | "decrease";
+  }) => string;
+  // Manual reconciliation: marks a set of same-Supplier entries (2+, none
+  // already cleared) as cleared against each other — only if their signed
+  // amounts sum to zero. Returns { cleared: false } and changes nothing
+  // otherwise (mismatched sum, wrong supplier, already cleared, etc).
+  clearPayableEntries: (entryIds: string[], by: string) => { cleared: boolean };
+
   pendingOrderFor: (id?: string) => PendingOrderLine | undefined;
   receivePendingOrderLine: (id: string) => PendingOrderLine | null;
+
+  // M-02 Phase 1 — an Employee raising a pending line from a titlecard's
+  // Order button. Joins the Supplier's pending pile; carries no PO number
+  // until a Manager Processes it (Phase 2).
+  raisePendingOrderLine: (input: {
+    recordId: string;
+    supplierId: string;
+    separator?: string;
+    qty: number;
+    sellPrice: number;
+    customerId?: string;
+    followUpDays?: number;
+  }) => string;
+
+  // Order Processing (M-02) — editing a still-pending line in place. Only
+  // ever applies while poNumber is unset; a placed line goes through Cancel
+  // / Void (Phase 3, not built) instead of a quiet edit.
+  updatePendingOrderLine: (id: string, patch: Partial<Pick<PendingOrderLine, "qty" | "sellPrice" | "separator">>) => void;
+  deletePendingOrderLine: (id: string) => { customerAttached: boolean; recordId: string } | null;
+
+  // Phase 3 / What's on Order — push a placed line's follow-up window out
+  // another `days` from now, restarting the clock rather than adding to the
+  // old deadline. Used both to chase the Supplier and to warn a waiting
+  // Customer (M-02 §"Tracking what's on order").
+  reflagPendingOrderLine: (id: string, days: number) => void;
+
+  // Mass-shift a whole pending stream (every unplaced line at
+  // supplierId+fromSeparator) onto a different separator in one move — the
+  // Order Processing pending table's own Sep dropdown, as opposed to
+  // retargeting one line at a time from View.
+  retargetStreamSeparator: (
+    supplierId: string,
+    fromSeparator: string | undefined,
+    toSeparator: string | undefined,
+  ) => { movedCount: number } | null;
+
+  // M-02 Phase 2 — processing a stream (one supplier + separator, all its
+  // still-unplaced lines) into a PurchaseOrder. `poNumber` blank auto-mints
+  // the next unused ascending number (decision 16); returns null if the
+  // stream is empty or the requested number is already taken.
+  poNumberTaken: (poNumber: string) => boolean;
+  processOrderStream: (
+    supplierId: string,
+    separator: string | undefined,
+    poNumber?: string,
+  ) => { poNumber: string; lineCount: number; unitCount: number; emailed: boolean } | null;
 }
 
 const Ctx = createContext<AppContextValue | null>(null);
@@ -1221,6 +1501,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
       misc: 0,
       status: "Draft",
       lines: [],
+      creditsApplied: [],
       createdBy: CURRENT_USER,
       createdAt: now(),
       log: [
@@ -1708,6 +1989,228 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
       ),
     }));
 
+  // M-05 — one PaymentBatch per Record-Payment action, whatever mix of
+  // Invoices and PayableEntries it covers, sharing one method/reference/date
+  // (the open question on payment batches, resolved this way rather than
+  // scattering separate records that merely share a reference). Browsed as
+  // one row per batch (AccountsPayable's Payment history), opened to see its
+  // targets. An Invoice whose balance is settled (by this payment, together
+  // with any credit already applied) flips to Paid, the same transition
+  // markInvoicePaid makes — settling the balance is what locks it.
+  const recordPayment: AppContextValue["recordPayment"] = (targets, input, by) =>
+    setS((prev) => {
+      const batchTargets: PaymentTarget[] = targets
+        .map((t) => ({ kind: t.kind, id: t.id, amount: round2(input.amounts[t.id] ?? 0) }))
+        .filter((t) => t.amount > 0);
+      if (batchTargets.length === 0) return prev;
+
+      const at = now();
+      const batch: PaymentBatch = {
+        id: uid("batch"),
+        supplierId: input.supplierId,
+        method: input.method,
+        reference: input.reference,
+        date: input.date,
+        recordedBy: by,
+        createdAt: at,
+        targets: batchTargets,
+      };
+      const paymentBatches = [batch, ...prev.paymentBatches];
+      const amountFor = (kind: PayableTargetKind, id: string) =>
+        batchTargets.find((t) => t.kind === kind && t.id === id)?.amount ?? 0;
+
+      const invoices = prev.invoices.map((iv) => {
+        const amount = amountFor("invoice", iv.id);
+        if (amount <= 0) return iv;
+        const updated: Invoice = {
+          ...iv,
+          log: [
+            ...iv.log,
+            { at, text: `Payment recorded — ${input.method} ${input.reference} ${money(amount)} by ${by}` },
+          ],
+        };
+        if (invoiceBalance(updated, paymentBatches) <= 0.005 && updated.status !== "Paid") {
+          return { ...updated, status: "Paid" as const, paidAt: at, paidBy: by, log: [...updated.log, { at, text: `Balance settled — marked paid by ${by}` }] };
+        }
+        return updated;
+      });
+
+      const payableEntries = prev.payableEntries.map((e) => {
+        const amount = amountFor("entry", e.id);
+        if (amount <= 0) return e;
+        return {
+          ...e,
+          log: [
+            ...e.log,
+            { at, text: `Payment recorded — ${input.method} ${input.reference} ${money(amount)} by ${by}` },
+          ],
+        };
+      });
+
+      return { ...prev, paymentBatches, invoices, payableEntries };
+    });
+
+  // M-05 decision 11 — a Credited claim's amount isn't earmarked to one
+  // Invoice the Manager picks. It nets against the Supplier's whole balance:
+  // distributed across their outstanding Invoices oldest-received-first,
+  // each one absorbing as much as its own balance can take, with any
+  // remainder (credit bigger than everything currently owed) dumped on the
+  // last one touched — the same forgiving handling an overpaying credit note
+  // gets in Record payment. Returns null if there's nothing outstanding for
+  // this Supplier to apply it against at all.
+  const applyClaimCredit: AppContextValue["applyClaimCredit"] = (claimId, by) => {
+    const claim = s.claims.find((c) => c.id === claimId);
+    if (!claim || claim.status !== "Credited" || claim.applied) return null;
+    const hasOutstanding = s.invoices.some((iv) => iv.supplierId === claim.supplierId && iv.status === "Finalized");
+    if (!hasOutstanding) return null;
+    const amount = claimTotal(claim);
+
+    // Everything below is computed fresh from `prev` on every call — no
+    // variable captured from outside this updater is mutated by it — so a
+    // React 18 StrictMode double-invoke (or any re-run with the same `prev`)
+    // recomputes the identical result instead of silently double-applying.
+    setS((prev) => {
+      const outstanding = prev.invoices
+        .filter((iv) => iv.supplierId === claim.supplierId && iv.status === "Finalized")
+        .sort((a, b) => (a.receivedDate || a.invoiceDate).localeCompare(b.receivedDate || b.invoiceDate));
+      if (outstanding.length === 0) return prev;
+
+      const at = now();
+      let remaining = amount;
+      const touchedIds = new Set<string>();
+      const byId = new Map(prev.invoices.map((iv) => [iv.id, iv]));
+
+      for (const iv of outstanding) {
+        if (remaining <= 0.005) break;
+        const current = byId.get(iv.id)!;
+        const balance = invoiceBalance(current, prev.paymentBatches);
+        if (balance <= 0.005) continue;
+        const portion = round2(Math.min(remaining, balance));
+        remaining = round2(remaining - portion);
+        touchedIds.add(iv.id);
+        byId.set(iv.id, {
+          ...current,
+          creditsApplied: [...current.creditsApplied, { id: uid("credit"), claimId, amount: portion, appliedAt: at, appliedBy: by }],
+          log: [...current.log, { at, text: `Claim ${claim.claimNumber ?? "—"} credit ${money(portion)} applied by ${by}` }],
+        });
+      }
+      // Credit bigger than everything currently outstanding — the last
+      // Invoice touched (or the last one in line, if none had any balance
+      // left) absorbs the rest and goes negative, rather than losing it.
+      if (remaining > 0.005) {
+        const last = outstanding[outstanding.length - 1];
+        const current = byId.get(last.id)!;
+        touchedIds.add(last.id);
+        byId.set(last.id, {
+          ...current,
+          creditsApplied: [...current.creditsApplied, { id: uid("credit"), claimId, amount: remaining, appliedAt: at, appliedBy: by }],
+          log: [
+            ...current.log,
+            { at, text: `Claim ${claim.claimNumber ?? "—"} credit ${money(remaining)} applied by ${by} (exceeds what's currently owed)` },
+          ],
+        });
+      }
+
+      const invoices = prev.invoices.map((iv) => {
+        if (!touchedIds.has(iv.id)) return iv;
+        const updated = byId.get(iv.id)!;
+        if (invoiceBalance(updated, prev.paymentBatches) <= 0.005 && updated.status !== "Paid") {
+          return {
+            ...updated,
+            status: "Paid" as const,
+            paidAt: at,
+            paidBy: by,
+            log: [...updated.log, { at, text: `Balance settled — marked paid by ${by}` }],
+          };
+        }
+        return updated;
+      });
+
+      return {
+        ...prev,
+        invoices,
+        claims: prev.claims.map((c) =>
+          c.id === claimId
+            ? {
+                ...c,
+                applied: true,
+                appliedAt: at,
+                appliedBy: by,
+                log: [
+                  ...c.log,
+                  {
+                    at,
+                    text: `${money(amount)} credit applied against ${touchedIds.size} Invoice${touchedIds.size === 1 ? "" : "s"} by ${by}`,
+                  },
+                ],
+              }
+            : c,
+        ),
+      };
+    });
+    return { applied: true };
+  };
+
+  const payableEntryFor = (id?: string) => s.payableEntries.find((e) => e.id === id);
+
+  // M-05 "Create new" — a manual ledger line, not sourced from Receiving or
+  // Supplier Claims and not tied to any InventoryItem. Defaults to
+  // Consignment instead of Invoice when the Supplier carries that flag, the
+  // same default Receiving's own intake would apply.
+  const addPayableEntry: AppContextValue["addPayableEntry"] = (input) => {
+    const supplier = s.suppliers.find((sup) => sup.id === input.supplierId);
+    const type: PayableEntryType = input.type === "Invoice" && supplier?.consignment ? "Consignment" : input.type;
+    const id = uid("entry");
+    const entry: PayableEntry = {
+      id,
+      supplierId: input.supplierId,
+      type,
+      reference: input.reference,
+      date: input.date,
+      subtotal: input.subtotal,
+      tax: input.tax,
+      freight: input.freight,
+      misc: input.misc,
+      adjustmentDirection: type === "Adjustment" ? input.adjustmentDirection ?? "increase" : undefined,
+      createdBy: CURRENT_USER,
+      createdAt: now(),
+      log: [{ at: now(), text: `${type} entered — ${input.reference || "no reference given"}` }],
+    };
+    setS((prev) => ({ ...prev, payableEntries: [entry, ...prev.payableEntries] }));
+    return id;
+  };
+
+  // Manual reconciliation only (never automatic): a Manager picks a set of
+  // entries whose signed amounts sum to zero — a placeholder Claim matched
+  // against the Credit that eventually replaced it, say — and clears them
+  // against each other. Nothing is deleted or edited beyond the clearing
+  // fields; both stay in the ledger as the record of what happened.
+  const clearPayableEntries: AppContextValue["clearPayableEntries"] = (entryIds, by) => {
+    const entries = entryIds.map((id) => s.payableEntries.find((e) => e.id === id)).filter((e): e is PayableEntry => !!e);
+    if (entries.length < 2 || entries.length !== entryIds.length) return { cleared: false };
+    if (entries.some((e) => e.clearedAt)) return { cleared: false };
+    if (new Set(entries.map((e) => e.supplierId)).size > 1) return { cleared: false };
+    const net = round2(entries.reduce((sum, e) => sum + payableEntrySignedAmount(e), 0));
+    if (Math.abs(net) > 0.005) return { cleared: false };
+
+    const at = now();
+    setS((prev) => ({
+      ...prev,
+      payableEntries: prev.payableEntries.map((e) =>
+        entryIds.includes(e.id)
+          ? {
+              ...e,
+              clearedWith: entryIds.filter((id) => id !== e.id),
+              clearedAt: at,
+              clearedBy: by,
+              log: [...e.log, { at, text: `Cleared against ${entryIds.length - 1} other entr${entryIds.length - 1 === 1 ? "y" : "ies"} by ${by} — net ${money(net)}` }],
+            }
+          : e,
+      ),
+    }));
+    return { cleared: true };
+  };
+
   const pendingOrderFor = (id?: string) => s.pendingOrders.find((o) => o.id === id);
 
   // Clicking an order in Receiving's Orders panel "moves" it into the current
@@ -1719,6 +2222,103 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
     if (!order) return null;
     setS((prev) => ({ ...prev, pendingOrders: prev.pendingOrders.filter((o) => o.id !== id) }));
     return order;
+  };
+
+  const raisePendingOrderLine: AppContextValue["raisePendingOrderLine"] = (input) => {
+    const id = uid("po-line");
+    const line: PendingOrderLine = {
+      id,
+      supplierId: input.supplierId,
+      separator: input.separator,
+      recordId: input.recordId,
+      qty: input.qty,
+      sellPrice: input.sellPrice,
+      customerId: input.customerId,
+      followUpDays: input.followUpDays,
+      createdBy: CURRENT_USER,
+      createdAt: now(),
+    };
+    setS((prev) => ({ ...prev, pendingOrders: [...prev.pendingOrders, line] }));
+    return id;
+  };
+
+  const updatePendingOrderLine: AppContextValue["updatePendingOrderLine"] = (id, patch) =>
+    setS((prev) => ({
+      ...prev,
+      pendingOrders: prev.pendingOrders.map((o) => (o.id === id && !o.poNumber ? { ...o, ...patch } : o)),
+    }));
+
+  const deletePendingOrderLine: AppContextValue["deletePendingOrderLine"] = (id) => {
+    const line = s.pendingOrders.find((o) => o.id === id && !o.poNumber);
+    if (!line) return null;
+    setS((prev) => ({ ...prev, pendingOrders: prev.pendingOrders.filter((o) => o.id !== id) }));
+    return { customerAttached: !!line.customerId, recordId: line.recordId };
+  };
+
+  const reflagPendingOrderLine: AppContextValue["reflagPendingOrderLine"] = (id, days) =>
+    setS((prev) => ({
+      ...prev,
+      pendingOrders: prev.pendingOrders.map((o) =>
+        o.id === id ? { ...o, followUpDays: days, followUpSetAt: now() } : o,
+      ),
+    }));
+
+  const retargetStreamSeparator: AppContextValue["retargetStreamSeparator"] = (supplierId, fromSeparator, toSeparator) => {
+    const fromKey = fromSeparator ?? "";
+    const ids = new Set(
+      s.pendingOrders.filter((o) => o.supplierId === supplierId && !o.poNumber && (o.separator ?? "") === fromKey).map((o) => o.id),
+    );
+    if (ids.size === 0) return null;
+    setS((prev) => ({
+      ...prev,
+      pendingOrders: prev.pendingOrders.map((o) => (ids.has(o.id) ? { ...o, separator: toSeparator } : o)),
+    }));
+    return { movedCount: ids.size };
+  };
+
+  const poNumberTaken: AppContextValue["poNumberTaken"] = (poNumber) =>
+    s.pendingOrders.some((o) => o.poNumber === poNumber);
+
+  const processOrderStream: AppContextValue["processOrderStream"] = (supplierId, separator, poNumber) => {
+    const supplier = s.suppliers.find((sup) => sup.id === supplierId);
+    if (!supplier) return null;
+    const sep = separator || undefined;
+    const lines = s.pendingOrders.filter((o) => o.supplierId === supplierId && (o.separator || undefined) === sep && !o.poNumber);
+    if (lines.length === 0) return null;
+
+    const used = new Set(s.pendingOrders.map((o) => o.poNumber).filter((n): n is string => !!n));
+    let num = poNumber?.trim();
+    if (num) {
+      if (used.has(num)) return null; // caller should already have checked via poNumberTaken
+    } else {
+      let n = s.nextPoNumber;
+      while (used.has(String(n))) n++;
+      num = String(n);
+    }
+
+    const at = now();
+    const lineIds = new Set(lines.map((l) => l.id));
+    const unitCount = lines.reduce((sum, l) => sum + l.qty, 0);
+    const sellTotal = lines.reduce((sum, l) => sum + l.sellPrice * l.qty, 0);
+    const cancelBy = supplier.cancelByDays
+      ? new Date(Date.now() + supplier.cancelByDays * 86400000).toLocaleDateString("en-CA")
+      : undefined;
+    const emailed = supplier.orderVia === "Email";
+    const streamLabel = sep ? `separator ${sep}` : "no separator";
+    const logText = emailed
+      ? `PO ${num} emailed to ${supplier.email} (${streamLabel}) — ${lines.length} line${lines.length === 1 ? "" : "s"}, ${unitCount} units, sell ${money(sellTotal)}` +
+        (cancelBy ? `, cancel by ${cancelBy}` : "") +
+        `, backorders ${supplier.backordersAllowed ? "allowed" : "not allowed"}.`
+      : `PO ${num} placed via ${supplier.orderVia} (${streamLabel}) — ${lines.length} line${lines.length === 1 ? "" : "s"}, ${unitCount} units, sell ${money(sellTotal)}. Printable order document produced; this does not confirm the supplier received it.`;
+
+    setS((prev) => ({
+      ...prev,
+      nextPoNumber: /^\d+$/.test(num!) ? Math.max(prev.nextPoNumber, Number(num) + 1) : prev.nextPoNumber,
+      pendingOrders: prev.pendingOrders.map((o) => (lineIds.has(o.id) ? { ...o, poNumber: num, placedAt: at } : o)),
+      suppliers: prev.suppliers.map((sup) => (sup.id === supplierId ? { ...sup, log: [...sup.log, { at, text: logText }] } : sup)),
+    }));
+
+    return { poNumber: num!, lineCount: lines.length, unitCount, emailed };
   };
 
   const value = useMemo<AppContextValue>(
@@ -1785,8 +2385,20 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
       setInvoiceTotalOverride,
       finalizeInvoice,
       markInvoicePaid,
+      recordPayment,
+      applyClaimCredit,
+      payableEntryFor,
+      addPayableEntry,
+      clearPayableEntries,
       pendingOrderFor,
       receivePendingOrderLine,
+      raisePendingOrderLine,
+      updatePendingOrderLine,
+      deletePendingOrderLine,
+      reflagPendingOrderLine,
+      retargetStreamSeparator,
+      poNumberTaken,
+      processOrderStream,
     }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [s],

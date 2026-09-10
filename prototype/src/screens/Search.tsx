@@ -342,6 +342,9 @@ function StockStamp({ facts }: { facts: StockFacts }) {
       {facts.state === "here" && facts.onOrder > 0 && (
         <div className="ago">+{facts.onOrder} on order</div>
       )}
+      {/* Raised but not placed is worth showing and worth keeping distinct —
+          it is not a promise anyone can make to a customer yet (M-02). */}
+      {facts.raised > 0 && <div className="ago">{facts.raised} being ordered</div>}
     </div>
   );
 }
@@ -361,9 +364,19 @@ function NoCopiesLine({ facts }: { facts: StockFacts }) {
     return (
       <>
         None on hand — but we have stocked it before
-        {facts.everSold > 0 ? `, and sold ${facts.everSold}` : ""}. Orderable.
+        {facts.everSold > 0 ? `, and sold ${facts.everSold}` : ""}.{" "}
+        {facts.raised > 0
+          ? `${facts.raised} raised on a supplier stream, not placed yet (M-02).`
+          : "Orderable."}
       </>
     );
   }
-  return <>Catalog match — we have never stocked this. “No, but we can order it.”</>;
+  return (
+    <>
+      Catalog match — we have never stocked this.{" "}
+      {facts.raised > 0
+        ? `${facts.raised} raised on a supplier stream, not placed yet (M-02).`
+        : "“No, but we can order it.”"}
+    </>
+  );
 }
