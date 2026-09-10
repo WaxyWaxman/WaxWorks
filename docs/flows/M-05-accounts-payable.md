@@ -2,7 +2,7 @@
 
 **Actor:** Manager
 **Status:** Specified
-**Related:** [E-02 Receive inventory](E-02-receive-inventory.md) · [E-04 Manage the inventory](E-04-manage-inventory.md) · [E-05 Sell a record](E-05-sell-a-record.md)
+**Related:** [E-02 Receive inventory](E-02-receive-inventory.md) · [E-04 Manage the inventory](E-04-manage-inventory.md) · [E-05 Point of Sale](E-05-sell-a-record.md)
 
 **Job:** As a manager, I need to see what the store owes, settle supplier invoices, and get credit for stock that arrived short or damaged.
 
@@ -74,7 +74,7 @@ Loading and redeeming happen at the till ([E-05](E-05-sell-a-record.md)); this i
 
 - Invoice records — number, date, linked PurchaseOrder, and amount — originate at receiving. Accounts payable consumes them and never creates one.
 - Invoices are keyed by `(supplier, invoice_number)`, not globally (decision 1).
-- A finalized Invoice is immutable; corrections are appended amendments handled in [E-04](E-04-manage-inventory.md), and they change what is owed.
+- A finalized Invoice is **not yet locked**: costs can still be corrected and lines added directly back in E-02 until a Manager marks it **paid** here, which is what makes it immutable. Voiding a paid Invoice is a manager-only amendment handled in [E-04](E-04-manage-inventory.md), appended as a separate artifact against the original record.
 
 **From [E-04](E-04-manage-inventory.md):**
 

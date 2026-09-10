@@ -1,8 +1,10 @@
 import { useState } from "react";
-import { CLAIM_REASONS, type ClaimReason, type InventoryItem, type RecordEntry } from "../data/types";
+import { CLAIM_REASONS, type InventoryItem, type RecordEntry } from "../data/types";
 import { money } from "../lib/money";
 import { useApp } from "../store/AppStore";
 import { Modal } from "./Modal";
+
+const CUSTOM_REASON = "Custom…";
 
 // Raises a claim against the supplier a copy actually arrived from — only
 // copies with a traceable supplier Invoice (arrivedOnInvoice/supplierId) are
@@ -24,7 +26,8 @@ export function ClaimModal({
   const app = useApp();
   const claimable = items.filter((i) => i.supplierId);
   const [itemId, setItemId] = useState(claimable[0]?.id ?? "");
-  const [reason, setReason] = useState<ClaimReason>("Received damaged");
+  const [reasonChoice, setReasonChoice] = useState<string>("Received damaged");
+  const [customReason, setCustomReason] = useState("");
   const [qty, setQty] = useState(1);
   const [separator, setSeparator] = useState("");
   const [note, setNote] = useState("");
@@ -32,6 +35,7 @@ export function ClaimModal({
   const item = claimable.find((i) => i.id === itemId);
   const supplier = app.supplierFor(item?.supplierId);
   const sepKey = separator.trim();
+  const reason = reasonChoice === CUSTOM_REASON ? customReason.trim() : reasonChoice;
 
   const existingDraft = app.claims.find(
     (c) => c.status === "Draft" && c.supplierId === item?.supplierId && (c.separator ?? "").trim() === sepKey,
@@ -58,7 +62,7 @@ export function ClaimModal({
           <button className="btn ghost" onClick={onClose}>
             Cancel
           </button>
-          <button className="btn primary" disabled={!item || qty < 1} onClick={commit}>
+          <button className="btn primary" disabled={!item || qty < 1 || !reason} onClick={commit}>
             Add to claim
           </button>
         </>
@@ -89,14 +93,21 @@ export function ClaimModal({
           {supplier && <div className="small muted">Supplier — {supplier.name}</div>}
           <label className="field">
             <span>Reason</span>
-            <select value={reason} onChange={(e) => setReason(e.target.value as ClaimReason)}>
+            <select value={reasonChoice} onChange={(e) => setReasonChoice(e.target.value)}>
               {CLAIM_REASONS.map((r) => (
                 <option key={r} value={r}>
                   {r}
                 </option>
               ))}
+              <option value={CUSTOM_REASON}>{CUSTOM_REASON}</option>
             </select>
           </label>
+          {reasonChoice === CUSTOM_REASON && (
+            <label className="field">
+              <span>Custom reason</span>
+              <input type="text" autoFocus value={customReason} onChange={(e) => setCustomReason(e.target.value)} placeholder="e.g. Sleeve split in transit" />
+            </label>
+          )}
           <label className="field">
             <span>Quantity</span>
             <input

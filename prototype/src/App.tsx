@@ -2,27 +2,29 @@ import { NavLink, Route, Routes, useLocation } from "react-router-dom";
 import { CURRENT_USER } from "./data/seed";
 import { Home } from "./screens/Home";
 import { Search } from "./screens/Search";
-import { Sell } from "./screens/Sell";
+import { PointOfSale } from "./screens/PointOfSale";
 import { ReturnScreen } from "./screens/Return";
 import { Claims } from "./screens/Claims";
 import { Customers } from "./screens/Customers";
 import { Receiving } from "./screens/Receiving";
+import { Suppliers } from "./screens/Suppliers";
 import { ReviewQueueBadge } from "./components/ReviewQueue";
 
 const NAV = [
   { to: "/", label: "Flow map", end: true },
   { to: "/search", label: "E-03/E-04 Search" },
-  { to: "/sell", label: "E-05 Sell" },
+  { to: "/sell", label: "E-05 Point of Sale" },
   { to: "/claims", label: "Supplier Claims" },
   { to: "/customers", label: "E-07 Customers" },
   { to: "/receiving", label: "E-02 Receiving" },
+  { to: "/suppliers", label: "M-01 Suppliers" },
 ];
 
 export function App() {
   const location = useLocation();
   // /return/:saleId has no nav entry of its own — a Return is entered from
-  // (and belongs to) Sell, so its editor keeps "E-05 Sell" lit rather than
-  // showing no active tab at all.
+  // (and belongs to) Point of Sale, so its editor keeps "E-05 Point of Sale"
+  // lit rather than showing no active tab at all.
   const onReturn = location.pathname.startsWith("/return");
 
   return (
@@ -52,12 +54,13 @@ export function App() {
           <Route path="/" element={<Home />} />
           <Route path="/search" element={<Search />} />
           <Route path="/search/:recordId" element={<Search />} />
-          <Route path="/sell" element={<Sell />} />
-          <Route path="/sell/:saleId" element={<Sell />} />
+          <Route path="/sell" element={<PointOfSale />} />
+          <Route path="/sell/:saleId" element={<PointOfSale />} />
           <Route path="/return/:saleId" element={<ReturnScreen />} />
           <Route path="/claims" element={<Claims />} />
           <Route path="/customers" element={<Customers />} />
           <Route path="/receiving" element={<Receiving />} />
+          <Route path="/suppliers" element={<Suppliers />} />
         </Routes>
       </main>
     </div>

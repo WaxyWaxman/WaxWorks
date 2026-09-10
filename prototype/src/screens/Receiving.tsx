@@ -176,13 +176,14 @@ function NewInvoiceModal({ onClose, onCreated }: { onClose: () => void; onCreate
   const [freight, setFreight] = useState("0.00");
 
   const numKey = invoiceNumber.trim().toLowerCase();
-  const collision = app.invoices.find(
-    (iv) => iv.supplierId === supplierId && iv.invoiceNumber.trim().toLowerCase() === numKey,
-  );
+  const collision = numKey
+    ? app.invoices.find(
+        (iv) => iv.supplierId === supplierId && iv.invoiceNumber.trim().toLowerCase() === numKey,
+      )
+    : undefined;
   const [proceedAnyway, setProceedAnyway] = useState(false);
 
-  const canSubmit =
-    supplierId && invoiceNumber.trim() && receivedDate.trim() && (!collision || proceedAnyway);
+  const canSubmit = supplierId && receivedDate.trim() && (!collision || proceedAnyway);
 
   return (
     <Modal
@@ -231,7 +232,11 @@ function NewInvoiceModal({ onClose, onCreated }: { onClose: () => void; onCreate
               <input
                 type="radio"
                 checked={mode === "Second-hand"}
-                onChange={() => setMode("Second-hand")}
+                onChange={() => {
+                  setMode("Second-hand");
+                  const def = app.suppliers.find((s) => s.defaultForSecondHand);
+                  if (def) setSupplierId(def.id);
+                }}
               />
               <span>Second-hand — grade required per copy, no sticky price</span>
             </label>
@@ -239,11 +244,15 @@ function NewInvoiceModal({ onClose, onCreated }: { onClose: () => void; onCreate
         </label>
 
         <label className="field">
-          <span>Supplier</span>
+          <span>
+            Supplier — any Supplier can carry a second-hand invoice, this just suggests one
+            first (decision 27)
+          </span>
           <select value={supplierId} onChange={(e) => setSupplierId(e.target.value)}>
             {app.suppliers.map((s) => (
               <option key={s.id} value={s.id}>
-                {s.name} ({s.shortName}) — {s.marginPct}% margin
+                {s.name} ({s.shortName})
+                {s.defaultForSecondHand ? " — default for second-hand" : ` — ${s.discountPct}% discount`}
               </option>
             ))}
           </select>
@@ -259,7 +268,7 @@ function NewInvoiceModal({ onClose, onCreated }: { onClose: () => void; onCreate
             type="text"
             value={invoiceNumber}
             onChange={(e) => setInvoiceNumber(e.target.value)}
-            placeholder="e.g. 55099"
+            placeholder="e.g. 55099 — leave blank to auto-generate a reference"
           />
         </label>
         {collision && (
@@ -309,9 +318,9 @@ function NewInvoiceModal({ onClose, onCreated }: { onClose: () => void; onCreate
   );
 }
 
-// Pricing shared by the fillable and edit rows. "Cost" in this UI is the
-// pre-discount figure off the paperwork; what E-02 decision 7 calls "cost"
-// (the post-discount Ext. Price) is derived here and shown small, not typed.
+// Pricing shared by the fillable and edit rows. "List price" in this UI is
+// the pre-discount figure off the paperwork; "cost" (E-02 decision 7 — the
+// post-discount Ext. Price) is derived here and shown small, not typed.
 function useLinePricing(opts: {
   listRaw: string;
   discountRaw: string;
@@ -323,7 +332,7 @@ function useLinePricing(opts: {
   const listPrice = Number(opts.listRaw) || 0;
   const discountPct = Number(opts.discountRaw) || 0;
   const extPrice = round2(listPrice * (1 - discountPct / 100));
-  const suggested = opts.stickyPrice ?? roundUpShelf(listPrice * (1 + opts.supplier.marginPct / 100));
+  const suggested = opts.stickyPrice ?? roundUpShelf(listPrice * (1 + opts.supplier.discountPct / 100));
   const sellPrice = opts.autoAccept ? suggested : Number(opts.sellRaw ?? suggested.toFixed(2)) || 0;
   const marginPct = sellPrice > 0 ? round2(((sellPrice - extPrice) / sellPrice) * 100) : 0;
   const belowCost = sellPrice > 0 && sellPrice < extPrice;
@@ -355,6 +364,11 @@ function InvoiceEditor({ invoiceId }: { invoiceId: string }) {
   const delta = round2(enteredTotal - computedTotal);
   const pctDelta = computedTotal !== 0 ? Math.abs(delta) / computedTotal : Math.abs(delta) > 0 ? 1 : 0;
   const beyondTolerance = Math.abs(delta) > 0.005 && pctDelta > 0.02;
+  // Informational only — a shipment-level "did this pay off" estimate against
+  // the full cash outlay (tax/freight/misc included), not a formal COGS
+  // figure. Per-item cost/margin is unaffected — see Cost treatment.
+  const expectedSellValue = round2(invoice.lines.reduce((sum, l) => sum + l.acceptedPrice * l.qty, 0));
+  const expectedMarginPct = expectedSellValue > 0 ? round2(((expectedSellValue - enteredTotal) / expectedSellValue) * 100) : 0;
   const [finalizedCount, setFinalizedCount] = useState<number | null>(null);
   const [labelsNote, setLabelsNote] = useState<string | null>(null);
 
@@ -383,7 +397,7 @@ function InvoiceEditor({ invoiceId }: { invoiceId: string }) {
             <div className="row wrap xsmall muted">
               <span>Invoice date {invoice.invoiceDate || "—"}</span>
               <span>Received {invoice.receivedDate}</span>
-              <span>Supplier margin {supplier.marginPct}% (M-01, not editable in this pass)</span>
+              <span>Supplier discount {supplier.discountPct}% — drives suggested retail (M-01)</span>
             </div>
             {invoice.status === "Finalized" && (
               <div className="callout">
@@ -415,7 +429,7 @@ function InvoiceEditor({ invoiceId }: { invoiceId: string }) {
                   <th>Barcode</th>
                   <th>Record</th>
                   <th>Grade</th>
-                  <th className="num">Cost</th>
+                  <th className="num">List price</th>
                   <th className="num">Disc%</th>
                   <th className="num">Sell price</th>
                   <th className="num">Margin%</th>
@@ -587,6 +601,17 @@ function InvoiceEditor({ invoiceId }: { invoiceId: string }) {
                 {beyondTolerance && " Beyond ±2%: proceeds and raises a review flag (M-04 d8)."}
               </div>
             )}
+            <div className="hr" />
+            <div className="totals-row">
+              <span>Expected sell value (accepted price × qty)</span>
+              <strong className="num">{money(expectedSellValue)}</strong>
+            </div>
+            <div className="totals-row">
+              <span>Expected margin — sell value vs. full invoice total, informational only</span>
+              <strong className="num" style={{ color: expectedMarginPct < 0 ? "var(--c-danger)" : undefined }}>
+                {expectedMarginPct.toFixed(1)}%
+              </strong>
+            </div>
           </div>
         </div>
 

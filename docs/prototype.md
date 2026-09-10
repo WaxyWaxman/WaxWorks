@@ -28,13 +28,15 @@ Start on the **Flow map**; it carries a suggested review path.
 | Flow | Status in docs | Prototype screen | Notes |
 |---|---|---|---|
 | [E-03](flows/E-03-search-inventory.md) | Specified | Search | Grouping, catalog-only rows, scan-to-resolve, catalog-provider-down toggle. Selecting a Record (click a row, Reserve, or a resolved scan) opens its titlecard inline above the results — see E-04. |
-| [E-04](flows/E-04-manage-inventory.md) | Specified | *(embedded in Search)* | Copies, derived on-hand math, Reserve → Held Sale, below-cost guardrail + manager override. Not a separate route — the titlecard is a view, not a screen of its own (E-04 decision 1), so it lives in Search's `TitlecardPanel` and updates as the selected Record changes. `/search/:recordId` deep-links to a specific one. |
-| [E-05](flows/E-05-sell-a-record.md) | Specified | Sell | Barcode resolver, multi-copy picker, customer pre-fill, `0.00` prompt, negative inventory, split tender, hold/void, receipt |
-| [E-06](flows/E-06-process-a-return.md) | Specified | Return | Negative-qty line, prior-Sale link, refund default, cash/store-credit, stock routing. Entered only from Sell's **+ New Return** (`/return/:saleId`) — mirrors `/sell/:saleId` in never being its own nav item, since a Return is a Sale with `isReturn` set. |
-| [E-07](flows/E-07-manage-customers.md) | Specified | Customers | Lookup, signed balance, discount + default tax line, attach to Sale |
-| E-04 §"Supplier claims" | Specified (part of E-04) | Supplier Claims (`/claims`) | Not a numbered flow of its own. Claiming credit from a supplier for short/damaged/unshipped stock — distinct from a customer Return. Raised from a titlecard's **Claim vs. supplier** button; claims to the same supplier + separator merge onto one Draft, sent together with an auto-generated claim number. Suppliers are modeled only as far as this needs — full supplier management is M-01, still not in this pass. |
+| [E-04](flows/E-04-manage-inventory.md) | Specified | *(embedded in Search)* | Copies, derived on-hand math, Reserve → Held Sale, below-cost pricing proceeds and raises a review flag (M-04 decision 8) rather than blocking on a manager override. Not a separate route — the titlecard is a view, not a screen of its own (E-04 decision 1), so it lives in Search's `TitlecardPanel` and updates as the selected Record changes. `/search/:recordId` deep-links to a specific one. |
+| [E-05](flows/E-05-sell-a-record.md) | Specified | Point of Sale | Barcode resolver, multi-copy picker, customer pre-fill (with inline create-on-no-match), `0.00` prompt, negative inventory, split tender, hold/void, receipt, PO field, 2-digit discount. Also carries Edit (void-and-duplicate for Current, open for Held), Copy, Search (barcode → item sale history), and M-03's close under **Other Functions** (View Subtotal / Total Today's Sales / Undo End of Day, Admin-labeled). |
+| [E-06](flows/E-06-process-a-return.md) | Specified | Return | Negative-qty line, prior-Sale link, refund default, cash/store-credit, stock routing. Entered only from Point of Sale's **+ New Return** (`/return/:saleId`) — mirrors `/sell/:saleId` in never being its own nav item, since a Return is a Sale with `isReturn` set. |
+| [E-07](flows/E-07-manage-customers.md) | Specified | Customers | Search (name/email/phone), New, Delete, opens on the most recently searched/added card. No separate Edit — every field, account number included, is a live input on the open card. A/R balance, discount + default tax line, purchase history, attach to Sale. Nothing gated. |
+| E-04 §"Supplier claims" | Specified (part of E-04) | Supplier Claims (`/claims`) | Not a numbered flow of its own. Claiming credit from a supplier for short/damaged/unshipped stock — distinct from a customer Return. Raised from a titlecard's **Claim vs. supplier** button; claims to the same supplier + separator merge onto one Draft, sent together with an auto-generated claim number. |
 | [E-02](flows/E-02-receive-inventory.md) | Specified | Receiving (`/receiving`) | The three phases in one screen: open an invoice (supplier, intake mode, invoice #, collision check, simulated photo extraction), then an always-present fillable row at the bottom of Lines — scanning or typing a barcode there resolves it against this supplier's pending orders first, then the local catalog (a catalog-only match pulls in, same as E-03 decision 6), or opens Lookup on a miss — followed by pricing, then reconcile (derived-vs-stated subtotal warning, ±2%-bounded total override) and finalize — lines aren't sellable InventoryItems until then. A committed line's pencil re-opens it inline for correction. A finalized copy is immediately claimable from its titlecard. |
-| E-01, M-01–M-06 | — | *stubbed* | Added once the counter core is signed off |
+| [M-01](flows/M-01-supplier-margin.md) | Specified | Suppliers (`/suppliers`) | Search, New/Edit/Copy/Delete/Merge, opens on the most recently searched card. Nothing is gated — Delete/Merge are labeled Admin-only by convention only. Full field set (order terms, discount vs. margin, rep contacts, etc.), all logged. |
+| [M-03](flows/M-03-daily-summary.md) | Specified | *(embedded in Point of Sale)* | Not a screen of its own — surfaced under Point of Sale's **Other Functions**. The close is a real state transition (Current → Closed, batched), with Undo End of Day (Admin-labeled) reverting a batch. Breakdown covers gross/returns/net, by Section, by tender, tax, movements (voids/holds/pay-outs), and stock below minimum. |
+| E-01, M-02, M-04, M-05, M-06 | — | *stubbed* | Added once the counter core is signed off. `markInvoicePaid` exists as a store action, called from Receiving — there's no Accounts Payable screen yet to move it to. |
 
 ## Turning a review into a decision
 
@@ -52,9 +54,22 @@ Style changes are cheap: design tokens are centralised in
 - Tax is a flat rate per named line; real multi-jurisdiction handling (M-06) is not modelled.
 - Manager override is initials-only with no real auth.
 - Open questions in the flow docs are surfaced in the UI but not resolved.
-- Suppliers are two seeded rows with a name, email, and a fixed margin — enough to demo Supplier
-  Claims batching and E-02's suggested-retail formula; setting/changing a margin is M-01, not
-  built.
+- Suppliers (M-01) are built with the full field set and are not gated (Delete/Merge are labeled
+  Admin-only, not enforced). There is no separate Margin field — Discount does double duty,
+  describing what the Supplier charges **and** driving suggested retail at receiving (E-02
+  decision 31). A Discount change reprices future receiving only (never existing stock); minimum
+  order qty/amount and cancel-by are captured but not yet consumed by anything (M-02 isn't built);
+  multi-store scope and floor/ceiling constraints are still open questions.
+- Customers (E-07) are built with the full field set and are not gated. There is no separate Edit
+  function — every field, account number included, is a live input on the open card; New and
+  Delete are the only explicit actions. History lists sold items only, not Returns.
+- Point of Sale (E-05, renamed from "Sell") folds in M-03's close for the first time in this
+  build. The day-breakdown's "By Section" only resolves a Section for item lines with a matching
+  Record — non-tracked and gift-card lines land in a generic bucket rather than their real Section,
+  since a SaleLine doesn't carry one directly. Movements (voids/holds) are scoped to everything in
+  memory, not "since the last close" — this prototype has no persistence across sessions to track
+  that boundary. Copy never carries over the specific InventoryItem (the source's copy may still be
+  sold); Edit on a Current Sale does, since voiding the original returns it to sellable first.
 - Receiving's photograph/OCR step (decision 15) isn't modelled at all — stated subtotal, tax, and
   freight are plain manually-entered fields, full stop, with no camera or extraction simulation
   standing in for it. Barcode-to-record matching is local-only (no live catalog-provider call, no
@@ -64,10 +79,9 @@ Style changes are cheap: design tokens are centralised in
   record, expected cost/discount, qty) — enough to look one up and receive against it, seeded with
   a handful of rows. It is not M-02: there is no way to place an order from here, no reorder
   suggestions, and no backorder lifecycle once a line isn't fully received.
-- On the line-entry row, "Cost" is the pre-discount figure off the paperwork and "Sell price"
-  replaces "Accepted price" — Disc% and Margin% are new. This is a deliberate departure from how
-  [E-02](flows/E-02-receive-inventory.md) decision 7 currently defines "cost" (there, cost *is*
-  the post-discount Ext. Price); the derived Ext. Price still drives the below-cost guardrail and
-  everything downstream (InventoryItem.cost, Supplier Claims), it's just no longer the field
-  labeled "Cost" in this screen. Worth a decision either amending E-02 decision 7 or documenting
-  the UI/spec vocabulary as deliberately different.
+- On the line-entry row, "List price" is the pre-discount figure off the paperwork and "Sell
+  price" replaces "Accepted price" — Disc% and Margin% are new. **Resolved:** the row used to
+  label the pre-discount figure "Cost", clashing with [E-02](flows/E-02-receive-inventory.md)
+  decision 7's "cost" (the post-discount Ext. Price) — renamed to "List price" so "cost" means
+  one thing everywhere: the net, post-discount figure that drives the below-cost guardrail and
+  everything downstream (InventoryItem.cost, Supplier Claims).

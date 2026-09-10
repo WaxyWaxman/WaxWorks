@@ -6,15 +6,25 @@ import { useApp } from "../store/AppStore";
 
 // Supplier Claims — claiming credit from a supplier for stock that arrived
 // short, damaged, or not at all. Distinct from a customer Return (E-06),
-// which lives at E-05 Sell → + New Return. Specified in E-04 §"Supplier
-// claims", not a numbered flow of its own, so no flow-id badge here.
+// which lives at E-05 Point of Sale → + New Return. Specified in E-04
+// §"Supplier claims", not a numbered flow of its own, so no flow-id badge here.
 export function Claims() {
   const app = useApp();
-  const drafts = app.claims.filter((c) => c.status === "Draft");
-  const pending = app.claims.filter((c) => c.status === "Pending");
-  const credited = app.claims.filter((c) => c.status === "Credited");
+  const [supplierQuery, setSupplierQuery] = useState("");
   const [sending, setSending] = useState<SupplierClaim | null>(null);
   const [crediting, setCrediting] = useState<SupplierClaim | null>(null);
+
+  const q = supplierQuery.trim().toLowerCase();
+  const inScope = q
+    ? app.claims.filter((c) => {
+        const supplier = app.supplierFor(c.supplierId);
+        return supplier && (supplier.name.toLowerCase().includes(q) || supplier.shortName.toLowerCase().includes(q));
+      })
+    : app.claims;
+
+  const drafts = inScope.filter((c) => c.status === "Draft");
+  const pending = inScope.filter((c) => c.status === "Pending");
+  const credited = inScope.filter((c) => c.status === "Credited");
 
   return (
     <div>
@@ -23,16 +33,27 @@ export function Claims() {
           <h1>Supplier Claims</h1>
           <p className="sub">
             Claiming credit from a supplier for stock that arrived short, damaged, or not at all —
-            not a customer return (that's <strong>E-05 Sell → + New Return</strong>).{" "}
+            not a customer return (that's <strong>E-05 Point of Sale → + New Return</strong>).{" "}
             <em>(E-04 §"Supplier claims".)</em> Raise a claim from a titlecard's{" "}
             <strong>Claim vs. supplier</strong> button; it lands here as a Draft to batch and send.
           </p>
         </div>
       </div>
 
+      <div className="card" style={{ marginBottom: "var(--sp-4)" }}>
+        <div className="card-body">
+          <input
+            type="search"
+            value={supplierQuery}
+            onChange={(e) => setSupplierQuery(e.target.value)}
+            placeholder="Filter by supplier — respects how claims are already batched by supplier + separator"
+          />
+        </div>
+      </div>
+
       <ClaimSection
         title="Draft — not yet sent"
-        empty="Nothing drafted. Raise a claim from a Record's titlecard (Claim vs. supplier)."
+        empty={q ? `No draft claims match "${supplierQuery}".` : "Nothing drafted. Raise a claim from a Record's titlecard (Claim vs. supplier)."}
         claims={drafts}
         renderAction={(c) => (
           <button className="btn sm primary" onClick={() => setSending(c)}>
@@ -43,7 +64,7 @@ export function Claims() {
 
       <ClaimSection
         title="Pending — sent, awaiting credit"
-        empty="No claims currently pending a supplier's response."
+        empty={q ? `No pending claims match "${supplierQuery}".` : "No claims currently pending a supplier's response."}
         claims={pending}
         renderAction={(c) => (
           <button className="btn sm" onClick={() => setCrediting(c)}>
@@ -52,7 +73,7 @@ export function Claims() {
         )}
       />
 
-      <ClaimSection title="Credited" empty="No credited claims yet." claims={credited} />
+      <ClaimSection title="Credited" empty={q ? `No credited claims match "${supplierQuery}".` : "No credited claims yet."} claims={credited} />
 
       {sending && <SendClaimModal claim={sending} onClose={() => setSending(null)} />}
       {crediting && <MarkCreditedModal claim={crediting} onClose={() => setCrediting(null)} />}
@@ -84,7 +105,7 @@ function ClaimSection({
             <div key={c.id} className="card">
               <div className="card-head">
                 <span>
-                  {c.claimNumber ? `Claim #${c.claimNumber}` : "Unsent"} — {supplier?.name ?? "Unknown supplier"}
+                  {c.claimNumber !== undefined ? `Claim #${c.claimNumber}` : "Unsent"} — {supplier?.name ?? "Unknown supplier"}
                   {c.separator && (
                     <span className="badge" style={{ marginLeft: "var(--sp-2)" }}>
                       sep {c.separator}
@@ -173,7 +194,7 @@ function SendClaimModal({ claim, onClose }: { claim: SupplierClaim; onClose: () 
           </button>
           <button
             className="btn primary"
-            disabled={num < 1 || taken}
+            disabled={num < 0 || taken}
             onClick={() => {
               app.sendClaim(claim.id, num);
               onClose();

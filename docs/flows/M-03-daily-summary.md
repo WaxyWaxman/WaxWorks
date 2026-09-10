@@ -1,8 +1,8 @@
 # M-03 — Daily summary of sales and inventory
 
-**Actor:** Manager
-**Status:** Specified
-**Related:** [E-05 Sell a record](E-05-sell-a-record.md) · [E-06 Process a return](E-06-process-a-return.md) · [M-06 Settings](M-06-settings.md)
+**Actor:** Manager (Undo End of Day labeled Admin-only by convention, not enforced)
+**Status:** Specified — surfaced on **Point of Sale** under **Other Functions** ([E-05](E-05-sell-a-record.md) decision 30), not a screen of its own
+**Related:** [E-05 Point of Sale](E-05-sell-a-record.md) · [E-06 Process a return](E-06-process-a-return.md) · [M-06 Settings](M-06-settings.md)
 
 **Job:** As a manager, I need an end-of-day picture of what sold and what the stock position looks like.
 
@@ -15,7 +15,7 @@ Closing the day is a real state transition, not just a report: it moves every **
 1. Manager runs **View Subtotal** as often as they like during the day. It produces the same breakdown as the close and changes nothing.
 2. Manager runs **Total Today's Sales** to close. The system produces the breakdown and moves all Current Sales to Closed.
 3. The closed group is a **batch**, carrying its own identifier, the timestamp it was run, and the User who ran it.
-4. **Undo End of Day** reverses a batch, returning its Sales to Current. **Manager-only.**
+4. **Undo End of Day** reverses a batch, returning its Sales to Current. **Admin** by convention — labeled, not an enforced check (see [E-05](E-05-sell-a-record.md) decision 30).
 
 A batch is not the same thing as a calendar day. Sales rung after a close belong to the next batch even if the date hasn't changed, and a shop that closes twice in a day produces two batches.
 

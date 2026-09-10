@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { ClaimModal } from "../components/ClaimModal";
+import { ManagerOverride } from "../components/ManagerOverride";
 import { Modal } from "../components/Modal";
 import { ReserveModal } from "../components/ReserveModal";
 import type { InventoryItem, RecordEntry } from "../data/types";
@@ -33,11 +34,16 @@ export function TitlecardPanel({
   const [priceEdit, setPriceEdit] = useState<InventoryItem | null>(null);
   const [labelFor, setLabelFor] = useState<InventoryItem | null>(null);
   const [claiming, setClaiming] = useState(false);
+  const [adjusting, setAdjusting] = useState(false);
 
   if (!record) return <p className="muted">Unknown Record.</p>;
   const copies = app.inventory.filter((i) => i.recordId === record.id && i.status !== "sold");
   const oh = onHand(record.id, app.inventory);
   const belowMin = oh < record.minOnHand;
+  const outstandingOversold = app.inventory.filter(
+    (i) => i.recordId === record.id && i.oversold && !i.oversoldReconciledAt,
+  );
+  const saleFor = (itemId: string) => app.sales.find((sale) => sale.lines.some((l) => l.inventoryItemId === itemId));
 
   const doRemoveHold = (c: InventoryItem) => {
     const res = app.releaseHoldLine(c.id);
@@ -84,6 +90,25 @@ export function TitlecardPanel({
                       <Row k="Genre / Section" v={`${record.genre} · ${record.section}`} />
                       <Row k="Manufacturer UPC" v={record.manufacturerUpc ?? "— (none on sleeve)"} />
                       <Row k="Catalog ID / sticky" v={`${record.discogsId ?? "—"} · ${record.stickyPrice ? money(record.stickyPrice) + " (New)" : "no sticky price"}`} />
+                      <tr>
+                        <td className="muted" style={{ width: 150 }}>
+                          Preferred supplier
+                        </td>
+                        <td>
+                          <select
+                            value={record.preferredSupplierId ?? ""}
+                            onChange={(e) => app.setRecordPreferredSupplier(record.id, e.target.value || undefined)}
+                            title="A default only — the Supplier actually used is recorded on each order line (M-02)"
+                          >
+                            <option value="">— none —</option>
+                            {app.suppliers.map((sup) => (
+                              <option key={sup.id} value={sup.id}>
+                                {sup.name} ({sup.shortName})
+                              </option>
+                            ))}
+                          </select>
+                        </td>
+                      </tr>
                     </tbody>
                   </table>
                   <div className="btn-row">
@@ -94,7 +119,16 @@ export function TitlecardPanel({
                     <button className="btn sm" onClick={() => setClaiming(true)}>
                       Claim vs. supplier
                     </button>
-                    <button className="btn sm" title="Manager only">
+                    <button
+                      className={"btn sm" + (outstandingOversold.length ? " danger" : "")}
+                      disabled={outstandingOversold.length === 0}
+                      onClick={() => setAdjusting(true)}
+                      title={
+                        outstandingOversold.length
+                          ? `Force ${outstandingOversold.length} outstanding oversold cop${outstandingOversold.length === 1 ? "y" : "ies"} back to zero`
+                          : "Manager only — nothing outstanding to adjust yet (only oversold reconciliation is built so far)"
+                      }
+                    >
                       Adjust on hand (Mgr)
                     </button>
                   </div>
@@ -217,10 +251,41 @@ export function TitlecardPanel({
                 <span>Minimum on hand</span>
                 <span className="num">{record.minOnHand}</span>
               </div>
+              {outstandingOversold.length > 0 && (
+                <div className="totals-row">
+                  <span>Oversold, unreconciled</span>
+                  <strong className="num" style={{ color: "var(--c-danger)" }}>
+                    {outstandingOversold.length}
+                  </strong>
+                </div>
+              )}
               {belowMin && (
                 <div className="callout">
                   Below minimum on hand. Informational only in v1 — does not raise an order.
                   <em> (E-04 decision 13.)</em>
+                </div>
+              )}
+              {outstandingOversold.length > 0 && (
+                <div className="callout danger">
+                  Sold before ever being received — a promise the copy exists <em>(E-05 decision
+                  21)</em>. Clears automatically, oldest first, when matching stock is received —
+                  or Adjust on hand (Mgr) above forces it to zero.
+                  <table className="data" style={{ marginTop: "var(--sp-2)" }}>
+                    <tbody>
+                      {outstandingOversold.map((i) => {
+                        const sale = saleFor(i.id);
+                        return (
+                          <tr key={i.id}>
+                            <td className="small">
+                              {sale?.saleNumber ? `Sale #${sale.saleNumber}` : "Sale in progress"}
+                            </td>
+                            <td className="small muted">{i.oversoldAt}</td>
+                            <td className="num small">{money(i.price)}</td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
                 </div>
               )}
             </div>
@@ -283,6 +348,17 @@ export function TitlecardPanel({
           items={copies}
           onClose={() => setClaiming(false)}
           onDone={onStatus}
+        />
+      )}
+      {adjusting && (
+        <ManagerOverride
+          reason={`Force ${outstandingOversold.length} outstanding oversold cop${outstandingOversold.length === 1 ? "y" : "ies"} of ${record.artist} — ${record.title} back to zero. Use this only when there's no incoming shipment to explain the deficit — receiving matching stock reconciles it automatically instead.`}
+          onCancel={() => setAdjusting(false)}
+          onConfirm={(by) => {
+            const n = app.reconcileOversold(record.id, by);
+            setAdjusting(false);
+            onStatus(`Adjusted on hand — ${n} oversold cop${n === 1 ? "y" : "ies"} cleared.`);
+          }}
         />
       )}
     </div>

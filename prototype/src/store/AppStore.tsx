@@ -5,6 +5,7 @@ import {
   useState,
   type ReactNode,
 } from "react";
+import { computeDayBreakdown, type DayBreakdown } from "../lib/dayBreakdown";
 import { money } from "../lib/money";
 import { round2 } from "../lib/totals";
 import {
@@ -20,7 +21,7 @@ import {
   TAX_LINES,
 } from "../data/seed";
 import type {
-  ClaimReason,
+  CloseBatch,
   Customer,
   GiftCard,
   Grade,
@@ -55,15 +56,20 @@ interface AppState {
   taxLines: TaxLine[];
   nonTracked: NonTrackedItem[];
   sales: Sale[];
+  closeBatches: CloseBatch[]; // M-03 — Total Today's Sales / Undo End of Day
   claims: SupplierClaim[];
   invoices: Invoice[];
   pendingOrders: PendingOrderLine[];
   reviewFlags: ReviewFlag[];
   activeSaleId: string | null;
+  lastViewedSupplierId: string | null; // M-01 — Suppliers opens on this card
+  lastViewedCustomerId: string | null; // E-07 — Customers opens on this card
   nextSaleNumber: number;
   nextHold: number;
   nextClaimNumber: number;
   nextInternalBarcode: number;
+  nextInvoiceRef: number;
+  nextCustomerPrimaryId: number;
   /** E-03 decision 8 — toggle to demo graceful degradation when the catalog provider (MusicBrainz) is down */
   discogsUp: boolean;
 }
@@ -131,15 +137,20 @@ const seed: AppState = {
       ],
     },
   ],
+  closeBatches: [],
   claims: [],
   invoices: [],
   pendingOrders: PENDING_ORDERS,
   reviewFlags: [],
   activeSaleId: null,
+  lastViewedSupplierId: null,
+  lastViewedCustomerId: null,
   nextSaleNumber: 100241,
   nextHold: 2,
   nextClaimNumber: 12,
   nextInternalBarcode: 9000,
+  nextInvoiceRef: 1,
+  nextCustomerPrimaryId: CUSTOMERS.length + 1,
   discogsUp: true,
 };
 
@@ -152,7 +163,17 @@ interface AppContextValue extends AppState {
 
   newSale: (opts?: { isReturn?: boolean }) => string;
   setActiveSale: (id: string | null) => void;
+  setSalePo: (saleId: string, po: string) => void;
+  editSale: (saleId: string) => string | null;
+  copySale: (saleId: string) => string | null;
+  viewSubtotal: () => DayBreakdown;
+  totalTodaysSales: (by: string) => { batchId: string; breakdown: DayBreakdown };
+  undoEndOfDay: (batchId: string, by: string) => void;
   attachCustomer: (saleId: string, customerId: string | null) => void;
+  addCustomer: (input: Omit<Customer, "id" | "primaryId" | "balance">) => string;
+  updateCustomer: (customerId: string, patch: Partial<Omit<Customer, "id" | "primaryId">>) => void;
+  deleteCustomer: (customerId: string) => void;
+  viewCustomer: (customerId: string) => void;
   addItemLine: (saleId: string, item: InventoryItem) => void;
   addNegInventoryLine: (saleId: string, record: RecordEntry, price: number) => void;
   addNonTrackedLine: (saleId: string, nt: NonTrackedItem, price: number) => void;
@@ -174,11 +195,12 @@ interface AppContextValue extends AppState {
   releaseHoldLine: (itemId: string) => { holdRef: string; holdClosed: boolean } | null;
   forceUnlockSale: (saleId: string) => void;
   acknowledgeReviewFlag: (id: string, by: string) => void;
+  reconcileOversold: (recordId: string, by: string) => number;
   addLog: (saleId: string, text: string) => void;
 
   raiseClaim: (
     itemId: string,
-    reason: ClaimReason,
+    reason: string,
     qty: number,
     separator?: string,
     note?: string,
@@ -223,6 +245,14 @@ interface AppContextValue extends AppState {
     label: string;
     section: Section;
   }) => string;
+  addSupplier: (input: Omit<Supplier, "id" | "log">) => string;
+  updateSupplier: (supplierId: string, patch: Partial<Omit<Supplier, "id" | "log">>) => void;
+  copySupplier: (supplierId: string) => string | null;
+  deleteSupplier: (supplierId: string) => void;
+  mergeSuppliers: (keepId: string, mergeId: string) => void;
+  setDefaultForSecondHand: (supplierId: string) => void;
+  setRecordPreferredSupplier: (recordId: string, supplierId: string | undefined) => void;
+  viewSupplier: (supplierId: string) => void;
   addInvoiceLine: (
     invoiceId: string,
     line: {
@@ -325,6 +355,62 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
   const setActiveSale = (id: string | null) =>
     setS((prev) => ({ ...prev, activeSaleId: id }));
 
+  const setSalePo: AppContextValue["setSalePo"] = (saleId, po) =>
+    patchSale(saleId, (sale) => ({ ...sale, po: po || undefined }));
+
+  // Edit — Current: void the original (returns its stock) and open a new
+  // Sale pre-populated with the same lines, same InventoryItems (they're
+  // sellable again now), for the Employee to correct. Held: there's nothing
+  // to duplicate, just open the existing hold to prep for tender.
+  const editSale: AppContextValue["editSale"] = (saleId) => {
+    const sale = s.sales.find((x) => x.id === saleId);
+    if (!sale) return null;
+    if (sale.state === "Held") return saleId;
+    if (sale.state !== "Current") return null;
+    voidSale(saleId);
+    const id = uid("sale");
+    const dup: Sale = {
+      id,
+      state: "Open",
+      customerId: sale.customerId,
+      po: sale.po,
+      createdBy: CURRENT_USER,
+      createdAt: now(),
+      lockedBy: CURRENT_USER,
+      replacesSaleId: sale.id,
+      lines: sale.lines.map((l) => ({ ...l, id: uid("line") })),
+      tenders: [],
+      log: [{ at: now(), text: `Editing Sale #${sale.saleNumber} — original voided, stock returned, lines carried over` }],
+    };
+    setS((prev) => ({ ...prev, sales: [dup, ...prev.sales], activeSaleId: id }));
+    return id;
+  };
+
+  // Copy — a fresh Sale seeded with the same line template (record, price,
+  // qty, discount, tax, grade). Unlike Edit, the source Sale is untouched
+  // and its items may still be sold, so a copy never carries over the
+  // specific InventoryItem — the Employee re-scans the physical copy being
+  // sold now.
+  const copySale: AppContextValue["copySale"] = (saleId) => {
+    const sale = s.sales.find((x) => x.id === saleId);
+    if (!sale) return null;
+    const id = uid("sale");
+    const dup: Sale = {
+      id,
+      state: "Open",
+      customerId: sale.customerId,
+      po: sale.po,
+      createdBy: CURRENT_USER,
+      createdAt: now(),
+      lockedBy: CURRENT_USER,
+      lines: sale.lines.map((l) => ({ ...l, id: uid("line"), inventoryItemId: undefined })),
+      tenders: [],
+      log: [{ at: now(), text: `Copied from Sale ${sale.saleNumber ?? sale.holdRef ?? "—"} — lines are a pricing template, re-scan each copy` }],
+    };
+    setS((prev) => ({ ...prev, sales: [dup, ...prev.sales], activeSaleId: id }));
+    return id;
+  };
+
   const attachCustomer: AppContextValue["attachCustomer"] = (saleId, customerId) =>
     patchSale(saleId, (sale) => {
       const cust = s.customers.find((c) => c.id === customerId);
@@ -350,6 +436,36 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
         ],
       };
     });
+
+  // E-07 — Search/New/Delete. Every other field is edited in place on the
+  // open card, not through a separate Edit flow.
+  const addCustomer: AppContextValue["addCustomer"] = (input) => {
+    const id = uid("cust");
+    const customer: Customer = { id, primaryId: s.nextCustomerPrimaryId, ...input, balance: 0 };
+    setS((prev) => ({
+      ...prev,
+      customers: [...prev.customers, customer],
+      nextCustomerPrimaryId: prev.nextCustomerPrimaryId + 1,
+      lastViewedCustomerId: id,
+    }));
+    return id;
+  };
+
+  const updateCustomer: AppContextValue["updateCustomer"] = (customerId, patch) =>
+    setS((prev) => ({
+      ...prev,
+      customers: prev.customers.map((c) => (c.id === customerId ? { ...c, ...patch } : c)),
+    }));
+
+  const deleteCustomer: AppContextValue["deleteCustomer"] = (customerId) =>
+    setS((prev) => ({
+      ...prev,
+      customers: prev.customers.filter((c) => c.id !== customerId),
+      lastViewedCustomerId: prev.lastViewedCustomerId === customerId ? null : prev.lastViewedCustomerId,
+    }));
+
+  const viewCustomer: AppContextValue["viewCustomer"] = (customerId) =>
+    setS((prev) => ({ ...prev, lastViewedCustomerId: customerId }));
 
   const addItemLine: AppContextValue["addItemLine"] = (saleId, item) =>
     patchSale(saleId, (sale) => {
@@ -378,6 +494,27 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
     record,
     price,
   ) => {
+    // "Oversold" (lexicon) — mint the real InventoryItem now, sold from
+    // birth. Grade is a placeholder (unknown at the till) and cost is
+    // unknown until this is reconciled against a real Invoice line.
+    const itemId = uid("item");
+    const code = `29${String(s.nextInternalBarcode).padStart(10, "0")}`;
+    const item: InventoryItem = {
+      id: itemId,
+      recordId: record.id,
+      grade: "M",
+      price,
+      cost: 0,
+      internalBarcode: code,
+      status: "sold",
+      oversold: true,
+      oversoldAt: now(),
+    };
+    setS((prev) => ({
+      ...prev,
+      inventory: [...prev.inventory, item],
+      nextInternalBarcode: prev.nextInternalBarcode + 1,
+    }));
     patchSale(saleId, (sale) => {
       const d = applyCustomerDefaults(sale.customerId, {
         discountPct: 0,
@@ -387,6 +524,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
         id: uid("line"),
         kind: "item",
         recordId: record.id,
+        inventoryItemId: itemId,
         title: `${record.artist} — ${record.title}`,
         qty: 1,
         price,
@@ -625,21 +763,52 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
     raiseReviewFlag("sale-lock-broken", `Sale lock broken — ${was} to ${CURRENT_USER} on an open Sale.`);
   };
 
-  const voidSale: AppContextValue["voidSale"] = (saleId) =>
-    setS((prev) => ({
-      ...prev,
-      inventory: prev.inventory.map((i) => {
-        const onSale = prev.sales
-          .find((x) => x.id === saleId)
-          ?.lines.some((l) => l.inventoryItemId === i.id);
-        return onSale && i.status !== "sold" ? { ...i, status: "sellable", heldByCustomerId: undefined } : i;
-      }),
-      sales: prev.sales.map((x) =>
-        x.id === saleId
-          ? { ...x, state: "Void", log: [...x.log, { at: now(), text: "Voided — stock returned, Sale number retained" }] }
-          : x,
-      ),
-    }));
+  // Void — Open or Current only (E-05 decision 5): a Held Sale uses Cancel
+  // Hold instead, and a Closed Sale can't be voided at all — it's reopened
+  // via Undo End of Day (M-03) or handled as a Return (E-06).
+  const voidSale: AppContextValue["voidSale"] = (saleId) => {
+    const sale = s.sales.find((x) => x.id === saleId);
+    if (!sale || sale.state === "Held" || sale.state === "Closed" || sale.state === "Void") return;
+    setS((prev) => {
+      const onSaleIds = new Set(
+        prev.sales.find((x) => x.id === saleId)?.lines.map((l) => l.inventoryItemId).filter((id): id is string => !!id),
+      );
+      return {
+        ...prev,
+        inventory: prev.inventory
+          // An unreconciled oversold copy never became real stock — voiding
+          // the Sale that invented it un-invents it, rather than leaving a
+          // phantom debt a later receipt would wrongly pay down.
+          .filter((i) => !(onSaleIds.has(i.id) && i.oversold && !i.oversoldReconciledAt))
+          .map((i) => {
+            if (!onSaleIds.has(i.id)) return i;
+            if (i.oversold) {
+              // Already reconciled against real received stock — that stock
+              // is real, it just becomes an ordinary sellable copy again.
+              return {
+                ...i,
+                status: "sellable" as const,
+                heldByCustomerId: undefined,
+                oversold: undefined,
+                oversoldAt: undefined,
+                oversoldReconciledAt: undefined,
+                oversoldReconciledBy: undefined,
+                oversoldReconciledVia: undefined,
+              };
+            }
+            // Void only ever runs against a Current (not yet Closed) Sale, so
+            // reverting a "sold" item here is safe — it can't undo settled
+            // history, only same-day stock that hasn't been totalled off yet.
+            return { ...i, status: "sellable" as const, heldByCustomerId: undefined };
+          }),
+        sales: prev.sales.map((x) =>
+          x.id === saleId
+            ? { ...x, state: "Void", log: [...x.log, { at: now(), text: "Voided — stock returned, Sale number retained" }] }
+            : x,
+        ),
+      };
+    });
+  };
 
   const cancelHold: AppContextValue["cancelHold"] = (saleId) =>
     setS((prev) => ({
@@ -656,6 +825,48 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
           : x,
       ),
     }));
+
+  // M-03 — View Subtotal computes the same breakdown as a close without
+  // touching anything; it's a pure read.
+  const viewSubtotal: AppContextValue["viewSubtotal"] = () =>
+    computeDayBreakdown(s.sales, s.records, s.taxLines, s.inventory);
+
+  // Total Today's Sales — the close is a real state transition (M-03
+  // decision 1): every Current Sale becomes Closed and stops being
+  // editable, batched under one identifier so it can be undone as a unit.
+  const totalTodaysSales: AppContextValue["totalTodaysSales"] = (by) => {
+    const breakdown = computeDayBreakdown(s.sales, s.records, s.taxLines, s.inventory);
+    const saleIds = s.sales.filter((sale) => sale.state === "Current" && !sale.isReturn).map((sale) => sale.id);
+    const batchId = uid("batch");
+    const batch: CloseBatch = { id: batchId, at: now(), by, saleIds };
+    setS((prev) => ({
+      ...prev,
+      closeBatches: [batch, ...prev.closeBatches],
+      sales: prev.sales.map((sale) =>
+        saleIds.includes(sale.id)
+          ? { ...sale, state: "Closed", batchId, log: [...sale.log, { at: now(), text: `Closed in batch ${batchId} by ${by}` }] }
+          : sale,
+      ),
+    }));
+    return { batchId, breakdown };
+  };
+
+  // Undo End of Day — Admin (M-03 decision 4). Restores every Sale in the
+  // batch to Current, Sale numbers included; the batch itself stays in
+  // history, marked undone, rather than disappearing.
+  const undoEndOfDay: AppContextValue["undoEndOfDay"] = (batchId, by) => {
+    const batch = s.closeBatches.find((b) => b.id === batchId);
+    if (!batch || batch.undoneAt) return;
+    setS((prev) => ({
+      ...prev,
+      closeBatches: prev.closeBatches.map((b) => (b.id === batchId ? { ...b, undoneAt: now(), undoneBy: by } : b)),
+      sales: prev.sales.map((sale) =>
+        batch.saleIds.includes(sale.id)
+          ? { ...sale, state: "Current", batchId: undefined, log: [...sale.log, { at: now(), text: `Batch ${batchId} undone by ${by} — back to Current` }] }
+          : sale,
+      ),
+    }));
+  };
 
   // Removes one copy from whichever Held sale it's on — since a hold can now
   // carry several copies (same customer + PO), this is finer-grained than
@@ -761,7 +972,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
     const claim = s.claims.find((c) => c.id === claimId);
     if (!claim || claim.status !== "Draft") return null;
     const supplier = s.suppliers.find((sup) => sup.id === claim.supplierId)!;
-    const used = new Set(s.claims.map((c) => c.claimNumber).filter(Boolean));
+    const used = new Set(s.claims.map((c) => c.claimNumber).filter((n): n is number => n !== undefined));
     let num = claimNumber ?? s.nextClaimNumber;
     while (used.has(num)) num++;
     setS((prev) => ({
@@ -940,9 +1151,13 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
 
   const startInvoice: AppContextValue["startInvoice"] = (input) => {
     const id = uid("inv");
+    // No supplier paperwork to key off — auto-generate our own reference
+    // rather than block opening the invoice on a number that doesn't exist.
+    const invoiceNumber = input.invoiceNumber.trim() || `REF${String(s.nextInvoiceRef).padStart(4, "0")}`;
     const invoice: Invoice = {
       id,
       ...input,
+      invoiceNumber,
       misc: 0,
       status: "Draft",
       lines: [],
@@ -951,11 +1166,15 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
       log: [
         {
           at: now(),
-          text: `Invoice opened — ${input.intakeMode} intake, invoice ${input.invoiceNumber}`,
+          text: `Invoice opened — ${input.intakeMode} intake, invoice ${invoiceNumber}`,
         },
       ],
     };
-    setS((prev) => ({ ...prev, invoices: [invoice, ...prev.invoices] }));
+    setS((prev) => ({
+      ...prev,
+      invoices: [invoice, ...prev.invoices],
+      nextInvoiceRef: input.invoiceNumber.trim() ? prev.nextInvoiceRef : prev.nextInvoiceRef + 1,
+    }));
     return id;
   };
 
@@ -983,6 +1202,96 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
     return id;
   };
 
+  // M-01 — nothing here is gated. Any Employee can New/Edit/Copy a Supplier.
+  const addSupplier: AppContextValue["addSupplier"] = (input) => {
+    const id = uid("sup");
+    const supplier: Supplier = { id, ...input, log: [{ at: now(), text: `Added by ${CURRENT_USER}` }] };
+    setS((prev) => ({ ...prev, suppliers: [...prev.suppliers, supplier] }));
+    return id;
+  };
+
+  const updateSupplier: AppContextValue["updateSupplier"] = (supplierId, patch) =>
+    setS((prev) => ({
+      ...prev,
+      suppliers: prev.suppliers.map((s) =>
+        s.id === supplierId
+          ? { ...s, ...patch, log: [...s.log, { at: now(), text: `Edited by ${CURRENT_USER}` }] }
+          : s,
+      ),
+    }));
+
+  const copySupplier: AppContextValue["copySupplier"] = (supplierId) => {
+    const src = s.suppliers.find((x) => x.id === supplierId);
+    if (!src) return null;
+    const id = uid("sup");
+    const copy: Supplier = {
+      ...src,
+      id,
+      name: `${src.name} (copy)`,
+      defaultForSecondHand: false,
+      log: [{ at: now(), text: `Copied from ${src.name} by ${CURRENT_USER}` }],
+    };
+    setS((prev) => ({ ...prev, suppliers: [...prev.suppliers, copy] }));
+    return id;
+  };
+
+  // Delete/Merge are Admin-only by convention (no enforced gate in this
+  // pass, same as every other "(Admin)"/"(Mgr)" label still awaiting real
+  // auth). Merge reassigns every pointer to the surviving record rather than
+  // rewriting history.
+  const deleteSupplier: AppContextValue["deleteSupplier"] = (supplierId) =>
+    setS((prev) => ({ ...prev, suppliers: prev.suppliers.filter((s) => s.id !== supplierId) }));
+
+  const mergeSuppliers: AppContextValue["mergeSuppliers"] = (keepId, mergeId) => {
+    const keep = s.suppliers.find((x) => x.id === keepId);
+    const merge = s.suppliers.find((x) => x.id === mergeId);
+    if (!keep || !merge || keepId === mergeId) return;
+    setS((prev) => ({
+      ...prev,
+      suppliers: prev.suppliers
+        .filter((x) => x.id !== mergeId)
+        .map((x) =>
+          x.id === keepId
+            ? {
+                ...x,
+                defaultForSecondHand: x.defaultForSecondHand || merge.defaultForSecondHand,
+                log: [...x.log, ...merge.log, { at: now(), text: `Merged with ${merge.name} by ${CURRENT_USER}` }],
+              }
+            : x,
+        ),
+      inventory: prev.inventory.map((i) => (i.supplierId === mergeId ? { ...i, supplierId: keepId } : i)),
+      pendingOrders: prev.pendingOrders.map((p) => (p.supplierId === mergeId ? { ...p, supplierId: keepId } : p)),
+      claims: prev.claims.map((c) => (c.supplierId === mergeId ? { ...c, supplierId: keepId } : c)),
+      invoices: prev.invoices.map((iv) => (iv.supplierId === mergeId ? { ...iv, supplierId: keepId } : iv)),
+      records: prev.records.map((r) =>
+        r.preferredSupplierId === mergeId ? { ...r, preferredSupplierId: keepId } : r,
+      ),
+    }));
+  };
+
+  const setRecordPreferredSupplier: AppContextValue["setRecordPreferredSupplier"] = (recordId, supplierId) =>
+    setS((prev) => ({
+      ...prev,
+      records: prev.records.map((r) => (r.id === recordId ? { ...r, preferredSupplierId: supplierId } : r)),
+    }));
+
+  const viewSupplier: AppContextValue["viewSupplier"] = (supplierId) =>
+    setS((prev) => ({ ...prev, lastViewedSupplierId: supplierId }));
+
+  // Only one Supplier carries the second-hand default at a time — setting it
+  // on one clears it from every other (E-02 decision 27).
+  const setDefaultForSecondHand: AppContextValue["setDefaultForSecondHand"] = (supplierId) =>
+    setS((prev) => ({
+      ...prev,
+      suppliers: prev.suppliers.map((s) =>
+        s.id === supplierId
+          ? { ...s, defaultForSecondHand: true, log: [...s.log, { at: now(), text: `Marked default for second-hand by ${CURRENT_USER}` }] }
+          : s.defaultForSecondHand
+            ? { ...s, defaultForSecondHand: false, log: [...s.log, { at: now(), text: `Unmarked default for second-hand by ${CURRENT_USER}` }] }
+            : s,
+      ),
+    }));
+
   // Shared by finalize (every line at once) and addInvoiceLine (one line, when
   // the Invoice is already Finalized — the "becomes sellable" moment already
   // happened for this Invoice, so a line added afterward mints immediately
@@ -992,11 +1301,25 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
     supplier: Supplier,
     invoiceNumber: string,
     startSeq: number,
+    // Oversold items claimed by an earlier line in the same batch (finalize
+    // can carry several lines for the same Record) — skip them so two lines
+    // don't both try to reconcile the one outstanding copy.
+    alreadyClaimed: Set<string> = new Set(),
   ) => {
+    // Received stock pays down any outstanding "oversold" promise for this
+    // Record first (oldest first) before minting brand-new sellable copies
+    // for whatever's left — that's how an oversold sale gets reconciled
+    // without a manager having to do anything.
+    const outstanding = s.inventory
+      .filter((i) => i.recordId === line.recordId && i.oversold && !i.oversoldReconciledAt && !alreadyClaimed.has(i.id))
+      .sort((a, b) => (a.oversoldAt ?? "").localeCompare(b.oversoldAt ?? ""));
+    const reconciledIds = outstanding.slice(0, line.qty).map((i) => i.id);
+
     const items: InventoryItem[] = [];
     const itemIds: string[] = [];
     let seq = startSeq;
-    for (let i = 0; i < line.qty; i++) {
+    const toMint = line.qty - reconciledIds.length;
+    for (let i = 0; i < toMint; i++) {
       const itemId = uid("item");
       const code = `29${String(seq).padStart(10, "0")}`;
       seq++;
@@ -1013,7 +1336,51 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
         supplierId: supplier.id,
       });
     }
-    return { items, itemIds, nextSeq: seq };
+    return { items, itemIds, nextSeq: seq, reconciledIds };
+  };
+
+  // Applies mintItemsForLine's reconciledIds to already-existing oversold
+  // items — backfilling the real cost/supplier now that receiving has
+  // caught up, same as if they'd been minted normally in the first place.
+  const applyOversoldReconciliation = (
+    inventory: InventoryItem[],
+    reconciledIds: string[],
+    cost: number,
+    arrivedOnInvoice: string,
+    supplierId: string,
+  ): InventoryItem[] =>
+    reconciledIds.length === 0
+      ? inventory
+      : inventory.map((i) =>
+          reconciledIds.includes(i.id)
+            ? {
+                ...i,
+                cost,
+                arrivedOnInvoice,
+                supplierId,
+                oversoldReconciledAt: now(),
+                oversoldReconciledBy: CURRENT_USER,
+                oversoldReconciledVia: "received" as const,
+              }
+            : i,
+        );
+
+  // Manager-only "adjust on hand" (E-04) for when an outstanding oversold
+  // copy can't be explained by an incoming shipment and needs to be forced
+  // back to zero for the count's own sanity, rather than waiting on receiving.
+  const reconcileOversold: AppContextValue["reconcileOversold"] = (recordId, by) => {
+    const outstanding = s.inventory.filter((i) => i.recordId === recordId && i.oversold && !i.oversoldReconciledAt);
+    if (outstanding.length === 0) return 0;
+    const ids = outstanding.map((i) => i.id);
+    setS((prev) => ({
+      ...prev,
+      inventory: prev.inventory.map((i) =>
+        ids.includes(i.id)
+          ? { ...i, oversoldReconciledAt: now(), oversoldReconciledBy: by, oversoldReconciledVia: "adjustment" as const }
+          : i,
+      ),
+    }));
+    return ids.length;
   };
 
   const addInvoiceLine: AppContextValue["addInvoiceLine"] = (invoiceId, line) => {
@@ -1025,10 +1392,12 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
 
     let mintedItems: InventoryItem[] = [];
     let nextBarcodeSeq = s.nextInternalBarcode;
+    let reconciledIds: string[] = [];
     if (invoice.status === "Finalized") {
       const minted = mintItemsForLine(newLine, supplier, invoice.invoiceNumber, nextBarcodeSeq);
       mintedItems = minted.items;
       nextBarcodeSeq = minted.nextSeq;
+      reconciledIds = minted.reconciledIds;
       newLine = { ...newLine, itemIds: minted.itemIds };
     }
 
@@ -1045,7 +1414,13 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
             }
           : r,
       ),
-      inventory: mintedItems.length ? [...prev.inventory, ...mintedItems] : prev.inventory,
+      inventory: applyOversoldReconciliation(
+        mintedItems.length ? [...prev.inventory, ...mintedItems] : prev.inventory,
+        reconciledIds,
+        newLine.cost,
+        `${supplier.shortName} ${invoice.invoiceNumber}`,
+        supplier.id,
+      ),
       nextInternalBarcode: nextBarcodeSeq,
       invoices: prev.invoices.map((iv) =>
         iv.id === invoiceId
@@ -1058,7 +1433,10 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
                   at: now(),
                   text:
                     `Line added — qty ${line.qty} at ${money(line.acceptedPrice)}` +
-                    (mintedItems.length ? " (Invoice already Finalized — minted immediately)" : ""),
+                    (mintedItems.length ? " (Invoice already Finalized — minted immediately)" : "") +
+                    (reconciledIds.length
+                      ? ` (${reconciledIds.length} reconciled an outstanding oversold sale)`
+                      : ""),
                 },
               ],
             }
@@ -1185,11 +1563,29 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
     if (!invoice || invoice.status !== "Draft" || invoice.lines.length === 0) return null;
     const supplier = s.suppliers.find((sup) => sup.id === invoice.supplierId)!;
     const allNewItems: InventoryItem[] = [];
+    const allReconciledIds: string[] = [];
+    let reconciledInventory: InventoryItem[] | null = null;
     let barcodeSeq = s.nextInternalBarcode;
     const updatedLines = invoice.lines.map((line) => {
-      const { items, itemIds, nextSeq } = mintItemsForLine(line, supplier, invoice.invoiceNumber, barcodeSeq);
+      const { items, itemIds, nextSeq, reconciledIds } = mintItemsForLine(
+        line,
+        supplier,
+        invoice.invoiceNumber,
+        barcodeSeq,
+        new Set(allReconciledIds),
+      );
       barcodeSeq = nextSeq;
       allNewItems.push(...items);
+      allReconciledIds.push(...reconciledIds);
+      // Each line reconciles with its own cost — an invoice with several
+      // lines for different Records must not blend their costs together.
+      reconciledInventory = applyOversoldReconciliation(
+        reconciledInventory ?? s.inventory,
+        reconciledIds,
+        line.cost,
+        `${supplier.shortName} ${invoice.invoiceNumber}`,
+        supplier.id,
+      );
       return { ...line, itemIds };
     });
 
@@ -1199,7 +1595,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
     setS((prev) => ({
       ...prev,
       nextInternalBarcode: barcodeSeq,
-      inventory: [...prev.inventory, ...allNewItems],
+      inventory: [...(reconciledInventory ?? prev.inventory), ...allNewItems],
       invoices: prev.invoices.map((iv) =>
         iv.id === invoiceId
           ? {
@@ -1211,7 +1607,11 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
                 ...iv.log,
                 {
                   at: now(),
-                  text: `Finalized — ${allNewItems.length} cop${allNewItems.length === 1 ? "y" : "ies"} now sellable`,
+                  text:
+                    `Finalized — ${allNewItems.length} cop${allNewItems.length === 1 ? "y" : "ies"} now sellable` +
+                    (allReconciledIds.length
+                      ? `, ${allReconciledIds.length} reconciled an outstanding oversold sale`
+                      : ""),
                 },
               ],
             }
@@ -1271,7 +1671,17 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
       supplierFor,
       newSale,
       setActiveSale,
+      setSalePo,
+      editSale,
+      copySale,
+      viewSubtotal,
+      totalTodaysSales,
+      undoEndOfDay,
       attachCustomer,
+      addCustomer,
+      updateCustomer,
+      deleteCustomer,
+      viewCustomer,
       addItemLine,
       addNegInventoryLine,
       addNonTrackedLine,
@@ -1288,6 +1698,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
       releaseHoldLine,
       forceUnlockSale,
       acknowledgeReviewFlag,
+      reconcileOversold,
       addLog,
       raiseClaim,
       sendClaim,
@@ -1299,6 +1710,14 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
       invoiceFor,
       startInvoice,
       createRecordManual,
+      addSupplier,
+      updateSupplier,
+      copySupplier,
+      deleteSupplier,
+      mergeSuppliers,
+      setDefaultForSecondHand,
+      setRecordPreferredSupplier,
+      viewSupplier,
       addInvoiceLine,
       updateInvoiceLine,
       removeInvoiceLine,

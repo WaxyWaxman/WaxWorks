@@ -2,7 +2,7 @@
 
 **Actor:** Manager
 **Status:** In clarification
-**Related:** [E-05 Sell a record](E-05-sell-a-record.md) · [M-03 Daily summary](M-03-daily-summary.md) · [M-04 Manage users](M-04-manage-users.md)
+**Related:** [E-05 Point of Sale](E-05-sell-a-record.md) · [M-03 Daily summary](M-03-daily-summary.md) · [M-04 Manage users](M-04-manage-users.md)
 
 **Job:** As a manager, I need to configure the things every other flow reads — tax, tenders, sections, and currency — so the till and the reports behave the way this shop actually works.
 

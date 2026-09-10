@@ -13,15 +13,15 @@ const BUILT = [
   {
     id: "E-05",
     to: "/sell",
-    title: "Sell a record",
-    blurb: "Barcode resolver, line edits, negative inventory, split tender, hold.",
+    title: "Point of Sale",
+    blurb: "Barcode resolver, line edits, negative inventory, split tender, hold, Edit/Copy/Void, Search, end-of-day close.",
   },
   {
     id: "E-06",
     to: "/sell",
     title: "Process a return",
     blurb:
-      "Click + New Return on E-05 Sell to open it — negative-quantity line, refund default, " +
+      "Click + New Return on E-05 Point of Sale to open it — negative-quantity line, refund default, " +
       "stock routing. Distinct from a supplier claim (below).",
   },
   {
@@ -71,7 +71,7 @@ export function Home() {
             Counter-core flows built for review: <strong>E-02 → E-03 → E-04 → E-05 → E-06</strong>,
             with <strong>E-07</strong> supporting and <strong>Supplier Claims</strong> (from E-04)
             alongside. E-03 and E-04 share one screen — search, then open a Record's titlecard
-            inline. A <strong>Return</strong> (customer refund) starts from E-05 Sell's{" "}
+            inline. A <strong>Return</strong> (customer refund) starts from E-05 Point of Sale's{" "}
             <em>+ New Return</em> and opens the E-06 editor; a <strong>Supplier Claim</strong> (credit
             from a supplier for short/damaged stock) is a different thing entirely, raised from a
             titlecard and sent from its own screen. Every screen is wired to a shared in-memory
@@ -134,17 +134,18 @@ export function Home() {
           provider is down.
           Click the Joni Mitchell — Blue row (or its Put on hold button) to see the titlecard above
           update in place. Try <em>Put on hold</em> for Ramona twice under the same PO (watch it
-          merge onto one hold), and <em>Edit price</em> below cost to see the guardrail + override.
+          merge onto one hold), and <em>Edit price</em> below cost to see it proceed and raise a
+          review flag (M-04 decision 8) instead of blocking.
         </li>
         <li>
-          <strong>E-05 Sell</strong> — new sale, attach Ramona (watch discount + tax pre-fill),
-          scan the Blue UPC (picker), scan <span className="mono">FREIGHT</span> (price prompt),
-          split the tender across gift card + cash, then hold or tender.
+          <strong>E-05 Point of Sale</strong> — new sale, attach Ramona (watch discount + tax
+          pre-fill), scan the Blue UPC (picker), scan <span className="mono">FREIGHT</span> (price
+          prompt), split the tender across gift card + cash, then hold or tender.
         </li>
         <li>
-          <strong>E-06 Return</strong> — on E-05 Sell, click <em>+ New Return</em> (opens the E-06
-          editor, not the Sale one). Scan a copy, link it to a prior sale, set the refund, then
-          route the returned copy.
+          <strong>E-06 Return</strong> — on E-05 Point of Sale, click <em>+ New Return</em> (opens
+          the E-06 editor, not the Sale one). Scan a copy, link it to a prior sale, set the refund,
+          then route the returned copy.
         </li>
         <li>
           <strong>Supplier Claims</strong> — open the Joni Mitchell — Blue titlecard (it arrived on

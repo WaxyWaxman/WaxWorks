@@ -65,7 +65,7 @@ export function ReserveModal({
           Sets the copy aside without ringing it up — the common case is a customer calling ahead,
           not standing at the counter. Creates a <strong>Held</strong> Sale (E-05) with an{" "}
           <span className="mono">H</span>-prefixed hold reference; it stays on hand but leaves
-          available stock, and is tendered later from <strong>E-05 Sell</strong>.{" "}
+          available stock, and is tendered later from <strong>E-05 Point of Sale</strong>.{" "}
           <em>(E-04 → E-05 inherited.)</em>
         </p>
         {items.length > 1 ? (

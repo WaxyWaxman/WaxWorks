@@ -23,6 +23,10 @@ export interface RecordEntry {
   stickyPrice?: number; // New stock only
   minOnHand: number;
   catalogOnly?: boolean; // a Discogs match we do not hold
+  // A default only — the Supplier actually used is recorded on each order
+  // line (M-02), so the same title can be bought from different Suppliers
+  // over time without rewriting history.
+  preferredSupplierId?: string;
 }
 
 export type ItemStatus = "sellable" | "held" | "sold";
@@ -40,17 +44,51 @@ export interface InventoryItem {
   heldByCustomerId?: string;
   arrivedOnInvoice?: string;
   supplierId?: string; // set when arrivedOnInvoice traces to a Supplier — claimable
+  // "Oversold" (lexicon) — minted straight from a Sale, before any Invoice
+  // line ever backed it (E-05 decision 21 allows selling into negative
+  // inventory). It's real from the moment it's sold — status is "sold" from
+  // birth, cost is unknown until reconciled. Clears when matching stock is
+  // later received (oldest oversold item first, ahead of minting new sellable
+  // copies) or a manager force-clears it as a hand adjustment.
+  oversold?: boolean;
+  oversoldAt?: string;
+  oversoldReconciledAt?: string;
+  oversoldReconciledBy?: string;
+  oversoldReconciledVia?: "received" | "adjustment";
 }
 
-// Suppliers are modeled only as far as Supplier Claims and Receiving need
-// them — margin is a fixed seeded value here since M-01 (setting/changing
-// it) is still not in this pass.
+export type SupplierOrderVia = "Phone" | "Email" | "FTP" | "Their Website" | "Fax" | "Rep";
+export type SupplierMinBasis = "Retail" | "Net";
+export type SupplierType = "Used" | "Bargain" | "New";
+
+// Suppliers (M-01) — no field here is gated; any Employee can New/Edit/Copy.
 export interface Supplier {
   id: string;
-  shortName: string;
+  shortName: string; // 4-letter code, used on Invoices (e.g. "FAB1")
   name: string;
+  accountNumber?: string;
+  orderVia: SupplierOrderVia;
+  // An order is "ready to place" once it hits minOrderQty. If that's 0,
+  // readiness falls back to minOrderAmount instead, priced at whichever
+  // basis minOrderAmountBasis names.
+  minOrderQty: number;
+  minOrderAmount: number;
+  minOrderAmountBasis: SupplierMinBasis;
+  discountPct: number; // % off retail this supplier offers — also drives suggested retail at receiving (E-02 decision 8)
+  cancelByDays?: number; // default days from order-placed to auto-cancel if unfulfilled; unset = not supported by this supplier, overridable per order
+  currency: string;
+  type: SupplierType;
+  notes?: string;
   email: string;
-  marginPct: number; // E-02 decision 8 — read-only in this pass, M-01 sets it
+  backordersAllowed: boolean;
+  repName?: string;
+  repPhone?: string;
+  mainPhone?: string;
+  defaultForSecondHand?: boolean; // E-02 decision 27 — pre-fills the Supplier field
+  // when Second-hand intake is chosen; there's no dedicated single supplier,
+  // any Supplier can carry second-hand invoices, this just picks which one
+  // to suggest first.
+  log: { at: string; text: string }[];
 }
 
 export interface NonTrackedItem {
@@ -80,18 +118,28 @@ export type TenderType =
   | "Pay-out"
   | "Used Credit";
 
+export interface CustomerAddress {
+  line1?: string;
+  line2?: string;
+  city?: string;
+  provinceState?: string; // 2-letter
+  country?: string;
+}
+
 export interface Customer {
-  id: string;
-  accountNumber: string;
+  id: string; // internal key, never shown
+  primaryId: number; // incremental, permanent — shown, never edited
+  accountNumber: string; // staff-editable, must stay unique
   accountType: "Regular" | "Staff" | "Business";
   name: string;
   phone: string;
   email: string;
   contactPreference: "Phone" | "Email";
+  address?: CustomerAddress;
   globalDiscountPct: number;
   defaultTaxLineId?: string;
   note?: string;
-  balance: number; // + store owes customer (store credit); - customer owes store
+  balance: number; // A/R balance — + store owes customer (store credit); - customer owes store
 }
 
 // "Open" (being rung up, no Sale number, locked to whoever opened it) is
@@ -142,7 +190,19 @@ export interface Sale {
   createdAt: string;
   isReturn?: boolean;
   lockedBy?: string; // set while Open; cleared on Hold/tender/void — E-05 locking
+  replacesSaleId?: string; // Edit (Current) voids the original and duplicates it — this points back, for the audit trail
+  batchId?: string; // set once a Current Sale is closed by Total Today's Sales (M-03)
   log: { at: string; text: string }[];
+}
+
+// ---- M-03 — closing the day is a state transition, not just a report ----
+export interface CloseBatch {
+  id: string;
+  at: string;
+  by: string;
+  saleIds: string[];
+  undoneAt?: string;
+  undoneBy?: string;
 }
 
 // ---- Supplier Claims (E-04 §"Supplier claims") ----
@@ -153,7 +213,6 @@ export const CLAIM_REASONS = [
   "Received damaged",
   "Short shipped",
   "Wrong item",
-  "Other",
 ] as const;
 export type ClaimReason = (typeof CLAIM_REASONS)[number];
 
@@ -164,7 +223,7 @@ export interface ClaimLine {
   recordId: string;
   itemId?: string;
   invoiceNumber?: string;
-  reason: ClaimReason;
+  reason: string; // one of CLAIM_REASONS, or free text (E-04 §"Supplier claims")
   note?: string;
   cost: number;
   qty: number;

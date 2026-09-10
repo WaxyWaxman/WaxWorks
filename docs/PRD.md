@@ -72,7 +72,7 @@ Each flow is its own document. Status is tracked per flow so parallel work doesn
 | E-02 | [Receive inventory](flows/E-02-receive-inventory.md) | **Specified** |
 | E-03 | [Search the inventory](flows/E-03-search-inventory.md) | **Specified** |
 | E-04 | [Manage the inventory](flows/E-04-manage-inventory.md) | **Specified** |
-| E-05 | [Sell a record](flows/E-05-sell-a-record.md) | **Specified** |
+| E-05 | [Point of Sale](flows/E-05-sell-a-record.md) | **Specified** |
 | E-06 | [Process a return](flows/E-06-process-a-return.md) | **Specified** |
 | E-07 | [Manage customers](flows/E-07-manage-customers.md) | **Specified** |
 

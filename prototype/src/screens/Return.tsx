@@ -6,8 +6,8 @@ import { money } from "../lib/money";
 import { balanceDue, saleTotals } from "../lib/totals";
 import { useApp } from "../store/AppStore";
 
-// Entered exclusively from E-05 Sell → + New Return (mirrors how /sell/:saleId
-// is never itself a nav item). A Return is a Sale with isReturn set, so a
+// Entered exclusively from E-05 Point of Sale → + New Return (mirrors how
+// /sell/:saleId is never itself a nav item). A Return is a Sale with isReturn set, so a
 // stray /sell/:id link to one, or a /return/:id link to an ordinary Sale,
 // redirects to the screen that actually knows how to edit it.
 export function ReturnScreen() {
@@ -34,7 +34,7 @@ export function ReturnScreen() {
         </div>
       </div>
 
-      {!sale && <p className="muted">Unknown Return — start one from E-05 Sell → + New Return.</p>}
+      {!sale && <p className="muted">Unknown Return — start one from E-05 Point of Sale → + New Return.</p>}
       {sale && sale.isReturn && (
         <ReturnEditor
           saleId={sale.id}

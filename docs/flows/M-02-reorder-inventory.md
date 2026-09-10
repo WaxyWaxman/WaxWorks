@@ -2,7 +2,7 @@
 
 **Actor:** Manager (Employees raise pending orders)
 **Status:** Specified
-**Related:** [E-02 Receive inventory](E-02-receive-inventory.md) · [E-04 Manage the inventory](E-04-manage-inventory.md) · [E-05 Sell a record](E-05-sell-a-record.md) · [M-01 Supplier margin](M-01-supplier-margin.md)
+**Related:** [E-02 Receive inventory](E-02-receive-inventory.md) · [E-04 Manage the inventory](E-04-manage-inventory.md) · [E-05 Point of Sale](E-05-sell-a-record.md) · [M-01 Supplier margin](M-01-supplier-margin.md)
 
 **Job:** As a manager, I need to restock what's selling before it runs out.
 

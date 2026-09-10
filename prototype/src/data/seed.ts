@@ -17,10 +17,66 @@ export const TAX_LINES: TaxLine[] = [
 ];
 export const DEFAULT_TAX_LINE = "tx-std";
 
-// ---- Suppliers (thin — just enough for Supplier Claims and Receiving; full M-01 is not in this pass) ----
+// ---- Suppliers (M-01) ----
 export const SUPPLIERS: Supplier[] = [
-  { id: "sup-fab", shortName: "FAB1", name: "F.A.B. Distribution", email: "claims@fabdist.example", marginPct: 60 },
-  { id: "sup-indie", shortName: "INDI", name: "Indie Direct Supply", email: "returns@indiedirect.example", marginPct: 50 },
+  {
+    id: "sup-fab",
+    shortName: "FAB1",
+    name: "F.A.B. Distribution",
+    accountNumber: "WW-4471",
+    orderVia: "Rep",
+    minOrderQty: 25,
+    minOrderAmount: 0,
+    minOrderAmountBasis: "Net",
+    discountPct: 60,
+    cancelByDays: 45,
+    currency: "CAD",
+    type: "New",
+    notes: "Rep visits monthly, will hold new releases on request.",
+    email: "claims@fabdist.example",
+    backordersAllowed: true,
+    repName: "Dana Cho",
+    repPhone: "514-555-0142",
+    mainPhone: "514-555-0100",
+    log: [{ at: "2026-01-06 09:00:00", text: "Discount set to 60% by RD" }],
+  },
+  {
+    id: "sup-indie",
+    shortName: "INDI",
+    name: "Indie Direct Supply",
+    accountNumber: "9927-A",
+    orderVia: "Their Website",
+    minOrderQty: 0,
+    minOrderAmount: 250,
+    minOrderAmountBasis: "Retail",
+    discountPct: 50,
+    currency: "USD",
+    type: "New",
+    email: "returns@indiedirect.example",
+    backordersAllowed: false,
+    mainPhone: "212-555-0199",
+    log: [{ at: "2026-01-06 09:00:00", text: "Discount set to 50% by RD" }],
+  },
+  // A real Supplier record, not a special case — second-hand walk-ins just
+  // suggest this one first (E-02 decision 27). discountPct is unused for
+  // it: second-hand copies are priced per copy, never off a supplier
+  // discount.
+  {
+    id: "sup-walkin",
+    shortName: "WALK",
+    name: "Walk-in / trade-in",
+    orderVia: "Phone",
+    minOrderQty: 0,
+    minOrderAmount: 0,
+    minOrderAmountBasis: "Net",
+    discountPct: 0,
+    currency: "CAD",
+    type: "Used",
+    email: "-",
+    backordersAllowed: false,
+    defaultForSecondHand: true,
+    log: [{ at: "2026-01-06 09:00:00", text: "Marked default for second-hand by RD" }],
+  },
 ];
 
 // ---- Pending orders (thin — just enough for Receiving's Orders lookup; full
@@ -210,24 +266,28 @@ export const GIFT_CARDS: GiftCard[] = [
 export const CUSTOMERS: Customer[] = [
   {
     id: "c-ramona",
+    primaryId: 1,
     accountNumber: "A-1042",
     accountType: "Regular",
     name: "Ramona Vasquez",
     phone: "514-555-0142",
     email: "ramona.v@example.com",
     contactPreference: "Email",
+    address: { line1: "128 Rue Saint-Denis", city: "Montreal", provinceState: "QC", country: "Canada" },
     globalDiscountPct: 10,
     balance: 25,
     note: "Collector — jazz and folk. Holds are common.",
   },
   {
     id: "c-lp",
+    primaryId: 2,
     accountNumber: "A-2008",
     accountType: "Business",
     name: "Left Bank Cafe (wholesale)",
     phone: "514-555-0199",
     email: "orders@leftbank.example",
     contactPreference: "Email",
+    address: { line1: "44 Avenue du Parc", city: "Montreal", provinceState: "QC", country: "Canada" },
     globalDiscountPct: 0,
     defaultTaxLineId: "tx-exempt",
     balance: -120.5,
@@ -235,6 +295,7 @@ export const CUSTOMERS: Customer[] = [
   },
   {
     id: "c-theo",
+    primaryId: 3,
     accountNumber: "A-3311",
     accountType: "Staff",
     name: "Theo Nakamura",

@@ -1,12 +1,12 @@
-# E-05 — Sell a record
+# E-05 — Point of Sale
 
-**Actor:** Employee
+**Actor:** Employee (Undo End of Day labeled Admin-only by convention, not enforced)
 **Status:** Specified
 **Related:** [E-03 Search the inventory](E-03-search-inventory.md) · [E-06 Process a return](E-06-process-a-return.md) · [E-07 Manage customers](E-07-manage-customers.md) · [M-03 Daily summary](M-03-daily-summary.md) · [M-06 Settings](M-06-settings.md)
 
 **Job:** As an employee, I need to ring up a sale and take payment.
 
-**Scope note:** this is the front-of-counter selling flow. Inbound receiving is [E-02](E-02-receive-inventory.md); customer returns are [E-06](E-06-process-a-return.md); the end-of-day close itself is [M-03](M-03-daily-summary.md).
+**Scope note:** this is the front-of-counter selling flow, renamed from "Sell a record" to **Point of Sale** to reflect that it now also carries M-03's close (Total Today's Sales / View Subtotal / Undo End of Day) — see decision 30. Inbound receiving is [E-02](E-02-receive-inventory.md); customer returns are [E-06](E-06-process-a-return.md); the full breakdown-and-close design still lives in [M-03](M-03-daily-summary.md), this flow just surfaces it.
 
 ---
 
@@ -146,7 +146,7 @@ Held copies count against **available** stock but remain on hand.
 
 **From [E-02](E-02-receive-inventory.md):**
 
-- **Negative inventory must be supported.** Stock only becomes sellable when its Invoice is finalized, so a physical copy can be on the counter before it exists in the system. The till completes that Sale and lets inventory go negative rather than blocking it. Reconciliation happens in [E-04](E-04-manage-inventory.md).
+- **Negative inventory must be supported.** Stock only becomes sellable when its Invoice is finalized, so a physical copy can be on the counter before it exists in the system. The till completes that Sale and mints the copy immediately as an **oversold** InventoryItem — sold from birth, unbacked by any Invoice line yet — rather than blocking it. Reconciliation happens in [E-04](E-04-manage-inventory.md).
 
 **From [E-04](E-04-manage-inventory.md):**
 
@@ -166,14 +166,14 @@ Held copies count against **available** stock but remain on hand.
 | 2 | Sale numbers are **globally unique** and ascending; supplier Invoice numbers remain unique per `(supplier, invoice_number)` |
 | 3 | Held Sales carry an `H`-prefixed hold reference, replaced by a Sale number on tender; the hold reference is retained |
 | 4 | A voided Sale retains its Sale number — the sequence is never made gapless by reuse |
-| 5 | **Void applies to Current Sales only.** Closed Sales are reopened via Undo End of Day (manager-only) or handled as a Return |
+| 5 | **Void applies to Open and Current Sales.** Held Sales use Cancel Hold instead; Closed Sales are reopened via Undo End of Day (Admin) or handled as a Return |
 | 6 | Cancelling a hold is a distinct action from voiding a Sale, and is logged rather than erased |
 | 7 | Holds do not expire; the hold log records creation, customer contact, and age |
 | 8 | A Sale may be split across multiple tenders; each tender is recorded individually |
 | 9 | Card payments are **recorded only** — no integration with a third-party payment processing system (Square, Stripe, or equivalent), no card data captured, no money moved (E-02 decision 26) |
 | 10 | Gift cards: **loading** one is a line item; **redeeming** one is a tender |
 | 11 | A price of `0.00` prompts the Employee for a price as the line is added |
-| 12 | An Employee may price a line below cost at the till **without** a manager override. (E-02 decision 10's below-cost guardrail governs shelf pricing at receiving and is unaffected) |
+| 12 | An Employee may price a line below cost at the till **without** a manager override — it proceeds, same as the review-flag behavior receiving uses for the same thing (M-04 decision 8) |
 | 13 | Line values are snapshotted onto the Sale line; later catalog edits never rewrite sale history |
 | 14 | Second-hand counter buys run through a **Used Credit** tender, settled to store credit or a negative-cash payout |
 | 15 | The stock side of a counter buy is a separate E-02 second-hand intake, linked by an optional cross-reference |
@@ -182,6 +182,16 @@ Held copies count against **available** stock but remain on hand.
 | 18 | A manufacturer UPC resolving to multiple sellable copies presents a picker on condition, price, and count |
 | 19 | Receipts print on demand after tender and can be reprinted or emailed later by Sale number |
 | 20 | A Sale need not have a Customer attached |
+| 21 | **Edit** on a Current Sale voids the original and duplicates its lines (same InventoryItems, now sellable again) into a new Open Sale — a `replacesSaleId` cross-reference preserves the audit trail. **Edit** on a Held Sale just opens it; there's nothing to duplicate |
+| 22 | **Copy** seeds a new Open Sale from the same line template (record, price, qty, discount, tax, grade) but never carries over the specific InventoryItem — the source Sale's copy may still be sold, so the Employee re-scans the physical copy being sold now |
+| 23 | **Search** resolves a scanned barcode to every Sale line that ever referenced it, Held Sales surfaced first (so they can be selected and tendered), then by recency |
+| 24 | **PO** is a plain field on the Sale header (the Customer's purchase-order reference), editable whenever the Sale's lines are |
+| 25 | **Discount is a 2-digit integer** (0–99%), clamped on entry rather than accepting arbitrary decimals |
+| 26 | **On entry, Point of Sale opens the most recent Sale** (Current or Open), or the most recent Held Sale if there isn't one yet |
+| 27 | Attaching a Customer with **no search match** offers to create one inline (name only, rest fillable later from [E-07](E-07-manage-customers.md)) and attach it immediately |
+| 28 | A Held Sale's log carries a **Log contact** action (method only — Phone or Email) alongside free-form notes, and the card shows a computed **age** since the hold was created |
+| 29 | The tender named **Account Balance** (not "Store Credit") is bidirectional — add to or draw from the Customer's A/R balance — per the E-07 rework; this flow's earlier "Store Credit, drawn against A/R" framing is superseded by that decision, not the other way around |
+| 30 | **Total Today's Sales / View Subtotal / Undo End of Day** ([M-03](M-03-daily-summary.md)) live under one **Other Functions** control on Point of Sale rather than as everyday buttons, since they're end-of-day operations, not per-Sale ones. Undo End of Day is labeled **Admin** by convention — no enforced check, consistent with every other not-yet-real-auth label this build uses (M-01, E-07) |
 
 ---
 
