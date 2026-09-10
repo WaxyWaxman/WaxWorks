@@ -647,7 +647,18 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
     patchSale(saleId, (sale) => ({
       ...sale,
       tenders: [...sale.tenders, { ...t, id: uid("tndr") }],
-      log: [...sale.log, { at: now(), text: `Tender: ${t.type} ${t.amount < 0 ? "-" : ""}$${Math.abs(t.amount).toFixed(2)}` }],
+      log: [
+        ...sale.log,
+        {
+          at: now(),
+          text: `Tender: ${t.type}${
+            // Account Balance moves money either way — same $ amount every
+            // time — so the log needs to spell out the direction, or every
+            // entry reads identically regardless of which one was picked.
+            t.type === "Account Balance" ? ` (${t.accountDirection === "add" ? "add to balance" : "draw down"})` : ""
+          } ${t.amount < 0 ? "-" : ""}$${Math.abs(t.amount).toFixed(2)}`,
+        },
+      ],
     }));
 
   const removeTender: AppContextValue["removeTender"] = (saleId, tenderId) =>

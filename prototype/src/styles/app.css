@@ -153,6 +153,17 @@ table.data tr.selected td { background: var(--c-accent-soft); box-shadow: inset 
 .modal .modal-foot { padding: var(--sp-4) var(--sp-5); border-top: 1px solid var(--c-border); display: flex; justify-content: flex-end; gap: var(--sp-2); }
 
 /* ---- Sell layout ---- */
+.sale-head { flex-wrap: wrap; row-gap: var(--sp-2); }
+.sale-head-left { display: flex; align-items: center; gap: var(--sp-3); flex-wrap: wrap; text-transform: none; }
+.sale-head-label { font-size: var(--fs-lg); font-weight: 800; text-transform: uppercase; color: var(--c-ink); }
+.sale-head-customer-btn {
+  appearance: none; border: none; background: transparent; cursor: pointer; padding: 0;
+  font: inherit; font-size: var(--fs-lg); font-weight: 800; color: var(--c-accent);
+}
+.sale-head-customer-btn:hover { text-decoration: underline; }
+.sale-head-customer-btn:disabled { cursor: default; color: var(--c-ink); text-decoration: none; }
+.sale-head-meta { display: inline-flex; align-items: center; gap: var(--sp-2); }
+
 .sell { display: grid; grid-template-columns: 1fr 340px; gap: var(--sp-4); align-items: start; }
 @media (max-width: 980px) { .sell { grid-template-columns: 1fr; } }
 .totals-row { display: flex; justify-content: space-between; padding: var(--sp-1) 0; font-size: var(--fs-sm); }

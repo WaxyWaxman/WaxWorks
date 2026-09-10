@@ -21,10 +21,18 @@ export function BarcodeInput({
   onScan,
   placeholder = "Scan or type a barcode…",
   samples = POS_SAMPLES,
+  actionLabel = "Scan",
+  onAction,
 }: {
   onScan: (code: string) => void;
   placeholder?: string;
   samples?: { code: string; label: string }[];
+  // A real scanner hits Enter on its own, so the button next to the field
+  // doesn't have to just re-submit the same value. Pass onAction to give it
+  // a different job (e.g. POS's "Lookup" opens a search instead of
+  // resolving the typed text as a scan) — Enter still always scans.
+  actionLabel?: string;
+  onAction?: (value: string) => void;
 }) {
   const [v, setV] = useState("");
   const submit = () => {
@@ -42,8 +50,8 @@ export function BarcodeInput({
           onChange={(e) => setV(e.target.value)}
           onKeyDown={(e) => e.key === "Enter" && submit()}
         />
-        <button className="btn primary" onClick={submit}>
-          Scan
+        <button className="btn primary" onClick={() => (onAction ? onAction(v.trim()) : submit())}>
+          {actionLabel}
         </button>
       </div>
       <div className="row wrap xsmall">
