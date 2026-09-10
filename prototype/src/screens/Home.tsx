@@ -55,7 +55,16 @@ const BUILT = [
       "Phases 1 and 2. Raise a pending line from a titlecard's Order button (supplier/separator/qty/price/" +
       "customer/follow-up). Order Processing lists one line per supplier + separator — click a row to View " +
       "its lines and titlecards, edit qty/price/separator, or Process it into a PurchaseOrder (auto PO number, " +
-      "email or printable). Phase 3 (on-order tracking) isn't built.",
+      "email or printable).",
+  },
+  {
+    id: "M-02",
+    to: "/on-order",
+    title: "What's on Order",
+    blurb:
+      "Phase 3 tracking. Every placed line not yet received, oldest first, overdue follow-up flags surfaced " +
+      "in red at the top. Search (keyword or scan), sort (age/title/artist), filter (supplier/PO), and " +
+      "Re-flag. Set status (Backordered/Cancelled) and voiding a PO aren't built.",
   },
 ];
 
@@ -173,6 +182,14 @@ export function Home() {
           <span className="badge ok">Ready</span>) — try the Sep dropdown to merge them, then
           Process the Email one to see the composed order preview. Previously placed POs (F.A.B.'s
           PO-1042, Indie Direct's PO-77) sit below, most recent first.
+        </li>
+        <li>
+          <strong>M-02 What's on Order</strong> — both of those placed POs now show up here, oldest
+          line first. PO-1042's Kind of Blue line and PO-77's Horses line (Theo's waiting on it) are
+          both past their follow-up flag and sit at the top in red; Purple Rain's flag isn't due yet.
+          Try the search box with "PO-77" or a supplier name, scan Horses's UPC to filter straight to
+          it, sort by Title, filter to F.A.B. Distribution, then <em>Re-flag</em> Theo's line to push
+          it out another few days.
         </li>
       </ol>
 

@@ -45,7 +45,11 @@ import type {
 
 let seq = 100;
 const uid = (p: string) => `${p}-${++seq}`;
-const now = () => new Date().toLocaleString("en-CA", { hour12: false });
+// en-CA formats as "YYYY-MM-DD, HH:MM:SS" (with a comma) — every parse site
+// (daysAgo, the follow-up-flag math, PointOfSale's age calc) assumes the
+// plain space-separated form seed data uses, so strip the comma here rather
+// than patch every `.replace(" ", "T")` call site.
+const now = () => new Date().toLocaleString("en-CA", { hour12: false }).replace(",", "");
 
 interface AppState {
   records: RecordEntry[];
@@ -303,6 +307,12 @@ interface AppContextValue extends AppState {
   // / Void (Phase 3, not built) instead of a quiet edit.
   updatePendingOrderLine: (id: string, patch: Partial<Pick<PendingOrderLine, "qty" | "sellPrice" | "separator">>) => void;
   deletePendingOrderLine: (id: string) => { customerAttached: boolean; recordId: string } | null;
+
+  // Phase 3 / What's on Order — push a placed line's follow-up window out
+  // another `days` from now, restarting the clock rather than adding to the
+  // old deadline. Used both to chase the Supplier and to warn a waiting
+  // Customer (M-02 §"Tracking what's on order").
+  reflagPendingOrderLine: (id: string, days: number) => void;
 
   // Mass-shift a whole pending stream (every unplaced line at
   // supplierId+fromSeparator) onto a different separator in one move — the
@@ -1745,6 +1755,14 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
     return { customerAttached: !!line.customerId, recordId: line.recordId };
   };
 
+  const reflagPendingOrderLine: AppContextValue["reflagPendingOrderLine"] = (id, days) =>
+    setS((prev) => ({
+      ...prev,
+      pendingOrders: prev.pendingOrders.map((o) =>
+        o.id === id ? { ...o, followUpDays: days, followUpSetAt: now() } : o,
+      ),
+    }));
+
   const retargetStreamSeparator: AppContextValue["retargetStreamSeparator"] = (supplierId, fromSeparator, toSeparator) => {
     const fromKey = fromSeparator ?? "";
     const ids = new Set(
@@ -1872,6 +1890,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
       raisePendingOrderLine,
       updatePendingOrderLine,
       deletePendingOrderLine,
+      reflagPendingOrderLine,
       retargetStreamSeparator,
       poNumberTaken,
       processOrderStream,

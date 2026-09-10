@@ -73,6 +73,25 @@ export function orderReady(
   return true;
 }
 
+export const daysAgo = (at: string): number =>
+  Math.max(0, Math.floor((Date.now() - new Date(at.replace(" ", "T")).getTime()) / 86400000));
+
+// ---- Follow-up flag (M-02 decision 8, consumed by Phase 3 / What's on
+// Order): the window restarts from `followUpSetAt` (falling back to
+// `createdAt` for a line never re-flagged) and runs for `followUpDays`.
+export function followUpDueAt(line: Pick<PendingOrderLine, "followUpDays" | "followUpSetAt" | "createdAt">): number | undefined {
+  if (line.followUpDays == null) return undefined;
+  const base = new Date((line.followUpSetAt ?? line.createdAt).replace(" ", "T")).getTime();
+  return base + line.followUpDays * 86400000;
+}
+
+export function isFollowUpOverdue(
+  line: Pick<PendingOrderLine, "followUpDays" | "followUpSetAt" | "createdAt">,
+): boolean {
+  const due = followUpDueAt(line);
+  return due != null && due <= Date.now();
+}
+
 // Every separator currently in use across a Supplier's still-pending lines
 // (key "" = no separator / the regular pile) — drives a Sep dropdown's
 // options and the merge check, wherever one appears: raising a line (Phase

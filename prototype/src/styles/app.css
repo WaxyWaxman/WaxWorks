@@ -108,6 +108,7 @@ table.data tr.nested td:first-child { padding-left: var(--sp-6); }
 table.data tr.row-click { cursor: pointer; }
 table.data tr.row-click:hover td { background: var(--c-accent-soft); }
 table.data tr.selected td { background: var(--c-accent-soft); box-shadow: inset 3px 0 0 var(--c-accent); }
+table.data tr.overdue td { background: var(--c-danger-soft); }
 .num { text-align: right; font-variant-numeric: tabular-nums; font-family: var(--font-mono); }
 
 /* ---- Badges / chips ---- */
