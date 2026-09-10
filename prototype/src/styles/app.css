@@ -111,7 +111,22 @@ code, .mono { font-family: var(--font-mono); font-size: 0.92em; }
   letter-spacing: 0; text-transform: none; color: var(--c-ink-faint);
 }
 
-.main { flex: 1; width: 100%; max-width: var(--maxw); margin: 0 auto; padding: var(--sp-5); }
+/* Full bleed. The band, the till slab and Receiving's worklist rail were all
+   drawn edge to edge, and a centred 1180px column left ~260px of dead margin
+   on a 1440 display. What the cap was really buying was a readable measure,
+   and that survives as --measure below. */
+.main { flex: 1; width: 100%; padding: var(--sp-5) var(--sp-6); }
+
+/* Running prose does not want the full width of a wide display. Anything that
+   is a sentence rather than data gets a measure; tables, rails and slabs do
+   not. */
+.main p,
+.page-head .sub,
+.callout { max-width: var(--measure); }
+/* ...except where the container is already the constraint. A paragraph in a
+   card grid or a rail is as wide as its column, and capping it again would
+   leave a ragged gap inside the box. */
+.flowmap p, .cols-2 p, .cols-3 p { max-width: none; }
 
 .page-head { display: flex; align-items: flex-start; gap: var(--sp-3); margin-bottom: var(--sp-5); }
 .page-head .flow-id {
@@ -320,3 +335,176 @@ table.data tr.band-row td {
   padding-top: var(--sp-3); padding-bottom: var(--sp-2);
 }
 table.data tr.band-row + tr.group-row td { border-top: none; }
+
+/* A section label: the narrow face, small, spaced, quiet. Used wherever a
+   block of the UI needs naming without a heading's weight. */
+.lab {
+  font-family: var(--font-narrow); font-size: var(--fs-xs); font-weight: 700;
+  letter-spacing: 0.1em; text-transform: uppercase; color: var(--c-ink-faint);
+}
+
+/* ---- The till (E-05) ----
+   Two zones, edge to edge: the sale on the left, the money on the right. The
+   slab is fixed-width because the number on it has to be readable from the
+   customer's side of the counter, and that does not scale with the window. */
+.till {
+  display: grid; grid-template-columns: minmax(0, 1fr) 386px;
+  align-items: stretch; border: 1px solid var(--c-border); background: var(--c-surface);
+}
+.till-main { display: flex; flex-direction: column; gap: var(--sp-4); padding: var(--sp-4); min-width: 0; }
+.till-slab {
+  border-left: 2px solid var(--c-ink); padding: var(--sp-4);
+  display: flex; flex-direction: column; gap: var(--sp-4);
+  /* The money follows you down the sale. Stretched to the full height of the
+     line list, Finish sale landed below the fold on a 900px screen — which is
+     the one button pressed on every single sale. Sticky and content-height
+     instead, under the 62px band. */
+  position: sticky; top: 62px; align-self: start;
+  max-height: calc(100vh - 62px); overflow-y: auto;
+}
+@media (max-width: 1100px) {
+  .till { grid-template-columns: minmax(0, 1fr); }
+  .till-slab {
+    border-left: none; border-top: 2px solid var(--c-ink);
+    position: static; max-height: none; overflow-y: visible;
+  }
+}
+
+/* The scan field is the biggest thing on the screen because it is where a
+   sale actually happens. It reads as a slab, not as a form control. */
+.scan-slab { border: 2px solid var(--c-ink); padding: var(--sp-3) var(--sp-4); }
+.scan-slab > .stack > .row > input[type="text"] {
+  border: none; background: transparent; padding: 0;
+  font-size: 30px; font-weight: 600; letter-spacing: 0.02em;
+}
+.scan-slab > .stack > .row > input[type="text"]:focus { outline: none; border: none; }
+.scan-slab > .stack > .row > input[type="text"]::placeholder { color: var(--c-border-strong); font-weight: 400; }
+
+.till-lines { display: flex; flex-direction: column; gap: var(--sp-2); min-height: 0; }
+.till-line {
+  display: grid; grid-template-columns: 50px minmax(0, 1fr) auto auto;
+  gap: var(--sp-3); align-items: center;
+  padding: var(--sp-3); border: 1px solid var(--c-border);
+}
+.till-line.flagged { border: 2px solid var(--c-accent); background: var(--c-accent-soft); }
+.till-line .art {
+  width: 50px; height: 50px; flex: none; display: grid; place-items: center; font-size: 22px;
+  background: repeating-linear-gradient(135deg, #e2e2de 0 6px, #ececea 6px 12px);
+  border: 1px solid var(--c-border);
+}
+.till-line .title { font-size: 18px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.till-line .meta { font-size: var(--fs-sm); color: var(--c-ink-faint); margin-top: 2px; }
+.till-line .net { font-size: 25px; font-weight: 600; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.till-controls { display: flex; gap: var(--sp-3); align-items: center; flex-wrap: wrap; margin-top: var(--sp-2); }
+.till-controls label { display: inline-flex; gap: var(--sp-2); align-items: center; margin: 0; }
+.till-controls label > span {
+  font-size: var(--fs-xs); font-weight: 700; letter-spacing: 0.06em;
+  text-transform: uppercase; color: var(--c-ink-faint); margin: 0;
+}
+.till-controls input, .till-controls select { width: auto; padding: 4px var(--sp-2); font-size: var(--fs-sm); }
+.till-controls .inline-num { width: 76px; }
+.till-controls .inline-pct { width: 58px; }
+.till-empty { border: 1px dashed var(--c-border-strong); padding: var(--sp-6); text-align: center; color: var(--c-ink-faint); }
+
+.till-due { font-size: 66px; font-weight: 800; line-height: 1; letter-spacing: -0.035em; font-variant-numeric: tabular-nums; }
+.till-rule { height: 2px; background: var(--c-ink); }
+.tender-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--sp-2); }
+.tender-grid .btn { justify-content: center; height: 56px; font-size: 15.5px; font-weight: 500; }
+.till-finish { justify-content: center; height: 70px; font-size: 23px; font-weight: 800; letter-spacing: 0.01em; }
+.till-actions { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--sp-2); }
+.till-actions .btn { justify-content: center; height: 44px; }
+
+/* ---- Menus outside the top band ----
+   Same panel, anchored left, for a trigger that is an ordinary button. */
+.menu-wrap { position: relative; display: inline-flex; }
+.menu-wrap .more-panel { right: auto; left: 0; border-top: 1px solid var(--c-ink); }
+.more-panel button.more-item {
+  appearance: none; background: transparent; border: none; width: 100%;
+  cursor: pointer; font: inherit; text-align: left;
+}
+.more-panel button.more-item:disabled { opacity: 0.4; cursor: not-allowed; }
+
+.till-bar { display: flex; align-items: center; gap: var(--sp-2); flex-wrap: wrap; margin-bottom: var(--sp-4); }
+.till-log { border: 1px solid var(--c-border); padding: var(--sp-2) var(--sp-3); }
+.till-log > summary { cursor: pointer; font-size: var(--fs-sm); font-weight: 600; color: var(--c-ink-soft); }
+.till-log[open] > summary { margin-bottom: var(--sp-3); }
+
+/* ---- Receiving (E-02) ----
+   Worklist rail from E, art-led lines from C, and the reconcile strip as a
+   footer rather than a third rail — which is what buys the table its width. */
+.recv {
+  display: grid; grid-template-columns: 280px minmax(0, 1fr);
+  border: 1px solid var(--c-border); background: var(--c-surface);
+}
+.recv-rail {
+  border-right: 1px solid var(--c-border-strong); background: var(--c-surface-2);
+  display: flex; flex-direction: column;
+  /* The rail is reference, not a queue you scroll past — it follows the lines. */
+  position: sticky; top: 62px; align-self: start;
+  /* 62px band, and ~64px more for the reconcile strip. A sticky box is clamped
+     by its container's bottom edge, so a rail tall enough to fill the whole
+     viewport gets pushed UP once the lines run out — sliding its own heading
+     under the band. Reserving the strip's height keeps it below the band at
+     every scroll position. */
+  max-height: calc(100vh - 62px - 64px); overflow-y: auto;
+}
+.recv-main { display: flex; flex-direction: column; min-width: 0; }
+@media (max-width: 1100px) {
+  .recv { grid-template-columns: minmax(0, 1fr); }
+  .recv-rail {
+    border-right: none; border-bottom: 1px solid var(--c-border-strong);
+    position: static; max-height: none; overflow-y: visible;
+  }
+}
+
+.recv-rail-sec { padding: var(--sp-3) var(--sp-4); border-bottom: 1px solid var(--c-border); }
+.recv-rail-sec:last-child { border-bottom: none; }
+.recv-rail-sec > .lab { display: block; margin-bottom: var(--sp-2); }
+.recv-rail-sec .field { margin-bottom: var(--sp-2); }
+.recv-rail-sec .field > span { font-size: 9.5px; }
+
+/* One pending order line. Clicking it prefills the entry row. */
+.recv-order {
+  display: block; width: 100%; text-align: left; cursor: pointer;
+  appearance: none; font: inherit; background: var(--c-surface);
+  border: 1px solid var(--c-border); padding: var(--sp-2);
+  margin-bottom: var(--sp-2);
+}
+.recv-order:hover { border-color: var(--c-ink); }
+.recv-order .t { font-size: var(--fs-sm); font-weight: 600; display: block; }
+.recv-order .m { font-size: var(--fs-xs); color: var(--c-ink-faint); }
+
+/* Lines get a leading art tile. Cover art is a stored URL (A-14) and the
+   catalogue misses often, so the empty state is designed, not accidental. */
+.recv-lines { overflow-x: auto; }
+.recv-art {
+  width: 38px; height: 38px; display: grid; place-items: center; font-size: 18px;
+  background: repeating-linear-gradient(135deg, #e2e2de 0 6px, #ececea 6px 12px);
+  border: 1px solid var(--c-border);
+}
+.recv-art.empty {
+  background: none; border: 1px dashed var(--c-border-strong);
+  font-size: 8.5px; color: var(--c-ink-faint); letter-spacing: 0.04em;
+}
+table.data td.recv-art-cell { width: 38px; padding-right: 0; }
+.recv-rec .t { display: block; font-size: var(--fs-base); font-weight: 600; line-height: 1.25; }
+.recv-rec .m { display: block; font-size: var(--fs-xs); color: var(--c-ink-faint); }
+/* The line actions sit in one row, not stacked — the column is narrow and a
+   wrapped pencil-over-cross reads as two unrelated controls. */
+table.data td .btn-row { flex-wrap: nowrap; }
+
+/* The reconcile strip. Sticky to the bottom of the viewport so derived vs.
+   stated never leaves the screen on a 50-100 line invoice — the one thing the
+   footer layout would otherwise have cost us against a pinned rail. */
+.recv-foot {
+  position: sticky; bottom: 0; z-index: 10;
+  border-top: 2px solid var(--c-ink); background: var(--c-surface-2);
+  padding: var(--sp-3) var(--sp-4);
+  display: flex; align-items: center; gap: var(--sp-5); flex-wrap: wrap;
+}
+.recv-foot .fig { display: flex; flex-direction: column; gap: 1px; }
+.recv-foot .fig > .lab { font-size: 9.5px; }
+.recv-foot .fig > .v { font-size: 20px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.recv-foot .fig.warn > .lab, .recv-foot .fig.warn > .v { color: var(--c-warn); }
+.recv-foot .fig.bad > .lab, .recv-foot .fig.bad > .v { color: var(--c-danger); }
+.recv-notes { padding: var(--sp-3) var(--sp-4) 0; }

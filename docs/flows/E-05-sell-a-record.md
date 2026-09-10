@@ -206,6 +206,7 @@ Held copies count against **available** stock but remain on hand.
 | 25 | **A deposit is a line-less Sale tendered to the Customer's account**, shown as a balance on the Held Sale. Closes the layaway open question using existing machinery (A-25) |
 | 26 | **Till rounding is advisory**, consistent with E-02 decision 32. Closes the till-rounding open question (A-24) |
 | 27 | **Search is a past-Sales browser, not an item-only lookup.** Default (nothing typed) is Current Sales, most recent first, so an Employee can scan for entry errors before close. Transaction # (Sale number or hold reference), Customer name, and Date join the barcode scan as filters; any one of them widens scope from Current-only to every non-Open Sale, since by then the Employee is after one specific Sale rather than skimming recent activity. Results are Sales, not lines — opening one goes straight to its editor. |
+| 28 | **Till actions are placed by who is waiting, not by how often they are used.** Anything reached for with a customer at the counter is on the screen with no click — the scan field, the customer, per-line quantity/price/discount/tax, the PO field, the six tender types, Finish sale, Hold, Void, Return. Anything touched only when nobody is waiting sits behind **Till functions**: searching past Sales, viewing holds, Edit (void-and-duplicate), Copy, and the end-of-day close ([M-03](M-03-daily-summary.md)). Frequency is explicitly not the test — the day close runs daily and is still behind the menu |
 
 ---
 
