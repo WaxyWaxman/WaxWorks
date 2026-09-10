@@ -247,7 +247,8 @@ for flow_id, flow in sorted(flows.items()):
     m = RELATED_LINE_RE.search(flow.text)
     if not m:
         continue
-    for other in re.findall(r"\b([EM]-\d{2})\b", m.group(1)):
+    # dedupe: a markdown link repeats the ID in both its label and its filename
+    for other in sorted(set(re.findall(r"\b([EM]-\d{2})\b", m.group(1)))):
         target = flows.get(other)
         if target is None:
             err(f"{flow_id}: Related: names {other}, which does not exist")

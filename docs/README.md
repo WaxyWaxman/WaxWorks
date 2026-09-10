@@ -7,26 +7,32 @@ Point-of-sale and inventory management for independent vinyl record stores.
 | Document | What it covers |
 |---|---|
 | [PRD.md](PRD.md) | Product context, users, domain model, cross-cutting concerns |
+| [architecture.md](architecture.md) | Stack, data model, database functions, build order — how it gets built |
+| [lexicon.md](lexicon.md) | Controlled vocabulary — the canonical term for each concept, and what not to call it |
 | [flows/](flows/) | One document per user flow — the detailed specs |
 | [architecture/](architecture/) | System design, derived from the specified flows |
 | [decisions/](decisions/) | ADRs — cross-cutting decisions that outlive any single flow |
 | [reference/](reference/) | Worked examples and external-system notes |
+| [prototype.md](prototype.md) | The clickable prototype — what it's for, how to run it, flow ↔ screen map |
 | [templates/](templates/) | Starting points for new flows and ADRs |
 
 ## Flows
 
 | ID | Flow | Actor | Status |
 |---|---|---|---|
-| E-01 | [Authenticate to the platform](flows/E-01-authenticate.md) | Employee | Stub |
+| E-01 | [Authenticate to the platform](flows/E-01-authenticate.md) | Employee | In clarification |
 | E-02 | [Receive inventory](flows/E-02-receive-inventory.md) | Employee | **Specified** |
-| E-03 | [Search the inventory](flows/E-03-search-inventory.md) | Employee | Stub |
-| E-04 | [Manage the inventory](flows/E-04-manage-inventory.md) | Employee | Stub |
-| E-05 | [Sell a record](flows/E-05-sell-a-record.md) | Employee | Stub |
-| E-06 | [Process a return](flows/E-06-process-a-return.md) | Employee | Stub |
+| E-03 | [Search the inventory](flows/E-03-search-inventory.md) | Employee | **Specified** |
+| E-04 | [Manage the inventory](flows/E-04-manage-inventory.md) | Employee | **Specified** |
+| E-05 | [Point of Sale](flows/E-05-sell-a-record.md) | Employee | **Specified** |
+| E-06 | [Process a return](flows/E-06-process-a-return.md) | Employee | **Specified** |
+| E-07 | [Manage customers](flows/E-07-manage-customers.md) | Employee | **Specified** |
 | M-01 | [Set a supplier margin](flows/M-01-supplier-margin.md) | Manager | Stub |
-| M-02 | [Re-order inventory](flows/M-02-reorder-inventory.md) | Manager | Stub |
-| M-03 | [Daily summary](flows/M-03-daily-summary.md) | Manager | Stub |
-| M-04 | [Add/remove employees or managers](flows/M-04-manage-users.md) | Manager | Stub |
+| M-02 | [Re-order inventory](flows/M-02-reorder-inventory.md) | Manager | **Specified** |
+| M-03 | [Daily summary](flows/M-03-daily-summary.md) | Manager | **Specified** |
+| M-04 | [Add/remove employees or managers](flows/M-04-manage-users.md) | Manager | In clarification |
+| M-05 | [Accounts payable](flows/M-05-accounts-payable.md) | Manager | **Specified** |
+| M-06 | [Configure the store](flows/M-06-settings.md) | Manager | In clarification |
 
 ## Conventions
 
@@ -50,7 +56,11 @@ Point-of-sale and inventory management for independent vinyl record stores.
 - **Resolved decisions** — a numbered table, so decisions can be cited precisely
 - **Open questions** — what's still undecided
 
-**Decisions are numbered and cited.** Referring to "E-02 decision 8" should be unambiguous, so don't renumber an existing decision — append instead.
+**Decisions are numbered and cited.** Referring to "E-02 decision 8" should be unambiguous, so don't renumber an existing decision — append instead. A later decision that changes an earlier one says so explicitly ("amends decision 9", "supersedes decision 15"), and the earlier one stays put as the record of what was decided at the time.
+
+**Architecture decisions are numbered `A-n`** in [architecture.md](architecture.md) and cited the same way. Where one amends a flow, the amendment is appended to that flow too — architecture.md §9 lists every one.
+
+**Use the [lexicon](lexicon.md)'s canonical terms.** In flow documents, the PRD, reference material, commit messages, and any prompt written to drive an LLM against this project, use the exact term the lexicon prescribes rather than a synonym.
 
 **Cross-flow dependencies go in "Inherited from other flows"** in the receiving document, not only in the flow that raised them. If E-02 needs something from E-05, it gets written into E-05.
 

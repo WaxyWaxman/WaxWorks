@@ -1,14 +1,20 @@
-# Local Claude Code state — worktrees, session data, per-user overrides.
-# The shared agent configuration under .claude/skills, .claude/agents and
-# .claude/settings.json IS tracked; everything below is machine-local.
+# Dependencies / build output
+node_modules/
+dist/
+.vite/
+
+# Local Claude Code state. The SHARED agent configuration is tracked on purpose --
+# skills, subagents, settings.json and launch.json travel with the repo so every
+# clone gets identical agent behaviour. Everything else under .claude/ is
+# machine-local session state and stays ignored.
+.claude/*
+!.claude/launch.json
+!.claude/settings.json
+!.claude/skills/
+!.claude/agents/
 .claude/worktrees/
 .claude/settings.local.json
-.claude/memory/
-.claude/projects/
-.claude/shell-snapshots/
-.claude/todos/
-.claude/statsig/
 
-# OS / editor noise
+# OS
 .DS_Store
 Thumbs.db
