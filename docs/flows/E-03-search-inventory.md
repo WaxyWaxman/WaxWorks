@@ -2,7 +2,7 @@
 
 **Actor:** Employee
 **Status:** Specified
-**Related:** [E-04 Manage the inventory](E-04-manage-inventory.md) · [E-05 Sell a record](E-05-sell-a-record.md) · [M-02 Re-order inventory](M-02-reorder-inventory.md)
+**Related:** [E-04 Manage the inventory](E-04-manage-inventory.md) · [E-05 Point of Sale](E-05-sell-a-record.md) · [M-02 Re-order inventory](M-02-reorder-inventory.md)
 
 **Job:** As an employee, I need to find a record quickly — usually while a customer is standing at the counter asking "do you have this?"
 

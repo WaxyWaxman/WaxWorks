@@ -2,7 +2,7 @@
 
 **Actor:** Employee (some actions manager-only)
 **Status:** Specified
-**Related:** [E-02 Receive inventory](E-02-receive-inventory.md) · [E-03 Search the inventory](E-03-search-inventory.md) · [E-05 Sell a record](E-05-sell-a-record.md) · [M-05 Accounts payable](M-05-accounts-payable.md)
+**Related:** [E-02 Receive inventory](E-02-receive-inventory.md) · [E-03 Search the inventory](E-03-search-inventory.md) · [E-05 Point of Sale](E-05-sell-a-record.md) · [M-05 Accounts payable](M-05-accounts-payable.md)
 
 **Job:** As an employee, I need to look after stock once it exists — correct it, price it, reserve it, hold it back, and raise a claim when a supplier got it wrong.
 
@@ -53,7 +53,7 @@ Hard adjustments are **manager-only** and always carry a **reason code**:
 
 The adjustment records the reason, the before and after counts, the timestamp, and the Manager who made it. There is no approval step and no cap — a Manager can set the count to whatever reality says it is. The reason code exists so the change is never silent, not to gate it.
 
-This is also how **negative inventory is reconciled**. A copy sold before its Invoice was finalized (E-02 decision 21) leaves the count below zero; finalizing the Invoice normally resolves it, and where it doesn't, a `Miscount / correction` adjustment closes the gap with an audit trail.
+This is also how **negative inventory is reconciled**. On hand never actually goes below zero as a stored count — a copy sold before its Invoice was finalized (E-02 decision 21) mints its InventoryItem immediately, **sold from birth**, tagged **oversold**: a promise the physical copy exists, unbacked by any Invoice line yet. Receiving normally resolves it on its own — a later Invoice line for the same Record reconciles the oldest outstanding oversold copy first, before minting any brand-new sellable stock, backfilling the real cost and supplier it never had at the till. Where no shipment is coming to explain it, a Manager forces it to zero as a `Miscount / correction` adjustment instead, with the same audit trail (who, when).
 
 ---
 
@@ -125,7 +125,8 @@ An optional cross-reference links the two, so a payout can be traced to the copi
 | 4 | Reason codes: Shrinkage, Damaged, Found, Miscount / correction, Written off, Other (note required) |
 | 5 | Adjustments have no approval step and no cap — the reason code makes them visible, not gated |
 | 6 | Negative inventory is reconciled by finalizing the Invoice, or by a reason-coded adjustment |
-| 7 | Employees may change a copy's price; **shelf** prices below cost still require a manager override (E-02 decision 10) |
+| 15 | **A negative-inventory Sale mints its InventoryItem immediately** — sold from birth, tagged **oversold** — rather than the on-hand count itself going below zero. It reconciles automatically (oldest outstanding oversold copy first, ahead of minting new stock, backfilling cost/supplier) when a matching Invoice line is later received, or via a `Miscount / correction` adjustment when there's no shipment to explain it |
+| 7 | ~~Employees may change a copy's price; shelf prices below cost still require a manager override (E-02 decision 10)~~ — **superseded**: below-cost still proceeds, it just raises a review flag instead (M-04 decision 8) |
 | 8 | `.50`/`.99` rounding applies to shelf prices set here (E-02 decision 9) |
 | 9 | Supplier claims are raised per copy against the Invoice it arrived on, batched by supplier and separator, and emailed |
 | 10 | Claim numbers auto-generate ascending and are unique; manual entry is permitted |

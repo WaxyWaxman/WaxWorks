@@ -1,0 +1,13 @@
+# Dependencies / build output
+node_modules/
+dist/
+.vite/
+
+# Local editor/agent state — keep launch.json, ignore the rest
+.claude/*
+!.claude/launch.json
+.claude/worktrees/
+
+# OS
+.DS_Store
+Thumbs.db

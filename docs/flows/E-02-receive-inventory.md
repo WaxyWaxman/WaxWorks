@@ -66,17 +66,17 @@
 
 **Cost** is the supplier's **post-discount unit price** — the `Ext. Price` column, not the list `Price`.
 
-**Suggested retail** is computed from the **pre-discount list price**:
+**Suggested retail** is computed from the **pre-discount list price**, marked up by the Supplier's own **Discount** field ([M-01](M-01-supplier-margin.md) — not the per-line Disc% below, the Supplier record's own figure):
 
 ```
-suggested_retail = round_up(list_price x (1 + supplier_margin))
+suggested_retail = round_up(list_price x (1 + supplier.discountPct / 100))
 ```
 
-Pricing off list rather than net means a supplier discount is captured as additional margin rather than passed through as a lower shelf price. When there is no discount the two prices are identical, so this is a single rule with no branch.
+Two different "discounts" are in play on one line and it's worth keeping them straight: the **line's own Disc%** (step 10, read off this invoice's paperwork) drives cost — `extPrice = list_price x (1 - line_discount)`. The **Supplier's Discount field** (M-01, one figure per Supplier, not per invoice) drives suggested retail instead. Pricing the retail side off list rather than net means a supplier discount on THIS invoice's paperwork is captured as margin rather than passed through as a lower shelf price — the two figures don't need to match, and usually won't.
 
-> Worked example — list `$27.99`, 10% supplier discount, 60% margin:
-> cost = `$25.19` · suggested retail = `27.99 x 1.60` = `$44.78` → **`$44.99`**
-> (Pricing off net cost would have given `$40.50` and surrendered the discount.)
+> Worked example — list `$27.99`, this invoice's line discount 10% (→ cost `$25.19`), Supplier's own Discount field 60%:
+> suggested retail = `27.99 x 1.60` = `$44.78` → **`$44.99`**
+> (Pricing off net cost would have given `$40.50` and surrendered the invoice's own discount.)
 
 **Rounding.** The system **suggests** a price ending in `.50` or `.99`, always rounded up. This is a default, not a rule — any amount the employee enters is accepted (decision 32).
 
@@ -121,16 +121,16 @@ Consequence to accept knowingly: per-item margin reporting reflects only supplie
 
 | # | Decision |
 |---|---|
-| 1 | Invoice numbers are supplier-provided and unique per `(supplier, invoice_number)` — not globally |
+| 1 | Invoice numbers are supplier-provided and unique per `(supplier, invoice_number)` — not globally. Left blank (e.g. second-hand with no paperwork), the system auto-generates a reference (`REF####`) |
 | 2 | Both invoice date and received date are captured; all dates normalize to `DD/MM/YYYY` |
-| 3 | Employees can create suppliers but never set margins |
-| 4 | Invoices are draft-persisted and resumable; deletable before finalize, void-only-by-manager after |
+| 3 | ~~Employees can create suppliers but never set margins~~ — **superseded by 30**: nothing about a Supplier is gated |
+| 4 | Invoices are draft-persisted and resumable; deletable before finalize. After finalize, lines and totals stay editable (a line can't be removed once it's sold) until a manager marks the invoice paid in M-05 — that's what locks it; voiding a paid invoice is manager-only, handled in E-04 |
 | 5 | Catalog lookup is local-first with Discogs as fallback; metadata is bulk-prefetched at PO time, with live lookup at the receiving desk as an accepted fallback |
 | 6 | Cover art is a one-time snapshot, not re-synced |
 | 7 | Cost is the supplier's post-discount `Ext. Price` |
-| 8 | Suggested retail is priced off the **pre-discount list price**: `list x (1 + supplier margin)` — supplier discounts are captured as margin |
+| 8 | ~~Suggested retail is priced off the pre-discount list price: `list x (1 + supplier margin)`~~ — **superseded by 31**: there is no separate Margin field, the Supplier's own Discount field (M-01) drives this formula instead |
 | 9 | Every shelf price ends in `.50` or `.99`, rounded up |
-| 10 | Employees cannot price below cost without a manager override |
+| 10 | ~~Employees cannot price below cost without a manager override~~ — **superseded by M-04 decision 8**: it proceeds and raises a review flag instead |
 | 11 | Sticky retail pricing applies to **New stock only**; second-hand copies are priced per copy |
 | 12 | Sticky prices pre-fill but are always confirmable and editable |
 | 13 | Cost is entered or confirmed on every receipt — never reused silently from a prior shipment |
@@ -139,7 +139,7 @@ Consequence to accept knowingly: per-item margin reporting reflects only supplie
 | 16 | Freight, tax, and misc stay at invoice level; no per-item landed cost |
 | 17 | Tax **is** included in cost of goods |
 | 18 | Derived-vs-stated subtotal mismatch raises a discrepancy warning, overridable by the employee |
-| 19 | Total adjustments beyond ±2% require a manager override |
+| 19 | ~~Total adjustments beyond ±2% require a manager override~~ — **superseded by M-04 decision 8**: it proceeds and raises a review flag instead |
 | 20 | Inventory becomes sellable only on invoice finalization |
 | 21 | E-05 must support **negative inventory** so a physical copy can be sold before it is received into the system |
 | 22 | Intake mode (New / Second-hand) is selected once per invoice — no mixed invoices |

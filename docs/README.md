@@ -11,6 +11,7 @@ Point-of-sale and inventory management for independent vinyl record stores.
 | [lexicon.md](lexicon.md) | Controlled vocabulary — the canonical term for each concept, and what not to call it |
 | [flows/](flows/) | One document per user flow — the detailed specs |
 | [reference/](reference/) | Worked examples and external-system notes |
+| [prototype.md](prototype.md) | The clickable prototype — what it's for, how to run it, flow ↔ screen map |
 
 ## Flows
 
@@ -20,7 +21,7 @@ Point-of-sale and inventory management for independent vinyl record stores.
 | E-02 | [Receive inventory](flows/E-02-receive-inventory.md) | Employee | **Specified** |
 | E-03 | [Search the inventory](flows/E-03-search-inventory.md) | Employee | **Specified** |
 | E-04 | [Manage the inventory](flows/E-04-manage-inventory.md) | Employee | **Specified** |
-| E-05 | [Sell a record](flows/E-05-sell-a-record.md) | Employee | **Specified** |
+| E-05 | [Point of Sale](flows/E-05-sell-a-record.md) | Employee | **Specified** |
 | E-06 | [Process a return](flows/E-06-process-a-return.md) | Employee | **Specified** |
 | E-07 | [Manage customers](flows/E-07-manage-customers.md) | Employee | **Specified** |
 | M-01 | [Set a supplier margin](flows/M-01-supplier-margin.md) | Manager | Stub |
