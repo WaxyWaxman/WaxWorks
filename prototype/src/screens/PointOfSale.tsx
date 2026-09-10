@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { BarcodeInput } from "../components/BarcodeInput";
 import { Modal } from "../components/Modal";
@@ -7,7 +7,7 @@ import type { InventoryItem, RecordEntry, Sale, SaleLine, TenderType } from "../
 import type { DayBreakdown } from "../lib/dayBreakdown";
 import { money } from "../lib/money";
 import { resolveScan } from "../lib/resolve";
-import { availableOnHand, balanceDue, saleTotals, tenderedTotal } from "../lib/totals";
+import { availableOnHand, balanceDue, saleTotals } from "../lib/totals";
 import { useApp } from "../store/AppStore";
 
 const TENDERS: TenderType[] = ["Cash", "Credit Card", "Account Balance", "Gift Card", "Pay-out", "Used Credit"];
@@ -67,56 +67,53 @@ export function PointOfSale() {
         </div>
       </div>
 
-      <div className="card" style={{ marginBottom: "var(--sp-4)" }}>
-        <div className="card-body row wrap">
-          <button className="btn primary" onClick={() => nav(`/sell/${app.newSale()}`)}>
-            + New Sale
+      {/* The bar carries what you reach for BEFORE a customer is in front of
+          you, plus a switcher for sales already going. Everything that is only
+          touched when nobody is waiting lives behind Till functions. */}
+      <div className="till-bar">
+        <button className="btn primary" onClick={() => nav(`/sell/${app.newSale()}`)}>
+          + New Sale
+        </button>
+        <button className="btn" onClick={() => nav(`/return/${app.newSale({ isReturn: true })}`)}>
+          + New Return
+        </button>
+
+        <TillFunctions
+          onSearch={() => setSearching(true)}
+          onHolds={() => setViewingHolds(true)}
+          onOtherFns={() => setOtherFns(true)}
+          heldCount={heldSales.length}
+          sale={sale}
+        />
+
+        {openSales.length + openReturns.length + recentCurrent.length > 0 && (
+          <span className="muted xsmall" style={{ marginLeft: "var(--sp-2)" }}>
+            Switch to:
+          </span>
+        )}
+        {openSales.map((s) => (
+          <button
+            key={s.id}
+            className={"btn sm" + (s.id === sale?.id ? " primary" : "")}
+            onClick={() => nav(`/sell/${s.id}`)}
+          >
+            Sale · {s.lines.length} line{s.lines.length !== 1 ? "s" : ""}
           </button>
-          <button className="btn" onClick={() => nav(`/return/${app.newSale({ isReturn: true })}`)}>
-            + New Return
+        ))}
+        {openReturns.map((s) => (
+          <button key={s.id} className="btn sm" onClick={() => nav(`/return/${s.id}`)}>
+            Return · {s.lines.length} line{s.lines.length !== 1 ? "s" : ""}
           </button>
-          <button className="btn" onClick={() => setSearching(true)}>
-            Search
+        ))}
+        {recentCurrent.map((s) => (
+          <button
+            key={s.id}
+            className={"btn sm" + (s.id === sale?.id ? " primary" : "")}
+            onClick={() => nav(`/sell/${s.id}`)}
+          >
+            #{s.saleNumber}
           </button>
-          <button className="btn" onClick={() => setOtherFns(true)}>
-            Other Functions
-          </button>
-          <span className="muted xsmall">Open:</span>
-          {openSales.length === 0 && <span className="xsmall muted">none</span>}
-          {openSales.map((s) => (
-            <button
-              key={s.id}
-              className={"btn sm" + (s.id === sale?.id ? " primary" : "")}
-              onClick={() => nav(`/sell/${s.id}`)}
-            >
-              Sale · {s.lines.length} line{s.lines.length !== 1 ? "s" : ""}
-            </button>
-          ))}
-          {openReturns.length > 0 && (
-            <>
-              <span className="muted xsmall">Open returns:</span>
-              {openReturns.map((s) => (
-                <button key={s.id} className="btn sm" onClick={() => nav(`/return/${s.id}`)}>
-                  Return · {s.lines.length} line{s.lines.length !== 1 ? "s" : ""}
-                </button>
-              ))}
-            </>
-          )}
-          <button className="btn" onClick={() => setViewingHolds(true)}>
-            View Holds{heldSales.length > 0 ? ` (${heldSales.length})` : ""}
-          </button>
-          <span className="muted xsmall">Recent:</span>
-          {recentCurrent.length === 0 && <span className="xsmall muted">none</span>}
-          {recentCurrent.map((s) => (
-            <button
-              key={s.id}
-              className={"btn sm" + (s.id === sale?.id ? " primary" : "")}
-              onClick={() => nav(`/sell/${s.id}`)}
-            >
-              #{s.saleNumber}
-            </button>
-          ))}
-        </div>
+        ))}
       </div>
 
       {!sale && <div className="callout">Start a new Sale or pick one above.</div>}
@@ -125,6 +122,125 @@ export function PointOfSale() {
       {searching && <SearchModal onClose={() => setSearching(false)} />}
       {otherFns && <OtherFunctionsModal onClose={() => setOtherFns(false)} />}
       {viewingHolds && <HoldsModal onClose={() => setViewingHolds(false)} />}
+    </div>
+  );
+}
+
+
+// Till functions — the same split the top menu uses, one level down. Nothing
+// in here is reached for while a customer is waiting: past sales, the day
+// close, and correcting a Sale that is already tendered.
+function TillFunctions({
+  onSearch,
+  onHolds,
+  onOtherFns,
+  heldCount,
+  sale,
+}: {
+  onSearch: () => void;
+  onHolds: () => void;
+  onOtherFns: () => void;
+  heldCount: number;
+  sale: Sale | null;
+}) {
+  const app = useApp();
+  const nav = useNavigate();
+  const [open, setOpen] = useState(false);
+  const wrapRef = useRef<HTMLDivElement>(null);
+  const btnRef = useRef<HTMLButtonElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const onPointer = (e: PointerEvent) => {
+      if (!wrapRef.current?.contains(e.target as Node)) setOpen(false);
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "Escape") return;
+      setOpen(false);
+      btnRef.current?.focus();
+    };
+    document.addEventListener("pointerdown", onPointer);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("pointerdown", onPointer);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [open]);
+
+  const run = (fn: () => void) => {
+    setOpen(false);
+    fn();
+  };
+
+  return (
+    <div className="menu-wrap" ref={wrapRef}>
+      <button
+        ref={btnRef}
+        type="button"
+        className="btn"
+        aria-haspopup="true"
+        aria-expanded={open}
+        onClick={() => setOpen((v) => !v)}
+      >
+        Till functions <span aria-hidden="true">▾</span>
+      </button>
+      {open && (
+        <div className="more-panel" role="menu">
+          <div className="more-group">
+            <div className="more-group-head">Look something up</div>
+            <button className="more-item" role="menuitem" onClick={() => run(onSearch)}>
+              <span>Search past sales</span>
+              <span className="flow">E-05</span>
+            </button>
+            <button className="more-item" role="menuitem" onClick={() => run(onHolds)}>
+              <span>View holds</span>
+              <span className="flow">{heldCount}</span>
+            </button>
+          </div>
+          <div className="more-group">
+            <div className="more-group-head">This sale</div>
+            <button
+              className="more-item"
+              role="menuitem"
+              disabled={!sale || sale.state !== "Current"}
+              title="Voids this Sale and opens a copy of it for correction — preserves the audit trail"
+              onClick={() =>
+                run(() => {
+                  if (!sale) return;
+                  const id = app.editSale(sale.id);
+                  if (id) nav(`/sell/${id}`);
+                })
+              }
+            >
+              <span>Edit (void &amp; duplicate)</span>
+              <span className="flow">E-05</span>
+            </button>
+            <button
+              className="more-item"
+              role="menuitem"
+              disabled={!sale || sale.lines.length === 0}
+              title="New Sale with the same line items — re-scan each copy"
+              onClick={() =>
+                run(() => {
+                  if (!sale) return;
+                  const id = app.copySale(sale.id);
+                  if (id) nav(`/sell/${id}`);
+                })
+              }
+            >
+              <span>Copy to a new Sale</span>
+              <span className="flow">E-05</span>
+            </button>
+          </div>
+          <div className="more-group">
+            <div className="more-group-head">End of day</div>
+            <button className="more-item" role="menuitem" onClick={() => run(onOtherFns)}>
+              <span>Other functions</span>
+              <span className="flow">M-03</span>
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -614,7 +730,9 @@ function SaleEditor() {
   const [ntPrompt, setNtPrompt] = useState<{ code: string; label: string; price: number } | null>(null);
   const [gcLoad, setGcLoad] = useState<string | null>(null);
   const [gcRedeem, setGcRedeem] = useState<{ code: string; balance: number } | null>(null);
-  const [showTender, setShowTender] = useState(false);
+  // The slab offers all six tender types directly, so opening the modal
+  // carries which one was pressed rather than defaulting to Cash.
+  const [showTender, setShowTender] = useState<TenderType | null>(null);
   const [custPick, setCustPick] = useState(false);
   const [receipt, setReceipt] = useState<number | null>(null);
   const [scanNote, setScanNote] = useState<string | null>(null);
@@ -664,160 +782,128 @@ function SaleEditor() {
   })();
 
   return (
-    <div className="sell">
-      <div className="stack">
-        <div className="card">
-          <div className="card-head sale-head">
-            <div className="sale-head-left">
-              <span className="sale-head-label">Sale</span>
-              {customer ? (
-                <button
-                  className="sale-head-customer-btn"
-                  onClick={() => setCustPick(true)}
-                  disabled={fieldsLocked}
-                  title="Change customer"
-                >
-                  {customer.name}
-                </button>
-              ) : (
-                <button className="btn primary" onClick={() => setCustPick(true)} disabled={fieldsLocked}>
-                  + Add customer
-                </button>
-              )}
-              <span className="sale-head-meta">
-                {sale.saleNumber ? (
-                  <>
-                    #{sale.saleNumber} <span className={"badge" + (sale.state === "Closed" ? "" : " ok")}>{sale.state}</span>
-                  </>
-                ) : sale.state === "Held" ? (
-                  <>
-                    <span className="mono">{sale.holdRef}</span> <span className="badge">Held</span>
-                    {holdAgeLabel && <span className="muted xsmall">on hold {holdAgeLabel}</span>}
-                  </>
-                ) : (
-                  <span className="badge">Open</span>
-                )}
-              </span>
-              {sale.lockedBy && (
-                <>
-                  <span className="badge accent">locked · {sale.lockedBy}</span>
-                  <button className="btn ghost sm" onClick={() => app.forceUnlockSale(sale.id)}>
-                    Force unlock
-                  </button>
-                </>
-              )}
-            </div>
-            <div className="btn-row">
-              {sale.state === "Current" && (
-                <button
-                  className="btn sm"
-                  onClick={() => {
-                    const id = app.editSale(sale.id);
-                    if (id) nav(`/sell/${id}`);
-                  }}
-                  title="Voids this Sale and opens a copy of it for correction — preserves the audit trail"
-                >
-                  Edit
-                </button>
-              )}
-              <button
-                className="btn sm"
-                disabled={sale.lines.length === 0}
-                onClick={() => {
-                  const id = app.copySale(sale.id);
-                  if (id) nav(`/sell/${id}`);
-                }}
-                title="New Sale with the same line items — re-scan each copy"
-              >
-                Copy
-              </button>
-            </div>
-          </div>
-          <div className="card-body stack">
-            <div className="row wrap">
-              {customer && (
-                <>
-                  <span className="badge accent">disc {customer.globalDiscountPct}%</span>
-                  {customer.defaultTaxLineId && (
-                    <span className="badge accent">
-                      tax → {app.taxLines.find((t) => t.id === customer.defaultTaxLineId)?.name}
-                    </span>
-                  )}
-                  <span className={"badge " + (customer.balance >= 0 ? "ok" : "warn")}>
-                    balance {money(customer.balance)}
-                  </span>
-                  <button className="btn ghost sm" onClick={() => app.attachCustomer(sale.id, null)} disabled={fieldsLocked}>
-                    detach
-                  </button>
-                </>
-              )}
-              <label className="row" style={{ gap: "var(--sp-2)" }}>
-                <span className="muted xsmall">PO</span>
-                <input
-                  className="inline-num"
-                  style={{ width: 120 }}
-                  type="text"
-                  value={sale.po ?? ""}
-                  disabled={fieldsLocked}
-                  onChange={(e) => app.setSalePo(sale.id, e.target.value)}
-                  placeholder="customer's PO #"
-                />
-              </label>
-              {sale.state === "Held" && (
-                <button className="btn ghost sm" onClick={() => setLoggingContact(true)}>
-                  Log contact
-                </button>
-              )}
-            </div>
-
-            {!fieldsLocked && (
-              <BarcodeInput onScan={onScan} actionLabel="Lookup" onAction={() => setLookingUp(true)} />
+    <div className="till">
+      {/* ---- the sale ---- */}
+      <div className="till-main">
+        <div className="row wrap" style={{ gap: "var(--sp-3)" }}>
+          <span className="sale-head-label">{sale.isReturn ? "Return" : "Sale"}</span>
+          {customer ? (
+            <button
+              className="sale-head-customer-btn"
+              onClick={() => setCustPick(true)}
+              disabled={fieldsLocked}
+              title="Change customer"
+            >
+              {customer.name}
+            </button>
+          ) : (
+            <button className="btn" onClick={() => setCustPick(true)} disabled={fieldsLocked}>
+              + Add customer
+            </button>
+          )}
+          <span className="sale-head-meta">
+            {sale.saleNumber ? (
+              <>
+                #{sale.saleNumber}{" "}
+                <span className={"badge" + (sale.state === "Closed" ? "" : " ok")}>{sale.state}</span>
+              </>
+            ) : sale.state === "Held" ? (
+              <>
+                <span className="mono">{sale.holdRef}</span> <span className="badge">Held</span>
+                {holdAgeLabel && <span className="muted xsmall">on hold {holdAgeLabel}</span>}
+              </>
+            ) : (
+              <span className="badge">Open</span>
             )}
-            {scanNote && <div className="callout ok">{scanNote}</div>}
-          </div>
+          </span>
+          {sale.lockedBy && (
+            <>
+              <span className="badge warn">locked · {sale.lockedBy}</span>
+              <button className="btn ghost sm" onClick={() => app.forceUnlockSale(sale.id)}>
+                Force unlock
+              </button>
+            </>
+          )}
+          <span className="right muted xsmall">
+            {sale.lines.length} line{sale.lines.length !== 1 ? "s" : ""}
+          </span>
         </div>
 
-        <div className="card">
-          <div className="card-head">Lines</div>
-          <div className="card-body" style={{ padding: 0 }}>
-            <table className="data">
-              <thead>
-                <tr>
-                  <th>Item</th>
-                  <th className="num">Qty</th>
-                  <th className="num">Price</th>
-                  <th className="num">Disc %</th>
-                  <th>Tax line</th>
-                  <th className="num">Net</th>
-                  <th />
-                </tr>
-              </thead>
-              <tbody>
-                {sale.lines.map((l) => (
-                  <LineRow key={l.id} line={l} locked={fieldsLocked} />
-                ))}
-                {sale.lines.length === 0 && (
-                  <tr>
-                    <td colSpan={7} className="muted small">
-                      No lines yet — scan something.
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
+        {/* Everything on this row is typed while somebody is standing there. */}
+        <div className="row wrap">
+          {customer && (
+            <>
+              <span className="badge">disc {customer.globalDiscountPct}%</span>
+              {customer.defaultTaxLineId && (
+                <span className="badge">
+                  tax → {app.taxLines.find((t) => t.id === customer.defaultTaxLineId)?.name}
+                </span>
+              )}
+              <span className={"badge " + (customer.balance >= 0 ? "ok" : "warn")}>
+                balance {money(customer.balance)}
+              </span>
+              <button
+                className="btn ghost sm"
+                onClick={() => app.attachCustomer(sale.id, null)}
+                disabled={fieldsLocked}
+              >
+                detach
+              </button>
+            </>
+          )}
+          <label className="row" style={{ gap: "var(--sp-2)" }}>
+            <span className="muted xsmall">PO</span>
+            <input
+              className="inline-num"
+              style={{ width: 120 }}
+              type="text"
+              value={sale.po ?? ""}
+              disabled={fieldsLocked}
+              onChange={(e) => app.setSalePo(sale.id, e.target.value)}
+              placeholder="customer's PO #"
+            />
+          </label>
+          {sale.state === "Held" && (
+            <button className="btn ghost sm" onClick={() => setLoggingContact(true)}>
+              Log contact
+            </button>
+          )}
         </div>
 
-        <div className="card">
-          <div className="card-head">Log</div>
-          <div className="card-body xsmall muted stack">
+        {!fieldsLocked && (
+          <div className="scan-slab">
+            <div className="lab" style={{ marginBottom: "var(--sp-1)" }}>
+              Scan the item
+            </div>
+            <BarcodeInput
+              onScan={onScan}
+              placeholder="scan or type…"
+              actionLabel="Lookup"
+              onAction={() => setLookingUp(true)}
+            />
+          </div>
+        )}
+        {scanNote && <div className="callout ok">{scanNote}</div>}
+
+        <div className="till-lines">
+          {sale.lines.map((l) => (
+            <LineRow key={l.id} line={l} locked={fieldsLocked} />
+          ))}
+          {sale.lines.length === 0 && (
+            <div className="till-empty">No lines yet — scan something.</div>
+          )}
+        </div>
+
+        <details className="till-log">
+          <summary>Log &amp; notes ({sale.log.length})</summary>
+          <div className="xsmall muted stack" style={{ marginBottom: "var(--sp-3)" }}>
             {sale.log.map((e, i) => (
               <div key={i}>
                 <span className="mono">{e.at}</span> — {e.text}
               </div>
             ))}
           </div>
-          <div className="card-body btn-row" style={{ paddingTop: 0 }}>
+          <div className="btn-row">
             <input
               type="text"
               value={noteDraft}
@@ -836,39 +922,37 @@ function SaleEditor() {
               Add note
             </button>
           </div>
-        </div>
+        </details>
       </div>
 
-      {/* ---- right rail ---- */}
-      <div className="stack">
-        <div className="card">
-          <div className="card-head">Totals</div>
-          <div className="card-body">
-            <div className="totals-row">
-              <span>Subtotal</span>
-              <span className="num">{money(totals.subtotal)}</span>
-            </div>
-            <div className="totals-row">
-              <span>Discount given</span>
-              <span className="num">-{money(totals.discount)}</span>
-            </div>
-            <div className="totals-row">
-              <span>Tax</span>
-              <span className="num">{money(totals.tax)}</span>
-            </div>
-            <div className="totals-row grand">
-              <span>{totals.grand < 0 ? "Refund due" : "Total"}</span>
-              <span className="num">{money(totals.grand)}</span>
-            </div>
+      {/* ---- the money ---- */}
+      <div className="till-slab">
+        <div>
+          <div className="lab">{totals.grand < 0 ? "Refund due" : "Amount due"}</div>
+          <div className="till-due">{money(Math.abs(due) < 0.001 && sale.tenders.length ? 0 : totals.grand)}</div>
+          <div className="xsmall muted" style={{ marginTop: 4 }}>
+            Subtotal {money(totals.subtotal)} · discount −{money(totals.discount)} · tax{" "}
+            {money(totals.tax)}
           </div>
         </div>
 
-        <div className="card">
-          <div className="card-head">
-            Tenders
-            <span className="muted xsmall">tendered {money(tenderedTotal(sale))}</span>
-          </div>
-          <div className="card-body">
+        <div className="till-rule" />
+
+        {!fieldsLocked && (
+          <>
+            <div className="lab">Take payment</div>
+            <div className="tender-grid">
+              {TENDERS.map((t) => (
+                <button key={t} className="btn" onClick={() => setShowTender(t)}>
+                  {t}
+                </button>
+              ))}
+            </div>
+          </>
+        )}
+
+        {sale.tenders.length > 0 && (
+          <div style={{ border: "1px solid var(--c-border)", padding: "var(--sp-3)" }}>
             {sale.tenders.map((t) => (
               <div key={t.id} className="tender-line">
                 <span>
@@ -892,63 +976,62 @@ function SaleEditor() {
               </div>
             ))}
             <div className="totals-row grand">
-              <span>{due > 0 ? "Balance due" : due < 0 ? "Change / owed" : "Settled"}</span>
-              <span className="num">{money(Math.abs(due))}</span>
+              <span style={{ color: due > 0.001 ? "var(--c-accent)" : undefined }}>
+                {due > 0.001 ? "Still owing" : due < -0.001 ? "Change / owed" : "Settled"}
+              </span>
+              <span className="num" style={{ color: due > 0.001 ? "var(--c-accent)" : undefined }}>
+                {money(Math.abs(due))}
+              </span>
             </div>
-            {!fieldsLocked && (
-              <div className="btn-row" style={{ marginTop: "var(--sp-3)" }}>
-                <button className="btn" onClick={() => setShowTender(true)}>
-                  Add tender
-                </button>
-              </div>
-            )}
           </div>
-        </div>
+        )}
 
-        <div className="card">
-          <div className="card-body btn-row">
-            {!fieldsLocked && (
-              <button
-                className="btn primary lg"
-                disabled={
-                  (sale.lines.length > 0 && due > 0.001) ||
-                  (sale.lines.length === 0 && sale.tenders.length === 0)
-                }
-                onClick={() => setReceipt(app.completeSale(sale.id))}
-              >
-                Tender &amp; finish
-              </button>
-            )}
-            {sale.state === "Open" && (
-              <button
-                className="btn"
-                disabled={sale.lines.length === 0 && sale.tenders.length === 0}
-                onClick={() => app.holdSale(sale.id)}
-              >
-                Hold
-              </button>
-            )}
-            {sale.state === "Held" && (
+        <div style={{ marginTop: "auto", display: "flex", flexDirection: "column", gap: "var(--sp-2)" }}>
+          {!fieldsLocked && (
+            <button
+              className="btn primary till-finish"
+              disabled={
+                (sale.lines.length > 0 && due > 0.001) ||
+                (sale.lines.length === 0 && sale.tenders.length === 0)
+              }
+              onClick={() => setReceipt(app.completeSale(sale.id))}
+            >
+              FINISH SALE
+            </button>
+          )}
+          <div className="till-actions">
+            <button
+              className="btn"
+              disabled={sale.state !== "Open" || (sale.lines.length === 0 && sale.tenders.length === 0)}
+              onClick={() => app.holdSale(sale.id)}
+            >
+              Hold
+            </button>
+            <button
+              className="btn danger"
+              disabled={sale.state !== "Open" && sale.state !== "Current"}
+              onClick={() => app.voidSale(sale.id)}
+            >
+              Void
+            </button>
+            {sale.state === "Held" ? (
               <button className="btn danger" onClick={() => app.cancelHold(sale.id)}>
                 Cancel hold
               </button>
-            )}
-            {(sale.state === "Open" || sale.state === "Current") && (
-              <button className="btn danger" onClick={() => app.voidSale(sale.id)}>
-                Void
+            ) : (
+              <button className="btn" onClick={() => nav(`/return/${app.newSale({ isReturn: true })}`)}>
+                Return
               </button>
             )}
           </div>
           {sale.state === "Closed" && (
-            <div className="card-body xsmall muted" style={{ paddingTop: 0 }}>
-              Closed — no longer editable. Reopen via Undo End of Day (Other Functions, Admin) or
-              handle as a Return.
+            <div className="xsmall muted">
+              Closed — no longer editable. Reopen via Undo End of Day (Till functions → Other
+              functions, Admin) or handle as a Return.
             </div>
           )}
           {due < -0.001 && sale.tenders.some((t) => t.type === "Cash") && (
-            <div className="card-body">
-              <div className="callout ok">Change owed: {money(Math.abs(due))}</div>
-            </div>
+            <div className="callout ok">Change owed: {money(Math.abs(due))}</div>
           )}
         </div>
       </div>
@@ -1067,12 +1150,13 @@ function SaleEditor() {
 
       {showTender && (
         <TenderModal
+          initialType={showTender}
           due={due}
           hasCustomer={!!customer}
-          onClose={() => setShowTender(false)}
+          onClose={() => setShowTender(null)}
           onAdd={(t) => {
             app.addTender(sale.id, t);
-            setShowTender(false);
+            setShowTender(null);
           }}
         />
       )}
@@ -1315,77 +1399,88 @@ function LineRow({ line, locked }: { line: SaleLine; locked: boolean }) {
     line.kind === "item" && line.qty > 0 && line.qty > avail && !ownItemHeld;
 
   return (
-    <tr>
-      <td>
-        <div>{line.title}</div>
-        <div className="xsmall muted">
+    <div className={"till-line" + (goesNegative ? " flagged" : "")}>
+      <span className="art">{rec?.art ?? "—"}</span>
+      <div style={{ minWidth: 0 }}>
+        <div className="title">{line.title}</div>
+        <div className="meta">
           {line.grade && <span className="badge grade">{line.grade}</span>} {line.kind}
+          {line.qty !== 1 ? ` · qty ${line.qty}` : ""}
+          {line.discountPct ? ` · ${line.discountPct}% off` : ""} · {money(line.price)}
           {line.linkedSaleNumber ? ` · linked #${line.linkedSaleNumber}` : ""}
+          {line.note ? ` · ${line.note}` : ""}
         </div>
-        {line.note && <div className="xsmall muted">{line.note}</div>}
-        {goesNegative && (
-          <div className="callout danger" style={{ marginTop: 4 }}>
-            Stock would go negative ({avail} available). Till completes the Sale anyway — reconcile in
-            E-04. {rec ? "" : ""}
+        {!locked && (
+          <div className="till-controls">
+            <label>
+              <span>Qty</span>
+              <input
+                className="inline-num"
+                type="number"
+                value={line.qty}
+                onChange={(e) => app.updateLine(sale.id, line.id, { qty: Number(e.target.value) })}
+              />
+            </label>
+            <label>
+              <span>Price</span>
+              <input
+                className="inline-num"
+                type="number"
+                step="0.01"
+                value={line.price}
+                onChange={(e) => app.updateLine(sale.id, line.id, { price: Number(e.target.value) })}
+              />
+            </label>
+            <label>
+              <span>Disc %</span>
+              <input
+                className="inline-pct"
+                type="number"
+                min={0}
+                max={99}
+                step={1}
+                value={line.discountPct}
+                onChange={(e) => {
+                  const clamped = Math.max(0, Math.min(99, Math.round(Number(e.target.value) || 0)));
+                  app.updateLine(sale.id, line.id, { discountPct: clamped });
+                }}
+              />
+            </label>
+            <label>
+              <span>Tax</span>
+              <select
+                value={line.taxLineId}
+                onChange={(e) => app.updateLine(sale.id, line.id, { taxLineId: e.target.value })}
+              >
+                {app.taxLines.map((t) => (
+                  <option key={t.id} value={t.id}>
+                    {t.name}
+                  </option>
+                ))}
+              </select>
+            </label>
           </div>
         )}
-      </td>
-      <td className="num">
-        <input
-          className="inline-num"
-          type="number"
-          value={line.qty}
-          disabled={locked}
-          onChange={(e) => app.updateLine(sale.id, line.id, { qty: Number(e.target.value) })}
-        />
-      </td>
-      <td className="num">
-        <input
-          className="inline-num"
-          type="number"
-          step="0.01"
-          value={line.price}
-          disabled={locked}
-          onChange={(e) => app.updateLine(sale.id, line.id, { price: Number(e.target.value) })}
-        />
-      </td>
-      <td className="num">
-        <input
-          className="inline-pct"
-          type="number"
-          min={0}
-          max={99}
-          step={1}
-          value={line.discountPct}
-          disabled={locked}
-          onChange={(e) => {
-            const clamped = Math.max(0, Math.min(99, Math.round(Number(e.target.value) || 0)));
-            app.updateLine(sale.id, line.id, { discountPct: clamped });
-          }}
-        />
-      </td>
-      <td>
-        <select
-          value={line.taxLineId}
-          disabled={locked}
-          onChange={(e) => app.updateLine(sale.id, line.id, { taxLineId: e.target.value })}
-        >
-          {app.taxLines.map((t) => (
-            <option key={t.id} value={t.id}>
-              {t.name}
-            </option>
-          ))}
-        </select>
-      </td>
-      <td className="num">{money(net)}</td>
-      <td className="num">
+        {goesNegative && (
+          <div className="callout danger" style={{ marginTop: "var(--sp-2)" }}>
+            Stock would go negative ({avail} available). The till completes the Sale anyway and
+            raises a review flag — reconciled in E-04.
+          </div>
+        )}
+      </div>
+      <div className="net">{money(net)}</div>
+      <div>
         {!locked && (
-          <button className="btn ghost sm" onClick={() => app.removeLine(sale.id, line.id)}>
+          <button
+            className="btn ghost sm"
+            title="Remove line"
+            onClick={() => app.removeLine(sale.id, line.id)}
+          >
             ✕
           </button>
         )}
-      </td>
-    </tr>
+      </div>
+    </div>
   );
 }
 
@@ -1430,11 +1525,13 @@ function PricePrompt({
 }
 
 function TenderModal({
+  initialType = "Cash",
   due,
   hasCustomer,
   onAdd,
   onClose,
 }: {
+  initialType?: TenderType;
   due: number;
   hasCustomer: boolean;
   onAdd: (t: {
@@ -1446,7 +1543,7 @@ function TenderModal({
   }) => void;
   onClose: () => void;
 }) {
-  const [type, setType] = useState<TenderType>("Cash");
+  const [type, setType] = useState<TenderType>(initialType);
   const [raw, setRaw] = useState(String(Math.max(0, due).toFixed(2)));
   const [note, setNote] = useState("");
   const [reference, setReference] = useState("");

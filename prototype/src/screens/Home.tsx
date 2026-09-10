@@ -117,7 +117,7 @@ export function Home() {
 
       <div className="legend">
         <span>
-          <span className="badge accent">Built</span> clickable, wired to state
+          <span className="badge ok">Built</span> clickable, wired to state
         </span>
         <span>
           <span className="badge">Stub</span> not in this first pass
