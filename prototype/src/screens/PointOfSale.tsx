@@ -1386,7 +1386,14 @@ function TenderModal({
 
   const needsCustomer = type === "Account Balance" && !hasCustomer;
   const needsNote = type === "Pay-out" && note.trim().length === 0;
-  const isNegativeType = type === "Pay-out";
+  // Negative amounts are for tenders that don't count toward paying off
+  // this Sale's total — Pay-out sends cash out of the till for an expense,
+  // and "add to balance" redirects an incoming tender (e.g. cash) into the
+  // Customer's store credit instead of applying it to the Sale. Both need
+  // an equal, opposite tender elsewhere to actually fund them; storing them
+  // negative is what makes balanceDue net that out instead of double-
+  // counting the money as both "received" and "credited".
+  const isNegativeType = type === "Pay-out" || (type === "Account Balance" && acctDirection === "add");
 
   return (
     <Modal
