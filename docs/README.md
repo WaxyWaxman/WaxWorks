@@ -8,7 +8,10 @@ Point-of-sale and inventory management for independent vinyl record stores.
 |---|---|
 | [PRD.md](PRD.md) | Product context, users, domain model, cross-cutting concerns |
 | [flows/](flows/) | One document per user flow — the detailed specs |
+| [architecture/](architecture/) | System design, derived from the specified flows |
+| [decisions/](decisions/) | ADRs — cross-cutting decisions that outlive any single flow |
 | [reference/](reference/) | Worked examples and external-system notes |
+| [templates/](templates/) | Starting points for new flows and ADRs |
 
 ## Flows
 
@@ -54,3 +57,16 @@ Point-of-sale and inventory management for independent vinyl record stores.
 ## Working process
 
 Flows are developed by walking through the steps, interrogating them for gaps, and recording the resolved decisions. A flow moves to `Specified` once its decision table is filled and only genuine unknowns remain open.
+
+## Planning agent
+
+The planning work is driven by skills in [`.claude/skills/`](../.claude/skills/),
+shared through this repository so both of us get the same behaviour. See
+[`CLAUDE.md`](../CLAUDE.md).
+
+| Skill | Use it to |
+|---|---|
+| `/flow-clarify <ID>` | Walk a flow, interrogate it for gaps, drive it toward `Specified` |
+| `/flow-new` | Scaffold a new flow and register it in every index |
+| `/architecture` | Derive architecture docs and ADRs from the specified flows |
+| `/spec-audit` | Check the doc set for contradictions, drift, and dangling links |

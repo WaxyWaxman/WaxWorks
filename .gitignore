@@ -1,0 +1,14 @@
+# Local Claude Code state — worktrees, session data, per-user overrides.
+# The shared agent configuration under .claude/skills, .claude/agents and
+# .claude/settings.json IS tracked; everything below is machine-local.
+.claude/worktrees/
+.claude/settings.local.json
+.claude/memory/
+.claude/projects/
+.claude/shell-snapshots/
+.claude/todos/
+.claude/statsig/
+
+# OS / editor noise
+.DS_Store
+Thumbs.db
