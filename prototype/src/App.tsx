@@ -1,3 +1,4 @@
+import { useEffect, useRef, useState } from "react";
 import { NavLink, Route, Routes, useLocation } from "react-router-dom";
 import { CURRENT_USER } from "./data/seed";
 import { Home } from "./screens/Home";
@@ -13,30 +14,60 @@ import { Suppliers } from "./screens/Suppliers";
 import { AccountsPayable } from "./screens/AccountsPayable";
 import { ReviewQueueBadge } from "./components/ReviewQueue";
 
-// The top menu is one band of equal segments (design review — Signal). The
-// short word is what staff read; the flow ID stays underneath it because this
-// is a review prototype and every screen has to stay citable.
-const NAV = [
-  // Counter work first, then the back office, which is the order the day
-  // happens in. Ten destinations is more than the reviewed design's five, and
-  // the band is tight at this width — see docs/prototype.md.
-  { to: "/", label: "Home", flow: "flow map", end: true },
-  { to: "/sell", label: "Sell", flow: "E-05" },
+// The top menu is one band of equal segments (design review — Signal), and it
+// carries exactly the three jobs done with a customer at the counter. Everything
+// else lives under More.
+//
+// The split is by WHO IS WAITING, not by how often a screen is used: Find,
+// Sell and Receive are the things done with someone standing there, so they
+// never cost a click. Accounts payable is used every week and is still under
+// More, because nobody is waiting on it.
+//
+// The short word is what staff read; the flow ID stays underneath it because
+// this is a review prototype and every screen has to stay citable.
+const PRIMARY_NAV = [
   { to: "/search", label: "Find", flow: "E-03/04" },
+  { to: "/sell", label: "Sell", flow: "E-05" },
   { to: "/receiving", label: "Receive", flow: "E-02" },
-  { to: "/orders", label: "Orders", flow: "M-02" },
-  { to: "/on-order", label: "On order", flow: "M-02" },
-  { to: "/customers", label: "Customers", flow: "E-07" },
-  { to: "/suppliers", label: "Suppliers", flow: "M-01" },
-  { to: "/claims", label: "Claims", flow: "E-04" },
-  { to: "/payable", label: "Payable", flow: "M-05" },
 ];
+
+// Grouped so More is a menu rather than a list of ten things. Group names are
+// what the work is, not what the screens are called.
+const MORE_NAV: { group: string; items: { to: string; label: string; flow: string; end?: boolean }[] }[] = [
+  {
+    group: "Ordering",
+    items: [
+      { to: "/orders", label: "Order processing", flow: "M-02" },
+      { to: "/on-order", label: "What's on order", flow: "M-02" },
+    ],
+  },
+  {
+    group: "Money",
+    items: [
+      { to: "/payable", label: "Accounts payable", flow: "M-05" },
+      { to: "/claims", label: "Supplier claims", flow: "E-04" },
+    ],
+  },
+  {
+    group: "Records",
+    items: [
+      { to: "/customers", label: "Customers", flow: "E-07" },
+      { to: "/suppliers", label: "Suppliers", flow: "M-01" },
+    ],
+  },
+  {
+    group: "This prototype",
+    items: [{ to: "/", label: "Flow map", flow: "review path", end: true }],
+  },
+];
+
+const MORE_PATHS = MORE_NAV.flatMap((g) => g.items.map((i) => i.to));
 
 export function App() {
   const location = useLocation();
   // /return/:saleId has no nav entry of its own — a Return is entered from
-  // (and belongs to) Point of Sale, so its editor keeps "E-05 Point of Sale"
-  // lit rather than showing no active tab at all.
+  // (and belongs to) Point of Sale, so its editor keeps "Sell" lit rather than
+  // showing no active tab at all.
   const onReturn = location.pathname.startsWith("/return");
 
   return (
@@ -46,17 +77,17 @@ export function App() {
           <span className="dot" /> Wax Works
         </NavLink>
         <nav>
-          {NAV.map((n) => (
+          {PRIMARY_NAV.map((n) => (
             <NavLink
               key={n.to}
               to={n.to}
-              end={n.end}
               className={({ isActive }) => (isActive || (n.to === "/sell" && onReturn) ? "active" : "")}
             >
               {n.label}
               <span className="flow">{n.flow}</span>
             </NavLink>
           ))}
+          <MoreMenu />
         </nav>
         <span className="review-slot">
           <ReviewQueueBadge />
@@ -80,6 +111,82 @@ export function App() {
           <Route path="/payable" element={<AccountsPayable />} />
         </Routes>
       </main>
+    </div>
+  );
+}
+
+// More is a segment of the band that happens to open a panel. It lights up
+// like any other segment when the screen you are on lives inside it, so the
+// band never claims nothing is selected.
+function MoreMenu() {
+  const location = useLocation();
+  const [open, setOpen] = useState(false);
+  const wrapRef = useRef<HTMLDivElement>(null);
+  const btnRef = useRef<HTMLButtonElement>(null);
+
+  const holdsCurrent =
+    location.pathname === "/" ||
+    MORE_PATHS.some((p) => p !== "/" && location.pathname.startsWith(p));
+
+  // Close on route change — otherwise the panel hangs over the screen it just
+  // navigated to.
+  useEffect(() => setOpen(false), [location.pathname]);
+
+  useEffect(() => {
+    if (!open) return;
+    const onPointer = (e: PointerEvent) => {
+      if (!wrapRef.current?.contains(e.target as Node)) setOpen(false);
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "Escape") return;
+      setOpen(false);
+      btnRef.current?.focus();
+    };
+    document.addEventListener("pointerdown", onPointer);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("pointerdown", onPointer);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [open]);
+
+  return (
+    <div className="more-wrap" ref={wrapRef}>
+      <button
+        ref={btnRef}
+        type="button"
+        className={"more-btn" + (holdsCurrent || open ? " active" : "")}
+        aria-haspopup="true"
+        aria-expanded={open}
+        onClick={() => setOpen((v) => !v)}
+      >
+        More
+        <span className="flow">
+          {MORE_PATHS.length} more <span aria-hidden="true">▾</span>
+        </span>
+      </button>
+
+      {open && (
+        <div className="more-panel" role="menu">
+          {MORE_NAV.map((g) => (
+            <div className="more-group" key={g.group}>
+              <div className="more-group-head">{g.group}</div>
+              {g.items.map((i) => (
+                <NavLink
+                  key={i.to}
+                  to={i.to}
+                  end={i.end}
+                  role="menuitem"
+                  className={({ isActive }) => "more-item" + (isActive ? " active" : "")}
+                >
+                  <span>{i.label}</span>
+                  <span className="flow">{i.flow}</span>
+                </NavLink>
+              ))}
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

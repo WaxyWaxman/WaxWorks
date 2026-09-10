@@ -43,17 +43,10 @@ code, .mono { font-family: var(--font-mono); font-size: 0.92em; }
 .topbar nav a {
   flex: 1; min-width: 0; display: flex; flex-direction: column;
   align-items: center; justify-content: center; gap: 1px;
-  padding: 0 var(--sp-1); border-right: 1px solid var(--c-border-strong);
-  color: var(--c-ink-soft); font-size: var(--fs-sm); font-weight: 600;
-  letter-spacing: 0.03em; text-transform: uppercase; text-align: center;
+  padding: 0 var(--sp-3); border-right: 1px solid var(--c-border-strong);
+  color: var(--c-ink-soft); font-size: var(--fs-md); font-weight: 600;
+  letter-spacing: 0.05em; text-transform: uppercase; text-align: center;
   white-space: nowrap; overflow: hidden;
-}
-/* Ten destinations is more than the reviewed design's five. Below this the
-   band would clip its own labels, so it scrolls sideways instead — the
-   segments keep their size and none of them silently disappears. */
-@media (max-width: 1180px) {
-  .topbar nav { overflow-x: auto; }
-  .topbar nav a { flex: 0 0 auto; min-width: 96px; }
 }
 .topbar nav a .flow {
   font-family: var(--font-mono); font-size: 9.5px; font-weight: 500;
@@ -68,6 +61,55 @@ code, .mono { font-family: var(--font-mono); font-size: 0.92em; }
   font-size: var(--fs-sm); color: var(--c-ink-soft);
 }
 .topbar .review-slot { display: flex; align-items: center; padding: 0 var(--sp-3); flex: none; border-left: 1px solid var(--c-border-strong); }
+
+/* ---- More ----
+   A segment of the band that opens a panel. It is styled from the same rules
+   as a NavLink segment on purpose: More is a destination-shaped thing, and if
+   it looked like a control the band would read as three items plus a widget. */
+.more-wrap { position: relative; display: flex; flex: 1; min-width: 0; }
+.more-btn {
+  appearance: none; cursor: pointer; font: inherit; background: var(--c-surface);
+  flex: 1; min-width: 0; display: flex; flex-direction: column;
+  align-items: center; justify-content: center; gap: 1px;
+  padding: 0 var(--sp-3); border: none; border-right: 1px solid var(--c-border-strong);
+  color: var(--c-ink-soft); font-size: var(--fs-md); font-weight: 600;
+  letter-spacing: 0.05em; text-transform: uppercase; white-space: nowrap;
+}
+.more-btn:hover { background: var(--c-surface-2); }
+.more-btn.active { background: var(--c-ink); color: #fff; font-weight: 800; }
+.more-btn .flow {
+  font-family: var(--font-mono); font-size: 9.5px; font-weight: 500;
+  letter-spacing: 0.04em; text-transform: none; color: var(--c-ink-faint);
+}
+.more-btn.active .flow { color: rgba(255, 255, 255, 0.6); }
+
+.more-panel {
+  position: absolute; top: 100%; right: 0; z-index: 30;
+  min-width: 268px; background: var(--c-surface);
+  border: 1px solid var(--c-ink); border-top: none;
+  box-shadow: var(--shadow-2); padding: var(--sp-2) 0;
+}
+.more-panel .more-group + .more-group { border-top: 1px solid var(--c-border); margin-top: var(--sp-2); padding-top: var(--sp-2); }
+.more-panel .more-group-head {
+  font-family: var(--font-narrow); font-size: var(--fs-xs); font-weight: 700;
+  letter-spacing: 0.1em; text-transform: uppercase; color: var(--c-ink-faint);
+  padding: var(--sp-1) var(--sp-4);
+}
+/* Scoped past `.topbar nav a`, which would otherwise centre and upper-case
+   these — the band's segments and the panel's rows are different things. */
+.more-panel .more-item {
+  display: flex; flex-direction: row; align-items: baseline;
+  justify-content: space-between; gap: var(--sp-4);
+  padding: var(--sp-2) var(--sp-4); border-right: none;
+  color: var(--c-ink); font-size: var(--fs-base); font-weight: 400;
+  text-transform: none; letter-spacing: 0; text-align: left; white-space: nowrap;
+}
+.more-panel .more-item:hover { background: var(--c-surface-2); text-decoration: none; }
+.more-panel .more-item.active { background: var(--c-accent-soft); box-shadow: inset 3px 0 0 var(--c-accent); font-weight: 600; }
+.more-panel .more-item .flow {
+  font-family: var(--font-mono); font-size: var(--fs-xs); font-weight: 400;
+  letter-spacing: 0; text-transform: none; color: var(--c-ink-faint);
+}
 
 .main { flex: 1; width: 100%; max-width: var(--maxw); margin: 0 auto; padding: var(--sp-5); }
 

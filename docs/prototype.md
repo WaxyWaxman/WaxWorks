@@ -59,18 +59,27 @@ implements.
 
 | Element | Comes from |
 |---|---|
-| Top menu | One band of equal segments, the active one filled solid |
+| Top menu | One band of equal segments, the active one filled solid, ending in **More** |
 | Point of Sale | Large scan field, large line rows, a total readable across the counter |
 | Receiving | Worklist rail on the left, art-led line table, reconcile as a footer strip |
 | Search | Results rail, titlecard, actions rail |
 
-**Known strain: the menu band was designed for five destinations, and there are
-now ten.** They fit at 1440px (94px a segment) and the band scrolls sideways
-below 1180px rather than clipping a label, but the segments are tight and every
-new screen makes them tighter. The reviewed design's own answer was a **MORE**
-segment holding the back office; that is not implemented, because hiding half
-the screens behind a menu makes a *review* prototype harder to review. Worth
-revisiting when the eleventh screen lands.
+### What the band carries
+
+**Find · Sell · Receive · More.** The split is by **who is waiting**, not by how
+often a screen is used: those three are the jobs done with a customer standing
+there, so they never cost a click. Accounts payable is touched every week and
+still sits under More, because nobody is waiting on it.
+
+More is a segment of the band, not a control bolted to the end of it — same
+size, same type, same fill when active. It lights up whenever the screen you are
+on lives inside it, so the band never claims nothing is selected. Its contents
+are grouped by the work rather than listed flat: **Ordering** (M-02),
+**Money** (M-05, supplier claims), **Records** (E-07, M-01), and the flow map.
+
+This also fixes what ten flat segments had started to cost. Four segments hold
+their size down to 900px with nothing clipped, and a new back-office screen now
+lands in a group instead of squeezing the band.
 
 The rule that makes it work, and the one to hold the line on: **the chrome is
 achromatic, and colour means exactly two things** — the primary action (one
