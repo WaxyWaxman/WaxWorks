@@ -57,6 +57,25 @@ export const SUPPLIERS: Supplier[] = [
     mainPhone: "212-555-0199",
     log: [{ at: "2026-01-06 09:00:00", text: "Discount set to 50% by RD" }],
   },
+  {
+    id: "sup-crate",
+    shortName: "CRAT",
+    name: "Crate Digger Wholesale",
+    accountNumber: "CD-118",
+    orderVia: "Email",
+    minOrderQty: 10,
+    minOrderAmount: 0,
+    minOrderAmountBasis: "Net",
+    discountPct: 40,
+    cancelByDays: 30,
+    currency: "CAD",
+    type: "New",
+    notes: "Email-only ordering — no rep, no phone line.",
+    email: "orders@cratedigger.example",
+    backordersAllowed: true,
+    mainPhone: "438-555-0177",
+    log: [{ at: "2026-01-06 09:00:00", text: "Discount set to 40% by RD" }],
+  },
   // A real Supplier record, not a special case — second-hand walk-ins just
   // suggest this one first (E-02 decision 27). discountPct is unused for
   // it: second-hand copies are priced per copy, never off a supplier
@@ -79,13 +98,25 @@ export const SUPPLIERS: Supplier[] = [
   },
 ];
 
-// ---- Pending orders (thin — just enough for Receiving's Orders lookup; full
-// M-02 — placing orders, reorder suggestions, backorders — is not in this pass) ----
+// ---- Pending orders (M-02) — Phase 1 raising isn't built yet (no titlecard
+// "Order" button in this pass), so these are seeded as if raised already.
+// poNumber + placedAt unset means still pending, i.e. Order Processing's
+// job; set means already placed, which is also what backs Receiving's
+// Orders lookup. No reorder suggestions, no backorder lifecycle (Phase 3). ----
 export const PENDING_ORDERS: PendingOrderLine[] = [
-  { id: "po-line-1", supplierId: "sup-fab", poNumber: "PO-1042", recordId: "r-kind", scannedCode: "888751545519", qty: 2, expectedListPrice: 22.0, expectedDiscountPct: 15, createdAt: "2026-09-02 10:15:00" },
-  { id: "po-line-2", supplierId: "sup-fab", poNumber: "PO-1042", recordId: "r-purple", scannedCode: "075992511018", qty: 3, expectedListPrice: 24.0, expectedDiscountPct: 10, createdAt: "2026-09-02 10:15:00" },
-  { id: "po-line-3", supplierId: "sup-fab", recordId: "r-blue", scannedCode: "081227971609", qty: 2, expectedListPrice: 27.99, expectedDiscountPct: 10, createdAt: "2026-09-05 14:30:00" },
-  { id: "po-line-4", supplierId: "sup-indie", poNumber: "PO-77", recordId: "r-horses", scannedCode: "060758004321", qty: 1, expectedListPrice: 20.0, expectedDiscountPct: 0, customerId: "c-theo", createdAt: "2026-09-06 09:00:00" },
+  // sup-fab — one already-placed PO (PO-1042, two lines) plus one pending line
+  { id: "po-line-1", supplierId: "sup-fab", poNumber: "PO-1042", placedAt: "2026-09-02 11:00:00", recordId: "r-kind", scannedCode: "888751545519", qty: 2, sellPrice: 24.0, expectedListPrice: 22.0, expectedDiscountPct: 15, createdAt: "2026-09-02 10:15:00" },
+  { id: "po-line-2", supplierId: "sup-fab", poNumber: "PO-1042", placedAt: "2026-09-02 11:00:00", recordId: "r-purple", scannedCode: "075992511018", qty: 3, sellPrice: 32.99, expectedListPrice: 24.0, expectedDiscountPct: 10, createdAt: "2026-09-02 10:15:00" },
+  { id: "po-line-3", supplierId: "sup-fab", recordId: "r-blue", scannedCode: "081227971609", qty: 2, sellPrice: 28.99, expectedListPrice: 27.99, expectedDiscountPct: 10, createdAt: "2026-09-05 14:30:00" },
+
+  // sup-indie — one already-placed PO (PO-77, customer-attached) plus one pending line
+  { id: "po-line-4", supplierId: "sup-indie", poNumber: "PO-77", placedAt: "2026-09-06 09:30:00", recordId: "r-horses", scannedCode: "060758004321", qty: 1, sellPrice: 24.99, expectedListPrice: 20.0, expectedDiscountPct: 0, customerId: "c-theo", createdAt: "2026-09-06 09:00:00" },
+  { id: "po-line-5", supplierId: "sup-indie", recordId: "r-purple", qty: 1, sellPrice: 32.99, createdAt: "2026-09-08 16:00:00" },
+
+  // sup-crate (Email order-via) — two pending lines on the regular stream, one customer-attached, plus a "R" (rush) stream that alone already meets the 10-unit minimum
+  { id: "po-line-6", supplierId: "sup-crate", recordId: "r-illmatic", qty: 4, sellPrice: 45.0, createdAt: "2026-09-07 10:00:00" },
+  { id: "po-line-7", supplierId: "sup-crate", recordId: "r-ok", qty: 2, sellPrice: 36.99, customerId: "c-ramona", createdAt: "2026-09-08 09:00:00" },
+  { id: "po-line-8", supplierId: "sup-crate", separator: "R", recordId: "r-tote", qty: 10, sellPrice: 18.0, createdAt: "2026-09-09 08:00:00" },
 ];
 
 // ---- Records ----

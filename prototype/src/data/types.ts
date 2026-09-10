@@ -272,19 +272,27 @@ export interface InvoiceLine {
   fromOrderId?: string; // the PendingOrderLine this was received against, if any
 }
 
-// A supplier order not yet received — thin scaffold for the Orders lookup in
-// Receiving. Not M-02 (no PO creation, no reorder suggestions, no backorder
-// lifecycle) — just enough to look one up and receive against it.
+// A supplier order line (M-02). `poNumber` unset means the line has been
+// raised but not yet sent anywhere (Phase 1); Processing a stream (Phase 2)
+// assigns a PO number and `placedAt` to every line in it at once. Also backs
+// the Orders lookup in Receiving — a line stops being pending once received
+// against (E-02). Reorder suggestions and the backorder lifecycle (Phase 3)
+// are not modelled.
 export interface PendingOrderLine {
   id: string;
-  supplierId: string;
+  supplierId: string; // recorded on the line, not the Record — M-02 decision 2
+  separator?: string; // single optional letter splitting one supplier's pending lines into independent streams — decision 3
   poNumber?: string;
+  placedAt?: string; // set alongside poNumber when the stream is Processed
   recordId: string;
   scannedCode?: string;
   qty: number;
-  expectedListPrice?: number;
+  sellPrice: number; // selling price for this line, defaults to shelf price when raised — step 2
+  expectedListPrice?: number; // cost estimate consumed by Receiving's line pre-fill only
   expectedDiscountPct?: number;
-  customerId?: string;
+  customerId?: string; // customer-attached line
+  followUpDays?: number; // days after which to chase it if still unfulfilled — decision 8; not yet consumed (Phase 3)
+  createdBy?: string;
   createdAt: string;
 }
 

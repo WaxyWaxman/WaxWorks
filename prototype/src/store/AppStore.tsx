@@ -67,6 +67,7 @@ interface AppState {
   nextSaleNumber: number;
   nextHold: number;
   nextClaimNumber: number;
+  nextPoNumber: number; // M-02 decision 16 — ascending from 0
   nextInternalBarcode: number;
   nextInvoiceRef: number;
   nextCustomerPrimaryId: number;
@@ -148,6 +149,7 @@ const seed: AppState = {
   nextSaleNumber: 100241,
   nextHold: 2,
   nextClaimNumber: 12,
+  nextPoNumber: 0,
   nextInternalBarcode: 9000,
   nextInvoiceRef: 1,
   nextCustomerPrimaryId: CUSTOMERS.length + 1,
@@ -282,6 +284,46 @@ interface AppContextValue extends AppState {
 
   pendingOrderFor: (id?: string) => PendingOrderLine | undefined;
   receivePendingOrderLine: (id: string) => PendingOrderLine | null;
+
+  // M-02 Phase 1 — an Employee raising a pending line from a titlecard's
+  // Order button. Joins the Supplier's pending pile; carries no PO number
+  // until a Manager Processes it (Phase 2).
+  raisePendingOrderLine: (input: {
+    recordId: string;
+    supplierId: string;
+    separator?: string;
+    qty: number;
+    sellPrice: number;
+    customerId?: string;
+    followUpDays?: number;
+  }) => string;
+
+  // Order Processing (M-02) — editing a still-pending line in place. Only
+  // ever applies while poNumber is unset; a placed line goes through Cancel
+  // / Void (Phase 3, not built) instead of a quiet edit.
+  updatePendingOrderLine: (id: string, patch: Partial<Pick<PendingOrderLine, "qty" | "sellPrice" | "separator">>) => void;
+  deletePendingOrderLine: (id: string) => { customerAttached: boolean; recordId: string } | null;
+
+  // Mass-shift a whole pending stream (every unplaced line at
+  // supplierId+fromSeparator) onto a different separator in one move — the
+  // Order Processing pending table's own Sep dropdown, as opposed to
+  // retargeting one line at a time from View.
+  retargetStreamSeparator: (
+    supplierId: string,
+    fromSeparator: string | undefined,
+    toSeparator: string | undefined,
+  ) => { movedCount: number } | null;
+
+  // M-02 Phase 2 — processing a stream (one supplier + separator, all its
+  // still-unplaced lines) into a PurchaseOrder. `poNumber` blank auto-mints
+  // the next unused ascending number (decision 16); returns null if the
+  // stream is empty or the requested number is already taken.
+  poNumberTaken: (poNumber: string) => boolean;
+  processOrderStream: (
+    supplierId: string,
+    separator: string | undefined,
+    poNumber?: string,
+  ) => { poNumber: string; lineCount: number; unitCount: number; emailed: boolean } | null;
 }
 
 const Ctx = createContext<AppContextValue | null>(null);
@@ -1672,6 +1714,95 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
     return order;
   };
 
+  const raisePendingOrderLine: AppContextValue["raisePendingOrderLine"] = (input) => {
+    const id = uid("po-line");
+    const line: PendingOrderLine = {
+      id,
+      supplierId: input.supplierId,
+      separator: input.separator,
+      recordId: input.recordId,
+      qty: input.qty,
+      sellPrice: input.sellPrice,
+      customerId: input.customerId,
+      followUpDays: input.followUpDays,
+      createdBy: CURRENT_USER,
+      createdAt: now(),
+    };
+    setS((prev) => ({ ...prev, pendingOrders: [...prev.pendingOrders, line] }));
+    return id;
+  };
+
+  const updatePendingOrderLine: AppContextValue["updatePendingOrderLine"] = (id, patch) =>
+    setS((prev) => ({
+      ...prev,
+      pendingOrders: prev.pendingOrders.map((o) => (o.id === id && !o.poNumber ? { ...o, ...patch } : o)),
+    }));
+
+  const deletePendingOrderLine: AppContextValue["deletePendingOrderLine"] = (id) => {
+    const line = s.pendingOrders.find((o) => o.id === id && !o.poNumber);
+    if (!line) return null;
+    setS((prev) => ({ ...prev, pendingOrders: prev.pendingOrders.filter((o) => o.id !== id) }));
+    return { customerAttached: !!line.customerId, recordId: line.recordId };
+  };
+
+  const retargetStreamSeparator: AppContextValue["retargetStreamSeparator"] = (supplierId, fromSeparator, toSeparator) => {
+    const fromKey = fromSeparator ?? "";
+    const ids = new Set(
+      s.pendingOrders.filter((o) => o.supplierId === supplierId && !o.poNumber && (o.separator ?? "") === fromKey).map((o) => o.id),
+    );
+    if (ids.size === 0) return null;
+    setS((prev) => ({
+      ...prev,
+      pendingOrders: prev.pendingOrders.map((o) => (ids.has(o.id) ? { ...o, separator: toSeparator } : o)),
+    }));
+    return { movedCount: ids.size };
+  };
+
+  const poNumberTaken: AppContextValue["poNumberTaken"] = (poNumber) =>
+    s.pendingOrders.some((o) => o.poNumber === poNumber);
+
+  const processOrderStream: AppContextValue["processOrderStream"] = (supplierId, separator, poNumber) => {
+    const supplier = s.suppliers.find((sup) => sup.id === supplierId);
+    if (!supplier) return null;
+    const sep = separator || undefined;
+    const lines = s.pendingOrders.filter((o) => o.supplierId === supplierId && (o.separator || undefined) === sep && !o.poNumber);
+    if (lines.length === 0) return null;
+
+    const used = new Set(s.pendingOrders.map((o) => o.poNumber).filter((n): n is string => !!n));
+    let num = poNumber?.trim();
+    if (num) {
+      if (used.has(num)) return null; // caller should already have checked via poNumberTaken
+    } else {
+      let n = s.nextPoNumber;
+      while (used.has(String(n))) n++;
+      num = String(n);
+    }
+
+    const at = now();
+    const lineIds = new Set(lines.map((l) => l.id));
+    const unitCount = lines.reduce((sum, l) => sum + l.qty, 0);
+    const sellTotal = lines.reduce((sum, l) => sum + l.sellPrice * l.qty, 0);
+    const cancelBy = supplier.cancelByDays
+      ? new Date(Date.now() + supplier.cancelByDays * 86400000).toLocaleDateString("en-CA")
+      : undefined;
+    const emailed = supplier.orderVia === "Email";
+    const streamLabel = sep ? `separator ${sep}` : "no separator";
+    const logText = emailed
+      ? `PO ${num} emailed to ${supplier.email} (${streamLabel}) — ${lines.length} line${lines.length === 1 ? "" : "s"}, ${unitCount} units, sell ${money(sellTotal)}` +
+        (cancelBy ? `, cancel by ${cancelBy}` : "") +
+        `, backorders ${supplier.backordersAllowed ? "allowed" : "not allowed"}.`
+      : `PO ${num} placed via ${supplier.orderVia} (${streamLabel}) — ${lines.length} line${lines.length === 1 ? "" : "s"}, ${unitCount} units, sell ${money(sellTotal)}. Printable order document produced; this does not confirm the supplier received it.`;
+
+    setS((prev) => ({
+      ...prev,
+      nextPoNumber: /^\d+$/.test(num!) ? Math.max(prev.nextPoNumber, Number(num) + 1) : prev.nextPoNumber,
+      pendingOrders: prev.pendingOrders.map((o) => (lineIds.has(o.id) ? { ...o, poNumber: num, placedAt: at } : o)),
+      suppliers: prev.suppliers.map((sup) => (sup.id === supplierId ? { ...sup, log: [...sup.log, { at, text: logText }] } : sup)),
+    }));
+
+    return { poNumber: num!, lineCount: lines.length, unitCount, emailed };
+  };
+
   const value = useMemo<AppContextValue>(
     () => ({
       ...s,
@@ -1738,6 +1869,12 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
       markInvoicePaid,
       pendingOrderFor,
       receivePendingOrderLine,
+      raisePendingOrderLine,
+      updatePendingOrderLine,
+      deletePendingOrderLine,
+      retargetStreamSeparator,
+      poNumberTaken,
+      processOrderStream,
     }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [s],
