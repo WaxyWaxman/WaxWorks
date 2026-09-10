@@ -1,5 +1,4 @@
 import { useEffect, useState } from "react";
-import { ManagerOverride } from "../components/ManagerOverride";
 import { Modal } from "../components/Modal";
 import {
   GRADES,
@@ -357,13 +356,20 @@ function InvoiceEditor({ invoiceId }: { invoiceId: string }) {
   const pctDelta = computedTotal !== 0 ? Math.abs(delta) / computedTotal : Math.abs(delta) > 0 ? 1 : 0;
   const beyondTolerance = Math.abs(delta) > 0.005 && pctDelta > 0.02;
   const [finalizedCount, setFinalizedCount] = useState<number | null>(null);
-  const [markingPaid, setMarkingPaid] = useState(false);
+  const [labelsNote, setLabelsNote] = useState<string | null>(null);
 
   const doFinalize = () => {
     if (delta !== 0) app.setInvoiceTotalOverride(invoiceId, enteredTotal);
     const res = app.finalizeInvoice(invoiceId);
     if (res) setFinalizedCount(res.itemCount);
   };
+
+  const doSaveUpdates = () => {
+    if (delta !== 0) app.setInvoiceTotalOverride(invoiceId, enteredTotal);
+  };
+
+  const mintedCount = invoice.lines.reduce((sum, l) => sum + (l.itemIds?.length ?? 0), 0);
+  const printAllLabels = () => setLabelsNote(`${mintedCount} label${mintedCount === 1 ? "" : "s"} would print here (stub) — hooked up down the line.`);
 
   return (
     <div className="sell">
@@ -445,6 +451,10 @@ function InvoiceEditor({ invoiceId }: { invoiceId: string }) {
                         if (res.blocked) {
                           setNote("Can't remove that line — one of its copies has already sold.");
                         }
+                      }}
+                      onPrintLabel={() => {
+                        const n = l.itemIds?.length ?? 0;
+                        setLabelsNote(`${n} label${n === 1 ? "" : "s"} would print here (stub) — hooked up down the line.`);
                       }}
                     />
                   ),
@@ -586,19 +596,32 @@ function InvoiceEditor({ invoiceId }: { invoiceId: string }) {
               <button className="btn primary lg" disabled={invoice.lines.length === 0} onClick={doFinalize}>
                 Finalize
               </button>
+              <button className="btn lg" onClick={printAllLabels} disabled={mintedCount === 0} title="Stub — nothing minted yet">
+                🏷 Print all labels
+              </button>
             </div>
           </div>
         )}
         {invoice.status === "Finalized" && (
           <div className="card">
             <div className="card-body btn-row">
-              <button className="btn primary lg" onClick={() => setMarkingPaid(true)}>
-                Mark as paid (locks this invoice)
+              <button className="btn primary lg" onClick={doSaveUpdates}>
+                Save updates
+              </button>
+              <button className="btn lg" onClick={printAllLabels}>
+                🏷 Print all labels
               </button>
             </div>
             <div className="card-body xsmall muted" style={{ paddingTop: 0 }}>
-              Paying is Accounts Payable's job (M-05, manager-only) — this is what actually makes
-              the paperwork official.
+              Marking this paid happens in Accounts Payable (M-05, manager-only), not here — this
+              Invoice stays open for correction until then.
+            </div>
+          </div>
+        )}
+        {labelsNote && (
+          <div className="card">
+            <div className="card-body">
+              <div className="callout ok">{labelsNote}</div>
             </div>
           </div>
         )}
@@ -620,16 +643,6 @@ function InvoiceEditor({ invoiceId }: { invoiceId: string }) {
             until it's marked paid.
           </div>
         </Modal>
-      )}
-      {markingPaid && (
-        <ManagerOverride
-          reason={`Mark ${supplier.shortName} ${invoice.invoiceNumber} as paid — this locks it permanently.`}
-          onCancel={() => setMarkingPaid(false)}
-          onConfirm={(by) => {
-            app.markInvoicePaid(invoiceId, by);
-            setMarkingPaid(false);
-          }}
-        />
       )}
     </div>
   );
@@ -727,14 +740,17 @@ function ReadLineRow({
   locked,
   onEdit,
   onRemove,
+  onPrintLabel,
 }: {
   line: InvoiceLine;
   recordTitle: string;
   locked: boolean;
   onEdit: () => void;
   onRemove: () => void;
+  onPrintLabel: () => void;
 }) {
   const marginPct = line.acceptedPrice > 0 ? round2(((line.acceptedPrice - line.cost) / line.acceptedPrice) * 100) : 0;
+  const minted = (line.itemIds?.length ?? 0) > 0;
   return (
     <tr>
       <td className="mono small">{line.scannedCode ?? "—"}</td>
@@ -749,16 +765,26 @@ function ReadLineRow({
       <td className="num">{line.qty}</td>
       <td className="num">{money(line.cost * line.qty)}</td>
       <td className="num">
-        {!locked && (
-          <div className="btn-row" style={{ justifyContent: "flex-end" }}>
-            <button className="btn ghost sm" onClick={onEdit} title="Edit this line">
-              ✏
-            </button>
-            <button className="btn ghost sm" onClick={onRemove} title="Remove this line">
-              ✕
-            </button>
-          </div>
-        )}
+        <div className="btn-row" style={{ justifyContent: "flex-end" }}>
+          {!locked && (
+            <>
+              <button className="btn ghost sm" onClick={onEdit} title="Edit this line">
+                ✏
+              </button>
+              <button className="btn ghost sm" onClick={onRemove} title="Remove this line">
+                ✕
+              </button>
+            </>
+          )}
+          <button
+            className="btn ghost sm"
+            onClick={onPrintLabel}
+            disabled={!minted}
+            title={minted ? "Print label — stub, hooked up down the line" : "Print label — nothing minted yet"}
+          >
+            🏷
+          </button>
+        </div>
       </td>
     </tr>
   );
