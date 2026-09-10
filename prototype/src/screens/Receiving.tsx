@@ -342,7 +342,10 @@ function InvoiceEditor({ invoiceId }: { invoiceId: string }) {
   const [prefillOrder, setPrefillOrder] = useState<PendingOrderLine | null>(null);
   const [rowResetKey, setRowResetKey] = useState(0);
 
-  const locked = invoice.status === "Finalized";
+  // Finalize is about stock, not paperwork — it mints sellable InventoryItems
+  // but leaves the Invoice open for correction. Only Paid (via Accounts
+  // Payable settling the balance) actually locks it.
+  const locked = invoice.status === "Paid";
 
   const derivedSubtotal = round2(invoice.lines.reduce((sum, l) => sum + l.cost * l.qty, 0));
   const mismatch = Math.abs(derivedSubtotal - invoice.statedSubtotal) > 0.01;
@@ -352,9 +355,9 @@ function InvoiceEditor({ invoiceId }: { invoiceId: string }) {
   const enteredTotal = Number(totalRaw) || 0;
   const delta = round2(enteredTotal - computedTotal);
   const pctDelta = computedTotal !== 0 ? Math.abs(delta) / computedTotal : Math.abs(delta) > 0 ? 1 : 0;
-  const needsOverride = Math.abs(delta) > 0.005 && pctDelta > 0.02;
-  const [overrideTotal, setOverrideTotal] = useState<{ enteredTotal: number } | null>(null);
+  const beyondTolerance = Math.abs(delta) > 0.005 && pctDelta > 0.02;
   const [finalizedCount, setFinalizedCount] = useState<number | null>(null);
+  const [markingPaid, setMarkingPaid] = useState(false);
 
   const doFinalize = () => {
     if (delta !== 0) app.setInvoiceTotalOverride(invoiceId, enteredTotal);
@@ -376,10 +379,16 @@ function InvoiceEditor({ invoiceId }: { invoiceId: string }) {
               <span>Received {invoice.receivedDate}</span>
               <span>Supplier margin {supplier.marginPct}% (M-01, not editable in this pass)</span>
             </div>
-            {locked && (
+            {invoice.status === "Finalized" && (
               <div className="callout">
-                Finalized invoices are immutable — voids and amendments are manager-only, handled
-                in E-04 (decision 23, not in this pass).
+                Finalized — its lines are sellable, but the Invoice stays open for correction
+                (fix a cost, add a line for a carton that turns up late) until it's marked paid.
+              </div>
+            )}
+            {invoice.status === "Paid" && (
+              <div className="callout ok">
+                Paid on {invoice.paidAt} by {invoice.paidBy} — now immutable. Corrections from here
+                are manager-only, via E-04.
               </div>
             )}
           </div>
@@ -431,7 +440,12 @@ function InvoiceEditor({ invoiceId }: { invoiceId: string }) {
                       }
                       locked={locked}
                       onEdit={() => setEditingLineId(l.id)}
-                      onRemove={() => app.removeInvoiceLine(invoiceId, l.id)}
+                      onRemove={() => {
+                        const res = app.removeInvoiceLine(invoiceId, l.id);
+                        if (res.blocked) {
+                          setNote("Can't remove that line — one of its copies has already sold.");
+                        }
+                      }}
                     />
                   ),
                 )}
@@ -547,7 +561,7 @@ function InvoiceEditor({ invoiceId }: { invoiceId: string }) {
               <span className="num">{money(computedTotal)}</span>
             </div>
             <label className="field" style={{ margin: 0 }}>
-              <span>Total — ±2% reconciles freely, beyond that needs a manager override</span>
+              <span>Total — ±2% reconciles freely; beyond that proceeds and raises a review flag</span>
               <input
                 type="number"
                 step="0.01"
@@ -557,43 +571,39 @@ function InvoiceEditor({ invoiceId }: { invoiceId: string }) {
               />
             </label>
             {delta !== 0 && (
-              <div className={"callout" + (needsOverride ? " danger" : "")}>
+              <div className="callout">
                 Adjustment {money(delta)} ({(pctDelta * 100).toFixed(1)}%) — a standalone line into
                 cost of goods, not redistributed across items (decision 21).
-                {needsOverride && " Beyond ±2%: needs a manager override."}
-                {invoice.totalOverrideBy && <div className="xsmall">Overridden by {invoice.totalOverrideBy}</div>}
+                {beyondTolerance && " Beyond ±2%: proceeds and raises a review flag (M-04 d8)."}
               </div>
             )}
           </div>
         </div>
 
-        {!locked && (
+        {invoice.status === "Draft" && (
           <div className="card">
             <div className="card-body btn-row">
-              <button
-                className="btn primary lg"
-                disabled={invoice.lines.length === 0}
-                onClick={() => (needsOverride ? setOverrideTotal({ enteredTotal }) : doFinalize())}
-              >
-                {needsOverride ? "Reconcile (needs override) & finalize" : "Finalize"}
+              <button className="btn primary lg" disabled={invoice.lines.length === 0} onClick={doFinalize}>
+                Finalize
               </button>
+            </div>
+          </div>
+        )}
+        {invoice.status === "Finalized" && (
+          <div className="card">
+            <div className="card-body btn-row">
+              <button className="btn primary lg" onClick={() => setMarkingPaid(true)}>
+                Mark as paid (locks this invoice)
+              </button>
+            </div>
+            <div className="card-body xsmall muted" style={{ paddingTop: 0 }}>
+              Paying is Accounts Payable's job (M-05, manager-only) — this is what actually makes
+              the paperwork official.
             </div>
           </div>
         )}
       </div>
 
-      {overrideTotal && (
-        <ManagerOverride
-          reason={`Reconcile ${supplier.shortName} ${invoice.invoiceNumber} total to ${money(overrideTotal.enteredTotal)} — ${money(delta)} beyond the ±2% bound.`}
-          onCancel={() => setOverrideTotal(null)}
-          onConfirm={(by) => {
-            app.setInvoiceTotalOverride(invoiceId, overrideTotal.enteredTotal, by);
-            const res = app.finalizeInvoice(invoiceId);
-            setOverrideTotal(null);
-            if (res) setFinalizedCount(res.itemCount);
-          }}
-        />
-      )}
       {finalizedCount !== null && (
         <Modal
           title="Invoice finalized"
@@ -606,9 +616,20 @@ function InvoiceEditor({ invoiceId }: { invoiceId: string }) {
         >
           <div className="callout ok">
             {finalizedCount} cop{finalizedCount === 1 ? "y" : "ies"} now sellable. A letter-size
-            summary would print here (decision 22). The invoice is now immutable (decision 23).
+            summary would print here (decision 22). The Invoice itself stays open for correction
+            until it's marked paid.
           </div>
         </Modal>
+      )}
+      {markingPaid && (
+        <ManagerOverride
+          reason={`Mark ${supplier.shortName} ${invoice.invoiceNumber} as paid — this locks it permanently.`}
+          onCancel={() => setMarkingPaid(false)}
+          onConfirm={(by) => {
+            app.markInvoicePaid(invoiceId, by);
+            setMarkingPaid(false);
+          }}
+        />
       )}
     </div>
   );
@@ -763,7 +784,6 @@ function EditLineRow({
   const [sellRaw, setSellRaw] = useState<string | null>(String(line.acceptedPrice));
   const [grade, setGrade] = useState<Grade>(line.grade);
   const [qty, setQty] = useState(line.qty);
-  const [override, setOverride] = useState(false);
 
   const { extPrice, sellPrice, marginPct, belowCost } = useLinePricing({
     listRaw,
@@ -774,19 +794,14 @@ function EditLineRow({
     supplier,
   });
 
-  const save = (overrideBy?: string) => {
-    app.updateInvoiceLine(
-      invoiceId,
-      line.id,
-      {
-        listPrice: Number(listRaw) || 0,
-        discountPct: Number(discountRaw) || 0,
-        acceptedPrice: sellPrice,
-        grade: mode === "New" ? line.grade : grade,
-        qty: mode === "New" ? qty : line.qty,
-      },
-      overrideBy,
-    );
+  const save = () => {
+    app.updateInvoiceLine(invoiceId, line.id, {
+      listPrice: Number(listRaw) || 0,
+      discountPct: Number(discountRaw) || 0,
+      acceptedPrice: sellPrice,
+      grade: mode === "New" ? line.grade : grade,
+      qty: mode === "New" ? qty : line.qty,
+    });
     onDone();
   };
 
@@ -844,19 +859,13 @@ function EditLineRow({
           </button>
           <button
             className={"btn sm" + (belowCost ? " danger" : " primary")}
-            onClick={() => (belowCost ? setOverride(true) : save())}
+            onClick={save}
+            title={belowCost ? "Below cost — proceeds and raises a review flag" : "Save"}
           >
-            {belowCost ? "⚠ Below cost" : "✓ Save"}
+            {belowCost ? "⚠ Save (below cost)" : "✓ Save"}
           </button>
         </div>
       </td>
-      {override && (
-        <ManagerOverride
-          reason={`Accept ${money(sellPrice)} below cost ${money(extPrice)} for ${record?.artist} — ${record?.title}.`}
-          onCancel={() => setOverride(false)}
-          onConfirm={(by) => save(by)}
-        />
-      )}
     </tr>
   );
 }
@@ -888,7 +897,6 @@ function NewLineRow({
   const [sellRaw, setSellRaw] = useState<string | null>(null);
   const [grade, setGrade] = useState<Grade>(mode === "New" ? "M" : "VG");
   const [qty, setQty] = useState(1);
-  const [override, setOverride] = useState(false);
 
   useEffect(() => {
     if (!prefillOrder) return;
@@ -922,7 +930,7 @@ function NewLineRow({
     const trimmed = code.trim();
     if (!trimmed) return;
     // Cascade: this supplier's pending orders, then the local catalog
-    // (including a catalog-only Discogs match, which "search" collapses
+    // (including a catalog-only match, which "search" collapses
     // into in this prototype) — no match opens Lookup, decision 24's fallback.
     const order = app.pendingOrders.find((o) => o.supplierId === supplier.id && o.scannedCode === trimmed);
     if (order) {
@@ -952,22 +960,18 @@ function NewLineRow({
   });
   const ready = !!record && listPrice > 0 && sellPrice > 0;
 
-  const commit = (overrideBy?: string) => {
+  const commit = () => {
     if (!record) return;
-    app.addInvoiceLine(
-      invoiceId,
-      {
-        recordId: record.id,
-        scannedCode: scannedCode.trim() || undefined,
-        listPrice,
-        discountPct,
-        acceptedPrice: sellPrice,
-        grade: mode === "New" ? "M" : grade,
-        qty: mode === "New" ? qty : 1,
-        fromOrderId: fromOrderId ?? undefined,
-      },
-      overrideBy,
-    );
+    app.addInvoiceLine(invoiceId, {
+      recordId: record.id,
+      scannedCode: scannedCode.trim() || undefined,
+      listPrice,
+      discountPct,
+      acceptedPrice: sellPrice,
+      grade: mode === "New" ? "M" : grade,
+      qty: mode === "New" ? qty : 1,
+      fromOrderId: fromOrderId ?? undefined,
+    });
     if (fromOrderId) app.receivePendingOrderLine(fromOrderId);
     const n = mode === "New" ? qty : 1;
     onCommitted(`Added ${n}× ${record.artist} — ${record.title} at ${money(sellPrice)} (cost ${money(extPrice)}).`);
@@ -1062,8 +1066,8 @@ function NewLineRow({
         <button
           className={"btn sm" + (belowCost ? " danger" : " primary")}
           disabled={!ready}
-          onClick={() => (belowCost ? setOverride(true) : commit())}
-          title={belowCost ? "Below cost — needs a manager override" : "Add this line"}
+          onClick={commit}
+          title={belowCost ? "Below cost — proceeds and raises a review flag" : "Add this line"}
         >
           {belowCost ? "⚠" : "✓"}
         </button>
@@ -1076,13 +1080,6 @@ function NewLineRow({
             setFromOrderId(null);
             setLookupOpen(false);
           }}
-        />
-      )}
-      {override && (
-        <ManagerOverride
-          reason={`Accept ${money(sellPrice)} below cost ${money(extPrice)} for ${record?.artist} — ${record?.title}.`}
-          onCancel={() => setOverride(false)}
-          onConfirm={(by) => commit(by)}
         />
       )}
     </tr>
@@ -1120,7 +1117,7 @@ function FindOrCreateRecordModal({
                 <tr key={r.id}>
                   <td>
                     {r.artist} — {r.title}
-                    {r.catalogOnly && <span className="badge warn" style={{ marginLeft: 6 }}>Discogs match</span>}
+                    {r.catalogOnly && <span className="badge warn" style={{ marginLeft: 6 }}>Catalog match</span>}
                   </td>
                   <td className="small muted">
                     {r.label} · {r.catalogNo}
@@ -1164,7 +1161,7 @@ function ManualEntryForm({ onCreate }: { onCreate: (rec: RecordEntry) => void })
   return (
     <div className="stack">
       <p className="small muted">
-        No barcode, no Discogs match — capture what decision 24 asks for. Format, year, and
+        No barcode, no catalog match — capture what decision 24 asks for. Format, year, and
         country are placeholders until someone fills them in from the titlecard (E-04).
       </p>
       <div className="grid cols-2">

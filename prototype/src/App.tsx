@@ -7,6 +7,7 @@ import { ReturnScreen } from "./screens/Return";
 import { Claims } from "./screens/Claims";
 import { Customers } from "./screens/Customers";
 import { Receiving } from "./screens/Receiving";
+import { ReviewQueueBadge } from "./components/ReviewQueue";
 
 const NAV = [
   { to: "/", label: "Flow map", end: true },
@@ -43,6 +44,7 @@ export function App() {
           ))}
         </nav>
         <span className="spacer" />
+        <ReviewQueueBadge />
         <span className="who">{CURRENT_USER} · Till 1 · Prototype</span>
       </header>
       <main className="main">

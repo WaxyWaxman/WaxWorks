@@ -94,7 +94,10 @@ export interface Customer {
   balance: number; // + store owes customer (store credit); - customer owes store
 }
 
-export type SaleState = "Current" | "Held" | "Closed" | "Void";
+// "Open" (being rung up, no Sale number, locked to whoever opened it) is
+// distinct from "Current" (tendered, awaiting the day's close) — architecture
+// spine decision, E-05 d21.
+export type SaleState = "Open" | "Current" | "Held" | "Closed" | "Void";
 export type SaleLineKind = "item" | "giftcard-load" | "nontracked";
 
 export interface SaleLine {
@@ -134,6 +137,7 @@ export interface Sale {
   createdBy: string;
   createdAt: string;
   isReturn?: boolean;
+  lockedBy?: string; // set while Open; cleared on Hold/tender/void — E-05 locking
   log: { at: string; text: string }[];
 }
 
@@ -177,10 +181,19 @@ export interface SupplierClaim {
 
 // ---- Receiving (E-02) ----
 // A supplier Invoice — the inbound receiving document. Distinct from a
-// customer's receipt (E-05) and from a customer invoice (E-07). Immutable
-// once finalized (decision 23); voids/amendments are E-04, not in this pass.
+// customer's receipt (E-05) and from a customer invoice (E-07).
+//
+// Finalize is about STOCK, not the paperwork: it's the moment lines become
+// sellable InventoryItems (decision 20). It is deliberately NOT the point an
+// Invoice locks — costs move, a missed carton turns up, and the paperwork
+// isn't really "official" until the store has paid it. Locking is what
+// Paid does: only Accounts Payable settling the balance (M-05) makes an
+// Invoice immutable. A Finalized-but-unpaid Invoice can be reopened to
+// correct costs or add lines; corrections propagate to any InventoryItems
+// already minted, and a newly added line mints its own immediately, the
+// same as finalizing always has.
 export type IntakeMode = "New" | "Second-hand";
-export type InvoiceStatus = "Draft" | "Finalized";
+export type InvoiceStatus = "Draft" | "Finalized" | "Paid";
 
 export interface InvoiceLine {
   id: string;
@@ -223,12 +236,36 @@ export interface Invoice {
   tax: number;
   freight: number;
   misc: number;
-  totalOverride?: number; // reconciling to the paper total — bounded ±2%, decision 19
-  totalOverrideBy?: string; // manager initials if beyond ±2%
+  totalOverride?: number; // reconciling to the paper total — beyond ±2% raises a ReviewFlag
   status: InvoiceStatus;
   lines: InvoiceLine[];
   createdBy: string;
   createdAt: string;
   finalizedAt?: string;
+  paidAt?: string;
+  paidBy?: string;
   log: { at: string; text: string }[];
+}
+
+// ---- Review queue (M-04 d8) ----
+// The manager override is retired: below-cost pricing, a >±2% invoice
+// adjustment, and an accepted discrepancy no longer block on a manager's
+// initials — they proceed immediately and leave a flag a manager reviews
+// afterward. Flags are acknowledged, never deleted.
+export type ReviewFlagKind =
+  | "below-cost"
+  | "total-adjustment"
+  | "discrepancy-accepted"
+  | "negative-stock"
+  | "sale-lock-broken";
+
+export interface ReviewFlag {
+  id: string;
+  kind: ReviewFlagKind;
+  summary: string;
+  recordedBy: string;
+  at: string;
+  acknowledged: boolean;
+  acknowledgedBy?: string;
+  acknowledgedAt?: string;
 }

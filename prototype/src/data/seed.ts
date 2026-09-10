@@ -131,7 +131,7 @@ export const RECORDS: RecordEntry[] = [
     manufacturerUpc: "200000000017",
     minOnHand: 5,
   },
-  // Catalog-only (Discogs match we do not hold) — E-03 decision 5
+  // Catalog-only (a catalog match we do not hold) — E-03 decision 5
   {
     id: "r-horses",
     artist: "Patti Smith",

@@ -7,7 +7,7 @@ const BUILT = [
     to: "/search/r-blue",
     title: "Search & the titlecard",
     blurb:
-      "One screen: grouped results, catalog-only rows, Discogs-down degradation, click a Record " +
+      "One screen: grouped results, catalog-only rows, catalog-provider-down degradation, click a Record " +
       "to open its titlecard above — every copy, stock + order state, Put on hold, re-price (guardrail).",
   },
   {
@@ -92,7 +92,7 @@ export function Home() {
           <span className="badge">Stub</span> not in this first pass
         </span>
         <span className="right">
-          Discogs:{" "}
+          Catalog provider:{" "}
           <button className="btn sm" onClick={toggleDiscogs}>
             {discogsUp ? "🟢 up — click to simulate outage" : "🔴 down — click to restore"}
           </button>
@@ -124,12 +124,14 @@ export function Home() {
           Scan the Blue UPC (a local hit — Blue's already stocked) at list $27.99 to see the
           suggested-retail worked example ($44.99, 60% margin); scan it again and the sticky
           price it just set takes over. Then scan Horses's UPC to watch a catalog-only title pull
-          in — try an accepted price below cost for the override, and reconcile the total beyond
-          ±2% for that guardrail too. Finalize, then go find your new copies in Search.
+          in — try an accepted price below cost to see it proceed and raise a review flag, and
+          reconcile the total beyond ±2% for the same reason. Finalize, then go find your new
+          copies in Search.
         </li>
         <li>
           <strong>E-03/E-04 Search</strong> — search “blue”. Check the grouping (one row per
-          Record, copies nested), the catalog-only rows, and how it reads when Discogs is down.
+          Record, copies nested), the catalog-only rows, and how it reads when the catalog
+          provider is down.
           Click the Joni Mitchell — Blue row (or its Put on hold button) to see the titlecard above
           update in place. Try <em>Put on hold</em> for Ramona twice under the same PO (watch it
           merge onto one hold), and <em>Edit price</em> below cost to see the guardrail + override.

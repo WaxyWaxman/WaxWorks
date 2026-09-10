@@ -1,6 +1,5 @@
 import { useState } from "react";
 import { ClaimModal } from "../components/ClaimModal";
-import { ManagerOverride } from "../components/ManagerOverride";
 import { Modal } from "../components/Modal";
 import { ReserveModal } from "../components/ReserveModal";
 import type { InventoryItem, RecordEntry } from "../data/types";
@@ -55,7 +54,7 @@ export function TitlecardPanel({
     <div>
       {record.catalogOnly && (
         <div className="callout">
-          This is a <strong>Discogs catalog match we don’t hold</strong>. Acting on it — ordering,
+          This is a <strong>catalog match we don’t hold</strong>. Acting on it — ordering,
           stocking, editing — pulls it into the local catalog and prompts for store-specific fields
           (supplier, Section). <em>(E-03 decision 6.)</em>
         </div>
@@ -84,7 +83,7 @@ export function TitlecardPanel({
                       <Row k="Year / country" v={`${record.year} · ${record.country}`} />
                       <Row k="Genre / Section" v={`${record.genre} · ${record.section}`} />
                       <Row k="Manufacturer UPC" v={record.manufacturerUpc ?? "— (none on sleeve)"} />
-                      <Row k="Discogs / sticky" v={`${record.discogsId ?? "—"} · ${record.stickyPrice ? money(record.stickyPrice) + " (New)" : "no sticky price"}`} />
+                      <Row k="Catalog ID / sticky" v={`${record.discogsId ?? "—"} · ${record.stickyPrice ? money(record.stickyPrice) + " (New)" : "no sticky price"}`} />
                     </tbody>
                   </table>
                   <div className="btn-row">
@@ -365,13 +364,12 @@ function PrintLabelModal({
 function PriceEditModal({ item, onClose }: { item: InventoryItem; onClose: () => void }) {
   const app = useApp();
   const [raw, setRaw] = useState(String(item.price));
-  const [override, setOverride] = useState(false);
   const next = Number(raw) || 0;
   const rounded = roundUpShelf(next);
   const belowCost = next < item.cost;
 
-  const commit = (by?: string) => {
-    app.setCopyPrice(item.id, rounded, by);
+  const commit = () => {
+    app.setCopyPrice(item.id, rounded);
     onClose();
   };
 
@@ -384,12 +382,8 @@ function PriceEditModal({ item, onClose }: { item: InventoryItem; onClose: () =>
           <button className="btn ghost" onClick={onClose}>
             Cancel
           </button>
-          <button
-            className="btn primary"
-            disabled={next <= 0}
-            onClick={() => (belowCost ? setOverride(true) : commit())}
-          >
-            {belowCost ? "Below cost — get manager override" : "Save price"}
+          <button className="btn primary" disabled={next <= 0} onClick={commit}>
+            Save price
           </button>
         </>
       }
@@ -403,24 +397,17 @@ function PriceEditModal({ item, onClose }: { item: InventoryItem; onClose: () =>
           <input type="number" step="0.01" value={raw} onChange={(e) => setRaw(e.target.value)} />
         </label>
         <div className="callout">
-          Rounds up to <strong>{money(rounded)}</strong> — shelf prices end in{" "}
-          <span className="mono">.50</span> or <span className="mono">.99</span>. (E-02 decision 9 /
-          E-04 decision 8.)
+          Rounds up to <strong>{money(rounded)}</strong> — shelf prices suggest ending in{" "}
+          <span className="mono">.50</span> or <span className="mono">.99</span>, though any amount
+          is accepted (E-02 decision 32 / E-04 decision 17).
         </div>
         {belowCost && (
-          <div className="callout danger">
-            <strong>Below-cost guardrail.</strong> A shelf price under cost needs a manager override —
-            it persists, unlike a one-off till discount (E-04 decision 7).
+          <div className="callout">
+            <strong>Below cost.</strong> This proceeds and raises a review flag for a manager
+            rather than blocking (M-04 decision 8) — no override needed.
           </div>
         )}
       </div>
-      {override && (
-        <ManagerOverride
-          reason={`Set shelf price ${money(rounded)} below cost ${money(item.cost)} for ${item.recordId}.`}
-          onCancel={() => setOverride(false)}
-          onConfirm={(by) => commit(by)}
-        />
-      )}
     </Modal>
   );
 }

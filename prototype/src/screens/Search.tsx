@@ -99,8 +99,8 @@ export function Search() {
           {statusMsg && <div className="callout ok">{statusMsg}</div>}
           {!app.discogsUp && (
             <div className="callout danger">
-              Discogs is unreachable — catalog-only rows are hidden. Local inventory and every till
-              function are unaffected. <em>(E-03 decision 8 — visible, not silent.)</em>
+              The catalog provider is unreachable — catalog-only rows are hidden. Local inventory
+              and every till function are unaffected. <em>(E-03 decision 8 — visible, not silent.)</em>
             </div>
           )}
         </div>
@@ -110,7 +110,7 @@ export function Search() {
         <div className="card-head">
           Results
           <span className="muted xsmall">
-            {results.held.length} in catalog · {results.catalogOnly.length} Discogs-only
+            {results.held.length} in catalog · {results.catalogOnly.length} catalog-only
           </span>
         </div>
         <div className="card-body" style={{ padding: 0 }}>
@@ -232,7 +232,7 @@ export function Search() {
                             {r.artist} — {r.title} <span className="badge warn">Not in stock</span>
                           </div>
                           <div className="xsmall muted">
-                            Discogs match · {r.label} · {r.year} — “no, but we can order it”
+                            Catalog match · {r.label} · {r.year} — “no, but we can order it”
                           </div>
                         </div>
                       </div>

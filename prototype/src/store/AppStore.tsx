@@ -31,6 +31,8 @@ import type {
   NonTrackedItem,
   PendingOrderLine,
   RecordEntry,
+  ReviewFlag,
+  ReviewFlagKind,
   Sale,
   SaleLine,
   Section,
@@ -56,12 +58,13 @@ interface AppState {
   claims: SupplierClaim[];
   invoices: Invoice[];
   pendingOrders: PendingOrderLine[];
+  reviewFlags: ReviewFlag[];
   activeSaleId: string | null;
   nextSaleNumber: number;
   nextHold: number;
   nextClaimNumber: number;
   nextInternalBarcode: number;
-  /** E-03 decision 8 — toggle to demo graceful degradation when Discogs is down */
+  /** E-03 decision 8 — toggle to demo graceful degradation when the catalog provider (MusicBrainz) is down */
   discogsUp: boolean;
 }
 
@@ -131,6 +134,7 @@ const seed: AppState = {
   claims: [],
   invoices: [],
   pendingOrders: PENDING_ORDERS,
+  reviewFlags: [],
   activeSaleId: null,
   nextSaleNumber: 100241,
   nextHold: 2,
@@ -168,6 +172,8 @@ interface AppContextValue extends AppState {
   voidSale: (saleId: string) => void;
   cancelHold: (saleId: string) => void;
   releaseHoldLine: (itemId: string) => { holdRef: string; holdClosed: boolean } | null;
+  forceUnlockSale: (saleId: string) => void;
+  acknowledgeReviewFlag: (id: string, by: string) => void;
   addLog: (saleId: string, text: string) => void;
 
   raiseClaim: (
@@ -187,7 +193,7 @@ interface AppContextValue extends AppState {
     qty: number,
     po?: string,
   ) => { id: string; holdRef: string };
-  setCopyPrice: (itemId: string, price: number, overrideBy?: string) => void;
+  setCopyPrice: (itemId: string, price: number) => void;
   routeReturnLine: (
     saleId: string,
     lineId: string,
@@ -229,21 +235,20 @@ interface AppContextValue extends AppState {
       qty: number;
       fromOrderId?: string;
     },
-    priceOverrideBy?: string,
   ) => void;
   updateInvoiceLine: (
     invoiceId: string,
     lineId: string,
     patch: Partial<Pick<InvoiceLine, "listPrice" | "discountPct" | "acceptedPrice" | "grade" | "qty">>,
-    priceOverrideBy?: string,
   ) => void;
-  removeInvoiceLine: (invoiceId: string, lineId: string) => void;
+  removeInvoiceLine: (invoiceId: string, lineId: string) => { blocked: boolean };
   updateInvoiceTotals: (
     invoiceId: string,
     patch: Partial<Pick<Invoice, "statedSubtotal" | "tax" | "freight" | "misc">>,
   ) => void;
-  setInvoiceTotalOverride: (invoiceId: string, value?: number, overrideBy?: string) => void;
+  setInvoiceTotalOverride: (invoiceId: string, value?: number) => void;
   finalizeInvoice: (invoiceId: string) => { itemCount: number } | null;
+  markInvoicePaid: (invoiceId: string, by: string) => void;
 
   pendingOrderFor: (id?: string) => PendingOrderLine | undefined;
   receivePendingOrderLine: (id: string) => PendingOrderLine | null;
@@ -258,6 +263,28 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
     setS((prev) => ({
       ...prev,
       sales: prev.sales.map((sale) => (sale.id === saleId ? fn(sale) : sale)),
+    }));
+
+  // M-04 d8 — the manager override is retired; these actions proceed and
+  // leave a flag a manager reviews afterward instead of blocking on one.
+  const raiseReviewFlag = (kind: ReviewFlagKind, summary: string) => {
+    const flag: ReviewFlag = {
+      id: uid("flag"),
+      kind,
+      summary,
+      recordedBy: CURRENT_USER,
+      at: now(),
+      acknowledged: false,
+    };
+    setS((prev) => ({ ...prev, reviewFlags: [flag, ...prev.reviewFlags] }));
+  };
+
+  const acknowledgeReviewFlag: AppContextValue["acknowledgeReviewFlag"] = (id, by) =>
+    setS((prev) => ({
+      ...prev,
+      reviewFlags: prev.reviewFlags.map((f) =>
+        f.id === id ? { ...f, acknowledged: true, acknowledgedBy: by, acknowledgedAt: now() } : f,
+      ),
     }));
 
   const recordFor = (id?: string) => s.records.find((r) => r.id === id);
@@ -281,11 +308,12 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
     const id = uid("sale");
     const sale: Sale = {
       id,
-      state: "Current",
+      state: "Open",
       customerId: undefined,
       createdBy: CURRENT_USER,
       createdAt: now(),
       isReturn: opts?.isReturn,
+      lockedBy: CURRENT_USER,
       lines: [],
       tenders: [],
       log: [{ at: now(), text: opts?.isReturn ? "Return started" : "Sale started" }],
@@ -526,6 +554,11 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
                 ...x,
                 state: "Current",
                 saleNumber: num,
+                // The Sale is attributed to whoever holds the lock at tender —
+                // a Sale one Employee starts and another finishes belongs to
+                // the one who finished it (E-05 locking).
+                createdBy: x.lockedBy ?? x.createdBy,
+                lockedBy: undefined,
                 log: [...x.log, { at: now(), text: `Tendered — Sale number ${num} assigned` }],
               }
             : x,
@@ -552,12 +585,34 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
               ...x,
               state: "Held",
               holdRef: ref,
+              lockedBy: undefined, // Hold releases the lock — any Employee may re-open it
               log: [...x.log, { at: now(), text: `Placed on hold — ${ref}` }],
             }
           : x,
       ),
     }));
     return ref;
+  };
+
+  // A lock stranded by a closed browser is broken this way — it proceeds and
+  // raises a review flag rather than requiring the original Employee (M-04 d8).
+  const forceUnlockSale: AppContextValue["forceUnlockSale"] = (saleId) => {
+    const sale = s.sales.find((x) => x.id === saleId);
+    if (!sale?.lockedBy) return;
+    const was = sale.lockedBy;
+    setS((prev) => ({
+      ...prev,
+      sales: prev.sales.map((x) =>
+        x.id === saleId
+          ? {
+              ...x,
+              lockedBy: CURRENT_USER,
+              log: [...x.log, { at: now(), text: `Lock forced from ${was} to ${CURRENT_USER}` }],
+            }
+          : x,
+      ),
+    }));
+    raiseReviewFlag("sale-lock-broken", `Sale lock broken — ${was} to ${CURRENT_USER} on an open Sale.`);
   };
 
   const voidSale: AppContextValue["voidSale"] = (saleId) =>
@@ -813,11 +868,20 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
     return { id, holdRef: ref };
   };
 
-  const setCopyPrice: AppContextValue["setCopyPrice"] = (itemId, price) =>
+  const setCopyPrice: AppContextValue["setCopyPrice"] = (itemId, price) => {
+    const item = s.inventory.find((i) => i.id === itemId);
     setS((prev) => ({
       ...prev,
       inventory: prev.inventory.map((i) => (i.id === itemId ? { ...i, price } : i)),
     }));
+    if (item && price < item.cost) {
+      const rec = s.records.find((r) => r.id === item.recordId);
+      raiseReviewFlag(
+        "below-cost",
+        `Shelf price ${money(price)} below cost ${money(item.cost)} for ${rec ? `${rec.artist} — ${rec.title}` : item.recordId} (${item.internalBarcode}).`,
+      );
+    }
+  };
 
   const routeReturnLine: AppContextValue["routeReturnLine"] = (
     saleId,
@@ -887,7 +951,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
 
   // Manual catalog entry (E-02 decision 24) — only the fields decision 24
   // actually names. Format/year/country are placeholders: an employee
-  // filling this in has no barcode and no Discogs match, so genuinely
+  // filling this in has no barcode and no catalog match, so genuinely
   // doesn't know them yet; editable later from the titlecard (E-04).
   const createRecordManual: AppContextValue["createRecordManual"] = (input) => {
     const id = uid("rec");
@@ -909,11 +973,55 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
     return id;
   };
 
-  const addInvoiceLine: AppContextValue["addInvoiceLine"] = (invoiceId, line, priceOverrideBy) => {
+  // Shared by finalize (every line at once) and addInvoiceLine (one line, when
+  // the Invoice is already Finalized — the "becomes sellable" moment already
+  // happened for this Invoice, so a line added afterward mints immediately
+  // rather than waiting for a Finalize that has already occurred).
+  const mintItemsForLine = (
+    line: { recordId: string; grade: Grade; acceptedPrice: number; cost: number; qty: number },
+    supplier: Supplier,
+    invoiceNumber: string,
+    startSeq: number,
+  ) => {
+    const items: InventoryItem[] = [];
+    const itemIds: string[] = [];
+    let seq = startSeq;
+    for (let i = 0; i < line.qty; i++) {
+      const itemId = uid("item");
+      const code = `29${String(seq).padStart(10, "0")}`;
+      seq++;
+      itemIds.push(itemId);
+      items.push({
+        id: itemId,
+        recordId: line.recordId,
+        grade: line.grade,
+        price: line.acceptedPrice,
+        cost: line.cost,
+        internalBarcode: code,
+        status: "sellable",
+        arrivedOnInvoice: `${supplier.shortName} ${invoiceNumber}`,
+        supplierId: supplier.id,
+      });
+    }
+    return { items, itemIds, nextSeq: seq };
+  };
+
+  const addInvoiceLine: AppContextValue["addInvoiceLine"] = (invoiceId, line) => {
     const invoice = s.invoices.find((iv) => iv.id === invoiceId);
-    if (!invoice || invoice.status !== "Draft") return;
+    if (!invoice || invoice.status === "Paid") return;
+    const supplier = s.suppliers.find((sup) => sup.id === invoice.supplierId)!;
     const cost = round2(line.listPrice * (1 - line.discountPct / 100));
-    const newLine: InvoiceLine = { id: uid("invline"), ...line, cost };
+    let newLine: InvoiceLine = { id: uid("invline"), ...line, cost };
+
+    let mintedItems: InventoryItem[] = [];
+    let nextBarcodeSeq = s.nextInternalBarcode;
+    if (invoice.status === "Finalized") {
+      const minted = mintItemsForLine(newLine, supplier, invoice.invoiceNumber, nextBarcodeSeq);
+      mintedItems = minted.items;
+      nextBarcodeSeq = minted.nextSeq;
+      newLine = { ...newLine, itemIds: minted.itemIds };
+    }
+
     setS((prev) => ({
       ...prev,
       // E-03 decision 6 — receiving a catalog-only Record pulls it into local
@@ -927,6 +1035,8 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
             }
           : r,
       ),
+      inventory: mintedItems.length ? [...prev.inventory, ...mintedItems] : prev.inventory,
+      nextInternalBarcode: nextBarcodeSeq,
       invoices: prev.invoices.map((iv) =>
         iv.id === invoiceId
           ? {
@@ -938,114 +1048,148 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
                   at: now(),
                   text:
                     `Line added — qty ${line.qty} at ${money(line.acceptedPrice)}` +
-                    (priceOverrideBy ? ` (below-cost override by ${priceOverrideBy})` : ""),
+                    (mintedItems.length ? " (Invoice already Finalized — minted immediately)" : ""),
                 },
               ],
             }
           : iv,
       ),
     }));
+
+    if (line.acceptedPrice < cost) {
+      const rec = s.records.find((r) => r.id === line.recordId);
+      raiseReviewFlag(
+        "below-cost",
+        `Accepted ${money(line.acceptedPrice)} below cost ${money(cost)} for ${rec ? `${rec.artist} — ${rec.title}` : line.recordId}.`,
+      );
+    }
   };
 
-  const updateInvoiceLine: AppContextValue["updateInvoiceLine"] = (
-    invoiceId,
-    lineId,
-    patch,
-    priceOverrideBy,
-  ) =>
+  const updateInvoiceLine: AppContextValue["updateInvoiceLine"] = (invoiceId, lineId, patch) => {
+    const invoice = s.invoices.find((iv) => iv.id === invoiceId);
+    const existing = invoice?.lines.find((l) => l.id === lineId);
+    if (!invoice || invoice.status === "Paid" || !existing) return;
+    const merged = { ...existing, ...patch };
+    const newCost = round2(merged.listPrice * (1 - merged.discountPct / 100));
+    const updatedLine: InvoiceLine = { ...merged, cost: newCost };
+
     setS((prev) => ({
       ...prev,
+      // Correcting a line propagates to any InventoryItems already minted for
+      // it — "fix costs to be correct" means the real stock record too, not
+      // just the Invoice's own memory of itself.
+      inventory: prev.inventory.map((i) =>
+        existing.itemIds?.includes(i.id)
+          ? { ...i, cost: newCost, price: updatedLine.acceptedPrice, grade: updatedLine.grade }
+          : i,
+      ),
       invoices: prev.invoices.map((iv) =>
         iv.id === invoiceId
           ? {
               ...iv,
-              lines: iv.lines.map((l) => {
-                if (l.id !== lineId) return l;
-                const merged = { ...l, ...patch };
-                return {
-                  ...merged,
-                  cost: round2(merged.listPrice * (1 - merged.discountPct / 100)),
-                };
-              }),
-              log: [
-                ...iv.log,
-                {
-                  at: now(),
-                  text: "Line edited" + (priceOverrideBy ? ` (below-cost override by ${priceOverrideBy})` : ""),
-                },
-              ],
+              lines: iv.lines.map((l) => (l.id === lineId ? updatedLine : l)),
+              log: [...iv.log, { at: now(), text: "Line edited" }],
             }
           : iv,
       ),
     }));
 
-  const removeInvoiceLine: AppContextValue["removeInvoiceLine"] = (invoiceId, lineId) =>
+    if (updatedLine.acceptedPrice < newCost) {
+      const rec = s.records.find((r) => r.id === existing.recordId);
+      raiseReviewFlag(
+        "below-cost",
+        `Corrected to ${money(updatedLine.acceptedPrice)} below cost ${money(newCost)} for ${rec ? `${rec.artist} — ${rec.title}` : existing.recordId}.`,
+      );
+    }
+  };
+
+  const removeInvoiceLine: AppContextValue["removeInvoiceLine"] = (invoiceId, lineId) => {
+    const invoice = s.invoices.find((iv) => iv.id === invoiceId);
+    const line = invoice?.lines.find((l) => l.id === lineId);
+    if (!invoice || invoice.status === "Paid" || !line) return { blocked: true };
+    const itemIds = line.itemIds ?? [];
+    const anySold = itemIds.some((id) => s.inventory.find((i) => i.id === id)?.status === "sold");
+    if (anySold) return { blocked: true };
+
     setS((prev) => ({
       ...prev,
+      inventory: prev.inventory.filter((i) => !itemIds.includes(i.id)),
       invoices: prev.invoices.map((iv) =>
         iv.id === invoiceId
           ? {
               ...iv,
               lines: iv.lines.filter((l) => l.id !== lineId),
-              log: [...iv.log, { at: now(), text: "Line removed before finalizing" }],
+              log: [
+                ...iv.log,
+                {
+                  at: now(),
+                  text: itemIds.length
+                    ? "Line removed — its copies withdrawn from stock"
+                    : "Line removed before finalizing",
+                },
+              ],
             }
           : iv,
       ),
     }));
+    return { blocked: false };
+  };
 
   const updateInvoiceTotals: AppContextValue["updateInvoiceTotals"] = (invoiceId, patch) =>
     setS((prev) => ({
       ...prev,
-      invoices: prev.invoices.map((iv) => (iv.id === invoiceId ? { ...iv, ...patch } : iv)),
-    }));
-
-  const setInvoiceTotalOverride: AppContextValue["setInvoiceTotalOverride"] = (
-    invoiceId,
-    value,
-    overrideBy,
-  ) =>
-    setS((prev) => ({
-      ...prev,
       invoices: prev.invoices.map((iv) =>
-        iv.id === invoiceId ? { ...iv, totalOverride: value, totalOverrideBy: overrideBy } : iv,
+        iv.id === invoiceId && iv.status !== "Paid" ? { ...iv, ...patch } : iv,
       ),
     }));
+
+  const setInvoiceTotalOverride: AppContextValue["setInvoiceTotalOverride"] = (invoiceId, value) => {
+    const invoice = s.invoices.find((iv) => iv.id === invoiceId);
+    if (!invoice || invoice.status === "Paid") return;
+    setS((prev) => ({
+      ...prev,
+      invoices: prev.invoices.map((iv) => (iv.id === invoiceId ? { ...iv, totalOverride: value } : iv)),
+    }));
+    if (value == null) return;
+    const derivedSubtotal = round2(invoice.lines.reduce((sum, l) => sum + l.cost * l.qty, 0));
+    const computedTotal = round2(derivedSubtotal + invoice.tax + invoice.freight + invoice.misc);
+    const delta = round2(value - computedTotal);
+    const pct = computedTotal !== 0 ? Math.abs(delta) / computedTotal : Math.abs(delta) > 0 ? 1 : 0;
+    if (Math.abs(delta) > 0.005 && pct > 0.02) {
+      const supplier = s.suppliers.find((sup) => sup.id === invoice.supplierId);
+      raiseReviewFlag(
+        "total-adjustment",
+        `${supplier?.shortName ?? ""} ${invoice.invoiceNumber} total adjusted ${money(delta)} (${(pct * 100).toFixed(1)}%) beyond ±2%.`,
+      );
+    }
+  };
 
   // On finalize: every line's qty becomes that many sellable InventoryItems
   // (E-02 decision 20 — not sellable before this), each minted its own
   // internal barcode and traced back to this Invoice/Supplier so a Supplier
-  // Claim can be raised against it later.
+  // Claim can be raised against it later. Finalizing does NOT lock the
+  // Invoice — only markInvoicePaid does (the paperwork isn't "official"
+  // until the store has settled it); this just makes the stock real.
   const finalizeInvoice: AppContextValue["finalizeInvoice"] = (invoiceId) => {
     const invoice = s.invoices.find((iv) => iv.id === invoiceId);
     if (!invoice || invoice.status !== "Draft" || invoice.lines.length === 0) return null;
     const supplier = s.suppliers.find((sup) => sup.id === invoice.supplierId)!;
-    const newItems: InventoryItem[] = [];
+    const allNewItems: InventoryItem[] = [];
     let barcodeSeq = s.nextInternalBarcode;
     const updatedLines = invoice.lines.map((line) => {
-      const itemIds: string[] = [];
-      for (let i = 0; i < line.qty; i++) {
-        const itemId = uid("item");
-        const code = `29${String(barcodeSeq).padStart(10, "0")}`;
-        barcodeSeq++;
-        itemIds.push(itemId);
-        newItems.push({
-          id: itemId,
-          recordId: line.recordId,
-          grade: line.grade,
-          price: line.acceptedPrice,
-          cost: line.cost,
-          internalBarcode: code,
-          status: "sellable",
-          arrivedOnInvoice: `${supplier.shortName} ${invoice.invoiceNumber}`,
-          supplierId: supplier.id,
-        });
-      }
+      const { items, itemIds, nextSeq } = mintItemsForLine(line, supplier, invoice.invoiceNumber, barcodeSeq);
+      barcodeSeq = nextSeq;
+      allNewItems.push(...items);
       return { ...line, itemIds };
     });
+
+    const derivedSubtotal = round2(invoice.lines.reduce((sum, l) => sum + l.cost * l.qty, 0));
+    const mismatch = Math.abs(derivedSubtotal - invoice.statedSubtotal) > 0.01;
+
     setS((prev) => ({
       ...prev,
       nextInternalBarcode: barcodeSeq,
-      inventory: [...prev.inventory, ...newItems],
+      inventory: [...prev.inventory, ...allNewItems],
       invoices: prev.invoices.map((iv) =>
         iv.id === invoiceId
           ? {
@@ -1057,15 +1201,42 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
                 ...iv.log,
                 {
                   at: now(),
-                  text: `Finalized — ${newItems.length} cop${newItems.length === 1 ? "y" : "ies"} now sellable`,
+                  text: `Finalized — ${allNewItems.length} cop${allNewItems.length === 1 ? "y" : "ies"} now sellable`,
                 },
               ],
             }
           : iv,
       ),
     }));
-    return { itemCount: newItems.length };
+
+    if (mismatch) {
+      raiseReviewFlag(
+        "discrepancy-accepted",
+        `${supplier.shortName} ${invoice.invoiceNumber} — derived subtotal ${money(derivedSubtotal)} vs. stated ${money(invoice.statedSubtotal)}.`,
+      );
+    }
+
+    return { itemCount: allNewItems.length };
   };
+
+  // Only this locks an Invoice (decision — finalize alone no longer does).
+  // Manager-only, per M-05: Accounts Payable settling the balance is what
+  // makes the paperwork official.
+  const markInvoicePaid: AppContextValue["markInvoicePaid"] = (invoiceId, by) =>
+    setS((prev) => ({
+      ...prev,
+      invoices: prev.invoices.map((iv) =>
+        iv.id === invoiceId
+          ? {
+              ...iv,
+              status: "Paid",
+              paidAt: now(),
+              paidBy: by,
+              log: [...iv.log, { at: now(), text: `Marked paid by ${by} — now immutable` }],
+            }
+          : iv,
+      ),
+    }));
 
   const pendingOrderFor = (id?: string) => s.pendingOrders.find((o) => o.id === id);
 
@@ -1105,6 +1276,8 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
       voidSale,
       cancelHold,
       releaseHoldLine,
+      forceUnlockSale,
+      acknowledgeReviewFlag,
       addLog,
       raiseClaim,
       sendClaim,
@@ -1122,6 +1295,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
       updateInvoiceTotals,
       setInvoiceTotalOverride,
       finalizeInvoice,
+      markInvoicePaid,
       pendingOrderFor,
       receivePendingOrderLine,
     }),

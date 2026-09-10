@@ -29,9 +29,9 @@ export function Sell() {
   }, [saleId, app.sales]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const sale = app.activeSale;
-  const openSales = app.sales.filter((s) => s.state === "Current" && !s.saleNumber && !s.isReturn);
+  const openSales = app.sales.filter((s) => s.state === "Open" && !s.isReturn);
   const heldSales = app.sales.filter((s) => s.state === "Held" && !s.isReturn);
-  const openReturns = app.sales.filter((s) => s.isReturn && s.state === "Current" && !s.saleNumber);
+  const openReturns = app.sales.filter((s) => s.isReturn && s.state === "Open");
 
   return (
     <div>
@@ -153,9 +153,17 @@ function SaleEditor() {
                 <span className="mono">{sale.holdRef}</span> <span className="badge">Held</span>
               </>
             ) : (
-              <span className="badge">Current</span>
+              <span className="badge">Open</span>
             )}
             <span className="muted xsmall">{sale.createdBy}</span>
+            {sale.lockedBy && (
+              <>
+                <span className="badge accent">locked · {sale.lockedBy}</span>
+                <button className="btn ghost sm" onClick={() => app.forceUnlockSale(sale.id)}>
+                  Force unlock
+                </button>
+              </>
+            )}
           </div>
           <div className="card-body stack">
             <div className="row wrap">
