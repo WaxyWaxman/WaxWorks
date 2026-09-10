@@ -82,7 +82,7 @@ Each flow is its own document. Status is tracked per flow so parallel work doesn
 
 | ID | Flow | Status |
 |---|---|---|
-| M-01 | [Set a supplier margin](flows/M-01-supplier-margin.md) | Stub |
+| M-01 | [Suppliers](flows/M-01-supplier-margin.md) | **Specified** |
 | M-02 | [Re-order inventory](flows/M-02-reorder-inventory.md) | **Specified** |
 | M-03 | [Daily summary of sales and inventory](flows/M-03-daily-summary.md) | **Specified** |
 | M-04 | [Add/remove employees or managers](flows/M-04-manage-users.md) | In clarification |

@@ -1,0 +1,24 @@
+name: docs-check
+
+# Mechanical consistency gate for the specification documents. Deterministic --
+# no API key, no model in the loop. The judgement calls stay with /spec-audit,
+# which a human runs locally before opening the PR.
+
+on:
+  # No paths filter: a change under .claude/ can break a cross-link too, and the
+  # job takes seconds. GitHub runs this against refs/pull/N/merge -- the simulated
+  # merge with main's tip -- so it validates the merged result, not the branch head.
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Check specification consistency
+        run: python scripts/check_docs.py

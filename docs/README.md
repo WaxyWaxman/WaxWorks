@@ -12,6 +12,7 @@ Point-of-sale and inventory management for independent vinyl record stores.
 | [flows/](flows/) | One document per user flow — the detailed specs |
 | [reference/](reference/) | Worked examples and external-system notes |
 | [prototype.md](prototype.md) | The clickable prototype — what it's for, how to run it, flow ↔ screen map |
+| [templates/](templates/) | Starting point for a new flow document |
 
 ## Flows
 
@@ -24,7 +25,7 @@ Point-of-sale and inventory management for independent vinyl record stores.
 | E-05 | [Point of Sale](flows/E-05-sell-a-record.md) | Employee | **Specified** |
 | E-06 | [Process a return](flows/E-06-process-a-return.md) | Employee | **Specified** |
 | E-07 | [Manage customers](flows/E-07-manage-customers.md) | Employee | **Specified** |
-| M-01 | [Set a supplier margin](flows/M-01-supplier-margin.md) | Manager | Stub |
+| M-01 | [Suppliers](flows/M-01-supplier-margin.md) | Employee | **Specified** |
 | M-02 | [Re-order inventory](flows/M-02-reorder-inventory.md) | Manager | **Specified** |
 | M-03 | [Daily summary](flows/M-03-daily-summary.md) | Manager | **Specified** |
 | M-04 | [Add/remove employees or managers](flows/M-04-manage-users.md) | Manager | In clarification |
@@ -64,3 +65,16 @@ Point-of-sale and inventory management for independent vinyl record stores.
 ## Working process
 
 Flows are developed by walking through the steps, interrogating them for gaps, and recording the resolved decisions. A flow moves to `Specified` once its decision table is filled and only genuine unknowns remain open.
+
+## Planning agent
+
+The planning work is driven by skills in [`.claude/skills/`](../.claude/skills/),
+shared through this repository so both of us get the same behaviour. See
+[`CLAUDE.md`](../CLAUDE.md).
+
+| Skill | Use it to |
+|---|---|
+| `/flow-clarify <ID>` | Walk a flow, interrogate it for gaps, drive it toward `Specified` |
+| `/flow-new` | Scaffold a new flow and register it in every index |
+| `/architecture` | Derive architecture docs and ADRs from the specified flows |
+| `/spec-audit` | Check the doc set for contradictions, drift, and dangling links |
