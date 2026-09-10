@@ -527,8 +527,8 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
               g.code === t.reference ? { ...g, balance: Math.max(0, g.balance - t.amount) } : g,
             );
           }
-          if ((t.type === "Store Credit" || t.type === "Used Credit") && sale.customerId) {
-            const delta = t.type === "Store Credit" ? -t.amount : Math.abs(t.amount);
+          if ((t.type === "Account Balance" || t.type === "Used Credit") && sale.customerId) {
+            const delta = t.type === "Account Balance" ? -t.amount : Math.abs(t.amount);
             customers = customers.map((c) =>
               c.id === sale.customerId ? { ...c, balance: c.balance + delta } : c,
             );

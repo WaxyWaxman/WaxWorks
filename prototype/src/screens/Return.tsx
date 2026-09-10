@@ -204,10 +204,10 @@ function ReturnEditor({ saleId, onRestart }: { saleId: string; onRestart: () => 
                 disabled={!customer}
                 title={customer ? "" : "Requires a Customer"}
                 onClick={() =>
-                  app.addTender(sale.id, { type: "Store Credit", amount: totals.grand, note: "Refund to store credit" })
+                  app.addTender(sale.id, { type: "Account Balance", amount: totals.grand, note: "Refund to account balance" })
                 }
               >
-                Refund to store credit
+                Refund to account balance
               </button>
             </div>
           )}
@@ -237,7 +237,7 @@ function ReturnEditor({ saleId, onRestart }: { saleId: string; onRestart: () => 
               )}
               {Math.abs(due) > 0.001 && (
                 <div className="callout" style={{ marginTop: 4 }}>
-                  Refund not yet tendered — choose “Refund to cash” or “store credit” above.
+                  Refund not yet tendered — choose “Refund to cash” or “account balance” above.
                 </div>
               )}
             </div>

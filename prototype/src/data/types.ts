@@ -75,7 +75,7 @@ export interface TaxLine {
 export type TenderType =
   | "Cash"
   | "Credit Card"
-  | "Store Credit"
+  | "Account Balance"
   | "Gift Card"
   | "Pay-out"
   | "Used Credit";

@@ -8,7 +8,7 @@ import { money } from "../lib/money";
 import { availableOnHand, balanceDue, saleTotals, tenderedTotal } from "../lib/totals";
 import { useApp } from "../store/AppStore";
 
-const TENDERS: TenderType[] = ["Cash", "Credit Card", "Store Credit", "Gift Card", "Pay-out", "Used Credit"];
+const TENDERS: TenderType[] = ["Cash", "Credit Card", "Account Balance", "Gift Card", "Pay-out", "Used Credit"];
 
 export function Sell() {
   const app = useApp();
@@ -645,7 +645,7 @@ function TenderModal({
   const [reference, setReference] = useState("");
   const amount = Number(raw) || 0;
 
-  const needsCustomer = type === "Store Credit" && !hasCustomer;
+  const needsCustomer = type === "Account Balance" && !hasCustomer;
   const needsNote = type === "Pay-out" && note.trim().length === 0;
   const isNegativeType = type === "Pay-out";
 
@@ -707,7 +707,7 @@ function TenderModal({
             <input type="text" value={reference} onChange={(e) => setReference(e.target.value)} placeholder="GC-4417" />
           </label>
         )}
-        {type === "Store Credit" && (
+        {type === "Account Balance" && (
           <div className={"callout" + (needsCustomer ? " danger" : "")}>
             Draws against the Customer’s account balance — requires a Customer on the Sale.
             {needsCustomer && " No Customer attached."}
@@ -716,7 +716,7 @@ function TenderModal({
         {type === "Used Credit" && (
           <div className="callout">
             Buying second-hand stock over the counter. Creates a balance owing to the customer,
-            settled to store credit or a negative-cash payout (E-05 decision 14). Stock enters
+            settled to account balance or a negative-cash payout (E-05 decision 14). Stock enters
             separately via E-02.
           </div>
         )}
