@@ -125,7 +125,6 @@ An optional cross-reference links the two, so a payout can be traced to the copi
 | 4 | Reason codes: Shrinkage, Damaged, Found, Miscount / correction, Written off, Other (note required) |
 | 5 | Adjustments have no approval step and no cap — the reason code makes them visible, not gated |
 | 6 | Negative inventory is reconciled by finalizing the Invoice, or by a reason-coded adjustment |
-| 15 | **A negative-inventory Sale mints its InventoryItem immediately** — sold from birth, tagged **oversold** — rather than the on-hand count itself going below zero. It reconciles automatically (oldest outstanding oversold copy first, ahead of minting new stock, backfilling cost/supplier) when a matching Invoice line is later received, or via a `Miscount / correction` adjustment when there's no shipment to explain it |
 | 7 | ~~Employees may change a copy's price; shelf prices below cost still require a manager override (E-02 decision 10)~~ — **superseded**: below-cost still proceeds, it just raises a review flag instead (M-04 decision 8) |
 | 8 | `.50`/`.99` rounding applies to shelf prices set here (E-02 decision 9) |
 | 9 | Supplier claims are raised per copy against the Invoice it arrived on, batched by supplier and separator, and emailed |
@@ -138,6 +137,7 @@ An optional cross-reference links the two, so a payout can be traced to the copi
 | 16 | **Below-cost shelf pricing raises a ReviewFlag rather than blocking.** **Amends decision 7**, following [E-02](E-02-receive-inventory.md) d35 and [M-04](M-04-manage-users.md) d8 |
 | 17 | **`.50`/`.99` rounding is a suggestion, not a rule.** **Amends decision 8**, following [E-02](E-02-receive-inventory.md) d32 |
 | 18 | **Reconciling negative inventory clears the oversold InventoryItem** the Sale minted — either by finalizing the Invoice that brings the real copy in, or by a reason-coded adjustment. Makes decision 6 concrete ([architecture](../architecture.md) §5.1) |
+| 19 | **A negative-inventory Sale mints its InventoryItem immediately** — sold from birth, tagged **oversold** — rather than the on-hand count itself going below zero. It reconciles automatically (oldest outstanding oversold copy first, ahead of minting new stock, backfilling cost/supplier) when a matching Invoice line is later received, or via a `Miscount / correction` adjustment when there's no shipment to explain it |
 
 ---
 
