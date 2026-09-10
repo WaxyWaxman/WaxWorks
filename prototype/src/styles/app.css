@@ -111,7 +111,22 @@ code, .mono { font-family: var(--font-mono); font-size: 0.92em; }
   letter-spacing: 0; text-transform: none; color: var(--c-ink-faint);
 }
 
-.main { flex: 1; width: 100%; max-width: var(--maxw); margin: 0 auto; padding: var(--sp-5); }
+/* Full bleed. The band, the till slab and Receiving's worklist rail were all
+   drawn edge to edge, and a centred 1180px column left ~260px of dead margin
+   on a 1440 display. What the cap was really buying was a readable measure,
+   and that survives as --measure below. */
+.main { flex: 1; width: 100%; padding: var(--sp-5) var(--sp-6); }
+
+/* Running prose does not want the full width of a wide display. Anything that
+   is a sentence rather than data gets a measure; tables, rails and slabs do
+   not. */
+.main p,
+.page-head .sub,
+.callout { max-width: var(--measure); }
+/* ...except where the container is already the constraint. A paragraph in a
+   card grid or a rail is as wide as its column, and capping it again would
+   leave a ragged gap inside the box. */
+.flowmap p, .cols-2 p, .cols-3 p { max-width: none; }
 
 .page-head { display: flex; align-items: flex-start; gap: var(--sp-3); margin-bottom: var(--sp-5); }
 .page-head .flow-id {

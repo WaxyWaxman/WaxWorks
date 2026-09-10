@@ -76,5 +76,7 @@
   --shadow-1: none;
   --shadow-2: 0 8px 24px rgba(17, 17, 17, 0.12);
 
-  --maxw: 1180px;
+  /* Not a page cap any more — the app is full bleed. This is the measure for
+     running prose, so a sentence never spans a 1440px display. */
+  --measure: 82ch;
 }
