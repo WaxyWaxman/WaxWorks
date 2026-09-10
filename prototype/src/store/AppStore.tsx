@@ -377,7 +377,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
     saleId,
     record,
     price,
-  ) =>
+  ) => {
     patchSale(saleId, (sale) => {
       const d = applyCustomerDefaults(sale.customerId, {
         discountPct: 0,
@@ -403,6 +403,11 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
         ],
       };
     });
+    raiseReviewFlag(
+      "negative-stock",
+      `Sold ${record.artist} — ${record.title} at ${money(price)} with none on hand.`,
+    );
+  };
 
   const addNonTrackedLine: AppContextValue["addNonTrackedLine"] = (saleId, nt, price) =>
     patchSale(saleId, (sale) => {
