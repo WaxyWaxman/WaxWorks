@@ -18,6 +18,7 @@ export function PointOfSale() {
   const { saleId } = useParams();
   const [searching, setSearching] = useState(false);
   const [otherFns, setOtherFns] = useState(false);
+  const [viewingHolds, setViewingHolds] = useState(false);
 
   // A Return is a Sale with isReturn set, but it's edited at E-06's own
   // screen (return-specific fields: link to a prior Sale, refund, stock
@@ -101,16 +102,9 @@ export function PointOfSale() {
               ))}
             </>
           )}
-          <span className="muted xsmall">Held:</span>
-          {heldSales.map((s) => (
-            <button
-              key={s.id}
-              className={"btn sm" + (s.id === sale?.id ? " primary" : "")}
-              onClick={() => nav(`/sell/${s.id}`)}
-            >
-              {s.holdRef} · {app.customerFor(s.customerId)?.name?.split(" ")[0] ?? "—"}
-            </button>
-          ))}
+          <button className="btn" onClick={() => setViewingHolds(true)}>
+            View Holds{heldSales.length > 0 ? ` (${heldSales.length})` : ""}
+          </button>
           <span className="muted xsmall">Recent:</span>
           {recentCurrent.length === 0 && <span className="xsmall muted">none</span>}
           {recentCurrent.map((s) => (
@@ -130,85 +124,288 @@ export function PointOfSale() {
 
       {searching && <SearchModal onClose={() => setSearching(false)} />}
       {otherFns && <OtherFunctionsModal onClose={() => setOtherFns(false)} />}
+      {viewingHolds && <HoldsModal onClose={() => setViewingHolds(false)} />}
     </div>
   );
 }
 
+type HoldSort = "age" | "customer" | "ref" | "items";
+
+// A single "View Holds" replaces one quick-scan button per Held Sale, which
+// gets unreadable once a store has 20+ holds going at once — search plus
+// sortable columns instead of a wall of buttons.
+function HoldsModal({ onClose }: { onClose: () => void }) {
+  const app = useApp();
+  const nav = useNavigate();
+  const [q, setQ] = useState("");
+  const [sortKey, setSortKey] = useState<HoldSort>("age");
+  const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
+
+  const ageMs = (sale: Sale) => {
+    const created = new Date(sale.createdAt.replace(" ", "T"));
+    return Number.isNaN(created.getTime()) ? 0 : Date.now() - created.getTime();
+  };
+  const ageLabel = (ms: number) => {
+    const hours = Math.floor(ms / 3_600_000);
+    if (hours < 1) return "under an hour";
+    if (hours < 24) return `${hours}h`;
+    return `${Math.floor(hours / 24)}d ${hours % 24}h`;
+  };
+
+  const rows = useMemo(() => {
+    const held = app.sales.filter((s) => s.state === "Held" && !s.isReturn);
+    const query = q.trim().toLowerCase();
+    const filtered = query
+      ? held.filter((s) => {
+          const cust = app.customerFor(s.customerId);
+          const haystack = [s.holdRef, s.po, cust?.name, cust?.phone, cust?.email, ...s.lines.map((l) => l.title)]
+            .filter(Boolean)
+            .join(" ")
+            .toLowerCase();
+          return haystack.includes(query);
+        })
+      : held;
+
+    const withMeta = filtered.map((s) => ({ sale: s, customer: app.customerFor(s.customerId), ageMs: ageMs(s) }));
+    withMeta.sort((a, b) => {
+      let cmp = 0;
+      switch (sortKey) {
+        case "customer":
+          cmp = (a.customer?.name ?? "").localeCompare(b.customer?.name ?? "");
+          break;
+        case "ref":
+          cmp = (a.sale.holdRef ?? "").localeCompare(b.sale.holdRef ?? "");
+          break;
+        case "items":
+          cmp = a.sale.lines.length - b.sale.lines.length;
+          break;
+        case "age":
+          cmp = a.ageMs - b.ageMs;
+          break;
+      }
+      return sortDir === "asc" ? cmp : -cmp;
+    });
+    return withMeta;
+  }, [app.sales, q, sortKey, sortDir]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const toggleSort = (key: HoldSort) => {
+    if (key === sortKey) setSortDir((d) => (d === "asc" ? "desc" : "asc"));
+    else {
+      setSortKey(key);
+      setSortDir("asc");
+    }
+  };
+  const sortArrow = (key: HoldSort) => (key === sortKey ? (sortDir === "asc" ? " ▲" : " ▼") : "");
+
+  return (
+    <Modal title="Held Sales" onClose={onClose}>
+      <div className="stack">
+        <input
+          type="search"
+          autoFocus
+          value={q}
+          onChange={(e) => setQ(e.target.value)}
+          placeholder="Search by customer, hold ref, PO, or item…"
+        />
+        <table className="data">
+          <thead>
+            <tr>
+              <th className="row-click" onClick={() => toggleSort("ref")}>
+                Hold{sortArrow("ref")}
+              </th>
+              <th className="row-click" onClick={() => toggleSort("customer")}>
+                Customer{sortArrow("customer")}
+              </th>
+              <th className="row-click" onClick={() => toggleSort("items")}>
+                Items{sortArrow("items")}
+              </th>
+              <th className="row-click" onClick={() => toggleSort("age")}>
+                Age{sortArrow("age")}
+              </th>
+              <th />
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map(({ sale, customer, ageMs: age }) => (
+              <tr key={sale.id}>
+                <td className="mono">{sale.holdRef}</td>
+                <td>{customer?.name ?? "—"}</td>
+                <td className="small">
+                  {sale.lines.length} line{sale.lines.length !== 1 ? "s" : ""}
+                  <div className="xsmall muted">{sale.lines.map((l) => l.title).join(", ")}</div>
+                </td>
+                <td className="small">{ageLabel(age)}</td>
+                <td className="num">
+                  <button
+                    className="btn sm primary"
+                    onClick={() => {
+                      nav(`/sell/${sale.id}`);
+                      onClose();
+                    }}
+                  >
+                    Open
+                  </button>
+                </td>
+              </tr>
+            ))}
+            {rows.length === 0 && (
+              <tr>
+                <td colSpan={5} className="small muted">
+                  No holds{q ? " matching that search" : " right now"}.
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+    </Modal>
+  );
+}
+
+// The primary job here is scanning recent Current Sales for entry errors
+// before end-of-day close, not hunting for one item's history — so the
+// default (nothing typed) is a plain recency list of Current Sales, and
+// item/transaction/customer/date each narrow it further. Any filter widens
+// scope to every non-Open Sale, since by then the Employee is looking for
+// something specific rather than skimming.
 function SearchModal({ onClose }: { onClose: () => void }) {
   const app = useApp();
   const nav = useNavigate();
   const [code, setCode] = useState("");
+  const [txQuery, setTxQuery] = useState("");
+  const [custQuery, setCustQuery] = useState("");
+  const [dateQuery, setDateQuery] = useState("");
 
-  const results = useMemo(() => {
-    if (!code.trim()) return [];
-    const res = resolveScan(code.trim(), app);
-    let recordId: string | undefined;
-    let itemId: string | undefined;
-    if (res.kind === "internal") {
-      recordId = res.record.id;
-      itemId = res.item.id;
-    } else if (res.kind === "upc-single") {
-      recordId = res.record.id;
-    } else if (res.kind === "upc-multi") {
-      recordId = res.record.id;
-    } else {
-      return [];
-    }
-    const matches: { sale: Sale; line: SaleLine }[] = [];
-    for (const sale of app.sales) {
-      for (const line of sale.lines) {
-        if (itemId ? line.inventoryItemId === itemId : line.recordId === recordId) matches.push({ sale, line });
-      }
-    }
-    // Held Sales surface first so they can be selected and tendered, then most recent.
-    return matches.sort((a, b) => {
-      if ((a.sale.state === "Held") !== (b.sale.state === "Held")) return a.sale.state === "Held" ? -1 : 1;
-      return b.sale.createdAt.localeCompare(a.sale.createdAt);
-    });
+  // Resolves the same way the till's barcode field does: an internal
+  // barcode narrows to one copy, a manufacturer UPC narrows to the Record
+  // (any copy sold under it, since condition/price vary line to line).
+  const codeFilter = useMemo(() => {
+    const trimmed = code.trim();
+    if (!trimmed) return null;
+    const res = resolveScan(trimmed, app);
+    if (res.kind === "internal") return { itemId: res.item.id as string | undefined, recordId: res.record.id as string | undefined, noMatch: false };
+    if (res.kind === "upc-single" || res.kind === "upc-multi")
+      return { itemId: undefined, recordId: res.record.id as string | undefined, noMatch: false };
+    return { itemId: undefined, recordId: undefined, noMatch: true };
   }, [code, app]);
 
+  const hasFilter = !!(code.trim() || txQuery.trim() || custQuery.trim() || dateQuery);
+
+  const rows = useMemo(() => {
+    const txQ = txQuery.trim().toLowerCase();
+    const custQ = custQuery.trim().toLowerCase();
+
+    const matches = (sale: Sale) => {
+      if (codeFilter) {
+        if (codeFilter.noMatch) return false;
+        const onSale = sale.lines.some((l) =>
+          codeFilter.itemId ? l.inventoryItemId === codeFilter.itemId : l.recordId === codeFilter.recordId,
+        );
+        if (!onSale) return false;
+      }
+      if (txQ) {
+        const label = (sale.saleNumber ? String(sale.saleNumber) : sale.holdRef ?? "").toLowerCase();
+        if (!label.includes(txQ)) return false;
+      }
+      if (custQ) {
+        const cust = app.customerFor(sale.customerId);
+        if (!cust?.name.toLowerCase().includes(custQ)) return false;
+      }
+      if (dateQuery && sale.createdAt.slice(0, 10) !== dateQuery) return false;
+      return true;
+    };
+
+    const scope = hasFilter ? app.sales.filter((s) => s.state !== "Open") : app.sales.filter((s) => s.state === "Current");
+    return scope.filter(matches).sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+  }, [app.sales, codeFilter, txQuery, custQuery, dateQuery, hasFilter]); // eslint-disable-line react-hooks/exhaustive-deps
+
   return (
-    <Modal title="Search — item sale history" onClose={onClose}>
+    <Modal title="Search — past Sales" onClose={onClose} wide>
       <div className="stack">
-        <BarcodeInput onScan={setCode} placeholder="Scan or type a barcode…" />
-        {code && (
-          <table className="data">
-            <tbody>
-              {results.map(({ sale, line }) => (
-                <tr key={line.id}>
+        <p className="small muted">
+          {hasFilter
+            ? `${rows.length} matching Sale${rows.length !== 1 ? "s" : ""}, most recent first.`
+            : "Current Sales, most recent first. Scan an item, or search by transaction #, customer, or date to widen the search to every Sale."}
+        </p>
+        <div className="row wrap">
+          <label className="field" style={{ margin: 0, flex: "1 1 160px" }}>
+            <span>Transaction # / hold ref</span>
+            <input type="text" value={txQuery} onChange={(e) => setTxQuery(e.target.value)} placeholder="e.g. 100241 or H3" />
+          </label>
+          <label className="field" style={{ margin: 0, flex: "1 1 160px" }}>
+            <span>Customer name</span>
+            <input type="text" value={custQuery} onChange={(e) => setCustQuery(e.target.value)} placeholder="e.g. Vasquez" />
+          </label>
+          <label className="field" style={{ margin: 0, flex: "1 1 160px" }}>
+            <span>Date</span>
+            <input type="date" value={dateQuery} onChange={(e) => setDateQuery(e.target.value)} />
+          </label>
+        </div>
+        <BarcodeInput onScan={setCode} placeholder="…or scan/type an item barcode" />
+        {code && codeFilter?.noMatch && <div className="callout danger">No catalog match for "{code}".</div>}
+
+        <table className="data">
+          <thead>
+            <tr>
+              <th>Sale</th>
+              <th>When</th>
+              <th>Customer</th>
+              <th>Items</th>
+              <th className="num">Total</th>
+              <th />
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((sale) => {
+              const cust = app.customerFor(sale.customerId);
+              const totals = saleTotals(sale, app.taxLines);
+              return (
+                <tr key={sale.id}>
                   <td>
-                    {line.title}
-                    <div className="xsmall muted">
-                      {sale.state === "Held" ? (
-                        <span className="badge">Held · {sale.holdRef}</span>
-                      ) : (
-                        <span className="badge">{sale.state}{sale.saleNumber ? ` · #${sale.saleNumber}` : ""}</span>
-                      )}{" "}
-                      {sale.createdAt}
-                    </div>
+                    {sale.isReturn && <span className="badge warn">Return</span>}{" "}
+                    {sale.saleNumber ? (
+                      <>
+                        #{sale.saleNumber}{" "}
+                        <span className={"badge" + (sale.state === "Closed" ? "" : sale.state === "Void" ? " danger" : " ok")}>
+                          {sale.state}
+                        </span>
+                      </>
+                    ) : (
+                      <>
+                        <span className="mono">{sale.holdRef}</span> <span className="badge">{sale.state}</span>
+                      </>
+                    )}
                   </td>
-                  <td className="num">{money(line.price)}</td>
+                  <td className="small mono">{sale.createdAt}</td>
+                  <td className="small">{cust?.name ?? "—"}</td>
+                  <td className="small muted">
+                    {sale.lines.length} line{sale.lines.length !== 1 ? "s" : ""}
+                    <div className="xsmall">{sale.lines.map((l) => l.title).join(", ")}</div>
+                  </td>
+                  <td className="num">{money(totals.grand)}</td>
                   <td className="num">
                     <button
                       className="btn sm primary"
                       onClick={() => {
-                        nav(`/sell/${sale.id}`);
+                        nav(sale.isReturn ? `/return/${sale.id}` : `/sell/${sale.id}`);
                         onClose();
                       }}
                     >
-                      {sale.state === "Held" ? "Select & tender" : "Open"}
+                      Open
                     </button>
                   </td>
                 </tr>
-              ))}
-              {results.length === 0 && (
-                <tr>
-                  <td className="small muted">No sale history for that barcode.</td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        )}
+              );
+            })}
+            {rows.length === 0 && (
+              <tr>
+                <td colSpan={6} className="small muted">
+                  No Sales match.
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
       </div>
     </Modal>
   );
@@ -423,6 +620,7 @@ function SaleEditor() {
   const [scanNote, setScanNote] = useState<string | null>(null);
   const [loggingContact, setLoggingContact] = useState(false);
   const [noteDraft, setNoteDraft] = useState("");
+  const [lookingUp, setLookingUp] = useState(false);
 
   // Lines/tenders/customer/PO are only editable pre-tender. Once a Sale is
   // Current it's Void-or-Edit(duplicate) only; Closed/Void are read-only.
@@ -469,29 +667,46 @@ function SaleEditor() {
     <div className="sell">
       <div className="stack">
         <div className="card">
-          <div className="card-head">
-            Sale —{" "}
-            {sale.saleNumber ? (
-              <>
-                #{sale.saleNumber} <span className={"badge" + (sale.state === "Closed" ? "" : " ok")}>{sale.state}</span>
-              </>
-            ) : sale.state === "Held" ? (
-              <>
-                <span className="mono">{sale.holdRef}</span> <span className="badge">Held</span>
-                {holdAgeLabel && <span className="muted xsmall">on hold {holdAgeLabel}</span>}
-              </>
-            ) : (
-              <span className="badge">Open</span>
-            )}
-            <span className="muted xsmall">{sale.createdBy}</span>
-            {sale.lockedBy && (
-              <>
-                <span className="badge accent">locked · {sale.lockedBy}</span>
-                <button className="btn ghost sm" onClick={() => app.forceUnlockSale(sale.id)}>
-                  Force unlock
+          <div className="card-head sale-head">
+            <div className="sale-head-left">
+              <span className="sale-head-label">Sale</span>
+              {customer ? (
+                <button
+                  className="sale-head-customer-btn"
+                  onClick={() => setCustPick(true)}
+                  disabled={fieldsLocked}
+                  title="Change customer"
+                >
+                  {customer.name}
                 </button>
-              </>
-            )}
+              ) : (
+                <button className="btn primary" onClick={() => setCustPick(true)} disabled={fieldsLocked}>
+                  + Add customer
+                </button>
+              )}
+              <span className="sale-head-meta">
+                {sale.saleNumber ? (
+                  <>
+                    #{sale.saleNumber} <span className={"badge" + (sale.state === "Closed" ? "" : " ok")}>{sale.state}</span>
+                  </>
+                ) : sale.state === "Held" ? (
+                  <>
+                    <span className="mono">{sale.holdRef}</span> <span className="badge">Held</span>
+                    {holdAgeLabel && <span className="muted xsmall">on hold {holdAgeLabel}</span>}
+                  </>
+                ) : (
+                  <span className="badge">Open</span>
+                )}
+              </span>
+              {sale.lockedBy && (
+                <>
+                  <span className="badge accent">locked · {sale.lockedBy}</span>
+                  <button className="btn ghost sm" onClick={() => app.forceUnlockSale(sale.id)}>
+                    Force unlock
+                  </button>
+                </>
+              )}
+            </div>
             <div className="btn-row">
               {sale.state === "Current" && (
                 <button
@@ -520,9 +735,6 @@ function SaleEditor() {
           </div>
           <div className="card-body stack">
             <div className="row wrap">
-              <button className="btn sm" onClick={() => setCustPick(true)} disabled={fieldsLocked}>
-                {customer ? `Customer: ${customer.name}` : "Attach customer"}
-              </button>
               {customer && (
                 <>
                   <span className="badge accent">disc {customer.globalDiscountPct}%</span>
@@ -558,7 +770,9 @@ function SaleEditor() {
               )}
             </div>
 
-            {!fieldsLocked && <BarcodeInput onScan={onScan} />}
+            {!fieldsLocked && (
+              <BarcodeInput onScan={onScan} actionLabel="Lookup" onAction={() => setLookingUp(true)} />
+            )}
             {scanNote && <div className="callout ok">{scanNote}</div>}
           </div>
         </div>
@@ -659,6 +873,11 @@ function SaleEditor() {
               <div key={t.id} className="tender-line">
                 <span>
                   {t.type}
+                  {t.type === "Account Balance" && (
+                    <span className={"badge" + (t.accountDirection === "add" ? " ok" : "")}>
+                      {t.accountDirection === "add" ? "add to balance" : "draw down"}
+                    </span>
+                  )}
                   {t.reference ? ` · ${t.reference}` : ""}
                   {t.note ? <span className="muted"> — {t.note}</span> : ""}
                 </span>
@@ -838,6 +1057,14 @@ function SaleEditor() {
 
       {custPick && <CustomerPickModal saleId={sale.id} onClose={() => setCustPick(false)} />}
 
+      {lookingUp && (
+        <LookupModal
+          saleId={sale.id}
+          onClose={() => setLookingUp(false)}
+          onAdded={setScanNote}
+        />
+      )}
+
       {showTender && (
         <TenderModal
           due={due}
@@ -976,6 +1203,104 @@ function CustomerPickModal({ saleId, onClose }: { saleId: string; onClose: () =>
       </div>
     </Modal>
   );
+}
+
+// A real scan hits Enter on its own — typing and pressing Enter (or the
+// sample chips) already resolves a code without a redundant button. Lookup
+// covers the other case: the Employee doesn't have a code, just a name to
+// search for, and wants to pick a copy off a results list to add as a line.
+function LookupModal({
+  saleId,
+  onClose,
+  onAdded,
+}: {
+  saleId: string;
+  onClose: () => void;
+  onAdded: (msg: string) => void;
+}) {
+  const app = useApp();
+  const [q, setQ] = useState("");
+  const query = q.trim().toLowerCase();
+
+  const results = useMemo(() => {
+    if (!query) return [];
+    const match = (r: RecordEntry) =>
+      [r.artist, r.title, r.label, r.catalogNo, r.genre, r.section, r.manufacturerUpc]
+        .filter(Boolean)
+        .some((f) => String(f).toLowerCase().includes(query));
+    return app.records.filter((r) => !r.catalogOnly && match(r));
+  }, [query, app.records]);
+
+  return (
+    <Modal title="Lookup — add a line" onClose={onClose}>
+      <div className="stack">
+        <p className="small muted">Search artist, title, label, catalog no., genre, or Section — then add a copy to the Sale.</p>
+        <input
+          type="search"
+          autoFocus
+          value={q}
+          onChange={(e) => setQ(e.target.value)}
+          placeholder="try: blue · rumours · jazz · radiohead"
+        />
+        <table className="data">
+          <tbody>
+            {results.map((r) => {
+              const copies = app.inventory.filter((i) => i.recordId === r.id && i.status === "sellable");
+              return (
+                <FragmentRow key={r.id}>
+                  <tr className="group-row">
+                    <td colSpan={3}>
+                      {r.artist} — {r.title}
+                      <div className="xsmall muted">
+                        {r.label} · {r.catalogNo} · {r.genre}
+                      </div>
+                    </td>
+                  </tr>
+                  {copies.map((c) => (
+                    <tr key={c.id} className="nested">
+                      <td className="small">
+                        <span className="badge grade">{c.grade}</span>{" "}
+                        {c.backroom && <span className="badge warn">Backroom</span>}
+                      </td>
+                      <td className="num">{money(c.price)}</td>
+                      <td className="num">
+                        <button
+                          className="btn sm primary"
+                          onClick={() => {
+                            app.addItemLine(saleId, c);
+                            onAdded(`Added ${r.artist} — ${r.title} (${c.grade}) at ${money(c.price)}.`);
+                            onClose();
+                          }}
+                        >
+                          Add
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                  {copies.length === 0 && (
+                    <tr className="nested">
+                      <td colSpan={3} className="small muted">
+                        No sellable copies on hand.
+                      </td>
+                    </tr>
+                  )}
+                </FragmentRow>
+              );
+            })}
+            {query && results.length === 0 && (
+              <tr>
+                <td className="small muted">No match for "{q}".</td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+    </Modal>
+  );
+}
+
+function FragmentRow({ children }: { children: React.ReactNode }) {
+  return <>{children}</>;
 }
 
 function LineRow({ line, locked }: { line: SaleLine; locked: boolean }) {
@@ -1130,7 +1455,14 @@ function TenderModal({
 
   const needsCustomer = type === "Account Balance" && !hasCustomer;
   const needsNote = type === "Pay-out" && note.trim().length === 0;
-  const isNegativeType = type === "Pay-out";
+  // Negative amounts are for tenders that don't count toward paying off
+  // this Sale's total — Pay-out sends cash out of the till for an expense,
+  // and "add to balance" redirects an incoming tender (e.g. cash) into the
+  // Customer's store credit instead of applying it to the Sale. Both need
+  // an equal, opposite tender elsewhere to actually fund them; storing them
+  // negative is what makes balanceDue net that out instead of double-
+  // counting the money as both "received" and "credited".
+  const isNegativeType = type === "Pay-out" || (type === "Account Balance" && acctDirection === "add");
 
   return (
     <Modal

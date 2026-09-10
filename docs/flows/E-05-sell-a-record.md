@@ -115,7 +115,7 @@ Some things sold at the till are not InventoryItems — freight, services, and b
 |---|---|
 | **New** | Start a Sale. |
 | **Edit** | **Current:** voids the original and duplicates it for editing, preserving the audit trail. **Held:** opens it to prepare for tender. |
-| **Search** | Scan a barcode to see that item's sale history; Held Sales involving it surface first so they can be selected and tendered. |
+| **Search** | Defaults to Current Sales, most recent first, for catching entry errors before end-of-day close. Transaction #, Customer name, and Date each filter it, alongside the original barcode scan; any filter widens scope from Current-only to every non-Open Sale (decision 27). |
 | **Copy** | New Sale with the same lines as the selected one. |
 | **Void** | **Current Sales only.** Returns stock to sellable inventory, drops the Sale from the pending end-of-day totals, and retains its Sale number. A **Closed** Sale cannot be voided — it is either reopened via Undo End of Day ([M-03](M-03-daily-summary.md), manager-only) or handled as a Return ([E-06](E-06-process-a-return.md)). Voiding settled history would misstate the day's takings. |
 | **Cancel Hold** | **Held Sales only.** Releases the held copies back to sellable stock and closes the hold, recording who cancelled it and when. |
@@ -205,6 +205,7 @@ Held copies count against **available** stock but remain on hand.
 | 24 | **Receipts are emailed in v1**, with browser printing as the fallback for a customer with no email address. A thermal receipt printer is post-v1 and opt-in ([architecture](../architecture.md) §4) |
 | 25 | **A deposit is a line-less Sale tendered to the Customer's account**, shown as a balance on the Held Sale. Closes the layaway open question using existing machinery (A-25) |
 | 26 | **Till rounding is advisory**, consistent with E-02 decision 32. Closes the till-rounding open question (A-24) |
+| 27 | **Search is a past-Sales browser, not an item-only lookup.** Default (nothing typed) is Current Sales, most recent first, so an Employee can scan for entry errors before close. Transaction # (Sale number or hold reference), Customer name, and Date join the barcode scan as filters; any one of them widens scope from Current-only to every non-Open Sale, since by then the Employee is after one specific Sale rather than skimming recent activity. Results are Sales, not lines — opening one goes straight to its editor. |
 
 ---
 
