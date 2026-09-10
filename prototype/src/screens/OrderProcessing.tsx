@@ -1,15 +1,16 @@
 import { useEffect, useMemo, useState } from "react";
+import { Link } from "react-router-dom";
 import { Modal } from "../components/Modal";
 import { SeparatorSelect } from "../components/SeparatorSelect";
 import { TitlecardPanel } from "../components/TitlecardPanel";
 import type { PendingOrderLine, Supplier } from "../data/types";
 import { money } from "../lib/money";
-import { orderReady, separatorCounts } from "../lib/totals";
+import { daysAgo, orderReady, separatorCounts } from "../lib/totals";
 import { useApp } from "../store/AppStore";
 
 // Order Processing (M-02 Phase 2) — a Manager turns Employee-raised pending
 // order lines (Phase 1, raised from a titlecard's Order button) into
-// PurchaseOrders.
+// PurchaseOrders. Once placed, a line moves to What's on Order (Phase 3).
 interface Stream {
   supplier: Supplier;
   separator?: string;
@@ -17,9 +18,6 @@ interface Stream {
 }
 
 const streamKey = (supplierId: string, separator: string | undefined) => `${supplierId}::${separator ?? ""}`;
-
-const daysAgo = (at: string): number =>
-  Math.max(0, Math.floor((Date.now() - new Date(at.replace(" ", "T")).getTime()) / 86400000));
 
 function streamMath(lines: PendingOrderLine[], supplier: Supplier) {
   const unitCount = lines.reduce((n, l) => n + l.qty, 0);
@@ -128,8 +126,8 @@ export function OrderProcessing() {
             One line per Supplier + separator, showing pending total, age of the oldest line, order
             method, customer-attached count, sell total, and estimated cost. Employees raise pending
             lines from a titlecard's <strong>Order</strong> button (Phase 1); a Manager{" "}
-            <strong>Process</strong>es a stream into a PurchaseOrder here (Phase 2). Tracking what's
-            already on order — Phase 3 — isn't built yet.
+            <strong>Process</strong>es a stream into a PurchaseOrder here (Phase 2). Once placed, a
+            line moves to <Link to="/on-order">What's on Order</Link> (Phase 3) until it's received.
           </p>
         </div>
       </div>

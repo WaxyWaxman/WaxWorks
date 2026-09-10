@@ -104,13 +104,17 @@ export const SUPPLIERS: Supplier[] = [
 // job; set means already placed, which is also what backs Receiving's
 // Orders lookup. No reorder suggestions, no backorder lifecycle (Phase 3). ----
 export const PENDING_ORDERS: PendingOrderLine[] = [
-  // sup-fab — one already-placed PO (PO-1042, two lines) plus one pending line
-  { id: "po-line-1", supplierId: "sup-fab", poNumber: "PO-1042", placedAt: "2026-09-02 11:00:00", recordId: "r-kind", scannedCode: "888751545519", qty: 2, sellPrice: 24.0, expectedListPrice: 22.0, expectedDiscountPct: 15, createdAt: "2026-09-02 10:15:00" },
-  { id: "po-line-2", supplierId: "sup-fab", poNumber: "PO-1042", placedAt: "2026-09-02 11:00:00", recordId: "r-purple", scannedCode: "075992511018", qty: 3, sellPrice: 32.99, expectedListPrice: 24.0, expectedDiscountPct: 10, createdAt: "2026-09-02 10:15:00" },
+  // sup-fab — one already-placed PO (PO-1042, two lines) plus one pending line.
+  // A 5-day follow-up flag set when placed (09/02) is overdue by today's demo
+  // date; the other line's 14-day flag hasn't come due yet — What's on Order
+  // (Phase 3) shows one red, one not.
+  { id: "po-line-1", supplierId: "sup-fab", poNumber: "PO-1042", placedAt: "2026-09-02 11:00:00", recordId: "r-kind", scannedCode: "888751545519", qty: 2, sellPrice: 24.0, expectedListPrice: 22.0, expectedDiscountPct: 15, followUpDays: 5, followUpSetAt: "2026-09-02 11:00:00", createdAt: "2026-09-02 10:15:00" },
+  { id: "po-line-2", supplierId: "sup-fab", poNumber: "PO-1042", placedAt: "2026-09-02 11:00:00", recordId: "r-purple", scannedCode: "075992511018", qty: 3, sellPrice: 32.99, expectedListPrice: 24.0, expectedDiscountPct: 10, followUpDays: 14, followUpSetAt: "2026-09-02 11:00:00", createdAt: "2026-09-02 10:15:00" },
   { id: "po-line-3", supplierId: "sup-fab", recordId: "r-blue", scannedCode: "081227971609", qty: 2, sellPrice: 28.99, expectedListPrice: 27.99, expectedDiscountPct: 10, createdAt: "2026-09-05 14:30:00" },
 
-  // sup-indie — one already-placed PO (PO-77, customer-attached) plus one pending line
-  { id: "po-line-4", supplierId: "sup-indie", poNumber: "PO-77", placedAt: "2026-09-06 09:30:00", recordId: "r-horses", scannedCode: "060758004321", qty: 1, sellPrice: 24.99, expectedListPrice: 20.0, expectedDiscountPct: 0, customerId: "c-theo", createdAt: "2026-09-06 09:00:00" },
+  // sup-indie — one already-placed PO (PO-77, customer-attached, overdue
+  // 3-day flag — Theo is waiting) plus one pending line
+  { id: "po-line-4", supplierId: "sup-indie", poNumber: "PO-77", placedAt: "2026-09-06 09:30:00", recordId: "r-horses", scannedCode: "060758004321", qty: 1, sellPrice: 24.99, expectedListPrice: 20.0, expectedDiscountPct: 0, customerId: "c-theo", followUpDays: 3, followUpSetAt: "2026-09-06 09:30:00", createdAt: "2026-09-06 09:00:00" },
   { id: "po-line-5", supplierId: "sup-indie", recordId: "r-purple", qty: 1, sellPrice: 32.99, createdAt: "2026-09-08 16:00:00" },
 
   // sup-crate (Email order-via) — two pending lines on the regular stream, one customer-attached, plus a "R" (rush) stream that alone already meets the 10-unit minimum

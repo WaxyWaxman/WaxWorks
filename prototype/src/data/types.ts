@@ -276,8 +276,10 @@ export interface InvoiceLine {
 // raised but not yet sent anywhere (Phase 1); Processing a stream (Phase 2)
 // assigns a PO number and `placedAt` to every line in it at once. Also backs
 // the Orders lookup in Receiving — a line stops being pending once received
-// against (E-02). Reorder suggestions and the backorder lifecycle (Phase 3)
-// are not modelled.
+// against (E-02). Reorder suggestions and the backorder lifecycle beyond the
+// follow-up flag are not modelled. Status (Backordered/Cancelled) and voiding
+// a PO — the rest of Phase 3 — aren't modelled either; only tracking and
+// re-flagging are.
 export interface PendingOrderLine {
   id: string;
   supplierId: string; // recorded on the line, not the Record — M-02 decision 2
@@ -291,7 +293,8 @@ export interface PendingOrderLine {
   expectedListPrice?: number; // cost estimate consumed by Receiving's line pre-fill only
   expectedDiscountPct?: number;
   customerId?: string; // customer-attached line
-  followUpDays?: number; // days after which to chase it if still unfulfilled — decision 8; not yet consumed (Phase 3)
+  followUpDays?: number; // days after which to chase it if still unfulfilled — decision 8
+  followUpSetAt?: string; // when the follow-up window last started — createdAt if unset; updated by Re-flag (Phase 3, What's on Order)
   createdBy?: string;
   createdAt: string;
 }
