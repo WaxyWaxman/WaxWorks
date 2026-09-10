@@ -1,0 +1,94 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;600;800&family=Archivo+Narrow:wght@500;700&display=swap">
+  <style>
+    body { margin: 0; font-family: "Archivo", ui-sans-serif, system-ui, sans-serif; background: #f2f2f0; color: #111111; }
+    a { color: #d64500; } a:hover { color: #a83700; }
+    .lab { font-family: "Archivo Narrow", "Archivo", sans-serif; font-weight: 700; font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase; color: #6e6e6a; }
+    .mode { flex: 1; height: 100%; display: flex; align-items: center; justify-content: center; font-size: 15px; font-weight: 600; color: #4a4a46; border-right: 1px solid #dcdcd8; }
+    .res { background: #ffffff; border: 1px solid #dcdcd8; padding: 14px 18px; display: flex; align-items: center; gap: 18px; }
+    .art { width: 56px; height: 56px; background: repeating-linear-gradient(135deg, #e6e6e2 0 5px, #f4f4f2 5px 10px); border: 1px solid #dcdcd8; flex: none; }
+  </style>
+</helmet>
+<div style="width: 1280px; height: 800px; box-sizing: border-box; background: #f2f2f0; display: flex; flex-direction: column;">
+
+  <div style="height: 62px; background: #ffffff; border-bottom: 3px solid #111111; display: flex; align-items: stretch;">
+    <div style="width: 168px; display: flex; align-items: center; padding-left: 20px; font-weight: 800; font-size: 17px; border-right: 1px solid #dcdcd8;">WAX WORKS</div>
+    <div class="mode">SELL</div>
+    <div class="mode" style="background: #111111; color: #ffffff; font-weight: 800;">FIND</div>
+    <div class="mode">RECEIVE</div>
+    <div class="mode">CUSTOMERS</div>
+    <div class="mode" style="border-right: none;">MORE</div>
+  </div>
+
+  <div style="padding: 20px 20px 0;">
+    <div style="background: #ffffff; border: 3px solid #111111; padding: 14px 20px; display: flex; align-items: center; gap: 12px;">
+      <span style="font-size: 32px; font-weight: 600;">alice coltrane</span>
+      <span style="width: 3px; height: 32px; background: #d64500;"></span>
+      <span style="margin-left: auto; font-size: 13px; color: #6e6e6a;">Type a title, or scan the sleeve</span>
+    </div>
+  </div>
+
+  <div style="padding: 16px 20px 0; display: flex; align-items: center; gap: 10px;">
+    <span style="background: #111111; color: #fff; padding: 7px 14px; font-size: 13px; font-weight: 600;">In stock &middot; 3</span>
+    <span style="border: 2px solid #c8c8c4; padding: 6px 14px; font-size: 13px; font-weight: 600; color: #4a4a46;">Can order &middot; 3</span>
+    <span style="margin-left: auto; font-size: 13px; color: #a83700; font-weight: 600;">Catalogue offline &mdash; showing what we hold</span>
+  </div>
+
+  <div style="flex: 1; padding: 16px 20px 0; display: flex; flex-direction: column; gap: 12px; overflow: hidden;">
+
+    <div class="res" style="border: 3px solid #d64500; background: #fffaf7; padding: 18px;">
+      <div class="art" style="width: 92px; height: 92px;"></div>
+      <div style="flex: 1; min-width: 0;">
+        <div style="font-size: 24px; font-weight: 800; letter-spacing: -0.01em;">Alice Coltrane &mdash; Journey in Satchidananda</div>
+        <div style="font-size: 14px; color: #6e6e6a; margin-top: 4px;">Impulse! &middot; 1971 &middot; Spiritual Jazz</div>
+        <div style="display: flex; gap: 8px; margin-top: 10px;">
+          <span style="border: 2px solid #111111; padding: 8px 16px; font-size: 14px; font-weight: 600; background: #fff;">Hold for a customer</span>
+          <span style="border: 2px solid #111111; padding: 8px 16px; font-size: 14px; font-weight: 600; background: #fff;">Add to sale</span>
+          <span style="border: 2px solid #111111; padding: 8px 16px; font-size: 14px; font-weight: 600; background: #fff;">All copies &amp; history</span>
+        </div>
+      </div>
+      <div style="text-align: right; flex: none; padding-left: 20px;">
+        <div class="lab">We have</div>
+        <div style="font-size: 56px; font-weight: 800; line-height: 1;">3</div>
+        <div style="font-size: 14px; color: #6e6e6a; margin-top: 2px;">1 more on hold</div>
+        <div style="font-size: 22px; font-weight: 700; margin-top: 8px;">26 &ndash; 34</div>
+      </div>
+    </div>
+
+    <div class="res">
+      <div class="art"></div>
+      <div style="flex: 1; min-width: 0;"><div style="font-size: 19px; font-weight: 600;">Alice Coltrane &mdash; Ptah, the El Daoud</div><div style="font-size: 13px; color: #6e6e6a; margin-top: 2px;">Impulse! &middot; 1970</div></div>
+      <div style="text-align: right;"><div style="font-size: 30px; font-weight: 800; line-height: 1;">1</div><div style="font-size: 15px; font-weight: 600; color: #4a4a46;">29.99</div></div>
+    </div>
+
+    <div class="res">
+      <div class="art"></div>
+      <div style="flex: 1; min-width: 0;"><div style="font-size: 19px; font-weight: 600;">Alice Coltrane &mdash; World Galaxy</div><div style="font-size: 13px; color: #a83700; margin-top: 2px; font-weight: 600;">None here &mdash; 3 arriving on PO-1151</div></div>
+      <div style="text-align: right;"><div style="font-size: 30px; font-weight: 800; line-height: 1; color: #c8c8c4;">0</div><div style="font-size: 13px; color: #6e6e6a;">on order</div></div>
+    </div>
+
+    <div class="res" style="opacity: 0.66; border-style: dashed;">
+      <div class="art"></div>
+      <div style="flex: 1; min-width: 0;"><div style="font-size: 19px; font-weight: 600;">Alice Coltrane &mdash; Universal Consciousness</div><div style="font-size: 13px; color: #6e6e6a; margin-top: 2px;">Not in stock &mdash; we can order it</div></div>
+      <div style="border: 2px solid #111111; padding: 8px 16px; font-size: 14px; font-weight: 600; background: #fff;">Order it in</div>
+    </div>
+
+  </div>
+
+  <div style="height: 26px; background: #111111; color: #8f8f8a; display: flex; align-items: center; padding: 0 20px; font-size: 11px; letter-spacing: 0.06em; margin-top: 16px;">
+    <span>B &middot; COUNTER &mdash; Search + titlecard (E-03 / E-04)</span>
+    <span style="margin-left: auto;">4 results per screen &middot; readable from the customer&#39;s side of the counter</span>
+  </div>
+
+</div>
+</x-dc>
+</body>
+</html>

@@ -1,0 +1,106 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+  <style>
+    body { margin: 0; font-family: "IBM Plex Sans", ui-sans-serif, system-ui, sans-serif; background: #fbfaf8; color: #16161a; }
+    a { color: #1f4d3a; } a:hover { color: #143528; }
+    .m { font-family: "IBM Plex Mono", ui-monospace, monospace; font-variant-numeric: tabular-nums; }
+    .th { font-size: 10px; letter-spacing: 0.07em; text-transform: uppercase; color: #7a766e; font-weight: 600; }
+    .r { display: grid; grid-template-columns: 24px 96px 1fr 40px 30px 62px 46px 62px 50px 62px 22px; align-items: center; height: 23px; border-bottom: 1px solid #eeebe5; font-size: 12px; }
+    .r > div { padding: 0 5px; overflow: hidden; white-space: nowrap; }
+    .n { text-align: right; }
+    .f { display: flex; flex-direction: column; gap: 1px; }
+    .f > span:first-child { font-size: 9.5px; letter-spacing: 0.06em; text-transform: uppercase; color: #8b867d; }
+    .f > span:last-child { font-size: 12.5px; border-bottom: 1px solid #cfcbc2; padding-bottom: 2px; }
+  </style>
+</helmet>
+<div style="width: 1280px; height: 800px; box-sizing: border-box; background: #fbfaf8; display: flex; flex-direction: column;">
+
+  <div style="height: 30px; background: #16161a; color: #eae7e1; display: flex; align-items: center; gap: 22px; padding: 0 14px; font-size: 12px;">
+    <span class="m" style="font-weight: 600; letter-spacing: 0.12em; font-size: 11px;">WAX WORKS</span>
+    <span style="color: #a09b93;">Point of Sale</span>
+    <span style="color: #a09b93;">Search</span>
+    <span style="border-bottom: 2px solid #6fae8e; padding-bottom: 1px;">Receiving</span>
+    <span style="color: #a09b93;">Customers</span>
+    <span style="color: #a09b93;">Suppliers</span>
+    <span style="color: #a09b93;">Claims</span>
+  </div>
+
+  <div style="height: 24px; border-bottom: 1px solid #d5d2cc; background: #f4f2ee; display: flex; align-items: center; gap: 18px; padding: 0 14px; font-size: 11px; color: #5d594f;" class="m">
+    <span>WORKLIST 3 OPEN POs &#9662;</span><span>PO-1142 &middot; 38 LINES OUTSTANDING</span><span>PO-1147 &middot; 12</span><span>PO-1151 &middot; 4</span>
+    <span style="margin-left: auto;">DRAFT &mdash; AUTOSAVED 14:19</span>
+  </div>
+
+  <div style="display: grid; grid-template-columns: repeat(9, minmax(0, 1fr)); gap: 12px 18px; padding: 10px 14px; border-bottom: 1px solid #b9b4aa; background: #f7f5f1;">
+    <div class="f"><span>Supplier</span><span>F.A.B. Distribution</span></div>
+    <div class="f"><span>Mode</span><span>New stock</span></div>
+    <div class="f"><span>Invoice no.</span><span class="m">FAB-88214</span></div>
+    <div class="f"><span>Invoice date</span><span class="m">2026-09-04</span></div>
+    <div class="f"><span>Received</span><span class="m">2026-09-10</span></div>
+    <div class="f"><span>Stated subtotal</span><span class="m n">2,418.66</span></div>
+    <div class="f"><span>Tax</span><span class="m n">0.00</span></div>
+    <div class="f"><span>Freight</span><span class="m n">64.00</span></div>
+    <div class="f"><span>Misc</span><span class="m n">0.00</span></div>
+  </div>
+
+  <div class="r th" style="border-bottom: 1px solid #b9b4aa; background: #f0ede8; height: 22px;">
+    <div>#</div><div>Barcode</div><div>Artist &mdash; Title</div><div>Cond</div><div class="n">Qty</div><div class="n">List</div><div class="n">Disc%</div><div class="n">Cost</div><div class="n">Marg%</div><div class="n">Sell</div><div></div>
+  </div>
+
+  <div style="flex: 1; overflow: hidden;">
+    <div class="r"><div class="m" style="color: #9a968d;">1</div><div class="m">602435991</div><div>Nina Simone &mdash; Pastel Blues</div><div>M</div><div class="n m">2</div><div class="n m">27.99</div><div class="n m">45</div><div class="n m">15.39</div><div class="n m">192</div><div class="n m">44.99</div><div></div></div>
+    <div class="r"><div class="m" style="color: #9a968d;">2</div><div class="m">602435992</div><div>Khruangbin &mdash; Con Todo El Mundo</div><div>M</div><div class="n m">3</div><div class="n m">25.99</div><div class="n m">45</div><div class="n m">14.29</div><div class="n m">191</div><div class="n m">41.50</div><div></div></div>
+    <div class="r"><div class="m" style="color: #9a968d;">3</div><div class="m">602435993</div><div>Fleetwood Mac &mdash; Rumours</div><div>M</div><div class="n m">4</div><div class="n m">29.99</div><div class="n m">45</div><div class="n m">16.49</div><div class="n m">191</div><div class="n m">47.99</div><div></div></div>
+    <div class="r" style="background: #fdf1ef;"><div class="m" style="color: #9a968d;">4</div><div class="m">602435994</div><div>Bad Bunny &mdash; Un Verano Sin Ti</div><div>M</div><div class="n m">2</div><div class="n m">34.99</div><div class="n m">40</div><div class="n m">20.99</div><div class="n m" style="color: #a3271f;">&minus;5</div><div class="n m" style="color: #a3271f;">19.99</div><div style="color: #a3271f;">&#9873;</div></div>
+    <div class="r"><div class="m" style="color: #9a968d;">5</div><div class="m">602435995</div><div>Sault &mdash; Untitled (Rise)</div><div>M</div><div class="n m">1</div><div class="n m">31.99</div><div class="n m">45</div><div class="n m">17.59</div><div class="n m">190</div><div class="n m">50.99</div><div></div></div>
+    <div class="r"><div class="m" style="color: #9a968d;">6</div><div class="m">602435996</div><div>Radiohead &mdash; In Rainbows</div><div>M</div><div class="n m">2</div><div class="n m">28.99</div><div class="n m">45</div><div class="n m">15.94</div><div class="n m">190</div><div class="n m">45.99</div><div></div></div>
+    <div class="r"><div class="m" style="color: #9a968d;">7</div><div class="m">602435997</div><div>Charles Mingus &mdash; Mingus Ah Um</div><div>M</div><div class="n m">1</div><div class="n m">24.99</div><div class="n m">45</div><div class="n m">13.74</div><div class="n m">191</div><div class="n m">39.99</div><div></div></div>
+    <div class="r"><div class="m" style="color: #9a968d;">8</div><div class="m">602435998</div><div>Little Simz &mdash; Sometimes I Might Be Introvert</div><div>M</div><div class="n m">2</div><div class="n m">33.99</div><div class="n m">45</div><div class="n m">18.69</div><div class="n m">191</div><div class="n m">54.50</div><div></div></div>
+    <div class="r"><div class="m" style="color: #9a968d;">9</div><div class="m">602435999</div><div>Portishead &mdash; Dummy</div><div>M</div><div class="n m">1</div><div class="n m">26.99</div><div class="n m">45</div><div class="n m">14.84</div><div class="n m">191</div><div class="n m">42.99</div><div></div></div>
+    <div class="r"><div class="m" style="color: #9a968d;">10</div><div class="m">602436000</div><div>Grace Jones &mdash; Nightclubbing</div><div>M</div><div class="n m">1</div><div class="n m">27.99</div><div class="n m">45</div><div class="n m">15.39</div><div class="n m">192</div><div class="n m">44.99</div><div></div></div>
+    <div class="r"><div class="m" style="color: #9a968d;">11</div><div class="m">602436001</div><div>Steely Dan &mdash; Aja</div><div>M</div><div class="n m">3</div><div class="n m">29.99</div><div class="n m">45</div><div class="n m">16.49</div><div class="n m">191</div><div class="n m">47.99</div><div></div></div>
+    <div class="r"><div class="m" style="color: #9a968d;">12</div><div class="m">602436002</div><div>Beach House &mdash; Once Twice Melody</div><div>M</div><div class="n m">2</div><div class="n m">41.99</div><div class="n m">45</div><div class="n m">23.09</div><div class="n m">190</div><div class="n m">66.99</div><div></div></div>
+    <div class="r"><div class="m" style="color: #9a968d;">13</div><div class="m">602436003</div><div>Tirzah &mdash; Devotion</div><div>M</div><div class="n m">1</div><div class="n m">25.99</div><div class="n m">45</div><div class="n m">14.29</div><div class="n m">191</div><div class="n m">41.50</div><div></div></div>
+    <div class="r"><div class="m" style="color: #9a968d;">14</div><div class="m">602436004</div><div>The Cure &mdash; Disintegration</div><div>M</div><div class="n m">2</div><div class="n m">32.99</div><div class="n m">45</div><div class="n m">18.14</div><div class="n m">191</div><div class="n m">52.99</div><div></div></div>
+    <div class="r"><div class="m" style="color: #9a968d;">15</div><div class="m">602436005</div><div>Yussef Dayes &mdash; Black Classical Music</div><div>M</div><div class="n m">1</div><div class="n m">36.99</div><div class="n m">45</div><div class="n m">20.34</div><div class="n m">191</div><div class="n m">59.50</div><div></div></div>
+    <div class="r"><div class="m" style="color: #9a968d;">16</div><div class="m">602436006</div><div>Aphex Twin &mdash; Selected Ambient Works 85&ndash;92</div><div>M</div><div class="n m">1</div><div class="n m">28.99</div><div class="n m">45</div><div class="n m">15.94</div><div class="n m">190</div><div class="n m">45.99</div><div></div></div>
+    <div class="r"><div class="m" style="color: #9a968d;">17</div><div class="m">602436007</div><div>Solange &mdash; A Seat at the Table</div><div>M</div><div class="n m">2</div><div class="n m">34.99</div><div class="n m">45</div><div class="n m">19.24</div><div class="n m">191</div><div class="n m">55.99</div><div></div></div>
+    <div class="r"><div class="m" style="color: #9a968d;">18</div><div class="m">602436008</div><div>Talk Talk &mdash; Spirit of Eden</div><div>M</div><div class="n m">1</div><div class="n m">30.99</div><div class="n m">45</div><div class="n m">17.04</div><div class="n m">190</div><div class="n m">49.50</div><div></div></div>
+    <div class="r" style="color: #b6b1a8;"><div class="m">19</div><div class="m">&#8230;</div><div>20 further lines &mdash; scroll</div><div></div><div></div><div></div><div></div><div></div><div></div><div></div><div></div></div>
+  </div>
+
+  <div class="r" style="height: 30px; background: #eef4f0; border-top: 1px solid #1f4d3a; border-bottom: 1px solid #1f4d3a; font-size: 12.5px;">
+    <div class="m" style="color: #1f4d3a; font-weight: 600;">39</div>
+    <div class="m" style="border: 1px solid #1f4d3a; background: #fff; height: 20px; display: flex; align-items: center; padding: 0 4px;">scan&#8230;<span style="width: 1px; height: 12px; background: #1f4d3a; margin-left: 1px;"></span></div>
+    <div style="color: #6b7d73;">resolves against this supplier&#39;s open POs, then local catalogue</div>
+    <div style="border-bottom: 1px solid #9fb3a8;">&nbsp;</div><div style="border-bottom: 1px solid #9fb3a8;">&nbsp;</div><div style="border-bottom: 1px solid #9fb3a8;">&nbsp;</div><div style="border-bottom: 1px solid #9fb3a8;">&nbsp;</div><div style="border-bottom: 1px solid #9fb3a8;">&nbsp;</div><div style="border-bottom: 1px solid #9fb3a8;">&nbsp;</div><div style="border-bottom: 1px solid #9fb3a8;">&nbsp;</div><div></div>
+  </div>
+
+  <div style="display: flex; align-items: center; gap: 26px; padding: 10px 14px; border-bottom: 1px solid #d5d2cc; background: #f7f5f1; font-size: 12px;">
+    <span><span class="th">Qty recd</span> <span class="m" style="font-weight: 600;">38</span></span>
+    <span><span class="th">Derived subtotal</span> <span class="m" style="font-weight: 600;">2,401.18</span></span>
+    <span><span class="th">Stated</span> <span class="m">2,418.66</span></span>
+    <span style="color: #9a6b00;"><span class="th" style="color: #9a6b00;">Delta</span> <span class="m" style="font-weight: 600;">&minus;17.48 &nbsp;&minus;0.72%</span> <span style="font-size: 11px;">within &plusmn;2% &mdash; posts to COGS as one line</span></span>
+    <span style="margin-left: auto; display: flex; gap: 6px; align-items: center;">
+      <span style="border: 1px solid #c9c5bc; background: #fff; padding: 5px 10px; font-size: 12px;">Flag for claim</span>
+      <span style="border: 1px solid #c9c5bc; background: #fff; padding: 5px 10px; font-size: 12px;">Auto-accept prices</span>
+      <span style="background: #1f4d3a; color: #fff; padding: 6px 16px; font-size: 12.5px; font-weight: 600;">Finalize invoice</span>
+    </span>
+  </div>
+
+  <div style="height: 22px; background: #f0ede8; display: flex; align-items: center; gap: 18px; padding: 0 14px; font-size: 10.5px; color: #6d685f;" class="m">
+    <span>ENTER commit line</span><span>TAB next field</span><span>SHIFT+TAB back</span><span>CTRL+F finalize</span>
+    <span style="margin-left: auto;">A &middot; LEDGER &mdash; Receiving (E-02) &middot; 18 of 38 lines visible</span>
+  </div>
+
+</div>
+</x-dc>
+</body>
+</html>

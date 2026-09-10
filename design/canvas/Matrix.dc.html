@@ -1,0 +1,98 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Public+Sans:wght@400;600;800&family=IBM+Plex+Mono:wght@400;600&display=swap">
+  <style>
+    body { margin: 0; font-family: "Public Sans", ui-sans-serif, system-ui, sans-serif; background: #ffffff; color: #17191c; }
+    a { color: #2563a8; } a:hover { color: #1a4a80; }
+    .hd { font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: 10.5px; letter-spacing: 0.06em; text-transform: uppercase; color: #7b8189; }
+    .cell { font-size: 13px; line-height: 1.42; color: #33383f; }
+    .rate { padding: 16px 8px; text-align: center; font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: 13px; font-weight: 600; }
+    .good { color: #1f4d3a; } .fair { color: #9a6b00; } .poor { color: #a3271f; }
+  </style>
+</helmet>
+<div style="width: 1600px; height: 860px; box-sizing: border-box; padding: 44px 48px; display: flex; flex-direction: column; gap: 22px; background: #ffffff;">
+
+  <div style="display: flex; flex-direction: column; gap: 6px;">
+    <div class="hd">Side by side</div>
+    <div style="font-size: 32px; font-weight: 800; letter-spacing: -0.015em;">How the five differ, and what each one costs you</div>
+  </div>
+
+  <div style="display: grid; grid-template-columns: 176px 1.35fr 1fr 1.25fr 96px 96px 100px; border-top: 2px solid #17191c;">
+
+    <div class="hd" style="padding: 10px 12px;">Option</div>
+    <div class="hd" style="padding: 10px 12px;">Premise</div>
+    <div class="hd" style="padding: 10px 12px;">Best at</div>
+    <div class="hd" style="padding: 10px 12px;">Cost you accept</div>
+    <div class="hd" style="padding: 10px 8px; text-align: center;">100-line invoice</div>
+    <div class="hd" style="padding: 10px 8px; text-align: center;">Phone fallback</div>
+    <div class="hd" style="padding: 10px 8px; text-align: center;">Turn to customer</div>
+
+    <div style="grid-column: 1 / -1; height: 1px; background: #d9dce1;"></div>
+
+    <div style="padding: 16px 12px; display: flex; flex-direction: column; gap: 4px; border-left: 4px solid #1f4d3a;"><div style="font-weight: 700; font-size: 16px;">A &middot; Ledger</div><div style="font-size: 11.5px; color: #7b8189;">Data-first</div></div>
+    <div class="cell" style="padding: 16px 12px;">The store is a book of accounts. Tables everywhere, hairline rules, tabular figures, no cards.</div>
+    <div class="cell" style="padding: 16px 12px;">Receiving. Around 35 lines visible without scrolling; the eye runs straight down a column.</div>
+    <div class="cell" style="padding: 16px 12px;">Nothing is presentable. Cost and margin sit in plain sight, and a new hire faces a wall of numbers.</div>
+    <div class="rate good">Excellent</div>
+    <div class="rate poor">Poor</div>
+    <div class="rate poor">Poor</div>
+
+    <div style="grid-column: 1 / -1; height: 1px; background: #eceef1;"></div>
+
+    <div style="padding: 16px 12px; display: flex; flex-direction: column; gap: 4px; border-left: 4px solid #d64500;"><div style="font-weight: 700; font-size: 16px;">B &middot; Counter</div><div style="font-size: 11.5px; color: #7b8189;">Task-first</div></div>
+    <div class="cell" style="padding: 16px 12px;">One screen, one job. Huge scan field, big blocks, very few things visible at once.</div>
+    <div class="cell" style="padding: 16px 12px;">Point of Sale. A 3&ndash;6 line sale never needs density, so the screen buys clarity instead.</div>
+    <div class="cell" style="padding: 16px 12px;">Receiving becomes a scroll marathon &mdash; 100 lines at this row height is roughly eight screens.</div>
+    <div class="rate poor">Poor</div>
+    <div class="rate good">Excellent</div>
+    <div class="rate fair">Fair</div>
+
+    <div style="grid-column: 1 / -1; height: 1px; background: #eceef1;"></div>
+
+    <div style="padding: 16px 12px; display: flex; flex-direction: column; gap: 4px; border-left: 4px solid #8a3324;"><div style="font-weight: 700; font-size: 16px;">C &middot; Crate</div><div style="font-size: 11.5px; color: #7b8189;">Content-first</div></div>
+    <div class="cell" style="padding: 16px 12px;">The sleeve is the interface. Cover art leads every row; warm paper ground, editorial type.</div>
+    <div class="cell" style="padding: 16px 12px;">Search. Staff recognise a sleeve faster than a catalogue number, and it faces a customer well.</div>
+    <div class="cell" style="padding: 16px 12px;">Art costs vertical space, and A-14 stores a URL &mdash; a MusicBrainz miss is a row of empty squares.</div>
+    <div class="rate fair">Fair</div>
+    <div class="rate good">Good</div>
+    <div class="rate good">Excellent</div>
+
+    <div style="grid-column: 1 / -1; height: 1px; background: #eceef1;"></div>
+
+    <div style="padding: 16px 12px; display: flex; flex-direction: column; gap: 4px; border-left: 4px solid #3f8f63;"><div style="font-weight: 700; font-size: 16px;">D &middot; Console</div><div style="font-size: 11.5px; color: #7b8189;">Command-first</div></div>
+    <div class="cell" style="padding: 16px 12px;">One always-focused input takes a barcode, a search term or a command. Screens are its output.</div>
+    <div class="cell" style="padding: 16px 12px;">Speed ceiling. E-05 four barcode types and E-03 search collapse into a single field.</div>
+    <div class="cell" style="padding: 16px 12px;">Half the crew&#39;s work is mouse-driven form filling. Commands do nothing for them.</div>
+    <div class="rate good">Good</div>
+    <div class="rate poor">Poor</div>
+    <div class="rate poor">Poor</div>
+
+    <div style="grid-column: 1 / -1; height: 1px; background: #eceef1;"></div>
+
+    <div style="padding: 16px 12px; display: flex; flex-direction: column; gap: 4px; border-left: 4px solid #2563a8;"><div style="font-weight: 700; font-size: 16px;">E &middot; Workbench</div><div style="font-size: 11.5px; color: #7b8189;">Structure-first</div></div>
+    <div class="cell" style="padding: 16px 12px;">One skeleton on every screen: list left, detail centre, a pinned context rail on the right.</div>
+    <div class="cell" style="padding: 16px 12px;">Consistency. Learn it once, and the reconcile panel stays pinned while 100 lines scroll past it.</div>
+    <div class="cell" style="padding: 16px 12px;">Three columns eat the width the receiving table needs, and you pay for simultaneity you said you don&#39;t need.</div>
+    <div class="rate good">Good</div>
+    <div class="rate fair">Fair</div>
+    <div class="rate fair">Fair</div>
+
+    <div style="grid-column: 1 / -1; height: 2px; background: #17191c;"></div>
+  </div>
+
+  <div style="margin-top: auto; display: flex; gap: 32px; align-items: flex-start;">
+    <div style="flex: 1; font-size: 13px; line-height: 1.5; color: #4b5058; text-wrap: pretty;"><strong>They are not mutually exclusive.</strong> A and B could be one product &mdash; Ledger density in the back, Counter clarity at the till &mdash; if you accept two idioms in one app. That is a real choice, not a fudge; it is what &ldquo;genuinely both&rdquo; on input already implies.</div>
+    <div style="flex: 1; font-size: 13px; line-height: 1.5; color: #4b5058; text-wrap: pretty;"><strong>The ratings are judgement, not measurement.</strong> They come from the row heights drawn here against a 50&ndash;100 line invoice and a 3&ndash;6 line sale, not from testing. Nothing on this canvas is a recorded decision.</div>
+  </div>
+
+</div>
+</x-dc>
+</body>
+</html>

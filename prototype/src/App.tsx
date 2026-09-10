@@ -10,14 +10,17 @@ import { Receiving } from "./screens/Receiving";
 import { Suppliers } from "./screens/Suppliers";
 import { ReviewQueueBadge } from "./components/ReviewQueue";
 
+// The top menu is one band of equal segments (design review — Signal). The
+// short word is what staff read; the flow ID stays underneath it because this
+// is a review prototype and every screen has to stay citable.
 const NAV = [
-  { to: "/", label: "Flow map", end: true },
-  { to: "/search", label: "E-03/E-04 Search" },
-  { to: "/sell", label: "E-05 Point of Sale" },
-  { to: "/claims", label: "Supplier Claims" },
-  { to: "/customers", label: "E-07 Customers" },
-  { to: "/receiving", label: "E-02 Receiving" },
-  { to: "/suppliers", label: "M-01 Suppliers" },
+  { to: "/", label: "Home", flow: "flow map", end: true },
+  { to: "/sell", label: "Sell", flow: "E-05" },
+  { to: "/search", label: "Find", flow: "E-03/04" },
+  { to: "/receiving", label: "Receive", flow: "E-02" },
+  { to: "/customers", label: "Customers", flow: "E-07" },
+  { to: "/suppliers", label: "Suppliers", flow: "M-01" },
+  { to: "/claims", label: "Claims", flow: "E-04" },
 ];
 
 export function App() {
@@ -30,9 +33,9 @@ export function App() {
   return (
     <div className="app">
       <header className="topbar">
-        <span className="brand">
+        <NavLink to="/" className="brand">
           <span className="dot" /> Wax Works
-        </span>
+        </NavLink>
         <nav>
           {NAV.map((n) => (
             <NavLink
@@ -42,11 +45,13 @@ export function App() {
               className={({ isActive }) => (isActive || (n.to === "/sell" && onReturn) ? "active" : "")}
             >
               {n.label}
+              <span className="flow">{n.flow}</span>
             </NavLink>
           ))}
         </nav>
-        <span className="spacer" />
-        <ReviewQueueBadge />
+        <span className="review-slot">
+          <ReviewQueueBadge />
+        </span>
         <span className="who">{CURRENT_USER} · Till 1 · Prototype</span>
       </header>
       <main className="main">

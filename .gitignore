@@ -18,3 +18,9 @@ dist/
 # OS
 .DS_Store
 Thumbs.db
+
+# Seeded design-canvas payloads. The ARTBOARD SOURCES under design/canvas/ are
+# tracked on purpose -- they are what a canvas is re-seeded from. The seeded
+# .html is a ~3 MB build artifact with the editor baked in; it is published as
+# an Artifact, not reviewed as a diff.
+/wax-works-*.html

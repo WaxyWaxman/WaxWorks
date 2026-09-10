@@ -72,12 +72,15 @@ A scanned barcode short-circuits to resolution rather than keyword search: a man
 | 8 | Search degrades gracefully and visibly when the catalog provider is unavailable; local search and the till are unaffected |
 | 9 | A scanned barcode resolves directly rather than running a keyword search |
 | 10 | **The catalog provider is MusicBrainz**, behind an adapter — not Discogs. Every "Discogs" in this flow now reads as "the catalog provider"; decision 8's graceful degradation is unchanged and provider-agnostic ([architecture](../architecture.md) A-12) |
+| 11 | **A result carries one of four stock states** — *here now*, *on the way*, *had before*, *never stocked* — and results are banded and sorted in that order. Extends decision 4 from a two-way split (ours / catalog-only) to the four cases decision 7 already put in scope. The state is **derived**, never stored: on hand and held come from copies, *on the way* from outstanding order lines, *had before* from a Record with no copies that has completed Sales behind it, *never stocked* from a catalog-only match. Each state carries a colour **and** words — colour is never the only carrier |
+| 12 | **Each result shows a recency stamp** alongside its state — how long since a copy last sold. Answers the reorder question decision 7 left open: a title stocked three times and sold out of reads differently from one that sat. Derived from completed Sales (Current or Closed, excluding Returns), so no new field is stored |
 
 ---
 
 ## Open questions
 
 - **Bin location.** Section tells you which part of the shop a Record lives in, but not where in the racks. Whether a finer-grained location is needed depends on shop size and is currently unanswered.
-- **Ranking within relevance.** Beyond "stock first," result ordering is unspecified — release year, provider-supplied popularity, and local sales velocity are all candidates. Note that popularity signals are provider-specific and may not survive the move off Discogs (decision 10).
+- **Ranking within relevance.** **Partly answered** by decision 11: results band by stock state, and within a band sort by quantity on hand, then artist. What is still unspecified is ranking *inside* a band on a broad search — release year, provider-supplied popularity, and local sales velocity are all candidates. Note that popularity signals are provider-specific and may not survive the move off Discogs (decision 10).
+- **Recency thresholds.** Decision 12 says a stamp is shown, not what counts as stale. The prototype buckets coarsely (days, then weeks, then months, then a month-and-year), which is a display choice standing in for a real one. Whether "cold" deserves its own visual treatment — and at what age — is unanswered.
 - **Multi-store search.** The system is multi-store and the schema carries a Store scope, but v1 does not expose cross-store results. When it does, PRD §6's question stands: does an Employee see a sister store's stock, and at what granularity?
 - **Result volume.** A broad artist search against the catalog provider can return hundreds of catalog rows. Paging, capping, or collapsing them is undecided.

@@ -1,31 +1,53 @@
 /*
  * Design tokens — the single place to make "style" decisions during review.
  * Change a value here and it propagates everywhere.
+ *
+ * Direction: SIGNAL (design review, 2026-09-10). Achromatic chrome — black,
+ * white and four greys carry every surface. One accent, spent once per screen
+ * on the primary action. Colour otherwise means STATE and nothing else, which
+ * is what makes the stock states in Search readable at a glance. If you find
+ * yourself reaching for --c-accent on a secondary control, the system has
+ * stopped working: the accent's whole job is to be the only one.
  */
 :root {
   /* Brand + surfaces */
-  --c-bg: #f4f1ec;
+  --c-bg: #f1f1ef;
   --c-surface: #ffffff;
-  --c-surface-2: #faf8f4;
-  --c-ink: #1c1a17;
-  --c-ink-soft: #57514a;
-  --c-ink-faint: #8b8379;
-  --c-border: #e2dcd2;
-  --c-border-strong: #cfc7b8;
+  --c-surface-2: #f7f7f5;
+  --c-ink: #111111;
+  --c-ink-soft: #55554f;
+  --c-ink-faint: #8a8a84;
+  --c-border: #e4e4e0;
+  --c-border-strong: #ccccc7;
 
-  --c-accent: #7b2d26;         /* oxblood — record-store leaning */
+  --c-accent: #d64500;         /* the one orange — primary action only */
   --c-accent-ink: #ffffff;
-  --c-accent-soft: #f3e4e2;
+  --c-accent-soft: #fff4ee;
+  --c-accent-dark: #a83700;    /* hover / text on light */
 
-  --c-ok: #2f6f4f;
-  --c-ok-soft: #e3f0e8;
-  --c-warn: #9a6b00;
-  --c-warn-soft: #f8ecd2;
-  --c-danger: #a3271f;
-  --c-danger-soft: #f6e1df;
+  --c-ok: #1f6b3f;
+  --c-ok-soft: #eaf3ed;
+  --c-warn: #8a6a1a;
+  --c-warn-soft: #fbf4e4;
+  --c-danger: #c0392b;
+  --c-danger-soft: #fdf3f1;
+
+  /*
+   * Stock state (E-03) — the four answers to "do you have it?".
+   * Ordered here the way they are ordered on screen.
+   */
+  --c-stock-here: #1f6b3f;         /* sellable copies on the floor */
+  --c-stock-here-soft: #eaf3ed;
+  --c-stock-coming: #8a6a1a;       /* on order, not yet received */
+  --c-stock-coming-soft: #fbf4e4;
+  --c-stock-before: #6b6b64;       /* we have stocked it, none right now */
+  --c-stock-before-soft: #f0f0ed;
+  --c-stock-never: #b4b4ae;        /* catalogue match, never stocked */
+  --c-stock-never-soft: #f7f7f5;
 
   /* Typography */
-  --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  --font-sans: "Archivo", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Helvetica, sans-serif;
+  --font-narrow: "Archivo Narrow", "Archivo", ui-sans-serif, system-ui, sans-serif;
   --font-mono: ui-monospace, "SF Mono", "Cascadia Mono", "Roboto Mono", Menlo, Consolas, monospace;
   --fs-xs: 11px;
   --fs-sm: 12.5px;
@@ -43,11 +65,16 @@
   --sp-5: 24px;
   --sp-6: 32px;
   --sp-7: 48px;
-  --radius: 8px;
-  --radius-sm: 5px;
-  --radius-lg: 14px;
-  --shadow-1: 0 1px 2px rgba(28, 26, 23, 0.06), 0 1px 3px rgba(28, 26, 23, 0.1);
-  --shadow-2: 0 8px 24px rgba(28, 26, 23, 0.14);
+  /*
+   * Signal is square. Radii are near-zero rather than zero so focus rings and
+   * nested surfaces still read as distinct edges.
+   */
+  --radius: 2px;
+  --radius-sm: 2px;
+  --radius-lg: 3px;
+  /* Borders do the work shadows used to. Kept as tokens so nothing breaks. */
+  --shadow-1: none;
+  --shadow-2: 0 8px 24px rgba(17, 17, 17, 0.12);
 
   --maxw: 1180px;
 }

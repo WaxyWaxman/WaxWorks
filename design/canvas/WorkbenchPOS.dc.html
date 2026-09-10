@@ -1,0 +1,121 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Public+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap">
+  <style>
+    body { margin: 0; font-family: "Public Sans", ui-sans-serif, system-ui, sans-serif; background: #f6f7f9; color: #1a1d21; }
+    a { color: #2563a8; } a:hover { color: #1a4a80; }
+    .m { font-family: "IBM Plex Mono", ui-monospace, monospace; font-variant-numeric: tabular-nums; }
+    .lab { font-size: 10px; letter-spacing: 0.09em; text-transform: uppercase; color: #7c828c; font-weight: 600; }
+    .tab { padding: 0 16px; height: 100%; display: flex; align-items: center; font-size: 13.5px; color: #5b616b; }
+    .li { padding: 10px 14px; border-bottom: 1px solid #e6e8ec; display: flex; flex-direction: column; gap: 2px; }
+    .lrow { display: grid; grid-template-columns: 1fr 40px 34px 70px 74px; align-items: center; padding: 11px 14px; border-bottom: 1px solid #e6e8ec; font-size: 13px; }
+    .n { text-align: right; }
+    .btn { border: 1px solid #ccd1d9; background: #ffffff; border-radius: 3px; padding: 7px 12px; font-size: 12.5px; text-align: center; }
+  </style>
+</helmet>
+<div style="width: 1280px; height: 800px; box-sizing: border-box; background: #f6f7f9; display: flex; flex-direction: column;">
+
+  <div style="height: 46px; background: #ffffff; border-bottom: 1px solid #dde1e7; display: flex; align-items: stretch;">
+    <div style="display: flex; align-items: center; padding: 0 18px; font-weight: 700; font-size: 15px; letter-spacing: -0.01em;">Wax Works</div>
+    <div class="tab" style="color: #1a1d21; font-weight: 600; box-shadow: inset 0 -2px 0 #2563a8;">Point of Sale</div>
+    <div class="tab">Search</div>
+    <div class="tab">Receiving</div>
+    <div class="tab">Customers</div>
+    <div class="tab">Suppliers</div>
+    <div class="tab">Claims</div>
+    <div style="margin-left: auto; display: flex; align-items: center; gap: 14px; padding: 0 18px; font-size: 12px; color: #5b616b;" class="m">
+      <span style="color: #9a6b00;">2 flags</span><span>SRT &middot; T2</span>
+    </div>
+  </div>
+
+  <div style="flex: 1; display: flex; min-height: 0;">
+
+    <div style="width: 244px; background: #ffffff; border-right: 1px solid #dde1e7; display: flex; flex-direction: column; flex: none;">
+      <div style="padding: 12px 14px 10px; border-bottom: 1px solid #dde1e7; display: flex; align-items: center; justify-content: space-between;">
+        <span class="lab">Sales</span>
+        <span style="background: #2563a8; color: #fff; border-radius: 3px; padding: 4px 10px; font-size: 12px; font-weight: 600;">+ New</span>
+      </div>
+      <div class="li" style="background: #eef4fb; border-left: 3px solid #2563a8; padding-left: 11px;">
+        <div style="font-size: 13.5px; font-weight: 600;">Open &middot; Mara Ellison</div>
+        <div style="font-size: 12px; color: #7c828c;" class="m">4 lines &middot; 163.92</div>
+      </div>
+      <div class="li"><div style="font-size: 13.5px;">H14 &middot; Held</div><div style="font-size: 12px; color: #7c828c;" class="m">A. Coltrane VG &middot; 26.00</div></div>
+      <div class="li"><div style="font-size: 13.5px;">H13 &middot; Held</div><div style="font-size: 12px; color: #7c828c;" class="m">Special order &middot; PO-1147</div></div>
+      <div class="li"><div style="font-size: 13.5px;">1841 &middot; Current</div><div style="font-size: 12px; color: #7c828c;" class="m">14:02 &middot; 88.40</div></div>
+      <div class="li"><div style="font-size: 13.5px;">1840 &middot; Current</div><div style="font-size: 12px; color: #7c828c;" class="m">13:47 &middot; 31.00</div></div>
+      <div class="li" style="color: #a3271f;"><div style="font-size: 13.5px;">1839 &middot; Void</div><div style="font-size: 12px; color: #a3271f;" class="m">13:31 &middot; number retained</div></div>
+      <div style="margin-top: auto; padding: 12px 14px; border-top: 1px solid #dde1e7; display: flex; flex-direction: column; gap: 6px;">
+        <span class="lab">Other functions</span>
+        <span style="font-size: 12.5px; color: #2563a8;">View subtotal</span>
+        <span style="font-size: 12.5px; color: #2563a8;">Total today&#39;s sales</span>
+        <span style="font-size: 12.5px; color: #7c828c;">Undo end of day &nbsp;<span style="font-size: 10px; border: 1px solid #ccd1d9; padding: 0 4px;">ADMIN</span></span>
+      </div>
+    </div>
+
+    <div style="flex: 1; min-width: 0; display: flex; flex-direction: column; background: #ffffff; border-right: 1px solid #dde1e7;">
+      <div style="padding: 12px 16px; border-bottom: 1px solid #dde1e7; display: flex; align-items: center; gap: 12px;">
+        <span class="m" style="flex: 1; border: 1px solid #2563a8; border-radius: 3px; background: #fbfcfd; height: 34px; display: flex; align-items: center; padding: 0 10px; font-size: 14px;">200000012457<span style="width: 1px; height: 17px; background: #2563a8; margin-left: 2px;"></span></span>
+        <span class="btn">Lookup</span>
+      </div>
+
+      <div style="padding: 10px 16px; border-bottom: 1px solid #e6e8ec; display: flex; align-items: center; gap: 10px; background: #fbfcfd;">
+        <span style="background: #eef4fb; border: 1px solid #c3d6ec; border-radius: 3px; padding: 5px 10px; font-size: 12.5px; font-weight: 600;">Mara Ellison</span>
+        <span style="font-size: 12px; color: #5b616b;">10% &middot; tax line B</span>
+        <span style="margin-left: auto; font-size: 12px; color: #7c828c;">4 lines</span>
+      </div>
+
+      <div class="lrow lab" style="background: #f2f4f7; padding-top: 7px; padding-bottom: 7px;"><div>Item</div><div>Cond</div><div class="n">Qty</div><div class="n">Price</div><div class="n">Ext.</div></div>
+      <div class="lrow"><div style="min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis;">Bill Evans Trio &mdash; Sunday at the Village Vanguard</div><div>NM</div><div class="n m">1</div><div class="n m">42.99</div><div class="n m" style="font-weight: 600;">38.69</div></div>
+      <div class="lrow"><div style="min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis;">Sade &mdash; Diamond Life</div><div>VG+</div><div class="n m">1</div><div class="n m">24.50</div><div class="n m" style="font-weight: 600;">22.05</div></div>
+      <div class="lrow"><div style="min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis;">Alice Coltrane &mdash; Journey in Satchidananda</div><div>VG</div><div class="n m">1</div><div class="n m">31.00</div><div class="n m" style="font-weight: 600;">27.90</div></div>
+      <div class="lrow" style="background: #fdf7e9;"><div style="min-width: 0;">Mail order postage <span style="font-size: 11px; color: #9a6b00;">non-tracked</span></div><div>&mdash;</div><div class="n m">1</div><div class="n m">12.00</div><div class="n m" style="font-weight: 600;">12.00</div></div>
+      <div class="lrow"><div style="min-width: 0;">Gift card load GC-4471</div><div>&mdash;</div><div class="n m">1</div><div class="n m">50.00</div><div class="n m" style="font-weight: 600;">50.00</div></div>
+
+      <div style="margin-top: auto; padding: 12px 16px; border-top: 1px solid #dde1e7; display: flex; gap: 8px;">
+        <span class="btn" style="flex: 1;">Hold</span><span class="btn" style="flex: 1;">Void</span><span class="btn" style="flex: 1;">Copy</span><span class="btn" style="flex: 1;">Edit line</span><span class="btn" style="flex: 1;">+ New return</span>
+      </div>
+    </div>
+
+    <div style="width: 316px; background: #ffffff; display: flex; flex-direction: column; flex: none;">
+      <div style="padding: 14px 16px 10px;" class="lab">This sale</div>
+      <div style="padding: 0 16px 12px; display: flex; flex-direction: column; gap: 5px; font-size: 13px; border-bottom: 1px solid #dde1e7;">
+        <div style="display: flex; justify-content: space-between;"><span style="color: #5b616b;">Gross</span><span class="m">160.49</span></div>
+        <div style="display: flex; justify-content: space-between;"><span style="color: #5b616b;">Discount 10%</span><span class="m">&minus;9.86</span></div>
+        <div style="display: flex; justify-content: space-between;"><span style="color: #5b616b;">Tax B 9.975%</span><span class="m">8.85</span></div>
+        <div style="display: flex; justify-content: space-between;"><span style="color: #5b616b;">Tax A 5.000%</span><span class="m">4.44</span></div>
+        <div style="display: flex; justify-content: space-between; align-items: baseline; margin-top: 6px;"><span style="font-weight: 600; font-size: 14px;">Total</span><span class="m" style="font-size: 26px; font-weight: 600;">163.92</span></div>
+      </div>
+
+      <div style="padding: 14px 16px 8px;" class="lab">Tender</div>
+      <div style="padding: 0 16px 12px; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px;">
+        <span class="btn">Cash</span><span class="btn">Card</span><span class="btn">Gift</span><span class="btn">Credit</span><span class="btn">Pay-out</span><span class="btn">Used</span>
+      </div>
+      <div style="padding: 0 16px 12px; display: flex; flex-direction: column; gap: 5px; font-size: 13px; border-bottom: 1px solid #dde1e7;">
+        <div style="display: flex; justify-content: space-between;"><span>Gift GC-1180</span><span class="m">20.00</span></div>
+        <div style="display: flex; justify-content: space-between;"><span>Cash</span><span class="m">40.00</span></div>
+        <div style="display: flex; justify-content: space-between; color: #a3271f; font-weight: 600;"><span>Remaining</span><span class="m">103.92</span></div>
+      </div>
+
+      <div style="margin-top: auto; padding: 14px 16px; display: flex; flex-direction: column; gap: 8px;">
+        <div style="background: #2563a8; color: #ffffff; border-radius: 3px; text-align: center; padding: 12px; font-size: 15px; font-weight: 600;">Complete sale</div>
+        <div style="font-size: 11.5px; color: #7c828c; text-align: center;">Receipt emailed &middot; E-05 d24</div>
+      </div>
+    </div>
+  </div>
+
+  <div style="height: 24px; background: #eef0f3; border-top: 1px solid #dde1e7; display: flex; align-items: center; padding: 0 16px; font-size: 11px; color: #7c828c;">
+    <span>E &middot; WORKBENCH &mdash; Point of Sale (E-05)</span>
+    <span style="margin-left: auto;">List &middot; detail &middot; context &mdash; the same three zones on every screen</span>
+  </div>
+
+</div>
+</x-dc>
+</body>
+</html>

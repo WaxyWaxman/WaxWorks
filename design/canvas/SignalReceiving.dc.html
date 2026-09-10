@@ -1,0 +1,154 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;800&family=Archivo+Narrow:wght@600;700&display=swap">
+  <style>
+    body { margin: 0; font-family: "Archivo", ui-sans-serif, system-ui, sans-serif; background: #f1f1ef; color: #111111; }
+    a { color: #d64500; } a:hover { color: #a83700; }
+    .lab { font-family: "Archivo Narrow", "Archivo", sans-serif; font-weight: 700; font-size: 11.5px; letter-spacing: 0.1em; text-transform: uppercase; color: #77776f; }
+    .cap { font-family: "Archivo Narrow", "Archivo", sans-serif; font-weight: 700; font-size: 10px; letter-spacing: 0.09em; text-transform: uppercase; color: #8a8a84; }
+    .mode { flex: 1; display: flex; align-items: center; justify-content: center; font-size: 14.5px; font-weight: 600; color: #4a4a44; border-right: 1px solid #d5d5d1; letter-spacing: 0.05em; }
+    .art { background: repeating-linear-gradient(135deg, #e2e2de 0 6px, #ececea 6px 12px); border: 1px solid #d5d5d1; flex: none; }
+    .lr { display: grid; grid-template-columns: 38px 1fr 56px 34px 62px 48px 64px 44px; gap: 12px; align-items: center; padding: 7px 16px; border-bottom: 1px solid #e4e4e0; }
+    .n { text-align: right; font-size: 13.5px; font-weight: 500; }
+    .po { padding: 9px 14px; border-bottom: 1px solid #ddddd9; display: flex; flex-direction: column; gap: 2px; }
+  </style>
+</helmet>
+<div style="width: 1280px; height: 800px; box-sizing: border-box; background: #f1f1ef; display: flex; flex-direction: column;">
+
+  <div style="height: 62px; background: #ffffff; border-bottom: 2px solid #111111; display: flex; align-items: stretch; flex: none;">
+    <div style="width: 178px; display: flex; align-items: center; padding-left: 20px; font-weight: 800; font-size: 17px; border-right: 1px solid #d5d5d1;">WAX WORKS</div>
+    <div class="mode">SELL</div>
+    <div class="mode">FIND</div>
+    <div class="mode" style="background: #111111; color: #ffffff; font-weight: 800;">RECEIVE</div>
+    <div class="mode">CUSTOMERS</div>
+    <div class="mode" style="border-right: none;">MORE</div>
+    <div style="width: 152px; display: flex; flex-direction: column; justify-content: center; padding-left: 18px; border-left: 1px solid #d5d5d1;"><span class="lab">Draft</span><span style="font-size: 14px; font-weight: 500;">saved 14:19</span></div>
+  </div>
+
+  <div style="flex: 1; display: flex; min-height: 0;">
+
+    <div style="width: 250px; background: #e9e9e6; border-right: 1px solid #d5d5d1; display: flex; flex-direction: column; flex: none;">
+      <div style="padding: 13px 14px 9px; border-bottom: 1px solid #d5d5d1;" class="lab">Worklist &mdash; 3 open orders</div>
+      <div class="po" style="background: #ffffff; border-left: 3px solid #d64500; padding-left: 11px;">
+        <div style="font-size: 14px; font-weight: 700;">PO-1142 &middot; F.A.B.</div>
+        <div style="font-size: 12.5px; color: #55554f;">38 of 62 still outstanding</div>
+      </div>
+      <div class="po"><div style="font-size: 14px; font-weight: 500;">PO-1147 &middot; F.A.B.</div><div style="font-size: 12.5px; color: #8a8a84;">12 outstanding</div></div>
+      <div class="po"><div style="font-size: 14px; font-weight: 500;">PO-1151 &middot; Redeye</div><div style="font-size: 12.5px; color: #8a8a84;">4 outstanding</div></div>
+
+      <div style="padding: 14px 14px 8px; border-top: 1px solid #d5d5d1;" class="lab">This invoice</div>
+      <div style="padding: 0 14px 14px; display: flex; flex-direction: column; gap: 9px;">
+        <div><div class="cap">Supplier</div><div style="font-size: 13.5px; font-weight: 500;">F.A.B. Distribution</div></div>
+        <div><div class="cap">Mode</div><div style="font-size: 13.5px; font-weight: 500;">New stock</div></div>
+        <div><div class="cap">Invoice no.</div><div style="font-size: 13.5px; font-weight: 500;">FAB-88214</div></div>
+        <div><div class="cap">Dated &middot; received</div><div style="font-size: 13.5px; font-weight: 500;">09-04 &middot; 09-10</div></div>
+        <div><div class="cap">Stated subtotal</div><div style="font-size: 13.5px; font-weight: 500;">2,418.66</div></div>
+        <div><div class="cap">Freight &middot; tax &middot; misc</div><div style="font-size: 13.5px; font-weight: 500;">64.00 &middot; 0.00 &middot; 0.00</div></div>
+      </div>
+
+      <div style="margin-top: auto; padding: 13px 14px; border-top: 1px solid #d5d5d1;">
+        <div style="border: 1px solid #111111; background: #ffffff; padding: 9px; text-align: center; font-size: 13px; font-weight: 500;">Open another invoice</div>
+      </div>
+    </div>
+
+    <div style="flex: 1; min-width: 0; display: flex; flex-direction: column; background: #ffffff;">
+
+      <div style="display: grid; grid-template-columns: 38px 1fr 56px 34px 62px 48px 64px 44px; gap: 12px; padding: 8px 16px 6px; border-bottom: 1px solid #b6b6b0; background: #f1f1ef;">
+        <div></div><div class="cap">Record</div><div class="cap" style="text-align: right;">List</div><div class="cap" style="text-align: right;">D%</div><div class="cap" style="text-align: right;">Cost</div><div class="cap" style="text-align: right;">M%</div><div class="cap" style="text-align: right;">Sell</div><div class="cap" style="text-align: right;">Qty</div>
+      </div>
+
+      <div style="flex: 1; overflow: hidden;">
+        <div class="lr">
+          <div class="art" style="width: 38px; height: 38px;"></div>
+          <div><div style="font-size: 15px; font-weight: 600; line-height: 1.2;">Pastel Blues</div><div style="font-size: 11.5px; color: #8a8a84;">Nina Simone &middot; Philips, 1965</div></div>
+          <div class="n">27.99</div><div class="n">45</div><div class="n">15.39</div><div class="n" style="color: #8a8a84;">192</div><div class="n">44.99</div><div class="n">2</div>
+        </div>
+        <div class="lr">
+          <div class="art" style="width: 38px; height: 38px;"></div>
+          <div><div style="font-size: 15px; font-weight: 600; line-height: 1.2;">Con Todo El Mundo</div><div style="font-size: 11.5px; color: #8a8a84;">Khruangbin &middot; Dead Oceans, 2018</div></div>
+          <div class="n">25.99</div><div class="n">45</div><div class="n">14.29</div><div class="n" style="color: #8a8a84;">191</div><div class="n">41.50</div><div class="n">3</div>
+        </div>
+        <div class="lr">
+          <div style="width: 38px; height: 38px; border: 1px dashed #ccccc7; display: flex; align-items: center; justify-content: center; font-size: 8.5px; color: #a5a59f;">no art</div>
+          <div><div style="font-size: 15px; font-weight: 600; line-height: 1.2;">Rumours</div><div style="font-size: 11.5px; color: #8a8a84;">Fleetwood Mac &middot; Warner, 1977</div></div>
+          <div class="n">29.99</div><div class="n">45</div><div class="n">16.49</div><div class="n" style="color: #8a8a84;">191</div><div class="n">47.99</div><div class="n">4</div>
+        </div>
+        <div class="lr" style="box-shadow: inset 3px 0 0 #c0392b; background: #fdf3f1;">
+          <div class="art" style="width: 38px; height: 38px;"></div>
+          <div><div style="font-size: 15px; font-weight: 600; line-height: 1.2;">Un Verano Sin Ti</div><div style="font-size: 11.5px; color: #c0392b; font-weight: 600;">Below cost &mdash; goes through, the manager will see it</div></div>
+          <div class="n">34.99</div><div class="n">40</div><div class="n">20.99</div><div class="n" style="color: #c0392b;">&minus;5</div><div class="n" style="color: #c0392b; font-weight: 700;">19.99</div><div class="n">2</div>
+        </div>
+        <div class="lr">
+          <div class="art" style="width: 38px; height: 38px;"></div>
+          <div><div style="font-size: 15px; font-weight: 600; line-height: 1.2;">Untitled (Rise)</div><div style="font-size: 11.5px; color: #8a8a84;">Sault &middot; Forever Living Originals, 2020</div></div>
+          <div class="n">31.99</div><div class="n">45</div><div class="n">17.59</div><div class="n" style="color: #8a8a84;">190</div><div class="n">50.99</div><div class="n">1</div>
+        </div>
+        <div class="lr">
+          <div class="art" style="width: 38px; height: 38px;"></div>
+          <div><div style="font-size: 15px; font-weight: 600; line-height: 1.2;">In Rainbows</div><div style="font-size: 11.5px; color: #8a8a84;">Radiohead &middot; XL, 2007</div></div>
+          <div class="n">28.99</div><div class="n">45</div><div class="n">15.94</div><div class="n" style="color: #8a8a84;">190</div><div class="n">45.99</div><div class="n">2</div>
+        </div>
+        <div class="lr">
+          <div style="width: 38px; height: 38px; border: 1px dashed #ccccc7; display: flex; align-items: center; justify-content: center; font-size: 8.5px; color: #a5a59f;">no art</div>
+          <div><div style="font-size: 15px; font-weight: 600; line-height: 1.2;">Mingus Ah Um</div><div style="font-size: 11.5px; color: #8a8a84;">Charles Mingus &middot; Columbia, 1959</div></div>
+          <div class="n">24.99</div><div class="n">45</div><div class="n">13.74</div><div class="n" style="color: #8a8a84;">191</div><div class="n">39.99</div><div class="n">1</div>
+        </div>
+        <div class="lr">
+          <div class="art" style="width: 38px; height: 38px;"></div>
+          <div><div style="font-size: 15px; font-weight: 600; line-height: 1.2;">Sometimes I Might Be Introvert</div><div style="font-size: 11.5px; color: #8a8a84;">Little Simz &middot; AGE 101, 2021</div></div>
+          <div class="n">33.99</div><div class="n">45</div><div class="n">18.69</div><div class="n" style="color: #8a8a84;">191</div><div class="n">54.50</div><div class="n">2</div>
+        </div>
+        <div class="lr">
+          <div class="art" style="width: 38px; height: 38px;"></div>
+          <div><div style="font-size: 15px; font-weight: 600; line-height: 1.2;">Dummy</div><div style="font-size: 11.5px; color: #8a8a84;">Portishead &middot; Go! Beat, 1994</div></div>
+          <div class="n">26.99</div><div class="n">45</div><div class="n">14.84</div><div class="n" style="color: #8a8a84;">191</div><div class="n">42.99</div><div class="n">1</div>
+        </div>
+        <div class="lr">
+          <div class="art" style="width: 38px; height: 38px;"></div>
+          <div><div style="font-size: 15px; font-weight: 600; line-height: 1.2;">Nightclubbing</div><div style="font-size: 11.5px; color: #8a8a84;">Grace Jones &middot; Island, 1981</div></div>
+          <div class="n">27.99</div><div class="n">45</div><div class="n">15.39</div><div class="n" style="color: #8a8a84;">192</div><div class="n">44.99</div><div class="n">1</div>
+        </div>
+        <div class="lr">
+          <div style="width: 38px; height: 38px; border: 1px dashed #ccccc7; display: flex; align-items: center; justify-content: center; font-size: 8.5px; color: #a5a59f;">no art</div>
+          <div><div style="font-size: 15px; font-weight: 600; line-height: 1.2;">Aja</div><div style="font-size: 11.5px; color: #8a8a84;">Steely Dan &middot; ABC, 1977</div></div>
+          <div class="n">29.99</div><div class="n">45</div><div class="n">16.49</div><div class="n" style="color: #8a8a84;">191</div><div class="n">47.99</div><div class="n">3</div>
+        </div>
+        <div style="padding: 8px 16px; font-size: 12.5px; color: #a5a59f;">27 further lines below &mdash; 11 fit on this screen</div>
+      </div>
+
+      <div style="display: grid; grid-template-columns: 38px 1fr 56px 34px 62px 48px 64px 44px; gap: 12px; align-items: center; padding: 9px 16px; background: #fff6f2; border-top: 2px solid #d64500; border-bottom: 1px solid #d5d5d1;">
+        <div style="width: 38px; height: 38px; border: 1px dashed #d64500;"></div>
+        <div><div style="font-size: 14.5px; font-weight: 500;">scan the next record<span style="display: inline-block; width: 2px; height: 15px; background: #d64500; vertical-align: -2px; margin-left: 3px;"></span></div><div style="font-size: 11.5px; color: #8a8a84;">this supplier&#39;s open orders first, then the catalogue</div></div>
+        <div style="border-bottom: 1px solid #ccccc7;">&nbsp;</div><div style="border-bottom: 1px solid #ccccc7;">&nbsp;</div><div style="border-bottom: 1px solid #ccccc7;">&nbsp;</div><div style="border-bottom: 1px solid #ccccc7;">&nbsp;</div><div style="border-bottom: 1px solid #ccccc7;">&nbsp;</div><div style="border-bottom: 1px solid #ccccc7;">&nbsp;</div>
+      </div>
+
+      <div style="display: flex; align-items: center; gap: 24px; padding: 11px 16px; background: #f1f1ef; border-top: 1px solid #d5d5d1;">
+        <div><div class="cap">Received</div><div style="font-size: 20px; font-weight: 700;">38</div></div>
+        <div><div class="cap">Our subtotal</div><div style="font-size: 20px; font-weight: 700;">2,401.18</div></div>
+        <div><div class="cap">Theirs</div><div style="font-size: 20px; font-weight: 700;">2,418.66</div></div>
+        <div><div class="cap" style="color: #8a6a1a;">Difference</div><div style="font-size: 20px; font-weight: 700; color: #8a6a1a;">&minus;17.48 &middot; 0.72%</div></div>
+        <div style="font-size: 11.5px; color: #77776f; max-width: 168px; line-height: 1.35;">Within &plusmn;2%. Posts to cost of goods as one line.</div>
+        <div style="margin-left: auto; display: flex; gap: 9px; align-items: center;">
+          <span style="border: 1px solid #111111; background: #ffffff; padding: 9px 14px; font-size: 13px; font-weight: 500;">Flag for a claim</span>
+          <span style="background: #d64500; color: #ffffff; padding: 11px 24px; font-size: 15px; font-weight: 700; letter-spacing: 0.02em;">FINALIZE</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div style="height: 24px; background: #111111; color: #8f8f8a; display: flex; align-items: center; padding: 0 20px; font-size: 11px; letter-spacing: 0.05em; flex: none;">
+    <span>2 &middot; SIGNAL &mdash; Receiving &nbsp;(worklist E &middot; layout C)</span>
+    <span style="margin-left: auto;">11 of 38 lines visible &mdash; smaller art and tighter rows buy three more than Paper</span>
+  </div>
+
+</div>
+</x-dc>
+</body>
+</html>

@@ -1,0 +1,117 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+  <style>
+    body { margin: 0; font-family: "IBM Plex Sans", ui-sans-serif, system-ui, sans-serif; background: #fbfaf8; color: #16161a; }
+    a { color: #1f4d3a; } a:hover { color: #143528; }
+    .m { font-family: "IBM Plex Mono", ui-monospace, monospace; font-variant-numeric: tabular-nums; }
+    .th { font-size: 10px; letter-spacing: 0.07em; text-transform: uppercase; color: #7a766e; font-weight: 600; }
+    .row { display: grid; grid-template-columns: 26px 104px 1fr 46px 34px 74px 52px 44px 78px; align-items: center; height: 26px; border-bottom: 1px solid #ece9e3; font-size: 12.5px; }
+    .row > div { padding: 0 6px; overflow: hidden; white-space: nowrap; }
+    .num { text-align: right; }
+    .btn { border: 1px solid #c9c5bc; background: #fff; padding: 3px 9px; font-size: 11.5px; color: #2c2a26; }
+  </style>
+</helmet>
+<div style="width: 1280px; height: 800px; box-sizing: border-box; background: #fbfaf8; display: flex; flex-direction: column;">
+
+  <div style="height: 30px; background: #16161a; color: #eae7e1; display: flex; align-items: center; gap: 22px; padding: 0 14px; font-size: 12px;">
+    <span class="m" style="font-weight: 600; letter-spacing: 0.12em; font-size: 11px;">WAX WORKS</span>
+    <span style="border-bottom: 2px solid #6fae8e; padding-bottom: 1px;">Point of Sale</span>
+    <span style="color: #a09b93;">Search</span>
+    <span style="color: #a09b93;">Receiving</span>
+    <span style="color: #a09b93;">Customers</span>
+    <span style="color: #a09b93;">Suppliers</span>
+    <span style="color: #a09b93;">Claims</span>
+    <span style="margin-left: auto; color: #a09b93;" class="m">Other Functions &#9662;</span>
+  </div>
+
+  <div style="height: 24px; border-bottom: 1px solid #d5d2cc; background: #f4f2ee; display: flex; align-items: center; gap: 18px; padding: 0 14px; font-size: 11px; color: #5d594f;" class="m">
+    <span>STORE Main St</span><span>TERMINAL 2</span><span>CLERK SRT</span><span>2026-09-10 14:22</span>
+    <span style="margin-left: auto; color: #9a6b00;">2 REVIEW FLAGS</span>
+  </div>
+
+  <div style="flex: 1; display: flex; min-height: 0;">
+
+    <div style="flex: 1; display: flex; flex-direction: column; min-width: 0; border-right: 1px solid #d5d2cc;">
+
+      <div style="display: flex; align-items: center; gap: 20px; padding: 9px 14px; border-bottom: 1px solid #d5d2cc; font-size: 12px;">
+        <span><span class="th">Sale</span> <span class="m" style="font-weight: 600;">&mdash; OPEN</span></span>
+        <span><span class="th">Customer</span> <span style="border-bottom: 1px dotted #a8a49b;">Mara Ellison &nbsp;&middot;&nbsp; 10% &nbsp;&middot;&nbsp; TAX-B</span></span>
+        <span><span class="th">PO ref</span> <span class="m" style="color: #a09b93;">&mdash;</span></span>
+        <span style="margin-left: auto; display: flex; gap: 5px;"><span class="btn">Hold</span><span class="btn">Void</span><span class="btn">Copy</span><span class="btn">+ Return</span></span>
+      </div>
+
+      <div style="display: flex; align-items: center; gap: 10px; padding: 8px 14px; border-bottom: 1px solid #d5d2cc; background: #f7f5f1;">
+        <span class="th">Scan / SKU</span>
+        <span class="m" style="flex: 1; max-width: 340px; border: 1px solid #16161a; background: #fff; height: 26px; display: flex; align-items: center; padding: 0 8px; font-size: 13px; color: #16161a;">200000012457<span style="width: 1px; height: 15px; background: #16161a; margin-left: 2px;"></span></span>
+        <span class="m" style="font-size: 11px; color: #7a766e;">UPC &middot; internal &middot; GC&#8230; &middot; non-tracked</span>
+      </div>
+
+      <div class="row th" style="border-bottom: 1px solid #b9b4aa; background: #f4f2ee; height: 24px;">
+        <div>#</div><div>Barcode</div><div>Artist &mdash; Title</div><div>Cond</div><div class="num">Qty</div><div class="num">Price</div><div class="num">Disc</div><div>Tax</div><div class="num">Ext.</div>
+      </div>
+
+      <div style="flex: 1; overflow: hidden;">
+        <div class="row"><div class="m" style="color: #9a968d;">1</div><div class="m">7245001188</div><div>Bill Evans Trio &mdash; Sunday at the Village Vanguard</div><div>NM</div><div class="num m">1</div><div class="num m">42.99</div><div class="num m">10%</div><div class="m">B</div><div class="num m">38.69</div></div>
+        <div class="row"><div class="m" style="color: #9a968d;">2</div><div class="m">200000012457</div><div>Sade &mdash; Diamond Life</div><div>VG+</div><div class="num m">1</div><div class="num m">24.50</div><div class="num m">10%</div><div class="m">B</div><div class="num m">22.05</div></div>
+        <div class="row"><div class="m" style="color: #9a968d;">3</div><div class="m">200000012902</div><div>Alice Coltrane &mdash; Journey in Satchidananda</div><div>VG</div><div class="num m">1</div><div class="num m">31.00</div><div class="num m">10%</div><div class="m">B</div><div class="num m">27.90</div></div>
+        <div class="row" style="background: #fdf6e6;"><div class="m" style="color: #9a968d;">4</div><div class="m">FREIGHT</div><div>Mail order postage <span style="color: #9a6b00; font-size: 10.5px;">&#9679; non-tracked, price asked at till</span></div><div style="color: #9a968d;">&mdash;</div><div class="num m">1</div><div class="num m">12.00</div><div class="num m">&mdash;</div><div class="m">&mdash;</div><div class="num m">12.00</div></div>
+        <div class="row"><div class="m" style="color: #9a968d;">5</div><div class="m">GC-4471</div><div>Gift card load</div><div style="color: #9a968d;">&mdash;</div><div class="num m">1</div><div class="num m">50.00</div><div class="num m">&mdash;</div><div class="m">&mdash;</div><div class="num m">50.00</div></div>
+        <div class="row" style="color: #cbc7bf;"><div class="m">6</div><div></div><div></div><div></div><div></div><div></div><div></div><div></div><div></div></div>
+        <div class="row" style="color: #cbc7bf;"><div class="m">7</div><div></div><div></div><div></div><div></div><div></div><div></div><div></div><div></div></div>
+        <div class="row" style="color: #cbc7bf;"><div class="m">8</div><div></div><div></div><div></div><div></div><div></div><div></div><div></div><div></div></div>
+        <div class="row" style="color: #cbc7bf;"><div class="m">9</div><div></div><div></div><div></div><div></div><div></div><div></div><div></div><div></div></div>
+        <div class="row" style="color: #cbc7bf;"><div class="m">10</div><div></div><div></div><div></div><div></div><div></div><div></div><div></div><div></div></div>
+        <div class="row" style="color: #cbc7bf;"><div class="m">11</div><div></div><div></div><div></div><div></div><div></div><div></div><div></div><div></div></div>
+        <div class="row" style="color: #cbc7bf;"><div class="m">12</div><div></div><div></div><div></div><div></div><div></div><div></div><div></div><div></div></div>
+        <div class="row" style="color: #cbc7bf;"><div class="m">13</div><div></div><div></div><div></div><div></div><div></div><div></div><div></div><div></div></div>
+        <div class="row" style="color: #cbc7bf;"><div class="m">14</div><div></div><div></div><div></div><div></div><div></div><div></div><div></div><div></div></div>
+        <div class="row" style="color: #cbc7bf;"><div class="m">15</div><div></div><div></div><div></div><div></div><div></div><div></div><div></div><div></div></div>
+        <div class="row" style="color: #cbc7bf;"><div class="m">16</div><div></div><div></div><div></div><div></div><div></div><div></div><div></div><div></div></div>
+      </div>
+    </div>
+
+    <div style="width: 316px; display: flex; flex-direction: column; background: #f7f5f1;">
+      <div style="padding: 10px 14px 8px; border-bottom: 1px solid #d5d2cc;" class="th">Totals</div>
+      <div style="padding: 8px 14px; display: flex; flex-direction: column; gap: 3px; border-bottom: 1px solid #d5d2cc; font-size: 12.5px;">
+        <div style="display: flex; justify-content: space-between;"><span>Gross</span><span class="m">160.49</span></div>
+        <div style="display: flex; justify-content: space-between; color: #5d594f;"><span>Customer discount 10%</span><span class="m">&minus;9.86</span></div>
+        <div style="display: flex; justify-content: space-between; color: #5d594f;"><span>Tax line B &nbsp;9.975%</span><span class="m">8.85</span></div>
+        <div style="display: flex; justify-content: space-between; color: #5d594f;"><span>Tax line A &nbsp;5.000%</span><span class="m">4.44</span></div>
+        <div style="display: flex; justify-content: space-between; border-top: 1px solid #16161a; margin-top: 5px; padding-top: 5px; font-weight: 600; font-size: 15px;"><span>TOTAL</span><span class="m">163.92</span></div>
+      </div>
+
+      <div style="padding: 10px 14px 6px;" class="th">Tender</div>
+      <div style="padding: 0 14px 8px; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 4px;">
+        <span class="btn" style="text-align: center;">Cash</span><span class="btn" style="text-align: center;">Card</span><span class="btn" style="text-align: center;">Gift</span>
+        <span class="btn" style="text-align: center;">Credit</span><span class="btn" style="text-align: center;">Pay-out</span><span class="btn" style="text-align: center;">Used</span>
+      </div>
+      <div style="padding: 6px 14px; border-top: 1px solid #d5d2cc; font-size: 12px; display: flex; flex-direction: column; gap: 3px;">
+        <div style="display: flex; justify-content: space-between;"><span>Gift card GC-1180</span><span class="m">20.00</span></div>
+        <div style="display: flex; justify-content: space-between;"><span>Cash</span><span class="m">40.00</span></div>
+        <div style="display: flex; justify-content: space-between; color: #a3271f; font-weight: 600;"><span>Remaining</span><span class="m">103.92</span></div>
+        <div style="display: flex; justify-content: space-between; color: #5d594f;"><span>Change owed</span><span class="m">0.00</span></div>
+      </div>
+      <div style="margin-top: auto; padding: 12px 14px; border-top: 1px solid #d5d2cc; display: flex; flex-direction: column; gap: 6px;">
+        <div style="background: #1f4d3a; color: #fff; text-align: center; padding: 9px; font-size: 13.5px; font-weight: 600;">Complete Sale &nbsp;<span class="m" style="opacity: 0.6;">F12</span></div>
+        <div style="font-size: 11px; color: #7a766e; text-align: center;">Receipt emailed &middot; E-05 d24</div>
+      </div>
+    </div>
+  </div>
+
+  <div style="height: 22px; border-top: 1px solid #d5d2cc; background: #f0ede8; display: flex; align-items: center; gap: 18px; padding: 0 14px; font-size: 10.5px; color: #6d685f;" class="m">
+    <span>F2 qty</span><span>F3 price</span><span>F4 disc</span><span>F6 customer</span><span>F8 hold</span><span>F12 tender</span><span>ESC clear line</span>
+    <span style="margin-left: auto;">A &middot; LEDGER &mdash; Point of Sale (E-05)</span>
+  </div>
+
+</div>
+</x-dc>
+</body>
+</html>

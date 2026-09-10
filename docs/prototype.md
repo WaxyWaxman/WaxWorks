@@ -27,7 +27,7 @@ Start on the **Flow map**; it carries a suggested review path.
 
 | Flow | Status in docs | Prototype screen | Notes |
 |---|---|---|---|
-| [E-03](flows/E-03-search-inventory.md) | Specified | Search | Grouping, catalog-only rows, scan-to-resolve, catalog-provider-down toggle. Selecting a Record (click a row, Reserve, or a resolved scan) opens its titlecard inline above the results — see E-04. |
+| [E-03](flows/E-03-search-inventory.md) | Specified | Search | Four stock states (here now / on the way / had before / never stocked) banding one ranked list, with a recency stamp per row and filter chips — E-03 decisions 11 and 12. Grouping, catalog-only rows, scan-to-resolve, catalog-provider-down toggle. Selecting a Record (click a row, Reserve, or a resolved scan) opens its titlecard inline above the results — see E-04. |
 | [E-04](flows/E-04-manage-inventory.md) | Specified | *(embedded in Search)* | Copies, derived on-hand math, Reserve → Held Sale, below-cost pricing proceeds and raises a review flag (M-04 decision 8) rather than blocking on a manager override. Not a separate route — the titlecard is a view, not a screen of its own (E-04 decision 1), so it lives in Search's `TitlecardPanel` and updates as the selected Record changes. `/search/:recordId` deep-links to a specific one. |
 | [E-05](flows/E-05-sell-a-record.md) | Specified | Point of Sale | Barcode resolver, multi-copy picker, customer pre-fill (with inline create-on-no-match), `0.00` prompt, negative inventory, split tender, hold/void, receipt, PO field, 2-digit discount. Also carries Edit (void-and-duplicate for Current, open for Held), Copy, Search (barcode → item sale history), and M-03's close under **Other Functions** (View Subtotal / Total Today's Sales / Undo End of Day, Admin-labeled). |
 | [E-06](flows/E-06-process-a-return.md) | Specified | Return | Negative-qty line, prior-Sale link, refund default, cash/store-credit, stock routing. Entered only from Point of Sale's **+ New Return** (`/return/:saleId`) — mirrors `/sell/:saleId` in never being its own nav item, since a Return is a Sale with `isReturn` set. |
@@ -47,6 +47,32 @@ Start on the **Flow map**; it carries a suggested review path.
 
 Style changes are cheap: design tokens are centralised in
 [`../prototype/src/styles/tokens.css`](../prototype/src/styles/tokens.css).
+
+## Design direction — Signal
+
+Five directions were drawn low-fidelity and reviewed against Point of Sale,
+Receiving, and Search; two composites were then drawn from the parts that were
+picked. **Signal** was chosen on 2026-09-10 and is what the prototype now
+implements.
+
+| Element | Comes from |
+|---|---|
+| Top menu | One band of equal segments, the active one filled solid |
+| Point of Sale | Large scan field, large line rows, a total readable across the counter |
+| Receiving | Worklist rail on the left, art-led line table, reconcile as a footer strip |
+| Search | Results rail, titlecard, actions rail |
+
+The rule that makes it work, and the one to hold the line on: **the chrome is
+achromatic, and colour means exactly two things** — the primary action (one
+orange, spent once per screen) and **state**. That is what lets the stock states
+in Search read at a glance. An accent on a secondary button breaks the system,
+because the accent's whole job is to be the only one. Every state colour is
+paired with words; colour is never the sole carrier.
+
+_The direction is settled for the prototype. It has **not** been recorded as a
+numbered `A-n` architecture decision — [architecture](architecture.md) §1 names
+Tailwind + shadcn/ui as the eventual UI stack, and how this token set maps onto
+that is a separate question nobody has answered yet._
 
 ## Known simplifications
 
