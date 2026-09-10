@@ -45,7 +45,7 @@ Names are configurable; behaviors are not — a tender's behavior is code, and t
 
 **Genre** is finer-grained and determines where a Record lives in the shop. Genres roll up into Sections: every music genre sits under `VINYL`, apparel under `MERCH`.
 
-The **genre map** translates Discogs' genre taxonomy into the shop's own. On import a Record is assigned a genre and Section by the map's best guess. When the guess is wrong, a Manager either corrects the map — fixing every future import — or an Employee overrides that one Record ([E-04](E-04-manage-inventory.md)).
+The **genre map** translates the catalog provider's genre taxonomy into the shop's own. On import a Record is assigned a genre and Section by the map's best guess. When the guess is wrong, a Manager either corrects the map — fixing every future import — or an Employee overrides that one Record ([E-04](E-04-manage-inventory.md)).
 
 ## Currency
 
@@ -76,7 +76,7 @@ Store name and the details that appear on receipts and outbound documents.
 | 3 | **Multi-jurisdiction sales tax is in scope**, settling PRD §6 open question 4 for outbound tax |
 | 4 | Tender display names are configurable; tender behaviors are not |
 | 5 | **Sections** are the top-level reporting category; **genres** roll up into them |
-| 6 | A **genre map** translates Discogs genres to shop genres and Sections, correctable at the map or per Record |
+| 6 | A **genre map** translates catalog provider genres to shop genres and Sections, correctable at the map or per Record |
 | 7 | Currency codes carry conversion rates for cost and payables conversion |
 | 8 | Settings changes are never retroactive; completed records keep their snapshotted values |
 | 9 | Referenced settings are deactivated, never deleted |

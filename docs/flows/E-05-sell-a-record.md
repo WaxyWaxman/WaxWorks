@@ -16,10 +16,13 @@ A Sale is in exactly one state:
 
 | State | Meaning |
 |---|---|
-| **Current** | Rung up since the last end-of-day close. Editable. |
+| **Open** | Being rung up right now. No Sale number yet, and absent from every M-03 total. **Locked to the Employee who opened it** (decision 23). |
+| **Current** | Tendered since the last end-of-day close. Editable. |
 | **Held** | A reservation — either placed by an Employee against stock on hand, or created automatically when a customer-attached PurchaseOrder line is received. Not a completed Sale. |
 | **Closed** | Included in a completed end-of-day close. No longer editable. |
 | **Void** | Reversed by an Employee. Retains its Sale number. |
+
+**Open** was added by decision 21: step 12 assigns *Current* only on completion of tender, which left the Sale being rung up with no state to be in.
 
 ---
 
@@ -52,14 +55,14 @@ A Sale is in exactly one state:
 9. System totals the Sale and offers the tender types configured in [M-06](M-06-settings.md).
 10. A Sale may be **split across multiple tenders** — e.g. `$20.00` gift card, `$20.00` cash, remainder on card. Each tender is recorded as its own entry against the Sale.
 11. **Cash** tenders calculate change owed.
-12. On completion the Sale moves to **Current** and is assigned a **Sale number**.
-13. System prompts to print a **receipt**. Any Sale can be reopened later by Sale number to reprint or email its receipt.
+12. On completion the Sale moves from **Open** to **Current** and is assigned a **Sale number**, attributed to whoever holds the lock (decision 23).
+13. System offers the **receipt**. In v1 receipts are **emailed** (decision 24); a customer with no email address gets a browser-printed copy. Any Sale can be reopened later by Sale number to re-send or reprint.
 
 ---
 
 ## Sale numbering
 
-Sale numbers auto-generate ascending, are checked for uniqueness against history, and may be entered manually. They are **globally unique**, unlike supplier Invoice numbers, which are unique per `(supplier, invoice_number)` (E-02 decision 1).
+Sale numbers auto-generate ascending, are checked for uniqueness against history, and may be entered manually. They are **unique per Store** (decision 22), unlike supplier Invoice numbers, which are unique per `(supplier, invoice_number)` (E-02 decision 1). Allocation uses a locked counter row rather than a database sequence, because a sequence gaps on every rolled-back transaction and a gap reads as missing paperwork ([architecture](../architecture.md) A-17).
 
 A **Held** Sale carries an `H`-prefixed hold reference (`H1`, `H2`…) rather than a Sale number, so it is never mistaken for a completed Sale. On tender it receives a proper Sale number; the hold reference is retained on the record for traceability.
 
@@ -119,6 +122,20 @@ Some things sold at the till are not InventoryItems — freight, services, and b
 | **Log** | Timestamped free-form notes against a Sale. For a **Held** Sale the log additionally shows the hold timeline automatically: when the hold was created, when the customer was contacted and by what method, and how long it has been sitting. |
 | **Receipt** | Print, reprint, or email the receipt for any Sale by Sale number. |
 
+### Sale locking and attribution
+
+An **Open** Sale is locked to the Employee who opened it (decision 23). Another Employee cannot add to it or tender it while it is open.
+
+Handing a Sale over is deliberate: the holder puts it on **Hold**, which releases the lock, and any Employee may then re-open it, taking the lock. **The Sale is attributed to whoever holds the lock at tender** — so a Sale one Employee starts and another finishes belongs to the one who finished it.
+
+A lock stranded by a closed browser is broken by `sale_force_unlock`, which proceeds and raises a review flag ([M-04](M-04-manage-users.md) d8).
+
+An Open Sale **suppresses the 15-minute session lapse** on its terminal ([E-01](E-01-authenticate.md) d10) — otherwise a lapse would strand a locked Sale mid-ring.
+
+### Deposits
+
+Taking money against a Held Sale needs no new state (decision 25). Ring a Sale with **no lines**, tender it to the Customer's account, and the deposit becomes store credit on their balance ([E-07](E-07-manage-customers.md)). The Held Sale displays that balance, so the counter can see the deposit exists. On collection, the credit is drawn down as a **Store Credit** tender.
+
 ### Holds
 
 A Held Sale is created two ways:
@@ -138,7 +155,7 @@ Held copies count against **available** stock but remain on hand.
 - Every tender on a Sale is individually recorded; the Sale's tender mix is what M-03 reports.
 - Line values — price, discount, tax line, condition grade, and title — are **snapshotted onto the Sale line** at the time of sale. Editing or deleting a catalog Record or InventoryItem afterwards never rewrites what a past Sale says it sold for.
 - Every Sale, void, hold cancellation, and pay-out is attributed to the Employee who performed it.
-- An Employee may take a line below cost at the till without a manager override (see decision 12).
+- An Employee may take a line below cost at the till freely — no gate and no ReviewFlag (see decision 12). A below-cost *shelf* price does raise one ([E-02](E-02-receive-inventory.md) d35); the difference is that a shelf price persists.
 
 ---
 
@@ -182,23 +199,19 @@ Held copies count against **available** stock but remain on hand.
 | 18 | A manufacturer UPC resolving to multiple sellable copies presents a picker on condition, price, and count |
 | 19 | Receipts print on demand after tender and can be reprinted or emailed later by Sale number |
 | 20 | A Sale need not have a Customer attached |
-| 21 | **Edit** on a Current Sale voids the original and duplicates its lines (same InventoryItems, now sellable again) into a new Open Sale — a `replacesSaleId` cross-reference preserves the audit trail. **Edit** on a Held Sale just opens it; there's nothing to duplicate |
-| 22 | **Copy** seeds a new Open Sale from the same line template (record, price, qty, discount, tax, grade) but never carries over the specific InventoryItem — the source Sale's copy may still be sold, so the Employee re-scans the physical copy being sold now |
-| 23 | **Search** resolves a scanned barcode to every Sale line that ever referenced it, Held Sales surfaced first (so they can be selected and tendered), then by recency |
-| 24 | **PO** is a plain field on the Sale header (the Customer's purchase-order reference), editable whenever the Sale's lines are |
-| 25 | **Discount is a 2-digit integer** (0–99%), clamped on entry rather than accepting arbitrary decimals |
-| 26 | **On entry, Point of Sale opens the most recent Sale** (Current or Open), or the most recent Held Sale if there isn't one yet |
-| 27 | Attaching a Customer with **no search match** offers to create one inline (name only, rest fillable later from [E-07](E-07-manage-customers.md)) and attach it immediately |
-| 28 | A Held Sale's log carries a **Log contact** action (method only — Phone or Email) alongside free-form notes, and the card shows a computed **age** since the hold was created |
-| 29 | The tender named **Account Balance** (not "Store Credit") is bidirectional — add to or draw from the Customer's A/R balance — per the E-07 rework; this flow's earlier "Store Credit, drawn against A/R" framing is superseded by that decision, not the other way around |
-| 30 | **Total Today's Sales / View Subtotal / Undo End of Day** ([M-03](M-03-daily-summary.md)) live under one **Other Functions** control on Point of Sale rather than as everyday buttons, since they're end-of-day operations, not per-Sale ones. Undo End of Day is labeled **Admin** by convention — no enforced check, consistent with every other not-yet-real-auth label this build uses (M-01, E-07) |
+| 21 | **A Sale has a fifth state, `Open`** — pre-tender, no Sale number, absent from M-03 totals ([architecture](../architecture.md) A-16) |
+| 22 | **Sale numbers are unique per Store**, not chain-wide. Decision 2's "globally unique" was contrasting them against supplier Invoice numbers and predates the multi-store decision (A-11) |
+| 23 | **An Open Sale is locked to the Employee who opened it.** Handoff is via Hold; re-opening transfers the lock; **tender attributes to the lock holder.** Closes the employee-attribution open question (A-19) |
+| 24 | **Receipts are emailed in v1**, with browser printing as the fallback for a customer with no email address. A thermal receipt printer is post-v1 and opt-in ([architecture](../architecture.md) §4) |
+| 25 | **A deposit is a line-less Sale tendered to the Customer's account**, shown as a balance on the Held Sale. Closes the layaway open question using existing machinery (A-25) |
+| 26 | **Till rounding is advisory**, consistent with E-02 decision 32. Closes the till-rounding open question (A-24) |
 
 ---
 
 ## Open questions
 
-- **Rounding at the till.** E-02 decision 9 requires shelf prices to end in `.50` or `.99`. Ad-hoc till discounts and `0.00` prompts are currently exempt — should they be, or should every customer-facing amount round the same way?
-- **Layaway / deposits.** Taking partial payment against a Held Sale isn't specified. A deposit is money in against goods not yet delivered, which the current tender model has no state for.
-- **Receipt content and format.** Line detail, tax breakdown, store branding, and paper size are unspecified. E-02's finalize summary is letter-size; a till receipt is presumably roll paper.
-- **Employee attribution vs. Sale ownership.** If one Employee starts a Sale and another tenders it, which one is the Sale attributed to for M-03's per-employee reporting?
+- ~~**Rounding at the till**~~ — **Resolved** by decision 26: rounding is a suggestion everywhere, receiving included.
+- ~~**Layaway / deposits**~~ — **Resolved** by decision 25: a line-less Sale tendered to the Customer's account.
+- **Receipt content and format.** Settled for v1 as an emailed template — logo, header, itemized lines, subtotal, tax per tax line, total, tender breakdown ([architecture](../architecture.md) §4). Paper size stays open until the thermal print agent lands.
+- ~~**Employee attribution vs. Sale ownership**~~ — **Resolved** by decision 23: the Sale belongs to whoever holds the lock at tender.
 - **Gift card expiry and escheatment.** Balances currently persist indefinitely; several jurisdictions regulate this.

@@ -18,10 +18,10 @@ The design intent is that Employees have high agency. The manager-gated list bel
 
 ## Manager-only actions
 
+Everything in this table is something an Employee **cannot do at all**. It is distinct from the review queue below, which lets an Employee proceed and tells a Manager afterward — the [lexicon](../lexicon.md) keeps *manager-only* and *manager override* as separate concepts, and decision 8 replaces only the second.
+
 | Action | Flow | Why it's gated |
 |---|---|---|
-| Price a **shelf price** below cost | [E-02](E-02-receive-inventory.md) d10, [E-04](E-04-manage-inventory.md) | Persists; sets margin for every future copy |
-| Adjust an Invoice total beyond **±2%** | [E-02](E-02-receive-inventory.md) d19 | Beyond rounding, it's a cost restatement |
 | **Void or amend** a finalized Invoice | [E-02](E-02-receive-inventory.md) d23, [E-04](E-04-manage-inventory.md) | Restates what was received and owed |
 | **Adjust on hand** | [E-04](E-04-manage-inventory.md) | Rewrites stock reality; always reason-coded |
 | **Process** pending orders into PurchaseOrders | [M-02](M-02-reorder-inventory.md) | Commits money to a supplier |
@@ -41,11 +41,25 @@ The design intent is that Employees have high agency. The manager-gated list bel
 
 ---
 
-## The manager override
+## The review queue
 
-A Manager approves a gated action **in place**, at the terminal where the Employee is working, by entering their own initials. This does not end or replace the Employee's session ([E-01](E-01-authenticate.md) d6): the Employee remains the actor, and the override is recorded alongside as a separate attribution.
+**The manager override is replaced by a review queue** (decision 8). Actions that used to stop and wait for a Manager's initials now **proceed**, and record a flag the Manager reviews afterward.
 
-Both names are retained — the record shows who did the thing and who authorised it.
+| Flagged action | Flow |
+|---|---|
+| A **shelf price** below cost | [E-02](E-02-receive-inventory.md) d35, [E-04](E-04-manage-inventory.md) |
+| An Invoice total adjusted beyond **±2%** | [E-02](E-02-receive-inventory.md) d35 |
+| A derived-vs-stated **subtotal discrepancy** accepted | [E-02](E-02-receive-inventory.md) d18 |
+| A Sale driving stock **negative** | [E-05](E-05-sell-a-record.md) |
+| A **sale lock** broken on a stranded terminal | [E-05](E-05-sell-a-record.md) d23 |
+
+A flag records the acting Employee, the subject, and the figures that made it worth a look — cost against price, the size of the delta, the variance. It is written in the same transaction as the action it describes, so the two can never disagree. Flags are **acknowledged, never deleted**.
+
+This extends the design intent stated above: Employees have high agency, and a Manager sees what happened rather than standing in the way of it. It also answers what the audit-surface open question asked for.
+
+### Manager-only authorization
+
+The in-place mechanism survives for the manager-only table (decision 9). A Manager authorizes at the terminal where the Employee is working by entering their own initials, without ending or replacing the Employee's session ([E-01](E-01-authenticate.md) d6). Both names are retained — the record shows who did the thing and who authorized it.
 
 ---
 
@@ -62,7 +76,9 @@ Both names are retained — the record shows who did the thing and who authorise
 ## Requirements
 
 - Attribution is permanent. A deactivated User's name still resolves on historical records.
-- An override records the authorising Manager separately from the acting Employee.
+- A manager-only authorization records the authorizing Manager separately from the acting Employee.
+- A review flag records the acting Employee and the figures that raised it, and commits with the action it describes.
+- The count of unreviewed flags is visible in the application shell. A review queue nobody opens is worse than a gate, because it looks like oversight.
 - Role changes take effect on the next session, not retroactively on past attributions.
 - Users are scoped to a Store; in v1 a User belongs to exactly one ([E-01](E-01-authenticate.md) d8).
 
@@ -72,12 +88,12 @@ Both names are retained — the record shows who did the thing and who authorise
 
 **From [E-02](E-02-receive-inventory.md):**
 
-- Manager override gates below-cost pricing, Invoice adjustments beyond ±2%, and voiding a finalized Invoice.
+- Below-cost pricing and Invoice adjustments beyond ±2% raise review flags (d35); voiding a finalized Invoice remains manager-only.
 - Employees can create Suppliers but never set margins.
 
 **From [E-01](E-01-authenticate.md):**
 
-- An override is performed at a terminal with an active Employee session, without displacing it.
+- A manager-only authorization is performed at a terminal with an active Employee session, without displacing it.
 
 ---
 
@@ -92,6 +108,8 @@ Both names are retained — the record shows who did the thing and who authorise
 | 5 | Users are **deactivated, never deleted** — historical attribution must survive |
 | 6 | Till discounts below cost, Returns, and supplier creation are explicitly **not** gated |
 | 7 | In v1 there are no credentials to issue, so adding a User has no invite step |
+| 8 | **The manager override is replaced by a review queue.** Previously gated actions proceed and raise a flag a Manager reviews afterward. **Amends decisions 3 and 4** for override-gated actions, and closes the audit-surface open question ([architecture](../architecture.md) A-28) |
+| 9 | **Manager-only actions are unchanged** and keep the in-place authorization of decisions 3 and 4 — the Manager enters their own initials, both names are recorded. Only the *override* is replaced (A-28a) |
 
 ---
 
@@ -100,5 +118,5 @@ Both names are retained — the record shows who did the thing and who authorise
 - **Is there a tier above Manager?** Someone has to be able to demote the last Manager, and an owner tier is the usual answer. Currently any Manager can promote or demote any other.
 - **Credentials.** Blocked on [E-01](E-01-authenticate.md) — when passwords or PINs arrive, adding a User grows an issuance step, and Managers may warrant stronger credentials than Employees.
 - **Multi-store membership.** Whether a User can belong to several Stores, whether a Manager can administer more than one, and how switching works.
-- **Override at a distance.** Currently a Manager must be physically at the terminal. A remote or asynchronous approval (phone code, push notification) is a plausible later need in a shop where the Manager isn't always on the floor.
-- **Audit surface.** Overrides, adjustments, and voids are all recorded, but nothing yet presents them as a reviewable log.
+- **Authorization at a distance.** A Manager must be physically at the terminal for a manager-only action. A remote or asynchronous approval is a plausible later need in a shop where the Manager isn't always on the floor. Decision 8 shrinks this problem considerably — most of what used to need a Manager present now proceeds and flags.
+- ~~**Audit surface**~~ — **Resolved** by decision 8: the review queue is that log.

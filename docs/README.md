@@ -7,6 +7,7 @@ Point-of-sale and inventory management for independent vinyl record stores.
 | Document | What it covers |
 |---|---|
 | [PRD.md](PRD.md) | Product context, users, domain model, cross-cutting concerns |
+| [architecture.md](architecture.md) | Stack, data model, database functions, build order — how it gets built |
 | [lexicon.md](lexicon.md) | Controlled vocabulary — the canonical term for each concept, and what not to call it |
 | [flows/](flows/) | One document per user flow — the detailed specs |
 | [reference/](reference/) | Worked examples and external-system notes |
@@ -52,7 +53,9 @@ Point-of-sale and inventory management for independent vinyl record stores.
 - **Resolved decisions** — a numbered table, so decisions can be cited precisely
 - **Open questions** — what's still undecided
 
-**Decisions are numbered and cited.** Referring to "E-02 decision 8" should be unambiguous, so don't renumber an existing decision — append instead.
+**Decisions are numbered and cited.** Referring to "E-02 decision 8" should be unambiguous, so don't renumber an existing decision — append instead. A later decision that changes an earlier one says so explicitly ("amends decision 9", "supersedes decision 15"), and the earlier one stays put as the record of what was decided at the time.
+
+**Architecture decisions are numbered `A-n`** in [architecture.md](architecture.md) and cited the same way. Where one amends a flow, the amendment is appended to that flow too — architecture.md §9 lists every one.
 
 **Use the [lexicon](lexicon.md)'s canonical terms.** In flow documents, the PRD, reference material, commit messages, and any prompt written to drive an LLM against this project, use the exact term the lexicon prescribes rather than a synonym.
 

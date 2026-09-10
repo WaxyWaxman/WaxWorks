@@ -56,7 +56,9 @@ The Manager aims to empower their employees to help make good decisions and some
 
 The Manager inherits all Employee capabilities (superset).
 
-**Manager override** is a recurring mechanism — several employee actions are gated behind it (below-cost pricing, invoice adjustments beyond ±2%, voiding a finalized invoice). Its mechanics are defined in [M-04](flows/M-04-manage-users.md).
+**Two mechanisms, not one.** A small set of actions is **manager-only** — an Employee cannot perform them at all, and a Manager authorizes in place by entering their own initials, with both names recorded. Everything else that used to be gated behind a *manager override* now **proceeds and raises a review flag** the Manager reviews afterward: below-cost shelf pricing, invoice adjustments beyond ±2%, selling into negative stock. Both mechanics are defined in [M-04](flows/M-04-manage-users.md) — see decisions 8 and 9, and [architecture](architecture.md) A-28.
+
+This extends the design intent that Employees have high agency: a Manager sees what happened rather than standing in the way of it.
 
 ---
 
@@ -96,17 +98,17 @@ _Partially derived from E-02. Refine as further flows land._
 | Entity | Notes |
 |---|---|
 | **Store** | Tenant boundary. The system serves **multiple stores** — inventory, invoices, suppliers, users, and reporting all scope to a store. |
-| **Record** (catalog) | The pressing — artist, title, label, catalog no., format, year, genre, cover art. Sourced locally or from Discogs. Carries the sticky retail price (New stock only). |
+| **Record** (catalog) | The pressing — artist, title, label, catalog no., format, year, genre, cover art. Sourced locally or from the catalog provider. Carries the sticky retail price (New stock only). Scoped to a Store, like everything else (§6). |
 | **InventoryItem** | A physical copy of a Record — condition, cost, price, status. Created by receiving, consumed by sale. |
 | **Barcode** | Manufacturer UPC/EAN or a store-generated internal code. Maps to a Record (new) or an individual InventoryItem (second-hand). |
 | **Supplier** | Source of stock. Carries margin config (manager-set). Creatable by employees. |
 | **Invoice** | Inbound receiving document. Draft or finalized; immutable once finalized. Keyed by `(supplier, invoice_number)`. Carries invoice-level freight / tax / misc. |
 | **InvoiceLine** | One received item on an invoice — links Record, cost (`Ext. Price`), accepted retail price, condition. |
-| **InvoiceScan** | Photograph of the supplier's paperwork plus extracted invoice-level totals. Assistive only. |
-| **CostAdjustment** | The bounded ±2% reconciliation delta; flows into COGS. |
-| **Backorder** | Units ordered but not shipped (the supplier's `Balance`). Tracked until fulfilled. |
-| **PurchaseOrder** | Manager-created reorder (M-02). Triggers Discogs metadata prefetch. |
-| **Sale / Transaction** | A completed checkout (E-05). Carries a globally unique Sale number and one of four states: Current, Held, Closed, Void. |
+| ~~**InvoiceScan**~~ | **Removed** — there is no invoice photography and no document extraction ([E-02](flows/E-02-receive-inventory.md) d27). Invoice-level totals are entered manually. |
+| **CostAdjustment** | The ±2% reconciliation delta; flows into COGS. Beyond ±2% it proceeds and raises a ReviewFlag (E-02 d35). |
+| **Backorder** | Units ordered but not shipped (the supplier's `Balance`). **Derived, not stored** — ordered minus received against that PurchaseOrder line across every Invoice (E-02 d30). |
+| **PurchaseOrder** | Manager-created reorder (M-02). Triggers catalog metadata prefetch. One Invoice may span several POs, so the link lives on the InvoiceLine ([E-02](flows/E-02-receive-inventory.md) d28). |
+| **Sale / Transaction** | A checkout (E-05). Carries a Sale number unique **per store** (E-05 d22) and one of five states: **Open**, Current, Held, Closed, Void. An Open Sale is pre-tender, unnumbered, and locked to the Employee ringing it (E-05 d21, d23). |
 | **SaleLine** | One line on a Sale. Snapshots price, discount, tax line, condition, and title at time of sale. A negative quantity is a Return. |
 | **Tender** | One payment against a Sale. A Sale may carry several (split tender). Types in M-06. |
 | **Return** | Reversal of a sale (E-06). A negative-quantity SaleLine, not a separate document. |
@@ -116,6 +118,7 @@ _Partially derived from E-02. Refine as further flows land._
 | **SupplierClaim** | A claim for credit against a supplier Invoice for short, damaged, or unshipped stock (E-04). Pending or Credited. |
 | **APPayment** | A payment recorded against a supplier Invoice — method, reference, amount, date (M-05). |
 | **InventoryAdjustment** | A manager-only correction to stock, carrying a reason code, before/after counts, and attribution (E-04). |
+| **ReviewFlag** | A record that an Employee took an action worth a Manager's later attention — below-cost pricing, an adjustment beyond ±2%, a Sale driving stock negative. Carries the actor, the subject, and the figures that raised it. Acknowledged, never deleted ([M-04](flows/M-04-manage-users.md) d8). |
 | **Section** | Top-level reporting category (`VINYL`, `MERCH`). Genres roll up into Sections (M-06). |
 | **TaxLine** | A named, rated tax entry. Sellable things reference one rather than carrying a boolean (M-06). |
 | **CloseBatch** | One end-of-day close — its identifier, timestamp, closing User, and the Sales it moved to Closed (M-03). |
@@ -133,7 +136,7 @@ The **titlecard** is the screen showing one Record with all of its copies, quant
 
 Goldmine scale (M, NM, VG+, VG, G+, G, F, P). Required per item in second-hand intake; defaults to Mint/Sealed for new stock.
 
-**Open:** does grading apply separately to sleeve and vinyl, as is conventional?
+~~**Open:** does grading apply separately to sleeve and vinyl?~~ **Resolved** — **one grade per copy**, plus a free-text condition note where specifics belong ("sleeve has ring wear"). See [architecture](architecture.md) A-18.
 
 ### 4.3 Internal barcode scheme
 
@@ -168,7 +171,11 @@ _Status: **ratified**._
 
 **Platform.** A **web application**, delivered as a PWA so one codebase serves the counter, the receiving desk, the office, and a phone or tablet on the shop floor without separate native builds. It must be usable on both macOS and Windows, which is what rules out a desktop app.
 
-**Hardware.** Barcode scanners at the till and receiving desk (standard laser units reading UPC-A — see §4.3, which is why the internal scheme stays in that symbology). A label printer at the receiving desk. A receipt printer at the till. No card reader is driven by this system (NG-4); cards settle on a separate terminal. No cash drawer integration — the daily close does not reconcile the drawer (M-03 decision 8).
+**Hardware.** Barcode scanners at the till and receiving desk (standard laser units reading UPC-A — see §4.3, which is why the internal scheme stays in that symbology). A label printer at the receiving desk. No card reader is driven by this system (NG-4); cards settle on a separate terminal. No cash drawer integration — the daily close does not reconcile the drawer (M-03 decision 8).
+
+**Printing.** In v1, receipts are **emailed** ([E-05](flows/E-05-sell-a-record.md) d24), and barcode labels and the letter-size finalize summary print from the browser to a driver-installed printer. **No local software is installed on shop machines in v1.** A thermal receipt printer needs a small local print agent, which is deferred and opt-in per Store — see [architecture](architecture.md) §4. That agent gives a Store local *printing*, not offline trading.
+
+**Technical architecture** — stack, data model, database functions, and build order — lives in [architecture.md](architecture.md).
 
 **Auditability.** Attribution is required on every Sale, Return, void, hold cancellation, pay-out, inventory adjustment, override, Invoice finalization, and payment. Beyond attribution, four things are immutable or effectively so:
 
@@ -177,15 +184,19 @@ _Status: **ratified**._
 - a voided Sale's number, which is retained rather than reused (E-05 decision 4);
 - a User record, which is deactivated rather than deleted so historical attribution survives (M-04 decision 5).
 
-**External dependencies.** Discogs, at roughly 60 requests/min authenticated. Mitigated by bulk prefetch at PurchaseOrder time (M-02) and local-first resolution everywhere (E-02 decision 5). When Discogs is unavailable, local search and every till function continue to work and the degradation is visible rather than silent (E-03 decision 8).
+**External dependencies.** The **catalog provider** — MusicBrainz, with Cover Art Archive for artwork, behind an adapter (E-03 decision 10). Roughly 1 request/second, mitigated by batched prefetch at PurchaseOrder time (M-02 decision 14) and local-first resolution everywhere (E-02 decision 5). When the provider is unavailable, local search and every till function continue to work and the degradation is visible rather than silent (E-03 decision 8).
 
 **Scale.** The schema is multi-store from the outset; v1 deploys a single store with no cross-store UI.
 
+**Offline behavior — resolved.** v1 is **online-only**. The PWA caches the app shell so the application loads instantly and survives a refresh, but writes fail visibly rather than queuing. For a shop whose card terminal is already independent of this system, a genuine outage already halts card sales. See [architecture](architecture.md) A-1.
+
+**Backups.** Daily, via the hosting platform's own backup facility, enabled at launch and with a restore verified before the shop depends on it.
+
 ### Still open
 
-- **Offline behavior** — must the till keep selling if the internet drops? A PWA makes a degraded offline mode *possible*, but nothing about it is specified: what stays available, how Sales queue, and how they reconcile on reconnection. For a shop whose card terminal is already independent of this system, the practical question is whether cash sales must continue during an outage.
-- **Data retention & backup** — untouched.
-- **Discogs terms of use** for commercial data — untouched, and worth checking before launch rather than after.
+- ~~**Offline behavior**~~ — **Resolved** above: online-only in v1.
+- ~~**Discogs terms of use**~~ — **Moot.** The catalog provider is MusicBrainz, whose core data is CC0 and whose artwork archive is openly licensed ([architecture](architecture.md) A-12).
+- **Data retention** — how long Sales, Invoices, and customer records are kept is still unaddressed. Backups are settled; retention is not.
 
 ---
 
@@ -194,30 +205,30 @@ _Status: **ratified**._
 ### Resolved
 
 - The system is **multi-store**. The schema scopes every entity to a Store from the outset; v1 deploys one store with no cross-store UI.
-- **Discogs** is the external catalog metadata source.
+- **MusicBrainz** is the external catalog metadata source, behind a provider adapter. Discogs remains implemented as a second adapter, off by default ([architecture](architecture.md) A-12).
 - **There is a Customer record** ([E-07](flows/E-07-manage-customers.md)) — holds, special orders, store credit, discounts, and receipt-less returns all need somewhere to hang.
 - **Multi-jurisdiction sales tax is in scope** on the outbound side, as a table of named tax lines referenced per item ([M-06](flows/M-06-settings.md)). Inbound tax treatment stays as E-02 decision 17 has it.
 - **Payment recording and accounts payable are in scope** — tenders captured at the till ([E-05](flows/E-05-sell-a-record.md)), supplier balances settled in [M-05](flows/M-05-accounts-payable.md). Formalized as E-02 decision 26, superseding decision 25. The only exclusion is integration with a third-party payment processing system such as Square or Stripe (NG-4).
 - **The internal barcode scheme is ratified** — UPC-A under GS1 number system `2` (§4.3).
 
-### Multi-store consequences
+### Multi-store consequences — resolved
 
-Worth settling as flows land:
+**Every entity is scoped to a Store. Nothing is shared** ([architecture](architecture.md) A-5). The catalog, suppliers and their margins, Sections, the genre map, and sticky retail prices are all per store. This answers all five questions below the same way, and gives the schema a single access-control shape rather than two classes of table.
 
-- Is the catalog (Record metadata) shared across stores, or per-store? Sharing means one store's Discogs lookup benefits all — a meaningful cost and latency saving.
-- Are sticky retail prices global or per-store? Two stores in different markets will want different prices.
-- Are suppliers and their margins per-store or shared?
-- Can a user belong to more than one store? Can a manager see across stores?
-- Does inventory search (E-03) cover other stores' stock — "we don't have it, but our other branch does"?
+- ~~Is the catalog shared across stores, or per-store?~~ **Per store.** The cost this would have carried — two stores each spending a lookup on the same pressing — is absorbed by a shared metadata *cache* sitting underneath the per-store catalogs (A-6). The cache is shared; the catalog is not.
+- ~~Are sticky retail prices global or per-store?~~ **Per store.**
+- ~~Are suppliers and their margins per-store or shared?~~ **Per store.**
+- ~~Can a user belong to more than one store?~~ **Not in v1** (E-01 decision 8). Cross-store management is deferred to [M-04](flows/M-04-manage-users.md).
+- ~~Does inventory search cover other stores' stock?~~ **Not in v1** — the schema carries the Store scope, but no cross-store UI is exposed ([E-03](flows/E-03-search-inventory.md)).
 
 ### Still open
 
 1. ~~Is there a customer record at all?~~ **Resolved** — see above, and [E-07](flows/E-07-manage-customers.md).
-2. Consignment — common in record stores. In scope?
+2. **Consignment** — **partially resolved.** A Supplier carries a consignment flag, copied onto each InventoryItem at receipt ([E-02](flows/E-02-receive-inventory.md) d33), so consigned stock is identifiable from day one. The program itself — how a consignor is paid, and when — is future work.
 3. What's the migration story — is there existing inventory data to import?
-4. ~~Currency and tax regime — is multi-jurisdiction tax in scope?~~ **Resolved for outbound tax** — see above. Currency conversion for supplier costs and payables is handled in [M-06](flows/M-06-settings.md); exchange gain/loss on payment is still unaddressed ([M-05](flows/M-05-accounts-payable.md)).
+4. ~~Currency and tax regime — is multi-jurisdiction tax in scope?~~ **Resolved for outbound tax** — see above. **Inbound tax is excluded from cost of goods** ([E-02](flows/E-02-receive-inventory.md) d34, amending its decision 17) — GST and QST are Input Tax Credits, a receivable rather than a cost. Currency conversion for supplier costs and payables is handled in [M-06](flows/M-06-settings.md); exchange gain/loss on payment is still unaddressed ([M-05](flows/M-05-accounts-payable.md)).
 5. **Accounts receivable.** [E-07](flows/E-07-manage-customers.md) lets a business customer owe the store money on an outbound customer invoice, but nothing chases it — no terms, no due dates, no aging.
-6. **Sleeve vs. vinyl grading** — §4.2's open question is unchanged, and now touches E-06, where a returned copy may need re-grading.
+6. ~~**Sleeve vs. vinyl grading**~~ — **Resolved.** One grade per copy plus a condition note (§4.2). A returned copy re-graded in E-06 sets one grade and a note, same as intake.
 
 ---
 
