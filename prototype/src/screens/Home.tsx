@@ -66,14 +66,27 @@ const BUILT = [
       "in red at the top. Search (keyword or scan), sort (age/title/artist), filter (supplier/PO), and " +
       "Re-flag. Set status (Backordered/Cancelled) and voiding a PO aren't built.",
   },
+  {
+    id: "M-01",
+    to: "/suppliers",
+    title: "Suppliers",
+    blurb: "Search, New/Edit/Copy/Delete/Merge, full field set — nothing gated.",
+  },
+  {
+    id: "M-05",
+    to: "/payable",
+    title: "Accounts payable",
+    blurb:
+      "Outstanding Invoices and Pending/Credited Supplier Claims per supplier, since what's owed is the " +
+      "net of both. Record a payment (partial supported, one record per Invoice sharing a reference), " +
+      "apply a claim credit, and the gift-card liability registry.",
+  },
 ];
 
 const NOT_BUILT = [
   ["E-01", "Authenticate"],
-  ["M-01", "Supplier margin"],
   ["M-03", "Daily summary"],
   ["M-04", "Manage users"],
-  ["M-05", "Accounts payable"],
   ["M-06", "Configure the store"],
 ];
 
@@ -190,6 +203,15 @@ export function Home() {
           Try the search box with "PO-77" or a supplier name, scan Horses's UPC to filter straight to
           it, sort by Title, filter to F.A.B. Distribution, then <em>Re-flag</em> Theo's line to push
           it out another few days.
+        </li>
+        <li>
+          <strong>M-05 Accounts payable</strong> — F.A.B. Distribution and Indie Direct Supply both
+          carry a seeded Finalized invoice. Select F.A.B.'s and open it: a Credited claim (#9, $12.40)
+          sits alongside it — <em>Apply credit</em> is one click, no invoice to pick, and nets
+          straight against F.A.B.'s balance. Then <em>Record payment</em> for the rest (try a
+          partial amount first, then the remainder to watch it flip to Paid and drop into Payment
+          history). Crate Digger Wholesale's CD-777 is already settled, for the history view; the
+          gift-card liability registry sits below.
         </li>
       </ol>
 
