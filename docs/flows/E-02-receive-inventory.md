@@ -157,6 +157,7 @@ Consequence to accept knowingly: per-item margin reporting reflects only supplie
 | 34 | **Inbound tax is excluded from cost of goods.** **Amends decision 17** — GST and QST are Input Tax Credits, a receivable rather than a cost. Closes the tax-in-COGS open question (A-29) |
 | 35 | **Below-cost pricing and adjustments beyond ±2% proceed and raise a review flag** rather than blocking. **Amends decisions 10 and 19**: the manager override is replaced by a review queue across the system ([M-04](M-04-manage-users.md) d8, A-28) |
 | 36 | **Receiving history is browsable** — past Invoices are searchable by supplier, number, date, title, or barcode and open as they were finalized. Decision 23's immutability is what makes "as-was" trivially true (A-27) |
+| 37 | **The reconcile figures stay on screen for the whole invoice, and lines carry cover art.** Receiving is laid out as an outstanding-orders rail, an art-led line table, and a reconcile strip pinned to the bottom of the viewport. The strip is what makes the footer placement safe: derived vs. stated is the check step 18 turns on, and on a 50–100 line invoice a footer that scrolled away would hide it exactly when it matters. Cover art leads each line because staff recognise a sleeve faster than a catalogue number; art is a stored URL ([architecture](../architecture.md) A-14) and the provider misses often, so the **missing state is designed** — a marked placeholder, never a broken image |
 
 ---
 
