@@ -60,7 +60,7 @@ implements.
 | Element | Comes from |
 |---|---|
 | Top menu | One band of equal segments, the active one filled solid, ending in **More** |
-| Point of Sale | Large scan field, large line rows, a total readable across the counter |
+| Point of Sale | Large scan field, large line rows, a total readable across the counter. Actions are placed by **who is waiting** (E-05 decision 28) — counter work on screen, everything else behind **Till functions**. The money slab is sticky, because Finish sale otherwise fell below the fold on a 900px screen |
 | Receiving | Worklist rail on the left, art-led line table, reconcile as a footer strip |
 | Search | Results rail, titlecard, actions rail |
 
