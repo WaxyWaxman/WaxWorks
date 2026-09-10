@@ -262,81 +262,150 @@ function HoldsModal({ onClose }: { onClose: () => void }) {
   );
 }
 
+// The primary job here is scanning recent Current Sales for entry errors
+// before end-of-day close, not hunting for one item's history — so the
+// default (nothing typed) is a plain recency list of Current Sales, and
+// item/transaction/customer/date each narrow it further. Any filter widens
+// scope to every non-Open Sale, since by then the Employee is looking for
+// something specific rather than skimming.
 function SearchModal({ onClose }: { onClose: () => void }) {
   const app = useApp();
   const nav = useNavigate();
   const [code, setCode] = useState("");
+  const [txQuery, setTxQuery] = useState("");
+  const [custQuery, setCustQuery] = useState("");
+  const [dateQuery, setDateQuery] = useState("");
 
-  const results = useMemo(() => {
-    if (!code.trim()) return [];
-    const res = resolveScan(code.trim(), app);
-    let recordId: string | undefined;
-    let itemId: string | undefined;
-    if (res.kind === "internal") {
-      recordId = res.record.id;
-      itemId = res.item.id;
-    } else if (res.kind === "upc-single") {
-      recordId = res.record.id;
-    } else if (res.kind === "upc-multi") {
-      recordId = res.record.id;
-    } else {
-      return [];
-    }
-    const matches: { sale: Sale; line: SaleLine }[] = [];
-    for (const sale of app.sales) {
-      for (const line of sale.lines) {
-        if (itemId ? line.inventoryItemId === itemId : line.recordId === recordId) matches.push({ sale, line });
-      }
-    }
-    // Held Sales surface first so they can be selected and tendered, then most recent.
-    return matches.sort((a, b) => {
-      if ((a.sale.state === "Held") !== (b.sale.state === "Held")) return a.sale.state === "Held" ? -1 : 1;
-      return b.sale.createdAt.localeCompare(a.sale.createdAt);
-    });
+  // Resolves the same way the till's barcode field does: an internal
+  // barcode narrows to one copy, a manufacturer UPC narrows to the Record
+  // (any copy sold under it, since condition/price vary line to line).
+  const codeFilter = useMemo(() => {
+    const trimmed = code.trim();
+    if (!trimmed) return null;
+    const res = resolveScan(trimmed, app);
+    if (res.kind === "internal") return { itemId: res.item.id as string | undefined, recordId: res.record.id as string | undefined, noMatch: false };
+    if (res.kind === "upc-single" || res.kind === "upc-multi")
+      return { itemId: undefined, recordId: res.record.id as string | undefined, noMatch: false };
+    return { itemId: undefined, recordId: undefined, noMatch: true };
   }, [code, app]);
 
+  const hasFilter = !!(code.trim() || txQuery.trim() || custQuery.trim() || dateQuery);
+
+  const rows = useMemo(() => {
+    const txQ = txQuery.trim().toLowerCase();
+    const custQ = custQuery.trim().toLowerCase();
+
+    const matches = (sale: Sale) => {
+      if (codeFilter) {
+        if (codeFilter.noMatch) return false;
+        const onSale = sale.lines.some((l) =>
+          codeFilter.itemId ? l.inventoryItemId === codeFilter.itemId : l.recordId === codeFilter.recordId,
+        );
+        if (!onSale) return false;
+      }
+      if (txQ) {
+        const label = (sale.saleNumber ? String(sale.saleNumber) : sale.holdRef ?? "").toLowerCase();
+        if (!label.includes(txQ)) return false;
+      }
+      if (custQ) {
+        const cust = app.customerFor(sale.customerId);
+        if (!cust?.name.toLowerCase().includes(custQ)) return false;
+      }
+      if (dateQuery && sale.createdAt.slice(0, 10) !== dateQuery) return false;
+      return true;
+    };
+
+    const scope = hasFilter ? app.sales.filter((s) => s.state !== "Open") : app.sales.filter((s) => s.state === "Current");
+    return scope.filter(matches).sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+  }, [app.sales, codeFilter, txQuery, custQuery, dateQuery, hasFilter]); // eslint-disable-line react-hooks/exhaustive-deps
+
   return (
-    <Modal title="Search — item sale history" onClose={onClose}>
+    <Modal title="Search — past Sales" onClose={onClose} wide>
       <div className="stack">
-        <BarcodeInput onScan={setCode} placeholder="Scan or type a barcode…" />
-        {code && (
-          <table className="data">
-            <tbody>
-              {results.map(({ sale, line }) => (
-                <tr key={line.id}>
+        <p className="small muted">
+          {hasFilter
+            ? `${rows.length} matching Sale${rows.length !== 1 ? "s" : ""}, most recent first.`
+            : "Current Sales, most recent first. Scan an item, or search by transaction #, customer, or date to widen the search to every Sale."}
+        </p>
+        <div className="row wrap">
+          <label className="field" style={{ margin: 0, flex: "1 1 160px" }}>
+            <span>Transaction # / hold ref</span>
+            <input type="text" value={txQuery} onChange={(e) => setTxQuery(e.target.value)} placeholder="e.g. 100241 or H3" />
+          </label>
+          <label className="field" style={{ margin: 0, flex: "1 1 160px" }}>
+            <span>Customer name</span>
+            <input type="text" value={custQuery} onChange={(e) => setCustQuery(e.target.value)} placeholder="e.g. Vasquez" />
+          </label>
+          <label className="field" style={{ margin: 0, flex: "1 1 160px" }}>
+            <span>Date</span>
+            <input type="date" value={dateQuery} onChange={(e) => setDateQuery(e.target.value)} />
+          </label>
+        </div>
+        <BarcodeInput onScan={setCode} placeholder="…or scan/type an item barcode" />
+        {code && codeFilter?.noMatch && <div className="callout danger">No catalog match for "{code}".</div>}
+
+        <table className="data">
+          <thead>
+            <tr>
+              <th>Sale</th>
+              <th>When</th>
+              <th>Customer</th>
+              <th>Items</th>
+              <th className="num">Total</th>
+              <th />
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((sale) => {
+              const cust = app.customerFor(sale.customerId);
+              const totals = saleTotals(sale, app.taxLines);
+              return (
+                <tr key={sale.id}>
                   <td>
-                    {line.title}
-                    <div className="xsmall muted">
-                      {sale.state === "Held" ? (
-                        <span className="badge">Held · {sale.holdRef}</span>
-                      ) : (
-                        <span className="badge">{sale.state}{sale.saleNumber ? ` · #${sale.saleNumber}` : ""}</span>
-                      )}{" "}
-                      {sale.createdAt}
-                    </div>
+                    {sale.isReturn && <span className="badge warn">Return</span>}{" "}
+                    {sale.saleNumber ? (
+                      <>
+                        #{sale.saleNumber}{" "}
+                        <span className={"badge" + (sale.state === "Closed" ? "" : sale.state === "Void" ? " danger" : " ok")}>
+                          {sale.state}
+                        </span>
+                      </>
+                    ) : (
+                      <>
+                        <span className="mono">{sale.holdRef}</span> <span className="badge">{sale.state}</span>
+                      </>
+                    )}
                   </td>
-                  <td className="num">{money(line.price)}</td>
+                  <td className="small mono">{sale.createdAt}</td>
+                  <td className="small">{cust?.name ?? "—"}</td>
+                  <td className="small muted">
+                    {sale.lines.length} line{sale.lines.length !== 1 ? "s" : ""}
+                    <div className="xsmall">{sale.lines.map((l) => l.title).join(", ")}</div>
+                  </td>
+                  <td className="num">{money(totals.grand)}</td>
                   <td className="num">
                     <button
                       className="btn sm primary"
                       onClick={() => {
-                        nav(`/sell/${sale.id}`);
+                        nav(sale.isReturn ? `/return/${sale.id}` : `/sell/${sale.id}`);
                         onClose();
                       }}
                     >
-                      {sale.state === "Held" ? "Select & tender" : "Open"}
+                      Open
                     </button>
                   </td>
                 </tr>
-              ))}
-              {results.length === 0 && (
-                <tr>
-                  <td className="small muted">No sale history for that barcode.</td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        )}
+              );
+            })}
+            {rows.length === 0 && (
+              <tr>
+                <td colSpan={6} className="small muted">
+                  No Sales match.
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
       </div>
     </Modal>
   );
