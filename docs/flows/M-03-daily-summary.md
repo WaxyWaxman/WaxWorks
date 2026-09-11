@@ -87,6 +87,7 @@ Pay-outs are the one cash movement that is captured, because money leaving the t
 | 11 | Margin figures carry the E-02 unallocated-cost caveat |
 | 12 | **Held Sales are absent from the close.** The close touches only Current Sales — a Hold is not revenue until tendered. Held copies still reduce *available* stock, so the stock position reflects them. Closes the Held-Sale open question ([architecture](../architecture.md) A-23) |
 | 13 | **The summary is stored on the batch and printable.** `close_batches.summary` holds the computed breakdown at close time; a print route renders it. Storing rather than recomputing means an Undo End of Day cycle can never quietly restate a past day. Closes the delivery open question (A-30) |
+| 14 | **The tender column reports every movement of money, not a net figure.** Refines decision 6. **Account Balance** is split by direction — a customer paying onto their account and a customer spending that credit are opposite movements that happen to share a tender type, and netting them reports `$0` for a day that did $100 of each. **Gift-card loads** are reported as an *of which* line against the tender that took the money: loading a card is money in but not a sale ([M-05](M-05-accounts-payable.md) decision 10), so it stays out of gross and out of Section, and naming it is what lets the tender column be reconciled against net sales instead of silently exceeding it |
 
 ---
 
