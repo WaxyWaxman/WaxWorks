@@ -597,13 +597,14 @@ function InvoiceEditor({
                 <th />
                 <th>Record</th>
                 <th>Grade</th>
-                {/* Cost-vs-price folds onto two lines per cell rather than
-                    spreading over five columns — the width d38 accepts losing
-                    to the reconcile track comes out of here. Cost leads
-                    because cost is the Ext. Price (d7); list and discount are
-                    what it was derived from, and sit under it. */}
-                <th className="num">Cost</th>
+                {/* A column per figure. Short headings, because a two-word
+                    heading sets its column's minimum all the way down and
+                    these columns are pinned narrow so Record takes only what
+                    is left. */}
+                <th className="num">List</th>
+                <th className="num">Disc%</th>
                 <th className="num">Sell</th>
+                <th className="num">Margin</th>
                 <th className="num">Qty</th>
                 <th className="num">Net</th>
                 <th />
@@ -646,7 +647,7 @@ function InvoiceEditor({
               )}
               {invoice.lines.length === 0 && (
                 <tr>
-                  <td colSpan={8} className="muted small">
+                  <td colSpan={10} className="muted small">
                     No lines yet — scan a barcode above, or pick something off the worklist.
                   </td>
                 </tr>
@@ -961,29 +962,39 @@ function StageCard({
                   )}
                   <span className="recv-stage-hint">&nbsp;</span>
                 </label>
-                <div className="field">
-                  <span>Margin</span>
-                  {/* With no cost typed yet the margin computes to 100%, which
-                      is a number that invites acceptance and means nothing.
-                      Cost is entered on every receipt (d13) — until it is,
-                      this says so rather than flattering the line. */}
-                  <span
-                    className="recv-stage-margin"
-                    style={{
-                      color: listPrice <= 0
-                        ? "var(--c-ink-faint)"
-                        : belowCost
-                          ? "var(--c-danger)"
-                          : "var(--c-ok)",
-                    }}
-                  >
-                    {listPrice > 0 ? `${marginPct.toFixed(1)}%` : "—"}
-                  </span>
-                  <span className="recv-stage-hint">
-                    {listPrice > 0 ? `${money(extPrice * lineQty)} net` : "enter their cost"}
-                  </span>
-                </div>
+              </div>
+            </div>
 
+            {/* Cost, margin and net are what "add this line or don't" turns on,
+                so they sit in their own column with the action under them,
+                rather than as the last three slots of a wrapping input row
+                where they were the smallest things on the card. */}
+            <div className="recv-readout">
+              <div className={"recv-readout-fig" + (listPrice > 0 ? "" : " idle")}>
+                <span className="lab">Cost each</span>
+                <span className="v">{listPrice > 0 ? money(extPrice) : "—"}</span>
+              </div>
+              <div
+                className={
+                  "recv-readout-fig lead" +
+                  (listPrice <= 0 ? " idle" : belowCost ? " bad" : " ok")
+                }
+              >
+                <span className="lab">Margin</span>
+                {/* With no cost typed yet the margin computes to 100%, a number
+                    that invites acceptance and means nothing. Cost is entered
+                    on every receipt (d13) — until it is, this says so rather
+                    than flattering the line. */}
+                <span className="v">{listPrice > 0 ? `${marginPct.toFixed(1)}%` : "—"}</span>
+              </div>
+              <div className={"recv-readout-fig" + (listPrice > 0 ? "" : " idle")}>
+                <span className="lab">Net · {lineQty} cop{lineQty === 1 ? "y" : "ies"}</span>
+                <span className="v">
+                  {listPrice > 0 ? money(extPrice * lineQty) : "enter their cost"}
+                </span>
+              </div>
+
+              <div className="recv-readout-acts">
                 <button
                   className={"btn" + (belowCost ? " danger" : " primary")}
                   disabled={!ready}
@@ -994,7 +1005,7 @@ function StageCard({
                       : "Add this line"
                   }
                 >
-                  {belowCost ? "⚠ Add line (below cost)" : "Add line ⏎"}
+                  {belowCost ? "⚠ Add below cost" : "Add line ⏎"}
                 </button>
                 <button className="btn ghost" onClick={clearRow}>
                   Discard
@@ -1066,17 +1077,11 @@ function ReadLineRow({
       <td>
         <span className="badge grade">{line.grade}</span>
       </td>
-      <td className="num">
-        <span className="recv-fig">{money(line.cost)}</span>
-        <span className="recv-fig-sub">
-          {line.listPrice.toFixed(2)} −{line.discountPct}%
-        </span>
-      </td>
-      <td className="num">
-        <span className="recv-fig">{money(line.acceptedPrice)}</span>
-        <span className={"recv-fig-sub" + (belowCost ? " bad" : "")}>
-          {belowCost ? "below cost" : `${marginPct.toFixed(1)}% margin`}
-        </span>
+      <td className="num">{money(line.listPrice)}</td>
+      <td className="num">{line.discountPct}%</td>
+      <td className="num">{money(line.acceptedPrice)}</td>
+      <td className={"num small recv-margin" + (belowCost ? " bad" : " muted")}>
+        {marginPct.toFixed(1)}%
       </td>
       <td className="num">{line.qty}</td>
       <td className="num">{money(line.cost * line.qty)}</td>
@@ -1168,24 +1173,23 @@ function EditLineRow({
         )}
       </td>
       <td className="num">
-        <span className="recv-edit-stack">
-          <input
-            className="inline-num"
-            type="number"
-            step="0.01"
-            value={listRaw}
-            onChange={(e) => setListRaw(e.target.value)}
-            aria-label="List price — pre-discount"
-          />
-          <input
-            className="inline-pct"
-            type="number"
-            value={discountRaw}
-            onChange={(e) => setDiscountRaw(e.target.value)}
-            aria-label="Supplier discount %"
-          />
-        </span>
-        <span className="recv-fig-sub">= {money(extPrice)}</span>
+        <input
+          className="inline-num"
+          type="number"
+          step="0.01"
+          value={listRaw}
+          onChange={(e) => setListRaw(e.target.value)}
+          aria-label="List price — pre-discount"
+        />
+      </td>
+      <td className="num">
+        <input
+          className="inline-pct"
+          type="number"
+          value={discountRaw}
+          onChange={(e) => setDiscountRaw(e.target.value)}
+          aria-label="Supplier discount %"
+        />
       </td>
       <td className="num">
         <input
@@ -1196,9 +1200,9 @@ function EditLineRow({
           onChange={(e) => setSellRaw(e.target.value)}
           aria-label="Sell price"
         />
-        <span className={"recv-fig-sub" + (belowCost ? " bad" : "")}>
-          {belowCost ? "below cost" : `${marginPct.toFixed(1)}% margin`}
-        </span>
+      </td>
+      <td className={"num small recv-margin" + (belowCost ? " bad" : " muted")}>
+        {marginPct.toFixed(1)}%
       </td>
       <td className="num">
         {mode === "New" ? (

@@ -828,10 +828,10 @@ table.data tr.band-row + tr.group-row td { border-top: none; }
    each other, so an overlay would cover the half you are comparing to. */
 .recv-frame {
   flex: 1; min-height: 0; min-width: 0;
-  display: grid; grid-template-columns: 320px minmax(0, 1fr) 386px;
+  display: grid; grid-template-columns: 320px minmax(0, 1fr) 320px;
   background: var(--c-surface);
 }
-.recv-frame.slab-shut { grid-template-columns: 52px minmax(0, 1fr) 386px; }
+.recv-frame.slab-shut { grid-template-columns: 52px minmax(0, 1fr) 320px; }
 .recv-noinvoice {
   grid-column: 2 / -1; display: grid; place-items: center;
   padding: var(--sp-6); color: var(--c-ink-faint); text-align: center;
@@ -859,6 +859,11 @@ table.data tr.band-row + tr.group-row td { border-top: none; }
   display: flex; flex-direction: column; min-height: 0; min-width: 0;
 }
 .recv-slab-acts { flex: none; display: flex; gap: var(--sp-2); padding: var(--sp-3) var(--sp-3) 0; }
+/* Find's band carries one chip and needed no layout of its own. Receiving's
+   carries a name and a count, which ran together without one. */
+.recv-slab .slab-band {
+  display: flex; justify-content: space-between; align-items: baseline; gap: var(--sp-2);
+}
 .recv-slab-acts .btn { flex: 1; justify-content: center; }
 
 /* One worklist row: an outstanding PO line, a draft, or a past Invoice. */
@@ -935,7 +940,8 @@ table.data tr.band-row + tr.group-row td { border-top: none; }
 .recv-stage { flex: none; border-bottom: 1px solid var(--c-border); background: var(--c-accent-soft); }
 .recv-stage-in {
   padding: var(--sp-3) var(--sp-4); display: grid; gap: var(--sp-3);
-  grid-template-columns: 44px minmax(0, 1fr);
+  grid-template-columns: 44px minmax(0, 1fr) auto;
+  align-items: start;
 }
 .recv-stage .recv-art { width: 44px; height: 44px; font-size: 21px; }
 .recv-stage-title { font-size: var(--fs-md); font-weight: 700; line-height: 1.2; }
@@ -946,7 +952,39 @@ table.data tr.band-row + tr.group-row td { border-top: none; }
 .recv-stage-fields input, .recv-stage-fields select { width: 96px; }
 .recv-stage-fields .recv-stage-qty input { width: 58px; }
 .recv-stage-hint { font-size: 10px; color: var(--c-ink-faint); }
-.recv-stage-margin { font-family: var(--font-mono); font-size: 17px; font-weight: 700; }
+
+/* The readout. Cost, margin and net are what "add this line or don't" turns
+   on, so they get their own column at the end of the card rather than a slot
+   in the wrapping row of inputs, where they were the smallest things on it. */
+.recv-readout {
+  flex: none; min-width: 172px; align-self: stretch;
+  display: flex; flex-direction: column; gap: var(--sp-2);
+  border-left: 1px solid var(--c-border-strong); padding-left: var(--sp-4);
+}
+.recv-readout-fig { display: flex; flex-direction: column; gap: 1px; }
+.recv-readout-fig > .lab { font-size: 9.5px; }
+.recv-readout-fig > .v {
+  font-family: var(--font-mono); font-size: 15px; font-weight: 700;
+  font-variant-numeric: tabular-nums; line-height: 1.1;
+}
+.recv-readout-fig.lead > .v { font-size: 25px; letter-spacing: -0.02em; }
+.recv-readout-fig.ok > .v { color: var(--c-ok); }
+.recv-readout-fig.bad > .v { color: var(--c-danger); }
+.recv-readout-fig.idle > .v { color: var(--c-ink-faint); }
+.recv-readout-acts { margin-top: auto; display: flex; flex-direction: column; gap: var(--sp-2); }
+.recv-readout-acts .btn { justify-content: center; }
+@media (max-width: 1180px) {
+  /* The middle track has the width back, but the card is beside a bottom
+     reconcile strip rather than a side one — keep the readout on its own row
+     instead of squeezing the inputs. */
+  .recv-stage-in { grid-template-columns: 44px minmax(0, 1fr); }
+  .recv-readout {
+    grid-column: 2; border-left: none; padding-left: 0;
+    border-top: 1px solid var(--c-border-strong); padding-top: var(--sp-3);
+    flex-direction: row; align-items: flex-end; gap: var(--sp-5);
+  }
+  .recv-readout-acts { margin-top: 0; margin-left: auto; flex-direction: row; }
+}
 
 .recv-lines { flex: 1; min-height: 0; overflow: auto; }
 .recv-lines > .data { width: 100%; }
@@ -965,25 +1003,32 @@ table.data tr.band-row + tr.group-row td { border-top: none; }
 }
 table.data td.recv-art-cell { width: 38px; padding-right: 0; }
 /* Fixed layout, so the columns are what this track can afford rather than
-   whatever the longest cell asks for. Between two tracks the table has ~574px
-   on a 1280 counter display — the width d38 accepts losing to reconcile — and
-   auto layout spends that on whichever row happens to hold the longest title.
+   whatever the longest cell asks for. Every figure keeps its own column —
+   stacking cost over list and price over margin saved width but made two
+   cells that had to be read twice.
 
-   The title gets the two lines the row is already tall (Cost and Sell each
-   carry a sub-figure), so it stays readable at this width instead of
-   ellipsising after two words. The meta line under it clips instead: label and
-   year are recognition aids, and the sleeve above them does that job first. */
+   The figures are pinned and Record takes the remainder, which is the right
+   way round: a title is recognised from its first few words and its sleeve,
+   where a number that loses its column is simply unreadable. Record still
+   gets the two lines the row is tall enough for. */
 .recv-lines > .data { table-layout: fixed; }
-.recv-lines > .data td.recv-art-cell, .recv-lines > .data th:first-child { width: 44px; }
-.recv-lines > .data td:nth-child(3), .recv-lines > .data th:nth-child(3) { width: 52px; }
-.recv-lines > .data td:nth-child(4), .recv-lines > .data th:nth-child(4) { width: 88px; }
-.recv-lines > .data td:nth-child(5), .recv-lines > .data th:nth-child(5) { width: 92px; }
-.recv-lines > .data td:nth-child(6), .recv-lines > .data th:nth-child(6) { width: 44px; }
-.recv-lines > .data td:nth-child(7), .recv-lines > .data th:nth-child(7) { width: 72px; }
-.recv-lines > .data td:last-child, .recv-lines > .data th:last-child { width: 66px; }
+.recv-lines > .data td.recv-art-cell, .recv-lines > .data th:first-child { width: 40px; }
+.recv-lines > .data td:nth-child(3), .recv-lines > .data th:nth-child(3) { width: 48px; }
+.recv-lines > .data td:nth-child(4), .recv-lines > .data th:nth-child(4) { width: 68px; }
+.recv-lines > .data td:nth-child(5), .recv-lines > .data th:nth-child(5) { width: 52px; }
+.recv-lines > .data td:nth-child(6), .recv-lines > .data th:nth-child(6) { width: 68px; }
+.recv-lines > .data td:nth-child(7), .recv-lines > .data th:nth-child(7) { width: 58px; }
+.recv-lines > .data td:nth-child(8), .recv-lines > .data th:nth-child(8) { width: 40px; }
+.recv-lines > .data td:nth-child(9), .recv-lines > .data th:nth-child(9) { width: 68px; }
+.recv-lines > .data td:last-child, .recv-lines > .data th:last-child { width: 62px; }
+/* One line each, clipped. The cell is already two lines tall with the meta
+   under it, and letting the title take a second one put every row at 64px —
+   vertical is the scarcer resource on this screen, since the count of lines
+   you can see at once is what makes a long shipment readable. The full title
+   is in the row's tooltip and in the staging card. */
 .recv-rec .t {
-  display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2;
-  overflow: hidden; font-size: var(--fs-sm); font-weight: 600; line-height: 1.25;
+  display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  font-size: var(--fs-sm); font-weight: 600; line-height: 1.25;
 }
 .recv-rec .m {
   display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
@@ -992,16 +1037,12 @@ table.data td.recv-art-cell { width: 38px; padding-right: 0; }
 /* Figures never wrap — a column that shrinks below its number is unreadable
    in a way an ellipsised title is not. */
 .recv-lines > .data td.num, .recv-lines > .data th.num { white-space: nowrap; }
-/* Cost and price each carry what they were derived from underneath, so five
-   columns become two without losing a figure (d38's width trade). */
-.recv-fig { display: block; font-variant-numeric: tabular-nums; }
-.recv-fig-sub {
-  display: block; font-size: var(--fs-xs); color: var(--c-ink-faint);
-  font-variant-numeric: tabular-nums;
-}
-.recv-fig-sub.bad { color: var(--c-danger); font-weight: 600; }
-.recv-edit-stack { display: flex; flex-direction: column; gap: 2px; align-items: flex-end; }
-.recv-edit-stack .inline-num, .recv-edit-stack .inline-pct { width: 72px; }
+/* A below-cost margin says so in words as well as in red — the figure alone
+   reads as a bad deal rather than as the thing that raises a flag (d35). */
+.recv-margin { font-variant-numeric: tabular-nums; }
+.recv-margin.bad { color: var(--c-danger); font-weight: 700; }
+.recv-lines > .data td .inline-num { width: 100%; }
+.recv-lines > .data td .inline-pct { width: 100%; }
 /* Two buttons, on one line. Three wrapped in this cell's width and took every
    row to 94px — the table's whole height budget, spent on chrome. */
 .recv-row-acts { display: flex; gap: 2px; justify-content: flex-end; flex-wrap: nowrap; }
@@ -1016,7 +1057,7 @@ tr.recv-flagged > td:first-child { box-shadow: inset 3px 0 0 var(--c-warn); }
 }
 .recv-recon-head { flex: none; padding: var(--sp-4) var(--sp-4) var(--sp-3); }
 .recv-figure {
-  font-size: 54px; font-weight: 800; line-height: 1; letter-spacing: -0.035em;
+  font-size: 44px; font-weight: 800; line-height: 1; letter-spacing: -0.035em;
   font-variant-numeric: tabular-nums;
 }
 .recv-figure-sub { margin-top: 4px; }
@@ -1039,7 +1080,7 @@ tr.recv-flagged > td:first-child { box-shadow: inset 3px 0 0 var(--c-warn); }
 .recv-sec > .lab { display: block; }
 .recv-entry { display: flex; justify-content: space-between; align-items: center; gap: var(--sp-2); font-size: var(--fs-base); }
 .recv-entry input {
-  width: 104px; text-align: right; padding: 4px 7px;
+  width: 92px; text-align: right; padding: 4px 7px;
   font-size: var(--fs-base); font-weight: 600; font-variant-numeric: tabular-nums;
 }
 .recv-entry.total input { border: 2px solid var(--c-ink); font-size: var(--fs-md); font-weight: 700; }
