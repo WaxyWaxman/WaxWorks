@@ -4,6 +4,7 @@ import { FindAnswer } from "../components/FindAnswer";
 import { FindSelection } from "../components/FindSelection";
 import { FindSlab, type Hit } from "../components/FindSlab";
 import type { RecordEntry } from "../data/types";
+import { readStored, writeStored } from "../lib/tillMemory";
 import { resolveScan } from "../lib/resolve";
 import { money } from "../lib/money";
 import { stockFacts, stockRank, type StockState } from "../lib/stockState";
@@ -30,24 +31,6 @@ import { useApp } from "../store/AppStore";
 const SLAB_KEY = "waxworks.find.slab";
 const RECENT_KEY = "waxworks.find.recent";
 const RECENT_MAX = 9;
-
-function readStored<T>(key: string, fallback: T): T {
-  try {
-    const raw = window.localStorage.getItem(key);
-    return raw == null ? fallback : (JSON.parse(raw) as T);
-  } catch {
-    /* private window, or site data blocked — the slab just forgets */
-    return fallback;
-  }
-}
-
-function writeStored(key: string, value: unknown) {
-  try {
-    window.localStorage.setItem(key, JSON.stringify(value));
-  } catch {
-    /* nothing to do — forgetting is an acceptable outcome here */
-  }
-}
 
 export function Search() {
   const app = useApp();

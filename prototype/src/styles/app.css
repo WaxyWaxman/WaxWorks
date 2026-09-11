@@ -183,6 +183,15 @@ code, .mono { font-family: var(--font-mono); font-size: 0.92em; }
 /* ---- Forms ---- */
 label.field { display: block; margin-bottom: var(--sp-3); }
 label.field > span { display: block; font-size: var(--fs-xs); font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; color: var(--c-ink-faint); margin-bottom: 4px; }
+/* A note UNDER an input rather than a label above it. The rule above styles
+   every direct span in a .field, which is right for the label and wrong for
+   this — so .hint opts back out of the uppercasing. */
+label.field > .hint {
+  display: block; margin: 4px 0 0;
+  font-size: var(--fs-xs); font-weight: 400; text-transform: none;
+  letter-spacing: 0; color: var(--c-ink-faint);
+}
+label.field > .hint.bad { color: var(--c-danger); font-weight: 600; }
 input[type="text"], input[type="number"], input[type="search"], select, textarea {
   width: 100%; font: inherit; padding: var(--sp-2) var(--sp-3);
   border: 1px solid var(--c-border-strong); border-radius: var(--radius-sm);
@@ -1220,3 +1229,242 @@ tr.recv-flagged > td:first-child { box-shadow: inset 3px 0 0 var(--c-warn); }
 .recv-finalize { justify-content: center; height: 64px; font-size: 21px; font-weight: 800; letter-spacing: 0.01em; }
 .recv-foot-sub { font-size: var(--fs-xs); color: var(--c-ink-faint); text-align: center; }
 .recv-foot-alt { justify-content: center; }
+
+
+/* ---- Customers (E-07 d17) ----
+   The fourth screen on the till's frame (E-05 d29), after Find and Receiving
+   (E-02 d38). Three tracks: the slab you look in, the card you opened, and
+   the account. The frame never scrolls; each track does.
+
+   The slab PUSHES rather than overlays, the way Find's and Receiving's do and
+   unlike the till rail: the list and the card are read against each other, so
+   an overlay would cover the half being compared to.
+
+   It shares .slab-head / .slab-search / .slab-chips / .slab-list / .slab-band /
+   .slab-strip / .hit / .filter-chip with Find rather than restating them — one
+   slab, three errands. Only what differs is below. */
+.cust-frame {
+  position: relative;
+  flex: 1; min-height: 0; min-width: 0;
+  display: grid; grid-template-columns: 320px minmax(0, 1fr) 344px;
+  background: var(--c-surface);
+}
+.cust-frame.slab-shut { grid-template-columns: 52px minmax(0, 1fr) 344px; }
+
+/* ---- Track 1: the customer slab ---- */
+.cust-slab {
+  border-right: 1px solid var(--c-border-strong); background: var(--c-surface-2);
+  display: flex; flex-direction: column; min-height: 0; min-width: 0;
+}
+.cust-slab-acts { flex: none; display: flex; gap: var(--sp-2); padding: var(--sp-3) var(--sp-3) 0; }
+.cust-slab-acts .btn { flex: 1; justify-content: center; }
+/* The chip row carries two axes — a live state and a stored field — so they
+   are divided rather than read as five equivalent things. */
+.chip-sep { width: 1px; align-self: stretch; background: var(--c-border-strong); margin: 0 3px; }
+.cust-sortbar {
+  flex: none; display: flex; align-items: center; gap: var(--sp-2);
+  padding: 6px var(--sp-3); border-bottom: 1px solid var(--c-border-strong);
+}
+.cust-sortbar select { flex: 1; font-size: var(--fs-xs); font-weight: 600; padding: 3px 6px; }
+.cust-band { display: flex; align-items: baseline; justify-content: space-between; gap: var(--sp-2); }
+
+/* Initials stand in for Find's sleeve art: same 34px slot, no crosshatch —
+   a person has no sleeve, and a fake one would read as missing artwork. */
+.hit .ini {
+  width: 34px; height: 34px; display: grid; place-items: center; flex: none;
+  border: 1px solid var(--c-border); background: var(--c-surface-2);
+  font-family: var(--font-narrow); font-size: var(--fs-sm); font-weight: 700;
+  letter-spacing: 0.04em; color: var(--c-ink-soft);
+}
+.hit .n.bal-credit { color: var(--c-ok); }
+.hit .n.bal-owed { color: var(--c-warn); }
+.hit .n.bal-nil { color: var(--c-ink-faint); font-weight: 600; }
+
+/* Balance state as a dot on the shut strip — colour means STATE, the way
+   Find's stock dots do. */
+.bal-dot { width: 9px; height: 9px; border-radius: 50%; flex: none; display: inline-block; }
+.bal-dot.credit { background: var(--c-ok); }
+.bal-dot.owed { background: var(--c-warn); }
+.bal-dot.nil { background: var(--c-border-strong); }
+.ini-tile {
+  position: relative; width: 38px; height: 38px; flex: none; padding: 0; cursor: pointer;
+  display: grid; place-items: center;
+  border: 1px solid var(--c-border-strong); border-radius: var(--radius-sm);
+  background: var(--c-surface); color: var(--c-ink-soft);
+  font-family: var(--font-narrow); font-size: var(--fs-xs); font-weight: 700; letter-spacing: 0.04em;
+}
+.ini-tile:hover { border-color: var(--c-ink); }
+.ini-tile.on { border-color: var(--c-ink); box-shadow: inset 3px 0 0 var(--c-accent); color: var(--c-ink); }
+.ini-tile:focus-visible { outline: 2px solid var(--c-accent); outline-offset: 2px; }
+.ini-tile .bal-dot {
+  position: absolute; bottom: -3px; right: -3px; width: 11px; height: 11px;
+  border: 2px solid var(--c-surface-2);
+}
+
+/* ---- Track 2: the card ---- */
+.cust-main { display: flex; flex-direction: column; min-width: 0; min-height: 0; background: var(--c-surface); }
+.cust-head {
+  flex: none; display: flex; align-items: flex-start; gap: var(--sp-3); flex-wrap: wrap;
+  padding: var(--sp-3) var(--sp-4); border-bottom: 2px solid var(--c-ink);
+}
+.cust-head h2 { margin: 0; font-size: var(--fs-xl); letter-spacing: -0.025em; line-height: 1.1; }
+.cust-badges { display: flex; flex-wrap: wrap; gap: var(--sp-2); margin-top: 6px; align-items: center; }
+.cust-head-acts { margin-left: auto; display: flex; gap: var(--sp-2); align-items: center; }
+.cust-confirm { display: inline-flex; align-items: center; gap: var(--sp-2); flex-wrap: wrap; }
+
+/* d13 removed the confirm step on purpose; this is what replaces the
+   reassurance it gave. It holds its width so the head does not jump. */
+.saved-chip {
+  display: inline-flex; align-items: center; justify-content: center;
+  min-width: 62px; height: 22px; padding: 0 7px;
+  font-size: var(--fs-xs); font-weight: 600;
+  border: 1px solid transparent; border-radius: var(--radius-sm);
+  color: transparent; background: transparent;
+}
+.saved-chip.on { color: var(--c-ok); border-color: var(--c-ok); background: var(--c-ok-soft); }
+
+.cust-scroll {
+  flex: 1; min-height: 0; overflow-y: auto;
+  padding: var(--sp-4); display: flex; flex-direction: column; gap: var(--sp-5);
+}
+.cust-group { display: flex; flex-direction: column; gap: var(--sp-3); }
+.cust-group > .head {
+  display: flex; align-items: baseline; justify-content: space-between; gap: var(--sp-3);
+  border-bottom: 1px solid var(--c-border-strong); padding-bottom: var(--sp-1);
+}
+.cust-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(232px, 1fr)); gap: var(--sp-3) var(--sp-4); }
+.cust-grid .field { margin: 0; min-width: 0; }
+.cust-grid .field.wide { grid-column: 1 / -1; }
+/* The page body never scrolls sideways: a table wider than the track scrolls
+   inside its own box. */
+.cust-table { overflow-x: auto; }
+
+.cust-nosel {
+  grid-column: 2 / -1; display: grid; place-items: center;
+  padding: var(--sp-6); color: var(--c-ink-faint); text-align: center;
+}
+
+/* ---- Track 3: the account (d19) ----
+   Head and foot fixed, only the middle scrolls — so the primary action sits
+   in the same place on a quiet regular and on a business account with six
+   movements, the same reason Finish sale has its own floor. */
+.cust-acct {
+  border-left: 2px solid var(--c-ink); background: var(--c-surface);
+  display: flex; flex-direction: column; min-height: 0;
+}
+
+/* Waiting sits ABOVE the balance because a hold does not expire and nothing
+   else chases it (E-05 d7) — this screen is where it stops being invisible.
+   Accent-soft tints the subject, the way Receiving's staging card does; the
+   saturated accent stays on the foot button that acts on it, so the screen
+   still spends the orange once. */
+.cust-waiting {
+  flex: none; padding: var(--sp-3) var(--sp-4);
+  border-bottom: 1px solid var(--c-border); background: var(--c-surface-2);
+}
+.cust-waiting.live { background: var(--c-accent-soft); box-shadow: inset 3px 0 0 var(--c-ink); }
+.wait-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 2px var(--sp-2); align-items: baseline; margin-top: 6px; }
+.wait-row + .wait-row { padding-top: var(--sp-2); border-top: 1px solid var(--c-border); }
+.wait-t { font-size: var(--fs-sm); font-weight: 700; line-height: 1.25; }
+.wait-ref { font-family: var(--font-mono); font-size: var(--fs-xs); font-weight: 700; color: var(--c-ink); }
+.wait-m { grid-column: 1 / -1; font-size: var(--fs-xs); color: var(--c-ink-soft); }
+
+.cust-acct-head { flex: none; padding: var(--sp-3) var(--sp-4); }
+/* One signed figure, because money runs both ways (d4). It shrinks when it is
+   zero: most Customers never carry a balance, and a 46px $0.00 would spend the
+   top of the track on the least informative thing on it. */
+.cust-figure { font-size: 46px; font-weight: 800; line-height: 1; letter-spacing: -0.035em; font-variant-numeric: tabular-nums; }
+.cust-figure.credit { color: var(--c-ok); }
+.cust-figure.owed { color: var(--c-warn); }
+.cust-figure.nil { color: var(--c-ink-faint); font-size: 24px; font-weight: 700; }
+.cust-figure-say { margin-top: 4px; font-size: var(--fs-sm); font-weight: 600; }
+.cust-figure-sub { margin-top: 2px; font-size: var(--fs-xs); color: var(--c-ink-faint); }
+.cust-rule { flex: none; height: 2px; background: var(--c-ink); }
+
+.cust-acct-mid {
+  flex: 1; min-height: 0; overflow-y: auto; padding: var(--sp-3) var(--sp-4);
+  display: flex; flex-direction: column; gap: var(--sp-4);
+}
+.cust-sec { display: flex; flex-direction: column; gap: 6px; }
+.cust-sec .field { margin: 0; }
+
+.cust-standing { display: grid; grid-template-columns: 1fr 1fr; gap: var(--sp-2) var(--sp-3); }
+.cust-standing .stat { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+.cust-standing .stat .v {
+  font-family: var(--font-mono); font-size: var(--fs-md); font-weight: 700;
+  font-variant-numeric: tabular-nums; line-height: 1.1;
+}
+.cust-standing .stat .k {
+  font-family: var(--font-narrow); font-size: 9.5px; font-weight: 700;
+  letter-spacing: 0.08em; text-transform: uppercase; color: var(--c-ink-faint);
+}
+.cust-standing .stat.span { grid-column: 1 / -1; border-top: 1px solid var(--c-border); padding-top: 6px; }
+.cust-standing .stat.span .v { font-size: var(--fs-base); }
+
+.cust-ord { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 2px var(--sp-2); padding: 7px 0; border-bottom: 1px solid var(--c-border); }
+.cust-ord .t { font-size: var(--fs-sm); font-weight: 600; line-height: 1.25; }
+.cust-ord .m { grid-column: 1 / -1; font-size: var(--fs-xs); color: var(--c-ink-faint); }
+.cust-ord .badge { align-self: start; }
+
+.cust-salerow { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 2px var(--sp-2); padding: 6px 0; border-bottom: 1px solid var(--c-border); }
+.cust-salerow .t { grid-column: 1; grid-row: 1; font-family: var(--font-mono); font-size: var(--fs-sm); font-weight: 700; }
+.cust-salerow .m { grid-column: 1; grid-row: 2; font-size: var(--fs-xs); color: var(--c-ink-faint); }
+.cust-salerow .v {
+  grid-column: 2; grid-row: 1 / -1; align-self: center; text-align: right;
+  font-family: var(--font-mono); font-size: var(--fs-sm); font-weight: 700; font-variant-numeric: tabular-nums;
+}
+
+/* Explicitly placed: a row-spanning item left to auto-placement lands in the
+   first column and pushes the label out of it. */
+.cust-mv { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 2px var(--sp-2); padding: 6px 0; border-bottom: 1px solid var(--c-border); }
+.cust-mv .what { grid-column: 1; grid-row: 1; font-size: var(--fs-sm); font-weight: 600; }
+.cust-mv .when { grid-column: 1; grid-row: 2; font-size: var(--fs-xs); color: var(--c-ink-faint); }
+.cust-mv .amt {
+  grid-column: 2; grid-row: 1 / -1; align-self: center; text-align: right;
+  font-family: var(--font-mono); font-size: var(--fs-sm); font-weight: 700; font-variant-numeric: tabular-nums;
+}
+.cust-mv .amt.credit { color: var(--c-ok); }
+.cust-mv .amt.owed { color: var(--c-warn); }
+
+.cust-acct-foot {
+  flex: none; border-top: 2px solid var(--c-ink); background: var(--c-surface);
+  padding: var(--sp-3) var(--sp-4); display: flex; flex-direction: column; gap: 6px;
+}
+.cust-primary { justify-content: center; height: 56px; font-size: 18px; font-weight: 800; text-align: center; line-height: 1.15; }
+.cust-secondary { justify-content: center; height: 36px; }
+.cust-foot-sub { font-size: var(--fs-xs); color: var(--c-ink-faint); text-align: center; }
+
+/* The blank card's account track is REPLACED, not removed, so the track keeps
+   its shape and the absence explains itself instead of leaving a hole. */
+.cust-acct-blank {
+  flex: 1; min-height: 0; margin: var(--sp-4);
+  border: 2px dashed var(--c-border-strong); background: var(--c-surface-2);
+  display: grid; place-items: center; text-align: center;
+  padding: var(--sp-5); color: var(--c-ink-faint); font-size: var(--fs-sm);
+}
+
+/* Under ~1180 the account cannot sit beside the card and keep its figure
+   legible, so it drops to a band underneath — the same move the till, Find and
+   Receiving all make. It is allotted more height than theirs because it has
+   more fixed chrome above the scroll: a waiting band AND a balance head. */
+@media (max-width: 1180px) {
+  /* Follows Find rather than Receiving: the slab keeps its 320px when OPEN and
+     only takes 52px when shut. Forcing 52px in both states squeezes the open
+     panel — which the component still renders — into the strip's column. */
+  .cust-frame {
+    grid-template-columns: 320px minmax(0, 1fr);
+    grid-template-rows: minmax(0, 1fr) auto;
+  }
+  .cust-frame.slab-shut { grid-template-columns: 52px minmax(0, 1fr); }
+  .cust-slab { grid-row: 1 / -1; }
+  .cust-main { grid-column: 2; grid-row: 1; }
+  .cust-nosel { grid-column: 2; grid-row: 1 / -1; }
+  .cust-acct {
+    grid-column: 2; grid-row: 2;
+    border-left: none; border-top: 2px solid var(--c-ink); max-height: 58dvh;
+  }
+  .cust-waiting, .cust-acct-head { padding: var(--sp-2) var(--sp-4); }
+  .cust-figure { font-size: 34px; }
+  .cust-figure-sub { display: none; }
+  .cust-primary { height: 48px; font-size: var(--fs-md); }
+}

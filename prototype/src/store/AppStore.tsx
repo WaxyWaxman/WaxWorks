@@ -7,7 +7,7 @@ import {
 } from "react";
 import { computeDayBreakdown, type DayBreakdown } from "../lib/dayBreakdown";
 import { money } from "../lib/money";
-import { claimTotal, invoiceBalance, payableEntrySignedAmount, round2, tenderedTotal } from "../lib/totals";
+import { claimTotal, customerBalanceDelta, invoiceBalance, payableEntrySignedAmount, round2, tenderedTotal } from "../lib/totals";
 import {
   CURRENT_USER,
   CUSTOMERS,
@@ -75,12 +75,9 @@ function applyTenderEffect(
     );
   }
   if ((tender.type === "Account Balance" || tender.type === "Used Credit") && customerId) {
-    const delta =
-      tender.type === "Used Credit"
-        ? Math.abs(tender.amount)
-        : tender.accountDirection === "add"
-          ? Math.abs(tender.amount)
-          : -tender.amount;
+    // The rule itself lives in lib/totals so E-07's account track can list the
+    // movements it produced without keeping a second copy of it.
+    const delta = customerBalanceDelta(tender);
     cs = cs.map((c) => (c.id === customerId ? { ...c, balance: round2(c.balance + sign * delta) } : c));
   }
   return { giftCards: gc, customers: cs };

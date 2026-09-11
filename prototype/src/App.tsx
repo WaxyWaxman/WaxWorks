@@ -79,8 +79,8 @@ export function App() {
   // stranding you on a screen with no way back to a Sale in flight.
   const atTill = location.pathname.startsWith("/sell") || onReturn;
 
-  // Find was the second screen built this way, Receiving is the third (E-02
-  // d38). Three tracks only work if the frame is fixed: a page that scrolls as
+  // Find was the second screen built this way, Receiving the third (E-02
+  // d38) and Customers the fourth (E-07 d17). Three tracks only work if the frame is fixed: a page that scrolls as
   // one document cannot keep the scan field and the reconcile check where they
   // were. Still scoped to these screens rather than made a global rule — the
   // remaining long tables (Order Processing, Accounts Payable) are read top to
@@ -88,7 +88,8 @@ export function App() {
   const ownsWindow =
     atTill ||
     location.pathname.startsWith("/search") ||
-    location.pathname.startsWith("/receiving");
+    location.pathname.startsWith("/receiving") ||
+    location.pathname.startsWith("/customers");
 
   return (
     <div className={"app" + (ownsWindow ? " app-fixed" : "")}>
@@ -124,6 +125,7 @@ export function App() {
           <Route path="/return/:saleId" element={<ReturnScreen />} />
           <Route path="/claims" element={<Claims />} />
           <Route path="/customers" element={<Customers />} />
+          <Route path="/customers/:customerId" element={<Customers />} />
           <Route path="/receiving" element={<Receiving />} />
           <Route path="/receiving/:invoiceId" element={<Receiving />} />
           <Route path="/orders" element={<OrderProcessing />} />
