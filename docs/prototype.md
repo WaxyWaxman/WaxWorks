@@ -134,7 +134,13 @@ that is a separate question nobody has answered yet._
   22), each written to the line's own log with what it moved from and to (decision 23). Pending and
   Ordered are not offered because they are derived from whether the line has a PO number, and
   Received is not offered because it is counted off the Invoices — a status contradicting the count
-  would be a second, wrong answer. **Voiding a PO** still isn't built. Sending an Email order is simulated as a composed preview plus a
+  would be a second, wrong answer. **Voiding a PO** is built too, on the Previously-placed table and
+  manager-authorised in place (A-28a): the dialog leads with the fact that nothing is cancelled at
+  the supplier (decision 10), then says line by line what will happen, because decision 24 makes the
+  answer different for each — a fully unreceived line returns to pending whole, a part-received one
+  keeps what arrived and its remainder is raised as a fresh pending line, and a fully received one
+  is untouched. A voided PO keeps the lines already received, so it stays listed, badged **voided**
+  and with its Void action spent. Phase 3 is now complete. Sending an Email order is simulated as a composed preview plus a
   Supplier log entry, not a real send.
 - On the line-entry row, "List price" is the pre-discount figure off the paperwork and "Sell
   price" replaces "Accepted price" — Disc% and Margin% are new. **Resolved:** the row used to

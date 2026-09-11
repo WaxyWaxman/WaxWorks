@@ -631,6 +631,14 @@ interface AppContextValue extends AppState {
   /** Logs the receipt on the line; the line SURVIVES (M-02 d21). `qty` is
    *  what this Invoice took in, for the log entry. */
   receivePendingOrderLine: (id: string, qty?: number) => PendingOrderLine | null;
+  /**
+   * Reverse our own paperwork for a PurchaseOrder (M-02 d11, d24). Never
+   * touches the supplier — somebody still has to tell them (d10).
+   */
+  voidPurchaseOrder: (
+    poNumber: string,
+    by?: string,
+  ) => { returned: number; split: number; untouched: number };
   /** Set or clear one of the statuses a person sets (M-02 d12, d22). */
   setPendingOrderLineStatus: (
     id: string,
@@ -2395,6 +2403,98 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
     return order;
   };
 
+  // M-02 d11 + d24 — voiding reverses OUR paperwork, never the supplier's
+  // (d10). Three things can happen to a line on the voided PO, and which one
+  // depends on how much of it actually arrived:
+  //
+  //   nothing received  → returns to pending whole, as d11 always said
+  //   some received     → the line keeps what arrived (its quantity drops to
+  //                       that) and the remainder is raised as a NEW pending
+  //                       line. Neither half can simply go: the received
+  //                       copies are on the shelf and their link to the
+  //                       Invoice is what E-02 d30 counts, and the remainder
+  //                       is still wanted.
+  //   fully received    → untouched. There is nothing to reverse.
+  const voidPurchaseOrder: AppContextValue["voidPurchaseOrder"] = (poNumber, by) => {
+    const onPo = s.pendingOrders.filter((o) => o.poNumber === poNumber);
+    if (onPo.length === 0) return { returned: 0, split: 0, untouched: 0 };
+
+    const stamp = now();
+    const who = `${CURRENT_USER}${by ? ` (manager ${by})` : ""}`;
+    let returned = 0;
+    let split = 0;
+    let untouched = 0;
+    const raised: PendingOrderLine[] = [];
+
+    const next = s.pendingOrders.map((o) => {
+      if (o.poNumber !== poNumber) return o;
+      const received = s.invoices.reduce(
+        (n, iv) => n + iv.lines.filter((l) => l.fromOrderId === o.id).reduce((m, l) => m + l.qty, 0),
+        0,
+      );
+
+      if (received >= o.qty) {
+        untouched += 1;
+        return {
+          ...o,
+          poVoidedAt: stamp,
+          log: [...(o.log ?? []), { at: stamp, text: `PO ${poNumber} voided — already received in full, unchanged. By ${who}` }],
+        };
+      }
+
+      if (received === 0) {
+        returned += 1;
+        return {
+          ...o,
+          poNumber: undefined,
+          placedAt: undefined,
+          // A status the supplier reported about an order that no longer
+          // exists is not information, it is a leftover.
+          status: undefined,
+          expectedDate: undefined,
+          log: [...(o.log ?? []), { at: stamp, text: `PO ${poNumber} voided — returned to pending. By ${who}` }],
+        };
+      }
+
+      // Part received: split (d24).
+      split += 1;
+      const remainder = o.qty - received;
+      const newId = uid("po-line");
+      raised.push({
+        ...o,
+        id: newId,
+        qty: remainder,
+        poNumber: undefined,
+        placedAt: undefined,
+        status: undefined,
+        expectedDate: undefined,
+        createdAt: stamp,
+        createdBy: CURRENT_USER,
+        log: [
+          {
+            at: stamp,
+            text: `Raised from the void of PO ${poNumber} — ${remainder} of ${o.qty} never arrived. By ${who}`,
+          },
+        ],
+      });
+      return {
+        ...o,
+        qty: received,
+        poVoidedAt: stamp,
+        log: [
+          ...(o.log ?? []),
+          {
+            at: stamp,
+            text: `PO ${poNumber} voided — kept the ${received} received; ${remainder} returned to pending as a new line. By ${who}`,
+          },
+        ],
+      };
+    });
+
+    setS((prev) => ({ ...prev, pendingOrders: [...raised, ...next] }));
+    return { returned, split, untouched };
+  };
+
   // M-02 d12, d22, d23 — the statuses a person sets, each one logged.
   const setPendingOrderLineStatus: AppContextValue["setPendingOrderLineStatus"] = (
     id,
@@ -2589,6 +2689,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
       pendingOrderFor,
       receivePendingOrderLine,
       setPendingOrderLineStatus,
+      voidPurchaseOrder,
       raisePendingOrderLine,
       updatePendingOrderLine,
       deletePendingOrderLine,

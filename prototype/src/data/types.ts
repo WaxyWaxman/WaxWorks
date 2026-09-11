@@ -319,6 +319,14 @@ export interface PendingOrderLine {
   /** Every status change, and receipt (d23). Same shape the Invoice and the
    *  Supplier already carry, so a line's history reads as one sequence. */
   log?: { at: string; text: string }[];
+  /**
+   * Stamped on the lines a void LEAVES on their PO — the ones already
+   * received, which keep their link to the Invoice that took them in (d24).
+   * The prototype has no PurchaseOrder entity to hold the fact, so the surviving
+   * lines carry it and the PO row derives "voided" from them; without it a
+   * voided PO reads as live in Previously placed.
+   */
+  poVoidedAt?: string;
 }
 
 /** A placed line is never deleted — it is Cancelled, or it is received (d21). */
