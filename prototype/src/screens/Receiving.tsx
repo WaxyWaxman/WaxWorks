@@ -890,11 +890,17 @@ function StageCard({
               onChange={(e) => setScannedCode(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && resolveCode(scannedCode)}
             />
-            <button className="btn ghost sm" onClick={() => resolveCode(scannedCode)} title="Resolve">
-              ↵
-            </button>
-            <button className="btn ghost sm" onClick={() => setLookupOpen(true)}>
-              Lookup
+            {/* No resolve button: a scanner types the code and sends Return,
+                and a code typed by hand ends the same way. What is left is the
+                one thing the field cannot do for itself — find a title when
+                the code resolves to nothing (d24's fallback). */}
+            <button
+              className="btn recv-scan-look"
+              onClick={() => setLookupOpen(true)}
+              title="Look up a title — for an unbarcoded copy, or a code that finds nothing"
+              aria-label="Look up a title"
+            >
+              <MagnifierIcon />
             </button>
           </div>
           {finalized && (
@@ -1128,6 +1134,12 @@ const ROW_ICON = {
   "aria-hidden": true,
 } as const;
 
+const MagnifierIcon = () => (
+  <svg {...ROW_ICON} width={19} height={19}>
+    <circle cx="11" cy="11" r="6" />
+    <path d="M15.6 15.6L20 20" />
+  </svg>
+);
 const PencilIcon = () => (
   <svg {...ROW_ICON}>
     <path d="M4 20h4L19 9a2.83 2.83 0 0 0-4-4L4 16v4z" />

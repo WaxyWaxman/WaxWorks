@@ -828,7 +828,7 @@ table.data tr.band-row + tr.group-row td { border-top: none; }
    each other, so an overlay would cover the half you are comparing to. */
 .recv-frame {
   flex: 1; min-height: 0; min-width: 0;
-  display: grid; grid-template-columns: 320px minmax(0, 1fr) 320px;
+  display: grid; grid-template-columns: 288px minmax(0, 1fr) 320px;
   background: var(--c-surface);
 }
 .recv-frame.slab-shut { grid-template-columns: 52px minmax(0, 1fr) 320px; }
@@ -927,6 +927,10 @@ table.data tr.band-row + tr.group-row td { border-top: none; }
 }
 .recv-scan { flex: none; padding: var(--sp-3) var(--sp-4); border-bottom: 1px solid var(--c-border); }
 .recv-scan-note { font-size: var(--fs-xs); color: var(--c-ink-faint); margin-top: 2px; }
+/* A scanner types the code and sends Return, and a hand-typed code ends the
+   same way — so the slab is the field and the one thing it cannot do for
+   itself: look a title up when the code resolves to nothing. */
+.recv-scan-look { width: 38px; height: 38px; flex: none; display: grid; place-items: center; padding: 0; }
 /* Paid: the scan slab is REPLACED, not removed, so the track keeps its shape
    and the absence explains itself (d40). */
 .recv-locked {
@@ -1018,18 +1022,22 @@ table.data td.recv-art-cell { width: 38px; padding-right: 0; }
    outer edges so the table still sits inside the margin. */
 .recv-lines > .data td, .recv-lines > .data th { padding-left: 6px; padding-right: 6px; }
 .recv-lines > .data td:first-child, .recv-lines > .data th:first-child { padding-left: var(--sp-4); }
-.recv-lines > .data td:last-child, .recv-lines > .data th:last-child { padding-right: var(--sp-4); }
-.recv-lines > .data td.recv-art-cell, .recv-lines > .data th:first-child { width: 48px; }
-.recv-lines > .data td:nth-child(3), .recv-lines > .data th:nth-child(3) { width: 44px; }
+/* 16px of track padding plus the 32px art tile. */
+.recv-lines > .data td.recv-art-cell, .recv-lines > .data th:first-child { width: 54px; }
+/* A grade badge is up to three characters — VG+, not M. */
+.recv-lines > .data td:nth-child(3), .recv-lines > .data th:nth-child(3) { width: 54px; }
 .recv-lines > .data td:nth-child(4), .recv-lines > .data th:nth-child(4) { width: 70px; }
 .recv-lines > .data td:nth-child(5), .recv-lines > .data th:nth-child(5) { width: 52px; }
 .recv-lines > .data td:nth-child(6), .recv-lines > .data th:nth-child(6) { width: 70px; }
 .recv-lines > .data td:nth-child(7), .recv-lines > .data th:nth-child(7) { width: 52px; }
 .recv-lines > .data td:nth-child(8), .recv-lines > .data th:nth-child(8) { width: 44px; }
 .recv-lines > .data td:nth-child(9), .recv-lines > .data th:nth-child(9) { width: 62px; }
-/* Wide enough for the edit row's THREE buttons, not the read row's two —
-   sized to the busier state, or they spill over the Net figure next door. */
-.recv-lines > .data td:last-child, .recv-lines > .data th:last-child { width: 96px; }
+/* Three 24px buttons and two 3px gaps is 78px; with 6px of padding either
+   side the column has to be 90px before anything is clipped. 100 leaves it
+   slack rather than sitting on the limit. */
+.recv-lines > .data td:last-child, .recv-lines > .data th:last-child { width: 100px; }
+/* Symmetric, because the icons are centred in the column now. */
+.recv-lines > .data td:last-child, .recv-lines > .data th:last-child { padding-right: 6px; }
 /* One line each, clipped. The cell is already two lines tall with the meta
    under it, and letting the title take a second one put every row at 64px —
    vertical is the scarcer resource on this screen, since the count of lines
@@ -1043,6 +1051,8 @@ table.data td.recv-art-cell { width: 38px; padding-right: 0; }
   display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
   font-size: var(--fs-xs); color: var(--c-ink-faint);
 }
+/* A grade is a fixed short token; it never wraps and never ellipsises. */
+.recv-lines > .data td:nth-child(3) .badge { white-space: nowrap; }
 /* Figures never wrap — a column that shrinks below its number is unreadable
    in a way an ellipsised title is not. */
 .recv-lines > .data td.num, .recv-lines > .data th.num { white-space: nowrap; }
@@ -1064,12 +1074,13 @@ table.data td.recv-art-cell { width: 38px; padding-right: 0; }
    worklist line does, so it is findable after scrolling away and back. */
 .recv-lines > .data tr.recv-editing > td { background: var(--c-surface-2); }
 .recv-lines > .data tr.recv-editing > td:first-child { box-shadow: inset 3px 0 0 var(--c-ink); }
-/* On one line, and inside the cell. Wrapping took every row to 94px; letting
-   them overflow instead put the remove cross on top of the Net figure. Square
-   icon buttons with a known width are what keeps the column honest. */
-.recv-row-acts { display: flex; gap: 3px; justify-content: flex-end; flex-wrap: nowrap; overflow: hidden; }
+/* On one line, centred in their column, and sized so they fit in it. Wrapping
+   took every row to 94px; overflowing put the remove can under the Net figure;
+   clipping it merely hid that. Square buttons with a known width and a column
+   measured against them is what keeps this honest. */
+.recv-row-acts { display: flex; gap: 3px; justify-content: center; flex-wrap: nowrap; }
 .icon-btn {
-  width: 26px; height: 24px; padding: 0; flex: none;
+  width: 24px; height: 24px; padding: 0; flex: none;
   display: inline-grid; place-items: center;
 }
 /* Destructive, and sitting beside two actions that are not. It stays quiet
