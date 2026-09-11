@@ -173,6 +173,10 @@ Held copies count against **available** stock but remain on hand.
 
 - Receiving a **customer-attached** PurchaseOrder line automatically creates a **Held** Sale for that customer, so the copy cannot be sold off the floor before they collect it.
 
+**From [E-07](E-07-manage-customers.md):**
+
+- **A Held Sale is reachable from the Customer's card**, which shows its hold reference and age and offers to open it *ahead of* attaching the Customer to a Sale in flight ([E-07](E-07-manage-customers.md) d19, d20). The hold reference and the timeline's age are read there, so changing either changes what that screen can say.
+
 ---
 
 ## Resolved decisions
@@ -221,3 +225,4 @@ Held copies count against **available** stock but remain on hand.
 - **Receipt content and format.** Settled for v1 as an emailed template — logo, header, itemized lines, subtotal, tax per tax line, total, tender breakdown ([architecture](../architecture.md) §4). Paper size stays open until the thermal print agent lands.
 - ~~**Employee attribution vs. Sale ownership**~~ — **Resolved** by decision 23: the Sale belongs to whoever holds the lock at tender.
 - **Gift card expiry and escheatment.** Balances currently persist indefinitely; several jurisdictions regulate this.
+- **Merging a Sale in flight into a Held Sale.** Raised by [E-07](E-07-manage-customers.md) d20, and deliberately left open there. Folding an Open Sale's lines into an existing hold is a new operation, and it has to answer three things the current rows do not: which lock survives (decision 23 locks an Open Sale to whoever opened it), which identifier survives (decision 3 gives a Held Sale an `H`-reference replaced by a Sale number on tender), and what becomes of the absorbed Sale's log. Nothing is blocked meanwhile — opening the hold and ringing the extra copies onto it reaches the same end state.

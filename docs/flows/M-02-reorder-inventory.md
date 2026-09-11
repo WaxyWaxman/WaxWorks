@@ -2,7 +2,7 @@
 
 **Actor:** Manager (Employees raise pending orders)
 **Status:** Specified
-**Related:** [E-02 Receive inventory](E-02-receive-inventory.md) · [E-04 Manage the inventory](E-04-manage-inventory.md) · [E-05 Point of Sale](E-05-sell-a-record.md) · [M-01 Supplier margin](M-01-supplier-margin.md)
+**Related:** [E-02 Receive inventory](E-02-receive-inventory.md) · [E-04 Manage the inventory](E-04-manage-inventory.md) · [E-05 Point of Sale](E-05-sell-a-record.md) · [E-07 Manage customers](E-07-manage-customers.md) · [M-01 Supplier margin](M-01-supplier-margin.md)
 
 **Job:** As a manager, I need to restock what's selling before it runs out.
 
@@ -110,6 +110,10 @@ Below the pending streams, previously placed PurchaseOrders are listed most-rece
 **From [E-04](E-04-manage-inventory.md):**
 
 - Minimum on hand is informational in v1 and does **not** raise orders automatically.
+
+**From [E-07](E-07-manage-customers.md):**
+
+- **A customer-attached line's status is read on the Customer's card**, which lists their open lines with the status set here — Pending and Ordered derived from whether a PO number exists, Shipped with the supplier's expected date, Backordered, Cancelled (decisions 12, 22) — alongside anything already held for them ([E-07](E-07-manage-customers.md) d19). This is a second consumer of the traceability the requirements above already demand; it adds no new obligation, but it does mean a status renamed here is renamed on a counter screen.
 
 ---
 

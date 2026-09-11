@@ -1,0 +1,1291 @@
+<title>Customers, Three Tracks</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700;800&family=Archivo+Narrow:wght@600;700&display=swap">
+<style>
+/*
+ * E-07 Customers, re-laid as the till's three tracks.
+ * Palette and type are lifted from prototype/src/styles/tokens.css (SIGNAL)
+ * verbatim — this mock adds no colour of its own, on purpose. Structural class
+ * names are deliberately the ones already in app.css so the read across from
+ * Find and Receive is one-to-one.
+ */
+:root {
+  --c-bg: #f1f1ef;
+  --c-surface: #ffffff;
+  --c-surface-2: #f7f7f5;
+  --c-ink: #111111;
+  --c-ink-soft: #55554f;
+  --c-ink-faint: #8a8a84;
+  --c-border: #e4e4e0;
+  --c-border-strong: #ccccc7;
+  --c-accent: #d64500;
+  --c-accent-ink: #ffffff;
+  --c-accent-soft: #fff4ee;
+  --c-ok: #1f6b3f;
+  --c-ok-soft: #eaf3ed;
+  --c-warn: #8a6a1a;
+  --c-warn-soft: #fbf4e4;
+  --c-danger: #c0392b;
+  --c-danger-soft: #fdf3f1;
+
+  --font-sans: "Archivo", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Helvetica, sans-serif;
+  --font-narrow: "Archivo Narrow", "Archivo", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: ui-monospace, "SF Mono", "Cascadia Mono", "Roboto Mono", Menlo, Consolas, monospace;
+
+  --sp-1: 4px; --sp-2: 8px; --sp-3: 12px; --sp-4: 16px; --sp-5: 24px; --sp-6: 32px;
+  --radius-sm: 2px;
+}
+
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+body {
+  margin: 0; background: var(--c-bg); color: var(--c-ink);
+  font-family: var(--font-sans); font-size: 14px; line-height: 1.45;
+  -webkit-font-smoothing: antialiased;
+}
+.page { max-width: 1580px; margin: 0 auto; padding: var(--sp-6) var(--sp-5) 96px; }
+
+/* ---- page furniture (not part of the app) ---- */
+.masthead { display: flex; align-items: flex-end; gap: var(--sp-5); flex-wrap: wrap; margin-bottom: var(--sp-4); }
+.masthead h1 { font-size: 30px; letter-spacing: -0.03em; margin: 0 0 2px; line-height: 1.05; }
+.masthead p { margin: 0; color: var(--c-ink-soft); max-width: 64ch; font-size: 14.5px; }
+.stamp {
+  font-family: var(--font-narrow); font-weight: 700; font-size: 11px; letter-spacing: 0.12em;
+  text-transform: uppercase; color: var(--c-ink-faint); border: 1px solid var(--c-border-strong);
+  padding: 3px 8px; white-space: nowrap;
+}
+.stamp.live { color: var(--c-accent); border-color: var(--c-accent); }
+
+.controls {
+  display: flex; align-items: center; gap: var(--sp-2); flex-wrap: wrap;
+  border: 1px solid var(--c-border-strong); background: var(--c-surface);
+  padding: var(--sp-2) var(--sp-3); margin-bottom: var(--sp-3);
+}
+.controls .lab { margin-right: var(--sp-1); }
+.toggle {
+  font: inherit; font-size: 12.5px; font-weight: 600; cursor: pointer;
+  border: 1px solid var(--c-border-strong); background: var(--c-surface-2);
+  color: var(--c-ink-soft); padding: 5px 10px; border-radius: var(--radius-sm);
+}
+.toggle:hover { border-color: var(--c-ink); color: var(--c-ink); }
+.toggle[aria-pressed="true"] { background: var(--c-ink); border-color: var(--c-ink); color: #fff; }
+.toggle:disabled { opacity: 0.4; cursor: not-allowed; }
+.toggle:focus-visible, .rail-ico:focus-visible, .chip:focus-visible, .cust:focus-visible, .tile:focus-visible {
+  outline: 2px solid var(--c-accent); outline-offset: 2px;
+}
+
+/* ---- the app frame ---- */
+.screen {
+  border: 1px solid var(--c-ink); background: var(--c-surface);
+  height: clamp(640px, 84dvh, 900px);
+  display: flex; flex-direction: column; overflow: hidden;
+}
+.band {
+  flex: none; height: 58px; display: flex; align-items: stretch;
+  background: var(--c-surface); border-bottom: 2px solid var(--c-ink);
+}
+.band .wordmark {
+  width: 168px; display: flex; align-items: center; gap: var(--sp-2); padding-left: 18px;
+  font-weight: 800; font-size: 16px; letter-spacing: 0.02em; border-right: 1px solid var(--c-border-strong);
+}
+.band .wordmark .dot { width: 10px; height: 10px; border-radius: 50%; background: var(--c-accent); }
+.band .mode {
+  flex: 1; display: flex; align-items: center; justify-content: center;
+  font-size: 14px; font-weight: 600; letter-spacing: 0.05em; color: var(--c-ink-soft);
+  border-right: 1px solid var(--c-border-strong);
+}
+.band .mode.on { background: var(--c-ink); color: #fff; font-weight: 800; }
+.band .who {
+  width: 172px; display: flex; flex-direction: column; justify-content: center;
+  padding-left: 16px; border-left: 1px solid var(--c-border-strong);
+}
+
+.lab {
+  font-family: var(--font-narrow); font-weight: 700; font-size: 11px; letter-spacing: 0.1em;
+  text-transform: uppercase; color: var(--c-ink-faint);
+}
+.xsmall { font-size: 11px; }
+.small { font-size: 12.5px; }
+.muted { color: var(--c-ink-faint); }
+.mono { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+
+/* Three tracks. Same skeleton as .till-frame / .find-frame / .recv-frame. */
+.frame {
+  flex: 1; min-height: 0; display: grid;
+  grid-template-columns: 320px minmax(0, 1fr) 344px;
+}
+.frame.slab-shut { grid-template-columns: 52px minmax(0, 1fr) 344px; }
+
+/* ============ TRACK 1 — the customer slab ============ */
+.slab {
+  border-right: 1px solid var(--c-border-strong); background: var(--c-surface-2);
+  display: flex; flex-direction: column; min-height: 0; min-width: 0;
+}
+.slab-head {
+  flex: none; display: flex; align-items: center; gap: var(--sp-2);
+  padding: var(--sp-2) var(--sp-2) var(--sp-2) var(--sp-3);
+  border-bottom: 1px solid var(--c-border-strong);
+}
+.slab-head .lab { flex: 1; }
+.rail-ico {
+  position: relative; width: 38px; height: 38px; flex: none; padding: 0; cursor: pointer;
+  display: grid; place-items: center; font-size: 15px; line-height: 1;
+  border: 1px solid var(--c-border-strong); background: var(--c-surface);
+  color: var(--c-ink); border-radius: var(--radius-sm);
+}
+.rail-ico:hover { border-color: var(--c-ink); }
+.rail-ico.ink { background: var(--c-ink); border-color: var(--c-ink); color: #fff; }
+.rail-badge {
+  position: absolute; top: -6px; right: -6px; min-width: 16px; height: 16px; padding: 0 4px;
+  background: var(--c-ink); color: #fff; border-radius: 8px;
+  font-family: var(--font-mono); font-size: 10px; font-weight: 700;
+  display: grid; place-items: center; line-height: 1;
+}
+.rail-sep { width: 24px; height: 1px; background: var(--c-border-strong); flex: none; }
+
+/* The open panel's display lives here, not in an inline style: below 1180px
+   the slab is 52px whatever the toggle says, and an inline display would beat
+   the media query and leave the open panel crushed into the strip's column. */
+.slab-open-only { display: flex; flex-direction: column; min-height: 0; flex: 1; }
+.slab-acts { flex: none; display: flex; gap: var(--sp-2); padding: var(--sp-3) var(--sp-3) 0; }
+.slab-acts .btn { flex: 1; justify-content: center; }
+.slab-search {
+  flex: none; padding: var(--sp-3); display: flex; flex-direction: column; gap: 6px;
+  border-bottom: 1px solid var(--c-border-strong);
+}
+/* The search box is to Customers what the scan slab is to the till: the thing
+   the screen exists to do (E-07 steps 1-2), so it reads as a slab rather than
+   a form control. */
+.slab-search input {
+  font: inherit; font-size: 15px; font-weight: 600; width: 100%;
+  border: 2px solid var(--c-ink); background: var(--c-surface); color: var(--c-ink);
+  padding: 7px 10px; border-radius: var(--radius-sm);
+}
+.slab-search input::placeholder { color: var(--c-border-strong); font-weight: 400; }
+.slab-search .hint { font-size: 10.5px; color: var(--c-ink-faint); }
+
+.chips { display: flex; flex-wrap: wrap; gap: var(--sp-1); align-items: center; padding: var(--sp-2) var(--sp-3); border-bottom: 1px solid var(--c-border-strong); }
+.chip {
+  font: inherit; font-size: 11.5px; font-weight: 600; cursor: pointer;
+  border: 1px solid var(--c-border-strong); background: var(--c-surface); color: var(--c-ink-soft);
+  padding: 3px 7px; border-radius: var(--radius-sm); display: inline-flex; gap: 5px; align-items: center;
+}
+.chip .count { font-family: var(--font-mono); font-size: 10.5px; color: var(--c-ink-faint); }
+.chip:hover { border-color: var(--c-ink); color: var(--c-ink); }
+.chip.on { background: var(--c-ink); border-color: var(--c-ink); color: #fff; }
+.chip.on .count { color: #d5d5d1; }
+.chip:disabled { opacity: 0.4; cursor: not-allowed; }
+/* Two axes in one row — a live state and a stored field — so they are divided
+   rather than left to read as one list of five equivalent things. */
+.chip-sep { width: 1px; align-self: stretch; background: var(--c-border-strong); margin: 0 3px; }
+
+.sortbar {
+  flex: none; display: flex; align-items: center; gap: var(--sp-2);
+  padding: 6px var(--sp-3); border-bottom: 1px solid var(--c-border-strong);
+}
+.sortbar select {
+  font: inherit; font-size: 11.5px; font-weight: 600; flex: 1; padding: 3px 6px;
+  border: 1px solid var(--c-border-strong); background: var(--c-surface); color: var(--c-ink);
+  border-radius: var(--radius-sm);
+}
+
+.slab-list { flex: 1; min-height: 0; overflow-y: auto; }
+/* Bands, the way Find's slab bands by stock state — except the only state a
+   Customer can be in that anyone must act on is "something is waiting". */
+.slab-band {
+  position: sticky; top: 0; z-index: 1; background: var(--c-surface-2);
+  border-bottom: 1px solid var(--c-border-strong);
+  padding: var(--sp-3) var(--sp-3) var(--sp-2);
+  display: flex; align-items: baseline; justify-content: space-between; gap: var(--sp-2);
+}
+.slab-empty { padding: var(--sp-5) var(--sp-3); color: var(--c-ink-faint); font-size: 12.5px; text-align: center; }
+.slab-empty .btn { margin-top: var(--sp-3); }
+
+/* One customer. Same three-column skeleton as Find's .hit: a tile, two lines
+   of name, one right-hand figure. */
+.cust {
+  display: grid; grid-template-columns: 34px minmax(0, 1fr) auto; gap: var(--sp-2);
+  align-items: center; width: 100%; text-align: left; cursor: pointer;
+  padding: var(--sp-2) var(--sp-3); border: none; border-bottom: 1px solid var(--c-border);
+  border-left: 3px solid transparent; background: var(--c-surface); font: inherit; color: var(--c-ink);
+}
+.cust:hover { background: var(--c-surface-2); }
+.cust.on { border-left-color: var(--c-accent); box-shadow: inset 0 0 0 1px var(--c-ink); }
+/* Initials stand in for Find's sleeve art. Same 34px slot, same weight. */
+.ini {
+  width: 34px; height: 34px; display: grid; place-items: center; flex: none;
+  border: 1px solid var(--c-border); background: var(--c-surface-2);
+  font-family: var(--font-narrow); font-size: 12px; font-weight: 700; letter-spacing: 0.04em;
+  color: var(--c-ink-soft);
+}
+.cust .t { font-size: 12.5px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cust .m { font-size: 11px; color: var(--c-ink-faint); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cust .n {
+  font-family: var(--font-mono); font-size: 12.5px; font-weight: 700; text-align: right;
+  font-variant-numeric: tabular-nums; color: var(--c-ink-soft); white-space: nowrap;
+}
+.cust .n small {
+  display: block; font-family: var(--font-narrow); font-size: 9px; font-weight: 700;
+  letter-spacing: 0.05em; text-transform: uppercase; color: var(--c-ink-faint);
+}
+.cust .n.credit { color: var(--c-ok); }
+.cust .n.owed { color: var(--c-warn); }
+.cust .n.nil { color: var(--c-ink-faint); font-weight: 600; }
+
+/* Balance state as a dot — colour means STATE, the way Find's stock dots do. */
+.bal-dot { width: 9px; height: 9px; border-radius: 50%; flex: none; display: inline-block; }
+.bal-dot.credit { background: var(--c-ok); }
+.bal-dot.owed { background: var(--c-warn); }
+.bal-dot.nil { background: var(--c-border-strong); }
+
+/* the 52px shut strip */
+.slab-strip {
+  height: 100%; display: flex; flex-direction: column; align-items: center;
+  gap: var(--sp-2); padding: var(--sp-2) 0; min-height: 0;
+}
+.strip-stack { flex: 1; min-height: 0; overflow-y: auto; scrollbar-width: none; display: flex; flex-direction: column; align-items: center; gap: 6px; }
+.strip-stack::-webkit-scrollbar { display: none; }
+.tile {
+  position: relative; width: 38px; height: 38px; flex: none; padding: 0; cursor: pointer;
+  display: grid; place-items: center; border: 1px solid var(--c-border-strong);
+  border-radius: var(--radius-sm); background: var(--c-surface); color: var(--c-ink-soft);
+  font-family: var(--font-narrow); font-size: 11px; font-weight: 700; letter-spacing: 0.04em;
+}
+.tile:hover { border-color: var(--c-ink); }
+.tile.on { border-color: var(--c-ink); box-shadow: inset 3px 0 0 var(--c-accent); color: var(--c-ink); }
+.tile .bal-dot { position: absolute; bottom: -3px; right: -3px; border: 2px solid var(--c-surface-2); width: 11px; height: 11px; }
+.strip-lab {
+  font-family: var(--font-narrow); font-size: 8.5px; font-weight: 700; letter-spacing: 0.12em;
+  text-transform: uppercase; color: var(--c-border-strong); writing-mode: vertical-rl; padding: var(--sp-1) 0;
+}
+
+/* ============ TRACK 2 — the card ============ */
+.main { display: flex; flex-direction: column; min-width: 0; min-height: 0; background: var(--c-surface); }
+.main-head {
+  flex: none; display: flex; align-items: flex-start; gap: var(--sp-3); flex-wrap: wrap;
+  padding: var(--sp-3) var(--sp-4); border-bottom: 2px solid var(--c-ink);
+}
+.main-head h2 { margin: 0; font-size: 27px; letter-spacing: -0.025em; line-height: 1.1; }
+.main-head .badges { display: flex; flex-wrap: wrap; gap: var(--sp-2); margin-top: 6px; align-items: center; }
+.head-acts { margin-left: auto; display: flex; gap: var(--sp-2); align-items: center; }
+
+.badge {
+  display: inline-flex; align-items: center; gap: 4px; font-family: var(--font-narrow);
+  font-size: 10.5px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase;
+  border: 1px solid var(--c-border-strong); color: var(--c-ink-soft); padding: 1px 6px; background: var(--c-surface);
+}
+.badge.ok { color: var(--c-ok); border-color: var(--c-ok); background: var(--c-ok-soft); }
+.badge.warn { color: var(--c-warn); border-color: var(--c-warn); background: var(--c-warn-soft); }
+.badge.ink { color: #fff; background: var(--c-ink); border-color: var(--c-ink); }
+.badge.mono { font-family: var(--font-mono); text-transform: none; letter-spacing: 0; font-weight: 600; }
+
+.btn {
+  display: inline-flex; align-items: center; gap: 6px; cursor: pointer; font: inherit;
+  font-size: 13px; font-weight: 600; padding: 6px 12px; border-radius: var(--radius-sm);
+  border: 1px solid var(--c-border-strong); background: var(--c-surface); color: var(--c-ink);
+}
+.btn:hover { border-color: var(--c-ink); }
+.btn.ink { background: var(--c-ink); border-color: var(--c-ink); color: #fff; }
+.btn.accent { background: var(--c-accent); border-color: var(--c-accent); color: var(--c-accent-ink); }
+.btn.ghost { border-color: transparent; background: transparent; color: var(--c-ink-soft); }
+.btn.danger { color: var(--c-danger); border-color: var(--c-border-strong); }
+.btn.danger:hover { border-color: var(--c-danger); background: var(--c-danger-soft); }
+.btn.sm { font-size: 11.5px; padding: 3px 8px; }
+.btn:disabled { opacity: 0.45; cursor: not-allowed; }
+
+/* Live save (E-07 d13 — no Edit function, no confirm step). The card owes the
+   employee a signal that the keystroke landed; this is that signal. */
+.saved {
+  display: inline-flex; align-items: center; gap: 5px; font-size: 11px; font-weight: 600;
+  color: var(--c-ok); border: 1px solid var(--c-ok); background: var(--c-ok-soft);
+  padding: 2px 7px; border-radius: var(--radius-sm);
+}
+
+.card-scroll {
+  flex: 1; min-height: 0; overflow-y: auto;
+  padding: var(--sp-4); display: flex; flex-direction: column; gap: var(--sp-5);
+}
+.group { display: flex; flex-direction: column; gap: var(--sp-3); }
+.group > .group-head {
+  display: flex; align-items: baseline; justify-content: space-between; gap: var(--sp-3);
+  border-bottom: 1px solid var(--c-border-strong); padding-bottom: var(--sp-1);
+}
+.grid2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(232px, 1fr)); gap: var(--sp-3) var(--sp-4); }
+.f { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.f.wide { grid-column: 1 / -1; }
+.f input, .f select, .f textarea {
+  font: inherit; font-size: 14px; font-weight: 600; width: 100%; padding: 6px 9px;
+  border: 1px solid var(--c-border-strong); background: var(--c-surface); color: var(--c-ink);
+  border-radius: var(--radius-sm);
+}
+.f textarea { font-weight: 400; resize: vertical; }
+.f input:focus, .f select:focus, .f textarea:focus { outline: 2px solid var(--c-accent); outline-offset: -1px; }
+.f input:disabled { background: var(--c-surface-2); color: var(--c-ink-soft); border-style: dashed; cursor: not-allowed; }
+.f .hint { font-size: 10.5px; color: var(--c-ink-faint); }
+
+/* Primary ID is the one field on the card that is not a live input (E-07 d11). */
+.f.locked .lab::after { content: " · permanent"; color: var(--c-border-strong); }
+
+table.hist { width: 100%; border-collapse: collapse; }
+table.hist thead th {
+  font-family: var(--font-narrow); font-weight: 700; font-size: 10px; letter-spacing: 0.08em;
+  text-transform: uppercase; color: var(--c-ink-faint); text-align: left;
+  padding: 5px var(--sp-2) 5px 0; border-bottom: 1px solid var(--c-ink); white-space: nowrap;
+}
+table.hist td { padding: 6px var(--sp-2) 6px 0; border-bottom: 1px solid var(--c-border); font-size: 13px; }
+table.hist td.r, table.hist th.r { text-align: right; padding-right: 0; }
+table.hist .empty { color: var(--c-ink-faint); font-size: 12.5px; padding: var(--sp-4) 0; }
+
+/* ============ TRACK 3 — the account ============ */
+.acct {
+  border-left: 1px solid var(--c-border-strong); background: var(--c-surface);
+  display: flex; flex-direction: column; min-height: 0;
+}
+.acct-live { display: flex; flex-direction: column; min-height: 0; flex: 1; }
+
+/* Waiting sits ABOVE the balance because a hold does not expire and nothing
+   chases it — E-05 says in as many words that a hold nobody has chased is
+   otherwise invisible. This is the screen where it stops being invisible. */
+.waiting {
+  flex: none; border-bottom: 1px solid var(--c-border); background: var(--c-surface-2);
+  padding: var(--sp-3) var(--sp-4);
+}
+/* Accent-soft tints the thing, the way Receiving's staging card does; the
+   saturated accent stays on the foot button that acts on it. Soft is the
+   subject, saturated is the act — so the screen still spends the orange once. */
+.waiting.live { background: var(--c-accent-soft); box-shadow: inset 3px 0 0 var(--c-ink); }
+.waiting.none { color: var(--c-ink-faint); }
+.wait-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 2px var(--sp-2); align-items: baseline; }
+.wait-row + .wait-row { margin-top: var(--sp-2); padding-top: var(--sp-2); border-top: 1px solid var(--c-border); }
+.wait-t { font-size: 13px; font-weight: 700; line-height: 1.25; }
+.wait-m { font-size: 11px; color: var(--c-ink-soft); grid-column: 1 / -1; }
+.wait-ref { font-family: var(--font-mono); font-size: 11.5px; font-weight: 700; color: var(--c-ink); }
+
+.acct-head { flex: none; padding: var(--sp-3) var(--sp-4); }
+/* One signed figure, because money runs both ways (E-07 d4). It shrinks when
+   it is zero — most customers never carry a balance, and a 58px $0.00 spends
+   the top of the track on the least informative thing on it. */
+.figure { font-size: 46px; font-weight: 800; line-height: 1; letter-spacing: -0.035em; font-variant-numeric: tabular-nums; }
+.figure.credit { color: var(--c-ok); }
+.figure.owed { color: var(--c-warn); }
+.figure.nil { color: var(--c-ink-faint); font-size: 24px; font-weight: 700; }
+.figure-say { margin-top: 4px; font-size: 13px; font-weight: 600; }
+.figure-sub { margin-top: 2px; font-size: 11px; color: var(--c-ink-faint); }
+.rule { flex: none; height: 2px; background: var(--c-ink); }
+
+.acct-mid { flex: 1; min-height: 0; overflow-y: auto; padding: var(--sp-3) var(--sp-4); display: flex; flex-direction: column; gap: var(--sp-4); }
+.sec { display: flex; flex-direction: column; gap: 6px; }
+
+/* Standing — who this person is to the store. PRD G-4 and the Manager's
+   "top customers by quantity or life-time value"; no flow implements it yet. */
+.standing { display: grid; grid-template-columns: 1fr 1fr; gap: var(--sp-2) var(--sp-3); }
+.stat { display: flex; flex-direction: column; gap: 1px; }
+.stat .v { font-family: var(--font-mono); font-size: 17px; font-weight: 700; font-variant-numeric: tabular-nums; line-height: 1.1; }
+.stat .k { font-family: var(--font-narrow); font-size: 9.5px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--c-ink-faint); }
+.stat.span { grid-column: 1 / -1; border-top: 1px solid var(--c-border); padding-top: 6px; }
+.stat.span .v { font-size: 14px; }
+
+/* An order line. Status is M-02's: Pending and Ordered are derived from
+   whether a PO number exists; Shipped, Backordered and Cancelled are set by a
+   person (d12, d22). */
+.ord { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 2px var(--sp-2); padding: 7px 0; border-bottom: 1px solid var(--c-border); }
+.ord .t { font-size: 12.5px; font-weight: 600; line-height: 1.25; }
+.ord .m { grid-column: 1 / -1; font-size: 10.5px; color: var(--c-ink-faint); }
+.ord .badge { align-self: start; }
+
+.sale-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 2px var(--sp-2); padding: 6px 0; border-bottom: 1px solid var(--c-border); }
+.sale-row .t { grid-column: 1; grid-row: 1; font-family: var(--font-mono); font-size: 12px; font-weight: 700; }
+.sale-row .m { grid-column: 1; grid-row: 2; font-size: 10.5px; color: var(--c-ink-faint); }
+.sale-row .v { grid-column: 2; grid-row: 1 / -1; align-self: center; text-align: right; font-family: var(--font-mono); font-size: 13px; font-weight: 700; font-variant-numeric: tabular-nums; }
+
+.mv { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 2px var(--sp-2); padding: 6px 0; border-bottom: 1px solid var(--c-border); }
+.mv .what { grid-column: 1; grid-row: 1; font-size: 12.5px; font-weight: 600; }
+.mv .when { grid-column: 1; grid-row: 2; font-size: 10.5px; color: var(--c-ink-faint); }
+/* Explicitly placed: a row-spanning item left to auto-placement lands in the
+   first column and pushes the label out of it. */
+.mv .amt {
+  grid-column: 2; grid-row: 1 / -1; align-self: center; text-align: right;
+  font-family: var(--font-mono); font-size: 13px; font-weight: 700; font-variant-numeric: tabular-nums;
+}
+.mv .amt.credit { color: var(--c-ok); }
+.mv .amt.owed { color: var(--c-warn); }
+.sec-empty { font-size: 11.5px; color: var(--c-ink-faint); padding: 4px 0; }
+
+.acct-foot { flex: none; border-top: 2px solid var(--c-ink); padding: var(--sp-3) var(--sp-4); display: flex; flex-direction: column; gap: 6px; }
+.acct-foot .primary { justify-content: center; height: 56px; font-size: 18px; font-weight: 800; text-align: center; line-height: 1.15; }
+.acct-foot .secondary { justify-content: center; height: 36px; }
+.foot-sub { font-size: 11px; color: var(--c-ink-faint); text-align: center; }
+.foot-sub.gap { color: var(--c-accent); }
+
+/* The new-customer case: the account track has nothing to show yet, so it is
+   REPLACED by a same-height band that says so, rather than left as a hole. */
+.acct-blank {
+  flex: 1; min-height: 0; margin: var(--sp-4); border: 2px dashed var(--c-border-strong);
+  background: var(--c-surface-2); display: grid; place-items: center; text-align: center;
+  padding: var(--sp-5); color: var(--c-ink-faint); font-size: 12.5px;
+}
+
+/* ---- notes below the screen ---- */
+.notes { margin-top: var(--sp-6); display: grid; grid-template-columns: repeat(auto-fit, minmax(330px, 1fr)); gap: var(--sp-5); }
+.note h2 {
+  font-family: var(--font-narrow); font-size: 13px; font-weight: 700; letter-spacing: 0.1em;
+  text-transform: uppercase; color: var(--c-ink-faint); margin: 0 0 var(--sp-3);
+  padding-bottom: 5px; border-bottom: 1px solid var(--c-border-strong);
+}
+.note p, .note li, .note dd { font-size: 13.5px; color: var(--c-ink-soft); }
+.note p { margin: 0 0 var(--sp-3); }
+.note strong { color: var(--c-ink); }
+.note dl { margin: 0; display: flex; flex-direction: column; gap: var(--sp-3); }
+.note dt { font-weight: 700; color: var(--c-ink); font-size: 13.5px; }
+.note dd { margin: 2px 0 0; }
+.note ul { margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 6px; }
+.cite { font-family: var(--font-mono); font-size: 11.5px; color: var(--c-ink-faint); }
+.warnbox { border-left: 3px solid var(--c-accent); background: var(--c-accent-soft); padding: var(--sp-3) var(--sp-4); }
+.warnbox p:last-child { margin-bottom: 0; }
+.note.wide { grid-column: 1 / -1; }
+
+@media (prefers-reduced-motion: no-preference) {
+  .frame { transition: grid-template-columns 160ms ease; }
+}
+/* Under ~1180 the account cannot sit beside the card and keep its figure
+   legible, so it drops to a band underneath — the same move the till, Find
+   and Receive all make. */
+@media (max-width: 1180px) {
+  .frame, .frame.slab-shut { grid-template-columns: 52px minmax(0, 1fr); grid-template-rows: minmax(0, 1fr) auto; }
+  .slab { grid-row: 1 / -1; }
+  /* Forced past both the toggle and [hidden]: at this width the slab is the
+     strip, full stop. */
+  .slab-open-only { display: none !important; }
+  .slab-strip { display: flex !important; }
+  .main { grid-column: 2; grid-row: 1; }
+  /* Taller than the till's and Find's bottom strips, because this track has
+     more fixed chrome above the scroll — a waiting band AND a balance head.
+     At 46dvh the scrolling half came out 69px, which is not a track. */
+  .acct { grid-column: 2; grid-row: 2; border-left: none; border-top: 2px solid var(--c-ink); max-height: 58dvh; }
+  /* The head gives room back too: tighter padding, and the balance's third
+     line goes — the figure and its one-word verdict still say it. */
+  .waiting, .acct-head { padding: var(--sp-2) var(--sp-4); }
+  .figure { font-size: 34px; }
+  .figure-sub { display: none; }
+  .acct-foot .primary { height: 48px; font-size: 16px; }
+}
+</style>
+
+<div class="page">
+
+  <header class="masthead">
+    <div>
+      <h1>Customers, in three tracks</h1>
+      <p>E-07 laid out the way Sell, Find and Receive already are — a retractable slab on the left, the open card in the middle, the account pinned to the right. Layout mock, not working code. <strong>Second pass:</strong> the right track is no longer only about the balance.</p>
+    </div>
+    <span class="stamp">branch Customers-UI</span>
+    <span class="stamp live">proposed — not ratified</span>
+  </header>
+
+  <div class="controls">
+    <span class="lab">Mock controls</span>
+    <button class="toggle" id="t-slab" aria-pressed="true">Slab open</button>
+    <button class="toggle" id="t-sale" aria-pressed="false">Sale in flight</button>
+    <button class="toggle" id="t-new" aria-pressed="false">New customer</button>
+    <span class="lab" style="margin-left:var(--sp-3)">Open card</span>
+    <button class="toggle who-btn" data-who="ramona" aria-pressed="true">Ramona · hold + credit</button>
+    <button class="toggle who-btn" data-who="leftbank" aria-pressed="false">Left Bank · owes</button>
+    <button class="toggle who-btn" data-who="dev" aria-pressed="false">Dev · no balance</button>
+    <button class="toggle who-btn" data-who="theo" aria-pressed="false">Theo · quiet regular</button>
+    <span class="xsmall muted" style="margin-left:auto">Search, chips and sort are live. Try typing <span class="mono">A-1042</span>.</span>
+  </div>
+
+  <div class="screen">
+
+    <div class="band">
+      <div class="wordmark"><span class="dot"></span>WAX WORKS</div>
+      <div class="mode">FIND</div>
+      <div class="mode">SELL</div>
+      <div class="mode">RECEIVE</div>
+      <div class="mode on">MORE</div>
+      <div class="who">
+        <span class="xsmall muted">Signed in</span>
+        <span class="small" style="font-weight:600">E. Okafor</span>
+      </div>
+    </div>
+
+    <div class="frame" id="frame">
+
+      <!-- ============ TRACK 1 ============ -->
+      <nav class="slab" aria-label="Customers">
+
+        <!-- shut: the 52px strip -->
+        <div class="slab-strip" id="strip" hidden>
+          <button class="rail-ico" id="strip-expand" title="Open the list" aria-expanded="false">⟩</button>
+          <button class="rail-ico" title="New customer">＋</button>
+          <button class="rail-ico" title="Search — opens the list with the cursor in the box">
+            🔎<span class="rail-badge" id="strip-badge">4</span>
+          </button>
+          <div class="rail-sep"></div>
+          <div class="strip-stack" id="strip-stack"></div>
+          <div class="strip-lab">recent</div>
+        </div>
+
+        <!-- open -->
+        <div class="slab-open-only" id="slab-open">
+          <div class="slab-head">
+            <span class="lab">Customers</span>
+            <button class="rail-ico" id="slab-collapse" title="Collapse — the card takes the width">⟨</button>
+          </div>
+
+          <div class="slab-acts">
+            <button class="btn ink" id="new-btn">＋ New customer</button>
+          </div>
+
+          <div class="slab-search">
+            <input type="search" id="q" placeholder="name · email · phone" aria-label="Search customers by name, email or phone">
+            <span class="hint">Account number is not searched — you find it by opening the card <span class="cite">(d14)</span>.</span>
+          </div>
+
+          <div class="chips" id="chips">
+            <button class="chip on" data-filter="all">All <span class="count" id="c-all">4</span></button>
+            <button class="chip" data-filter="waiting">Waiting <span class="count" id="c-waiting">1</span></button>
+            <span class="chip-sep"></span>
+            <button class="chip" data-filter="Regular">Regular <span class="count" id="c-Regular">2</span></button>
+            <button class="chip" data-filter="Business">Business <span class="count" id="c-Business">1</span></button>
+            <button class="chip" data-filter="Staff">Staff <span class="count" id="c-Staff">1</span></button>
+          </div>
+
+          <div class="sortbar">
+            <span class="lab">Sort</span>
+            <select id="sort">
+              <option value="az">A–Z, whole name</option>
+              <option value="recent">Recently seen</option>
+              <option value="spend">Spend, this year</option>
+            </select>
+          </div>
+
+          <div class="slab-list" id="slab-list"></div>
+        </div>
+      </nav>
+
+      <!-- ============ TRACK 2 — the card ============ -->
+      <section class="main">
+        <div class="main-head">
+          <div style="min-width:0">
+            <h2 id="card-name">Ramona Vasquez</h2>
+            <div class="badges" id="card-badges"></div>
+          </div>
+          <div class="head-acts">
+            <span class="saved" id="saved-chip">✓ Saved</span>
+            <button class="btn danger sm" id="delete-btn">Delete</button>
+          </div>
+        </div>
+
+        <div class="card-scroll" id="card-scroll">
+
+          <div class="group">
+            <div class="group-head"><span class="lab">Identity</span><span class="xsmall muted" id="identity-note">Every field here saves as you type — there is no Edit step <span class="cite">(d13)</span>.</span></div>
+            <div class="grid2">
+              <label class="f locked">
+                <span class="lab">Primary ID</span>
+                <input type="text" id="f-primary" value="1" disabled>
+                <span class="hint">Internal, permanent, never reused, never editable <span class="cite">(d11)</span>.</span>
+              </label>
+              <label class="f">
+                <span class="lab">Account number</span>
+                <input type="text" id="f-acct" value="A-1042">
+                <span class="hint">Store-facing. Must stay unique.</span>
+              </label>
+              <label class="f">
+                <span class="lab">Account type</span>
+                <select id="f-type"><option>Regular</option><option>Staff</option><option>Business</option></select>
+              </label>
+              <label class="f">
+                <span class="lab">Name</span>
+                <input type="text" id="f-name" value="Ramona Vasquez">
+              </label>
+            </div>
+          </div>
+
+          <div class="group">
+            <div class="group-head"><span class="lab">Contact</span><span class="xsmall muted">Preference is what the hold timeline chases them on <span class="cite">(d8, E-05)</span>.</span></div>
+            <div class="grid2">
+              <label class="f"><span class="lab">Phone</span><input type="text" id="f-phone" value="514-555-0142"></label>
+              <label class="f"><span class="lab">Email</span><input type="email" id="f-email" value="ramona.v@example.com"></label>
+              <label class="f">
+                <span class="lab">Contact preference</span>
+                <select id="f-pref"><option>Email</option><option>Phone</option></select>
+              </label>
+            </div>
+          </div>
+
+          <div class="group">
+            <div class="group-head"><span class="lab">Mailing address</span></div>
+            <div class="grid2">
+              <label class="f wide"><span class="lab">Line 1</span><input type="text" id="f-l1" value="128 Rue Saint-Denis"></label>
+              <label class="f wide"><span class="lab">Line 2</span><input type="text" id="f-l2" value=""></label>
+              <label class="f"><span class="lab">City</span><input type="text" id="f-city" value="Montreal"></label>
+              <label class="f"><span class="lab">Province / State</span><input type="text" id="f-prov" maxlength="2" value="QC"></label>
+              <label class="f"><span class="lab">Country</span><input type="text" id="f-country" value="Canada"></label>
+            </div>
+          </div>
+
+          <div class="group">
+            <div class="group-head"><span class="lab">Note</span><span class="xsmall muted">Free-form, visible to every Employee.</span></div>
+            <label class="f wide"><textarea id="f-note" rows="2">Collector — jazz and folk. Holds are common.</textarea></label>
+          </div>
+
+          <div class="group">
+            <div class="group-head">
+              <span class="lab">History</span>
+              <span class="xsmall muted">Sold items only, newest first <span class="cite">(d16)</span>.</span>
+            </div>
+            <table class="hist">
+              <thead><tr><th>Title</th><th>Invoice #</th><th class="r">Date sold</th></tr></thead>
+              <tbody id="hist-body"></tbody>
+            </table>
+          </div>
+
+        </div>
+      </section>
+
+      <!-- ============ TRACK 3 — the account ============ -->
+      <aside class="acct" aria-label="Account and actions">
+        <div class="acct-live" id="acct-live">
+
+          <!-- 1. what is waiting for them -->
+          <div class="waiting" id="waiting"></div>
+
+          <!-- 2. what is owed, either way -->
+          <div class="acct-head">
+            <div class="lab">Account balance</div>
+            <div class="figure credit" id="fig">+$25.00</div>
+            <div class="figure-say" id="fig-say">Store credit</div>
+            <div class="figure-sub" id="fig-sub">Spendable at the till on the Account Balance tender.</div>
+          </div>
+          <div class="rule"></div>
+
+          <div class="acct-mid">
+            <!-- 3. who they are to the store -->
+            <div class="sec">
+              <span class="lab">Standing</span>
+              <div class="standing" id="standing"></div>
+            </div>
+
+            <!-- 4. what they change at the till -->
+            <div class="sec">
+              <span class="lab">What they change at the till</span>
+              <label class="f" style="margin-top:4px">
+                <span class="lab" style="font-size:10px">Global discount</span>
+                <input type="text" id="a-disc" value="10%">
+                <span class="hint">Pre-fills every Sale line; a changed line discount still overrides it <span class="cite">(d6)</span>.</span>
+              </label>
+              <label class="f" style="margin-top:6px">
+                <span class="lab" style="font-size:10px">Default tax line</span>
+                <select id="a-tax">
+                  <option>— none (uses the item's) —</option>
+                  <option>Standard (QC 14.975%)</option>
+                  <option>GST only (5%)</option>
+                  <option>Exempt (0%)</option>
+                </select>
+                <span class="hint">Overrides the item's tax line at the till when set <span class="cite">(d7)</span>.</span>
+              </label>
+            </div>
+
+            <!-- 5. what is on order for them -->
+            <div class="sec">
+              <span class="lab">On order</span>
+              <div id="orders"></div>
+            </div>
+
+            <!-- 6. what they have bought -->
+            <div class="sec">
+              <span class="lab">Recent sales</span>
+              <div id="sales"></div>
+            </div>
+
+            <!-- 7. why the balance is what it is -->
+            <div class="sec" id="mv-sec">
+              <span class="lab">What moved the balance</span>
+              <div id="movements"></div>
+              <span class="xsmall muted" style="margin-top:2px">Inferred, not recorded — see the notes.</span>
+            </div>
+          </div>
+
+          <div class="acct-foot">
+            <button class="btn accent primary" id="foot-primary">New Sale with Ramona</button>
+            <div class="foot-sub" id="foot-sub">Opens a Sale at the till with their discount and tax line already on it.</div>
+            <button class="btn secondary" id="foot-second" hidden></button>
+            <button class="btn secondary" id="foot-alt" hidden>Issue customer invoice</button>
+            <div class="foot-sub gap" id="foot-alt-sub" hidden>Shape only — terms are an E-07 open question.</div>
+          </div>
+        </div>
+
+        <div class="acct-live" id="acct-new" hidden>
+          <div class="acct-head">
+            <div class="lab">Account balance</div>
+            <div class="figure nil">—</div>
+            <div class="figure-say">Nothing yet</div>
+          </div>
+          <div class="rule"></div>
+          <div class="acct-blank">
+            No account until the record exists. The Primary ID is assigned on save, and the
+            balance starts at zero — it can only move through a Sale, a Return or a counter buy.
+          </div>
+          <div class="acct-foot">
+            <button class="btn accent primary">Add customer</button>
+            <div class="foot-sub">Name and a unique account number are the only two required.</div>
+          </div>
+        </div>
+      </aside>
+
+    </div>
+  </div>
+
+  <div class="notes">
+
+    <section class="note">
+      <h2>What each track is for</h2>
+      <dl>
+        <dt>Left — the customer slab (retractable)</dt>
+        <dd>Search over name, email and phone <span class="cite">(d14)</span>, chips, a sort control, the list. Shut, a 52px strip carrying New, Search with a result badge, and the cards you have opened. It <strong>pushes</strong> rather than overlays, the way Find's and Receive's do.</dd>
+        <dt>Middle — the open card</dt>
+        <dd>Every field a live input, grouped Identity / Contact / Address / Note, with History on the floor of the same scroll <span class="cite">(d16)</span>. No Edit function, no confirm step <span class="cite">(d13)</span>, so the head carries a saved chip instead.</dd>
+        <dt>Right — the account (sticky)</dt>
+        <dd>Now four things in priority order: <strong>what is waiting for them</strong>, <strong>what is owed either way</strong>, <strong>who they are to the store</strong>, and <strong>what is in flight</strong>. The foot is the errand you are actually on.</dd>
+      </dl>
+    </section>
+
+    <section class="note">
+      <h2>The right track, rebuilt</h2>
+      <p>You were right that it was all balance, and most customers never carry one. Theo is the case that exposed it — a perfectly ordinary regular whose whole track said <span class="mono">$0.00</span>.</p>
+      <p><strong>Waiting moved above the balance.</strong> E-05 says holds do not expire and the timeline records age because <em>"a hold nobody has chased is otherwise invisible"</em> <span class="cite">(d7)</span>. The customer card is where it stops being invisible, so it gets the top of the track — and it carries the age and the contact preference, which is what you need in order to act on it.</p>
+      <p><strong>The balance shrinks when it is zero.</strong> It still owns the second slot, because it is the figure that can be wrong in a way that costs money <span class="cite">(d4)</span> — but a settled account renders at 24px instead of spending the top of the screen on the least informative number on it.</p>
+      <p><strong>Standing, On order and Recent sales</strong> fill the rest. On order carries M-02's real statuses: Pending and Ordered derived from whether a PO number exists, Shipped, Backordered and Cancelled set by a person <span class="cite">(d12, d22)</span>, with the supplier's expected date where there is one.</p>
+    </section>
+
+    <section class="note">
+      <h2>Held sale beats attach — and a question underneath it</h2>
+      <p>The foot is now a ladder, and it tells you what it skipped:</p>
+      <ul>
+        <li><strong>Something held</strong> → <em>Open hold H4</em>, with the in-flight Sale offered underneath as a secondary.</li>
+        <li><strong>Sale in flight, nothing held</strong> → <em>Attach to Sale #1043</em>.</li>
+        <li><strong>Neither</strong> → <em>New Sale with Ramona</em>.</li>
+      </ul>
+      <p>Your second reading — <strong>fold the in-flight Sale into the hold</strong> — I did not draw, because it is a new operation and it collides with two recorded rows. <span class="cite">E-05 d23</span> locks an Open Sale to the Employee who opened it, and <span class="cite">E-05 d3</span> gives a Held Sale an <span class="mono">H</span>-reference that becomes a Sale number on tender. A merge has to say which lock survives, which reference survives, and what becomes of the absorbed Sale's log. That is its own decision row, not a layout choice — <strong>worth raising properly if you want it</strong>, and cheap to defer either way, since the recorded move (open the hold, ring the extra copies onto it) already gets everything into one transaction.</p>
+    </section>
+
+    <section class="note">
+      <h2>Sorting by surname — pick one</h2>
+      <p>You cannot sort by last name today: the record has a <strong>single <span class="mono">name</span> field</strong> <span class="cite">(Fields table; types.ts)</span>, so "last name" means guessing the final token — which files <em>Left Bank Cafe (wholesale)</em> under <strong>W</strong>.</p>
+      <dl>
+        <dt>a — leave it, sort the whole string</dt>
+        <dd>What I drew. At a counter you type into the search box; you almost never browse alphabetically, so the sort is a convenience rather than the path. Free.</dd>
+        <dt>b — split into given / family name</dt>
+        <dd>Correct, and awkward: business accounts have no surname, so you get an empty field on every Business card and a rule about which one sorts. Amends the Fields table.</dd>
+        <dt>c — one name field plus an optional "file under" <em>(my pick)</em></dt>
+        <dd>How record shops already alphabetise — <em>Beatles, The</em>. One optional field, blank by default, falling back to the name when empty, and business accounts simply never set it. Adds a field without splitting one.</dd>
+      </dl>
+      <p>The sort control is drawn with <strong>A–Z · Recently seen · Spend this year</strong>, which works under any of the three.</p>
+    </section>
+
+    <section class="note">
+      <h2>The waiting band, and the filter you asked for</h2>
+      <p><strong>Waiting is a chip and a band.</strong> Customers with something held sort into a <em>Waiting to collect</em> band above everyone else — which is Find's structure exactly, and it answers "what orders the list" at the same time. The chip filters to that band alone.</p>
+      <p><strong>The sort applies inside the bands, not across them</strong> — again as Find's does. Switch to <em>Spend, this year</em> and Ramona stays on top because she is the one with something to collect, while the band below reorders. If you would rather the sort beat the band outright, that is a one-line change, but then the waiting band stops being a band and becomes a mere label.</p>
+      <p>The chip row now carries two axes — a live state and a stored field — so there is a divider between them rather than five chips reading as one list of equivalent things.</p>
+      <p><strong>No owes-us filter</strong>, as agreed. Worth noting that Waiting does the job you would have wanted it for anyway: the person you need to chase is almost always the one with something sitting on the hold shelf, not the one carrying a balance.</p>
+      <p><strong>One thing I left alone:</strong> the shut strip's tiles still carry a balance dot, not a waiting mark. Two-datum rule. If waiting is the more useful signal there, say so and I will swap which one the dot means.</p>
+    </section>
+
+    <section class="note">
+      <h2>Where the spend figures come from</h2>
+      <p>Not invented, but not specified either — worth knowing exactly where they stand before we build them.</p>
+      <ul>
+        <li><strong>Recorded as a goal.</strong> PRD <span class="cite">G-4</span> — admins "review individual customer behavior to provide incentives and credit" — and the Manager's jobs include determining "who their top customers are by <strong>quantity or life-time value</strong>". So the store has asked for this.</li>
+        <li><strong>Not recorded anywhere as a field.</strong> No flow implements it. E-07's Fields table has no spend figure, and <span class="cite">d16</span> scopes History to sold items only.</li>
+        <li><strong>The boundary is <span class="cite">NG-2</span>: there is no loyalty program.</strong> These are reporting figures. The moment they become tiers, thresholds or automatic discounts, they have crossed a stated non-goal.</li>
+        <li><strong>One tension to settle.</strong> The PRD frames customer value as a <em>Manager/Admin</em> job, but <span class="cite">E-07 d12</span> says nothing about a Customer is gated. I have shown the figures to Employees, which is consistent with d12 — but it does put a manager-framed number on a counter screen a customer can read over your shoulder. Same argument as Find's cost toggle.</li>
+      </ul>
+    </section>
+
+    <section class="note">
+      <h2>New stops being a modal</h2>
+      <p>You asked whether there is a more natural choice. I do not think so — <span class="cite">d13</span> says the card <em>is</em> the edit surface, so New and open being the same surface is only that rule applied one step further.</p>
+      <p>But there is a better <strong>entry point</strong> than a ＋ button, and it is wired in the mock: search for someone who is not there, and the empty state offers <em>New customer named "…"</em> with the name already filled. That is the real counter sequence — you look first, and only then discover they need creating. The ＋ stays for when you already know.</p>
+    </section>
+
+    <section class="note">
+      <h2>What I did not invent</h2>
+      <ul>
+        <li><strong>No age at which a hold looks overdue.</strong> E-05 records that age is tracked, not a threshold. The band states "held 12 days" and leaves the judgement to whoever reads it. If you want it to go ochre at <em>n</em> days, <em>n</em> needs a decision row.</li>
+        <li><strong>The movement list is still an inference.</strong> <span class="cite">d5</span> says the balance is derived from movements; it never says the movements are visible. It hides entirely when there are none.</li>
+        <li><strong>No merge, no credit limit.</strong> Both are E-07 open questions, shown rather than solved — nothing stops Left Bank's −$120.50.</li>
+        <li><strong>Issue customer invoice is shape only</strong> <span class="cite">(d10)</span>; terms are open.</li>
+      </ul>
+    </section>
+
+    <section class="note wide">
+      <h2>Rows I would append</h2>
+      <div class="warnbox">
+        <p><strong>d17.</strong> Customers is a fixed three-track frame — slab, card, account — matching E-05 d29, E-03 and E-02 d38. The frame never scrolls; each track does. Below 1180px the account track drops to a bottom strip.</p>
+        <p><strong>d18 — refines d13.</strong> New opens a blank card in the middle track rather than a modal, so New and an open card are the same surface. A search matching nothing offers New with the typed name pre-filled.</p>
+        <p><strong>d19.</strong> The account track carries, in order: what is waiting for them (Held Sales and customer-attached order lines, with age and contact preference), the signed balance, standing (spend this year, last year, lifetime, sale count), the two till-affecting fields, on-order lines with M-02 status, and recent sales. Waiting sits above the balance because a hold does not expire and nothing else chases it (E-05 d7). Spend figures are reporting only — NG-2 stands.</p>
+        <p><strong>d20.</strong> The card's primary action is a ladder: open a Held Sale, else attach to a Sale in flight, else start a new Sale. Merging an in-flight Sale into a hold is explicitly <em>not</em> part of this and needs its own row (E-05 d23, d3).</p>
+        <p class="cite" style="color:var(--c-accent)">Status: recommended, not yet ratified. Wording is a draft — say the word and I will write the rows and run <span class="mono">scripts/check_docs.py</span>. d19 and d20 also want a line each in E-05's and M-02's "Inherited from other flows", since both reach into this screen.</p>
+      </div>
+    </section>
+
+  </div>
+</div>
+
+<script>
+(function () {
+  var DATA = {
+    ramona: {
+      key: "ramona",
+      name: "Ramona Vasquez", ini: "RV", primary: "1", acct: "A-1042", type: "Regular",
+      phone: "514-555-0142", email: "ramona.v@example.com", pref: "Email",
+      l1: "128 Rue Saint-Denis", l2: "", city: "Montreal", prov: "QC", country: "Canada",
+      note: "Collector — jazz and folk. Holds are common.",
+      disc: "10%", tax: "— none (uses the item's) —",
+      balance: 25, state: "credit",
+      say: "Store credit", sub: "Spendable at the till on the Account Balance tender.",
+      badges: [["ink", "Regular"], ["", "A-1042"], ["ok", "10% discount"]],
+      held: [{ ref: "H4", title: "Alice Coltrane — Ptah, the El Daoud", qty: 1, days: 12 }],
+      ytd: 1284.00, lastYear: 2040.50, lifetime: 6118.25, saleCount: 38,
+      orders: [
+        { title: "Pharoah Sanders — Karma", qty: 1, status: "Shipped", meta: "PO-2231 · shipped 08 Sep · due 12 Sep" }
+      ],
+      sales: [["1031", "30 Aug 2026", 42.50], ["1018", "14 Jul 2026", 61.00], ["0994", "21 May 2026", 38.00]],
+      movements: [
+        ["Return refunded to credit", "Sale #1031 · 30 Aug 2026", "+$25.00", "credit"],
+        ["Account balance drawn down", "Sale #1018 · 14 Jul 2026", "-$40.00", "owed"],
+        ["Used Credit counter buy, settled to credit", "02 Jul 2026", "+$40.00", "credit"]
+      ],
+      history: [
+        ["Bill Evans — Sunday at the Village Vanguard", "1031", "30 Aug 2026"],
+        ["Vashti Bunyan — Just Another Diamond Day", "1018", "14 Jul 2026"],
+        ["Alice Coltrane — Journey in Satchidananda", "0994", "21 May 2026"]
+      ]
+    },
+    leftbank: {
+      key: "leftbank",
+      name: "Left Bank Cafe (wholesale)", ini: "LB", primary: "2", acct: "A-2008", type: "Business",
+      phone: "514-555-0199", email: "orders@leftbank.example", pref: "Email",
+      l1: "44 Avenue du Parc", l2: "", city: "Montreal", prov: "QC", country: "Canada",
+      note: "Wholesale — exempt tax line. Settles on account, not at till.",
+      disc: "0%", tax: "Exempt (0%)",
+      balance: -120.5, state: "owed",
+      say: "Owed to the store", sub: "An outbound customer invoice, issued and not yet settled.",
+      badges: [["ink", "Business"], ["", "A-2008"], ["warn", "Exempt tax"]],
+      held: [],
+      ytd: 3410.00, lastYear: 2875.00, lifetime: 11290.00, saleCount: 22,
+      orders: [
+        { title: "Various — Blue Note Reissue Box", qty: 4, status: "Backordered", meta: "PO-2210 · placed 18 Aug · 31 days" },
+        { title: "Astrud Gilberto — Look to the Rainbow", qty: 2, status: "Pending", meta: "no PO number yet · raised 06 Sep" }
+      ],
+      sales: [["1044", "02 Sep 2026", 120.50], ["1029", "11 Aug 2026", 318.00]],
+      movements: [
+        ["Customer invoice issued, unpaid", "Invoice #1044 · 02 Sep 2026", "-$120.50", "owed"],
+        ["Customer invoice settled", "Invoice #1029 · 11 Aug 2026", "+$318.00", "credit"]
+      ],
+      history: [
+        ["Various — Blue Note Reissue Box", "1044", "02 Sep 2026"],
+        ["Astrud Gilberto — Look to the Rainbow", "1029", "11 Aug 2026"]
+      ]
+    },
+    dev: {
+      key: "dev",
+      name: "Dev Okonkwo", ini: "DO", primary: "4", acct: "A-1188", type: "Regular",
+      phone: "514-555-0231", email: "d.okonkwo@example.com", pref: "Phone",
+      l1: "77 Rue Rachel Est", l2: "", city: "Montreal", prov: "QC", country: "Canada",
+      note: "Buys reissues in batches. Rarely takes a hold.",
+      disc: "0%", tax: "— none (uses the item's) —",
+      balance: 0, state: "nil",
+      say: "Settled", sub: "Nothing runs either way.",
+      badges: [["ink", "Regular"], ["", "A-1188"]],
+      held: [],
+      ytd: 2890.00, lastYear: 1120.00, lifetime: 5004.00, saleCount: 27,
+      orders: [
+        { title: "Can — Future Days", qty: 1, status: "Ordered", meta: "PO-2228 · placed 01 Sep · 9 days" }
+      ],
+      sales: [["1042", "01 Sep 2026", 96.00], ["1036", "24 Aug 2026", 148.00], ["1021", "19 Jul 2026", 64.00]],
+      movements: [],
+      history: [
+        ["Can — Tago Mago", "1042", "01 Sep 2026"],
+        ["Neu! — Neu! 75", "1036", "24 Aug 2026"],
+        ["Harmonia — Deluxe", "1021", "19 Jul 2026"]
+      ]
+    },
+    theo: {
+      key: "theo",
+      name: "Theo Nakamura", ini: "TN", primary: "3", acct: "A-3311", type: "Staff",
+      phone: "438-555-0170", email: "theo@waxworks.example", pref: "Phone",
+      l1: "", l2: "", city: "", prov: "", country: "",
+      note: "",
+      disc: "20%", tax: "— none (uses the item's) —",
+      balance: 0, state: "nil",
+      say: "Settled", sub: "Nothing runs either way.",
+      badges: [["ink", "Staff"], ["", "A-3311"], ["ok", "20% discount"]],
+      held: [],
+      ytd: 210.00, lastYear: 0, lifetime: 210.00, saleCount: 4,
+      orders: [],
+      sales: [["1040", "28 Aug 2026", 52.00], ["1012", "02 Jul 2026", 31.00]],
+      movements: [],
+      history: [
+        ["Nina Simone — Pastel Blues", "1040", "28 Aug 2026"],
+        ["Donny Hathaway — Live", "1012", "02 Jul 2026"]
+      ]
+    }
+  };
+  var ALL = ["ramona", "leftbank", "dev", "theo"];
+  var RECENT = ["ramona", "dev", "leftbank", "theo"]; // newest first
+
+  var who = "ramona";
+  var saleInFlight = false;
+  var isNew = false;
+  var filter = "all";
+  var sortBy = "az";
+  var query = "";
+
+  function group(s) { return s.replace(/\B(?=(\d{3})+(?!\d))/g, ","); }
+  function money(n) {
+    var s = group(Math.abs(n).toFixed(2));
+    if (n > 0) return "+$" + s;
+    if (n < 0) return "−$" + s;
+    return "$0.00";
+  }
+  function dollars(n) { return "$" + group(n.toFixed(2)); }
+  function esc(s) {
+    return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+  }
+  function set(id, v) { var el = document.getElementById(id); if (el) el.value = v; }
+  function txt(id, v) { var el = document.getElementById(id); if (el) el.textContent = v; }
+
+  function waitingCount(c) { return c.held.length; }
+
+  // d14 — name, email and phone. Deliberately NOT account number.
+  function matches(c, q) {
+    if (!q) return true;
+    q = q.toLowerCase();
+    return c.name.toLowerCase().indexOf(q) >= 0 ||
+           c.email.toLowerCase().indexOf(q) >= 0 ||
+           c.phone.toLowerCase().indexOf(q) >= 0;
+  }
+
+  function searched() {
+    return ALL.map(function (k) { return DATA[k]; }).filter(function (c) { return matches(c, query); });
+  }
+
+  function visible() {
+    var rows = searched();
+    if (filter === "waiting") rows = rows.filter(function (c) { return waitingCount(c) > 0; });
+    else if (filter !== "all") rows = rows.filter(function (c) { return c.type === filter; });
+
+    if (sortBy === "recent") {
+      rows.sort(function (a, b) { return RECENT.indexOf(a.key) - RECENT.indexOf(b.key); });
+    } else if (sortBy === "spend") {
+      rows.sort(function (a, b) { return b.ytd - a.ytd; });
+    } else {
+      rows.sort(function (a, b) { return a.name.localeCompare(b.name); });
+    }
+    return rows;
+  }
+
+  function custRow(c) {
+    var b = document.createElement("button");
+    b.className = "cust" + (c.key === who && !isNew ? " on" : "");
+    b.type = "button";
+    b.innerHTML =
+      '<span class="ini">' + c.ini + '</span>' +
+      '<span style="min-width:0">' +
+        '<span class="t" style="display:block">' + esc(c.name) + '</span>' +
+        '<span class="m" style="display:block">' + c.type + ' · ' + c.acct + '</span>' +
+      '</span>' +
+      '<span class="n ' + c.state + '">' + money(c.balance) +
+        '<small>' + (c.state === "credit" ? "credit" : c.state === "owed" ? "owes us" : "settled") + '</small>' +
+      '</span>';
+    b.addEventListener("click", function () { pick(c.key); });
+    return b;
+  }
+
+  function band(label, n) {
+    var d = document.createElement("div");
+    d.className = "slab-band";
+    d.innerHTML = '<span class="lab">' + label + '</span><span class="lab">' + n + '</span>';
+    return d;
+  }
+
+  function renderSlab() {
+    var list = document.getElementById("slab-list");
+    list.innerHTML = "";
+    var rows = visible();
+
+    if (rows.length === 0) {
+      var e = document.createElement("div");
+      e.className = "slab-empty";
+      // The real counter sequence: you look first, and only then find out they
+      // need creating. So the empty state IS the New button, pre-filled.
+      e.innerHTML = query
+        ? 'No customer matches “' + esc(query) + '”.' +
+          '<div class="xsmall" style="margin-top:6px">Account number is not searched <span class="cite">(d14)</span> — if that is what you typed, open the card instead.</div>' +
+          '<button class="btn ink" id="new-from-search">＋ New customer named “' + esc(query) + '”</button>'
+        : 'Nothing in this band.';
+      list.appendChild(e);
+      var nb = document.getElementById("new-from-search");
+      if (nb) nb.addEventListener("click", function () { setNew(true); });
+    } else {
+      var waiting = rows.filter(function (c) { return waitingCount(c) > 0; });
+      var rest = rows.filter(function (c) { return waitingCount(c) === 0; });
+      // Bands only earn their keep when they actually split the list.
+      if (waiting.length && rest.length && filter === "all") {
+        list.appendChild(band("Waiting to collect", waiting.length));
+        waiting.forEach(function (c) { list.appendChild(custRow(c)); });
+        list.appendChild(band("Everyone else", rest.length));
+        rest.forEach(function (c) { list.appendChild(custRow(c)); });
+      } else {
+        rows.forEach(function (c) { list.appendChild(custRow(c)); });
+      }
+    }
+
+    document.getElementById("strip-badge").textContent = String(rows.length);
+
+    // Chip counts are of what the SEARCH left, not of the whole file.
+    var s = searched();
+    txt("c-all", s.length);
+    txt("c-waiting", s.filter(function (c) { return waitingCount(c) > 0; }).length);
+    ["Regular", "Business", "Staff"].forEach(function (t) {
+      txt("c-" + t, s.filter(function (c) { return c.type === t; }).length);
+    });
+    Array.prototype.forEach.call(document.querySelectorAll("#chips .chip"), function (ch) {
+      var f = ch.getAttribute("data-filter");
+      ch.classList.toggle("on", f === filter);
+      var n = Number(document.getElementById("c-" + f).textContent);
+      ch.disabled = f !== "all" && n === 0;
+    });
+
+    var stack = document.getElementById("strip-stack");
+    stack.innerHTML = "";
+    RECENT.forEach(function (k) {
+      var c = DATA[k];
+      var t = document.createElement("button");
+      t.className = "tile" + (k === who && !isNew ? " on" : "");
+      t.type = "button";
+      t.title = c.name + " · " + money(c.balance) + (waitingCount(c) ? " · " + waitingCount(c) + " waiting" : "");
+      t.innerHTML = c.ini + '<span class="bal-dot ' + c.state + '"></span>';
+      t.addEventListener("click", function () { pick(k); });
+      stack.appendChild(t);
+    });
+  }
+
+  function renderCard() {
+    var c = DATA[who];
+
+    if (isNew) {
+      txt("card-name", query ? query : "New customer");
+      document.getElementById("card-badges").innerHTML =
+        '<span class="badge">Unsaved</span><span class="badge mono">Primary ID assigned on save</span>';
+      document.getElementById("saved-chip").hidden = true;
+      document.getElementById("delete-btn").disabled = true;
+      document.getElementById("identity-note").innerHTML = "Name and a unique account number are the only two required.";
+      set("f-primary", "—"); set("f-acct", ""); set("f-name", query || ""); set("f-phone", ""); set("f-email", "");
+      set("f-l1", ""); set("f-l2", ""); set("f-city", ""); set("f-prov", ""); set("f-country", "");
+      set("f-note", "");
+      // A blank card starts at the defaults, not at whatever was open before it.
+      document.getElementById("f-type").value = "Regular";
+      document.getElementById("f-pref").value = "Email";
+      document.getElementById("hist-body").innerHTML =
+        '<tr><td colspan="3" class="empty">Nothing sold yet — history begins at their first tendered Sale.</td></tr>';
+      document.getElementById("acct-live").hidden = true;
+      document.getElementById("acct-new").hidden = false;
+      return;
+    }
+
+    document.getElementById("acct-live").hidden = false;
+    document.getElementById("acct-new").hidden = true;
+    document.getElementById("saved-chip").hidden = false;
+    document.getElementById("delete-btn").disabled = false;
+    document.getElementById("identity-note").innerHTML =
+      'Every field here saves as you type — there is no Edit step <span class="cite">(d13)</span>.';
+
+    txt("card-name", c.name);
+    document.getElementById("card-badges").innerHTML = c.badges.map(function (b) {
+      return '<span class="badge ' + b[0] + '">' + b[1] + '</span>';
+    }).join("");
+
+    set("f-primary", c.primary); set("f-acct", c.acct); set("f-name", c.name);
+    set("f-phone", c.phone); set("f-email", c.email);
+    set("f-l1", c.l1); set("f-l2", c.l2); set("f-city", c.city); set("f-prov", c.prov); set("f-country", c.country);
+    set("f-note", c.note);
+    document.getElementById("f-type").value = c.type;
+    document.getElementById("f-pref").value = c.pref;
+
+    var hb = document.getElementById("hist-body");
+    hb.innerHTML = c.history.length
+      ? c.history.map(function (h) {
+          return '<tr><td>' + esc(h[0]) + '</td><td class="mono">#' + h[1] + '</td><td class="r muted">' + h[2] + '</td></tr>';
+        }).join("")
+      : '<tr><td colspan="3" class="empty">Nothing sold to this Customer yet.</td></tr>';
+  }
+
+  function renderAccount() {
+    if (isNew) return;
+    var c = DATA[who];
+
+    // ---- 1. waiting ----
+    var w = document.getElementById("waiting");
+    if (c.held.length) {
+      w.className = "waiting live";
+      w.innerHTML =
+        '<div class="lab" style="color:var(--c-ink);margin-bottom:6px">Waiting for them</div>' +
+        c.held.map(function (h) {
+          return '<div class="wait-row">' +
+            '<span class="wait-t">' + esc(h.title) + '</span>' +
+            '<span class="wait-ref">' + h.ref + '</span>' +
+            '<span class="wait-m">' + h.qty + ' copy held · <strong>' + h.days + ' days</strong> · contact by ' +
+            c.pref.toLowerCase() + '</span></div>';
+        }).join("");
+    } else {
+      w.className = "waiting none";
+      w.innerHTML = '<div class="lab" style="margin-bottom:2px">Waiting for them</div>' +
+        '<div class="xsmall">Nothing held, nothing to collect.</div>';
+    }
+
+    // ---- 2. balance ----
+    var fig = document.getElementById("fig");
+    fig.className = "figure " + c.state;
+    fig.textContent = money(c.balance);
+    txt("fig-say", c.say);
+    txt("fig-sub", c.sub);
+
+    // ---- 3. standing ----
+    document.getElementById("standing").innerHTML =
+      '<div class="stat"><span class="v">' + dollars(c.ytd) + '</span><span class="k">This year</span></div>' +
+      '<div class="stat"><span class="v">' + dollars(c.lastYear) + '</span><span class="k">Last year</span></div>' +
+      '<div class="stat span"><span class="v">' + dollars(c.lifetime) + ' · ' + c.saleCount + ' sales</span>' +
+      '<span class="k">Lifetime</span></div>';
+
+    // ---- 4. till fields ----
+    set("a-disc", c.disc);
+    document.getElementById("a-tax").value = c.tax;
+
+    // ---- 5. on order ----
+    var ordCls = { Shipped: "ok", Backordered: "warn", Cancelled: "", Pending: "", Ordered: "ink" };
+    document.getElementById("orders").innerHTML = c.orders.length
+      ? c.orders.map(function (o) {
+          return '<div class="ord">' +
+            '<span class="t">' + esc(o.title) + '</span>' +
+            '<span class="badge ' + (ordCls[o.status] || "") + '">' + o.status + '</span>' +
+            '<span class="m">' + o.qty + ' × · ' + o.meta + '</span></div>';
+        }).join("")
+      : '<div class="sec-empty">Nothing on order for them.</div>';
+
+    // ---- 6. recent sales ----
+    document.getElementById("sales").innerHTML = c.sales.length
+      ? c.sales.map(function (s) {
+          return '<div class="sale-row"><span class="t">#' + s[0] + '</span>' +
+            '<span class="m">' + s[1] + '</span>' +
+            '<span class="v">' + dollars(s[2]) + '</span></div>';
+        }).join("")
+      : '<div class="sec-empty">No sales yet.</div>';
+
+    // ---- 7. movements ----
+    document.getElementById("mv-sec").hidden = c.movements.length === 0;
+    document.getElementById("movements").innerHTML = c.movements.map(function (m) {
+      return '<div class="mv"><span class="what">' + esc(m[0]) + '</span>' +
+             '<span class="amt ' + m[3] + '">' + m[2] + '</span>' +
+             '<span class="when">' + m[1] + '</span></div>';
+    }).join("");
+
+    // ---- foot: the ladder ----
+    var first = c.name.split(" ")[0].replace("(wholesale)", "").trim();
+    var primary = document.getElementById("foot-primary");
+    var second = document.getElementById("foot-second");
+    var sub = document.getElementById("foot-sub");
+    second.hidden = true;
+
+    if (c.held.length) {
+      var h = c.held[0];
+      primary.textContent = "Open hold " + h.ref;
+      sub.textContent = h.qty + " copy · held " + h.days + " days · contact by " + c.pref.toLowerCase();
+      if (saleInFlight) {
+        second.hidden = false;
+        second.textContent = "Attach to Sale #1043 instead";
+      }
+    } else if (saleInFlight) {
+      primary.textContent = "Attach to Sale #1043";
+      sub.textContent = c.disc === "0%"
+        ? "Their tax line replaces the item's on every line already rung up."
+        : "Their " + c.disc + " pre-fills every line; a changed line discount still overrides it.";
+    } else {
+      primary.textContent = "New Sale with " + first;
+      sub.textContent = "Opens a Sale at the till with their discount and tax line already on it.";
+    }
+
+    var business = c.type === "Business";
+    document.getElementById("foot-alt").hidden = !business;
+    document.getElementById("foot-alt-sub").hidden = !business;
+  }
+
+  function render() { renderSlab(); renderCard(); renderAccount(); }
+
+  function pick(k) {
+    who = k; isNew = false;
+    document.getElementById("t-new").setAttribute("aria-pressed", "false");
+    Array.prototype.forEach.call(document.querySelectorAll(".who-btn"), function (b) {
+      b.setAttribute("aria-pressed", String(b.getAttribute("data-who") === k));
+    });
+    render();
+  }
+
+  function setSlab(isOpen) {
+    var frame = document.getElementById("frame");
+    frame.classList.toggle("slab-shut", !isOpen);
+    document.getElementById("strip").hidden = isOpen;
+    document.getElementById("slab-open").hidden = !isOpen;
+    var t = document.getElementById("t-slab");
+    t.setAttribute("aria-pressed", String(isOpen));
+    t.textContent = isOpen ? "Slab open" : "Slab shut";
+    document.getElementById("strip-expand").setAttribute("aria-expanded", String(isOpen));
+  }
+
+  function setNew(on) {
+    isNew = on;
+    document.getElementById("t-new").setAttribute("aria-pressed", String(on));
+    render();
+  }
+
+  document.getElementById("t-slab").addEventListener("click", function () {
+    setSlab(this.getAttribute("aria-pressed") !== "true");
+  });
+  document.getElementById("slab-collapse").addEventListener("click", function () { setSlab(false); });
+  document.getElementById("strip-expand").addEventListener("click", function () { setSlab(true); });
+
+  document.getElementById("t-sale").addEventListener("click", function () {
+    saleInFlight = this.getAttribute("aria-pressed") !== "true";
+    this.setAttribute("aria-pressed", String(saleInFlight));
+    renderAccount();
+  });
+
+  document.getElementById("t-new").addEventListener("click", function () {
+    setNew(this.getAttribute("aria-pressed") !== "true");
+  });
+  document.getElementById("new-btn").addEventListener("click", function () { setNew(true); });
+
+  Array.prototype.forEach.call(document.querySelectorAll(".who-btn"), function (b) {
+    b.addEventListener("click", function () { pick(b.getAttribute("data-who")); });
+  });
+
+  document.getElementById("q").addEventListener("input", function () {
+    query = this.value.trim();
+    renderSlab();
+  });
+  document.getElementById("sort").addEventListener("change", function () {
+    sortBy = this.value; renderSlab();
+  });
+  document.getElementById("chips").addEventListener("click", function (e) {
+    var ch = e.target && e.target.closest ? e.target.closest(".chip") : null;
+    if (!ch || ch.disabled) return;
+    filter = ch.getAttribute("data-filter");
+    renderSlab();
+  });
+
+  render();
+})();
+</script>
