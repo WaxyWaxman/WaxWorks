@@ -462,6 +462,9 @@ table.data tr.band-row + tr.group-row td { border-top: none; }
    staff remember. Walk-ins say so rather than leaving a gap. */
 .rail-item .who { font-size: var(--fs-xs); color: var(--c-ink-faint); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .rail-item .amt { font-family: var(--font-mono); font-size: var(--fs-xs); color: var(--c-ink-soft); font-variant-numeric: tabular-nums; white-space: nowrap; }
+/* Recent mixes Sales and Returns, so a Return says so — the number alone
+   gives no clue which way the money went (E-06 d11). */
+.rail-kind { margin-left: var(--sp-2); font-size: 9px; padding: 0 4px; }
 
 .rail-fns { display: flex; flex-direction: column; }
 .rail-fn {

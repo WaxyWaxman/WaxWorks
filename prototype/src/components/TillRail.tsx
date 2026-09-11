@@ -109,8 +109,11 @@ export function TillRail({ activeSaleId }: { activeSaleId?: string }) {
   const openSales = app.sales.filter((s) => s.state === "Open" && !s.isReturn);
   const openReturns = app.sales.filter((s) => s.isReturn && s.state === "Open");
   const heldCount = app.sales.filter((s) => s.state === "Held" && !s.isReturn).length;
+  // Returns included: a finished Return carries a transaction number like any
+  // other tendered document, and the commonest reason to go looking for one
+  // is the refund that just went out (E-06 d11).
   const recent = [...app.sales]
-    .filter((s) => s.state === "Current" && !s.isReturn)
+    .filter((s) => s.state === "Current")
     .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
     .slice(0, 6);
   const inFlight = openSales.length + openReturns.length;
@@ -245,7 +248,10 @@ export function TillRail({ activeSaleId }: { activeSaleId?: string }) {
                   onClick={() => pick(s)}
                 >
                   <span className="rail-item-main">
-                    <span className="top">#{s.saleNumber}</span>
+                    <span className="top">
+                      #{s.saleNumber}
+                      {s.isReturn && <span className="badge warn rail-kind">return</span>}
+                    </span>
                     <span className="who">{whoFor(s)}</span>
                   </span>
                   <span className="amt">{money(totalFor(s))}</span>

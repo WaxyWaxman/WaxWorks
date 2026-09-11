@@ -3,8 +3,9 @@ import { useNavigate, useParams } from "react-router-dom";
 import { Modal } from "../components/Modal";
 import { TillRail } from "../components/TillRail";
 import { VoidSaleModal } from "../components/VoidSaleModal";
-import { GRADES, type Grade } from "../data/types";
+import { GRADES, type Grade, type RecordEntry } from "../data/types";
 import { money } from "../lib/money";
+import { resolveScan } from "../lib/resolve";
 import { balanceDue, saleTotals } from "../lib/totals";
 import { useApp } from "../store/AppStore";
 
@@ -450,12 +451,50 @@ function CustomerAttach({ saleId }: { saleId: string }) {
   );
 }
 
+// E-06 d12 — a lookup, not a dropdown. The old control listed every copy in
+// the building in one <select>, which is unreadable past a few hundred and
+// unusable at a real store's scale. Scanning the copy's own sticker resolves
+// it outright; otherwise search the catalogue and pick which copy came back.
+//
+// Deliberately NOT the till's Lookup: that one filters to sellable copies,
+// which is exactly backwards here. A returned copy is normally sold, so this
+// searches every copy and shows its state rather than hiding it.
 function AddReturnedItem({ saleId, onClose }: { saleId: string; onClose: () => void }) {
   const app = useApp();
-  const copies = app.inventory;
-  const [itemId, setItemId] = useState(copies[0]?.id ?? "");
-  const item = app.itemFor(itemId)!;
+  const [q, setQ] = useState("");
+  const [itemId, setItemId] = useState("");
+  const [scanNote, setScanNote] = useState<string | null>(null);
+
+  const item = app.itemFor(itemId);
   const record = app.recordFor(item?.recordId);
+
+  const query = q.trim().toLowerCase();
+  const results = useMemo(() => {
+    if (!query) return [];
+    const match = (r: RecordEntry) =>
+      [r.artist, r.title, r.label, r.catalogNo, r.genre, r.manufacturerUpc]
+        .filter(Boolean)
+        .some((f) => String(f).toLowerCase().includes(query));
+    return app.records.filter(match).slice(0, 12);
+  }, [query, app.records]);
+
+  // Enter on an internal barcode goes straight to that copy — the counter
+  // path, where the sticker is right there on the sleeve.
+  const onSubmit = () => {
+    const raw = q.trim();
+    if (!raw) return;
+    const res = resolveScan(raw, app);
+    if (res.kind === "internal") {
+      pickCopy(res.item.id);
+      setScanNote(null);
+      return;
+    }
+    if (res.kind === "upc-single" || res.kind === "upc-multi") {
+      setScanNote(`${res.record.artist} — ${res.record.title} — pick the copy that came back.`);
+      return;
+    }
+    setScanNote(`No copy matches "${raw}".`);
+  };
 
   // candidate prior Sales to link against (E-06 step 3)
   const priorSales = app.sales.filter(
@@ -464,8 +503,24 @@ function AddReturnedItem({ saleId, onClose }: { saleId: string; onClose: () => v
   const [link, setLink] = useState<string>("");
   const linkedSale = priorSales.find((s) => String(s.saleNumber) === link);
   const linkedLine = linkedSale?.lines.find((l) => l.recordId === item?.recordId);
-  const defaultRefund = linkedLine ? linkedLine.price * (1 - linkedLine.discountPct / 100) : item?.price ?? 0;
-  const [refund, setRefund] = useState<string>(String(defaultRefund.toFixed(2)));
+  const [refund, setRefund] = useState("0.00");
+
+  const pickCopy = (id: string) => {
+    setItemId(id);
+    setLink("");
+    setQ("");
+    setScanNote(null);
+    setRefund((app.itemFor(id)?.price ?? 0).toFixed(2));
+  };
+
+  const statusBadge = (status: string) =>
+    status === "sold" ? (
+      <span className="badge ok">sold</span>
+    ) : status === "held" ? (
+      <span className="badge warn">held</span>
+    ) : (
+      <span className="badge">on floor</span>
+    );
 
   return (
     <Modal
@@ -478,13 +533,10 @@ function AddReturnedItem({ saleId, onClose }: { saleId: string; onClose: () => v
           </button>
           <button
             className="btn primary"
+            disabled={!item}
             onClick={() => {
-              app.addReturnLine(
-                saleId,
-                item,
-                Number(refund) || 0,
-                linkedSale?.saleNumber,
-              );
+              if (!item) return;
+              app.addReturnLine(saleId, item, Number(refund) || 0, linkedSale?.saleNumber);
               onClose();
             }}
           >
@@ -494,64 +546,139 @@ function AddReturnedItem({ saleId, onClose }: { saleId: string; onClose: () => v
       }
     >
       <div className="stack">
-        <label className="field">
-          <span>Scan / select the copy</span>
-          <select
-            value={itemId}
-            onChange={(e) => {
-              setItemId(e.target.value);
-              setLink("");
-              const it = app.itemFor(e.target.value);
-              setRefund(String((it?.price ?? 0).toFixed(2)));
-            }}
-          >
-            {copies.map((c) => {
-              const r = app.recordFor(c.recordId);
-              return (
-                <option key={c.id} value={c.id}>
-                  {r?.artist} — {r?.title} · {c.grade} · {c.internalBarcode}
-                </option>
-              );
-            })}
-          </select>
-        </label>
+        {!item ? (
+          <>
+            <label className="field">
+              <span>Scan the copy's barcode, or search for it</span>
+              <input
+                type="search"
+                autoFocus
+                value={q}
+                onChange={(e) => {
+                  setQ(e.target.value);
+                  setScanNote(null);
+                }}
+                onKeyDown={(e) => e.key === "Enter" && onSubmit()}
+                placeholder="scan a sticker, or try: blue · rumours · radiohead"
+              />
+            </label>
+            {scanNote && <div className="callout">{scanNote}</div>}
 
-        <label className="field">
-          <span>Link to a prior Sale — when possible, never required (E-06 decision 2)</span>
-          <select
-            value={link}
-            onChange={(e) => {
-              setLink(e.target.value);
-              const s = priorSales.find((x) => String(x.saleNumber) === e.target.value);
-              const ll = s?.lines.find((l) => l.recordId === item?.recordId);
-              if (ll) setRefund(String((ll.price * (1 - ll.discountPct / 100)).toFixed(2)));
-            }}
-          >
-            <option value="">No link — no receipt / walk-in / gift</option>
-            {priorSales.map((s) => (
-              <option key={s.id} value={String(s.saleNumber)}>
-                #{s.saleNumber} · {app.customerFor(s.customerId)?.name ?? "walk-in"} ·{" "}
-                {new Date(s.createdAt).toLocaleDateString()}
-              </option>
-            ))}
-          </select>
-        </label>
+            {query && (
+              <table className="data">
+                <tbody>
+                  {results.map((r) => {
+                    const copies = app.inventory.filter((i) => i.recordId === r.id);
+                    return (
+                      <FragmentRows key={r.id}>
+                        <tr className="group-row">
+                          <td colSpan={4}>
+                            {r.artist} — {r.title}
+                            <div className="xsmall muted">
+                              {r.label} · {r.catalogNo} · {r.genre}
+                            </div>
+                          </td>
+                        </tr>
+                        {copies.map((c) => (
+                          <tr key={c.id} className="nested">
+                            <td className="small">
+                              <span className="badge grade">{c.grade}</span> {statusBadge(c.status)}
+                            </td>
+                            <td className="mono xsmall">{c.internalBarcode}</td>
+                            <td className="num">{money(c.price)}</td>
+                            <td className="num">
+                              <button className="btn sm primary" onClick={() => pickCopy(c.id)}>
+                                This one
+                              </button>
+                            </td>
+                          </tr>
+                        ))}
+                        {copies.length === 0 && (
+                          <tr className="nested">
+                            <td colSpan={4} className="small muted">
+                              No copies of this ever existed here — nothing to take back.
+                            </td>
+                          </tr>
+                        )}
+                      </FragmentRows>
+                    );
+                  })}
+                  {results.length === 0 && (
+                    <tr>
+                      <td className="small muted">No match for "{q}".</td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            )}
+            {!query && (
+              <p className="xsmall muted">
+                A returned copy is normally one the store already sold, so every copy is searchable
+                here — not just what is on the floor.
+              </p>
+            )}
+          </>
+        ) : (
+          <>
+            <div className="callout ok">
+              <strong>
+                {record?.artist} — {record?.title}
+              </strong>{" "}
+              · <span className="badge grade">{item.grade}</span> {statusBadge(item.status)}
+              <div className="xsmall mono">{item.internalBarcode}</div>
+              <button className="btn ghost sm" style={{ marginTop: "var(--sp-2)" }} onClick={() => setItemId("")}>
+                Pick a different copy
+              </button>
+            </div>
 
-        <label className="field">
-          <span>
-            Refund amount — defaults to {linkedLine ? "the linked line price" : "the item’s current price"},
-            overridable (E-06 decision 5)
-          </span>
-          <input type="number" step="0.01" value={refund} onChange={(e) => setRefund(e.target.value)} />
-        </label>
+            <label className="field">
+              <span>Link to a prior Sale — when possible, never required (E-06 decision 2)</span>
+              <select
+                value={link}
+                onChange={(e) => {
+                  setLink(e.target.value);
+                  const s = priorSales.find((x) => String(x.saleNumber) === e.target.value);
+                  const ll = s?.lines.find((l) => l.recordId === item?.recordId);
+                  if (ll) setRefund((ll.price * (1 - ll.discountPct / 100)).toFixed(2));
+                }}
+              >
+                <option value="">No link — no receipt / walk-in / gift</option>
+                {priorSales.map((s) => (
+                  <option key={s.id} value={String(s.saleNumber)}>
+                    #{s.saleNumber} · {app.customerFor(s.customerId)?.name ?? "walk-in"} ·{" "}
+                    {new Date(s.createdAt).toLocaleDateString()}
+                  </option>
+                ))}
+              </select>
+            </label>
 
-        <div className="callout">
-          {record?.artist} — {record?.title}. After tendering the refund you’ll route this copy:
-          back to sellable, re-graded as its own InventoryItem, or written off.
-        </div>
+            <label className="field">
+              <span>
+                Refund amount — defaults to{" "}
+                {linkedLine ? "the linked line price" : "the copy's current price"}, overridable
+                (E-06 decision 5)
+              </span>
+              <input
+                type="number"
+                step="0.01"
+                value={refund}
+                onChange={(e) => setRefund(e.target.value)}
+              />
+            </label>
+
+            <div className="callout">
+              After tendering the refund you'll route this copy: back to sellable, re-graded as its
+              own InventoryItem, or written off.
+            </div>
+          </>
+        )}
       </div>
     </Modal>
   );
+}
+
+function FragmentRows({ children }: { children: React.ReactNode }) {
+  return <>{children}</>;
 }
 
 function RouteStock({

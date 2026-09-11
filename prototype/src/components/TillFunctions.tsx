@@ -414,11 +414,23 @@ function BreakdownView({ data }: { data: DayBreakdown }) {
           <table className="data">
             <tbody>
               {data.byTender.map((t) => (
-                <tr key={t.type}>
-                  <td>{t.type}</td>
+                <tr key={t.label}>
+                  <td>{t.label}</td>
                   <td className="num">{money(t.amount)}</td>
                 </tr>
               ))}
+              {/* Money through the tenders that was not a sale, so this
+                  column can be reconciled against net sales rather than
+                  quietly disagreeing with it (M-03 d14). */}
+              {data.giftCardsLoaded !== 0 && (
+                <tr>
+                  <td className="muted">
+                    of which gift cards loaded
+                    <div className="xsmall muted">money in, not a sale — a balance the store now owes</div>
+                  </td>
+                  <td className="num muted">{money(data.giftCardsLoaded)}</td>
+                </tr>
+              )}
               {data.byTender.length === 0 && (
                 <tr>
                   <td className="small muted">Nothing tendered.</td>
