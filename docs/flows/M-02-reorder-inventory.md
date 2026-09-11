@@ -150,4 +150,4 @@ Below the pending streams, previously placed PurchaseOrders are listed most-rece
 - **Cancel-by dates.** Suppliers carry a default cancel-by window ([M-01](M-01-supplier-margin.md)) and some support it contractually. Whether the system acts on it — auto-cancelling lines past the date — or merely records it, is undecided.
 - **Reorder suggestion.** v1 is manual. When suggestions arrive, the inputs (sales velocity, minimum on hand, season) and whether they auto-populate a pending stream need settling.
 - **Multi-store ordering.** Whether stores order independently or a Manager can place one PurchaseOrder covering several stores' needs.
-- **Order acknowledgements.** Nothing consumes a supplier's confirmation that they received the order.
+- **Order acknowledgements.** Nothing consumes a supplier's confirmation that they *received* the order. Decision 22 consumes the adjacent one — a confirmation that it **shipped**, recorded as a status plus the supplier's expected date — but that is despatch, not acknowledgement, and nothing yet closes the gap between placing an order and knowing it landed.
