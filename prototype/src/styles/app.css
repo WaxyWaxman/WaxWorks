@@ -1072,6 +1072,24 @@ table.data td.recv-art-cell { width: 38px; padding-right: 0; }
   width: 26px; height: 24px; padding: 0; flex: none;
   display: inline-grid; place-items: center;
 }
+/* Destructive, and sitting beside two actions that are not. It stays quiet
+   until reached for rather than wearing red at rest, which would make every
+   row look like a warning. */
+.icon-btn.recv-danger { color: var(--c-ink-faint); }
+.icon-btn.recv-danger:hover { color: var(--c-danger); border-color: var(--c-danger); }
+
+/* The record cell is a control now — clicking it opens the titlecard, which
+   is where a clipped title can be read in full. It has to still read as a
+   table cell at rest, so it borrows nothing but the pointer and an underline
+   on approach. */
+.recv-rec-open {
+  display: block; width: 100%; text-align: left; cursor: pointer;
+  padding: 0; border: none; background: none; font: inherit; color: inherit;
+  min-width: 0;
+}
+.recv-rec-open:disabled { cursor: default; }
+.recv-rec-open:hover:not(:disabled) .t { text-decoration: underline; text-underline-offset: 2px; }
+.recv-rec-open:focus-visible { outline: 2px solid var(--c-accent); outline-offset: 1px; }
 tr.recv-flagged > td { background: var(--c-warn-soft); }
 tr.recv-flagged > td:first-child { box-shadow: inset 3px 0 0 var(--c-warn); }
 .recv-notes { padding: var(--sp-3) var(--sp-4) 0; }

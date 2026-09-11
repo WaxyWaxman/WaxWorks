@@ -3,6 +3,7 @@ import { useNavigate, useParams } from "react-router-dom";
 import { Modal } from "../components/Modal";
 import { ReceiveReconcile } from "../components/ReceiveReconcile";
 import { ReceiveSlab, type OutstandingLine } from "../components/ReceiveSlab";
+import { TitlecardPanel } from "../components/TitlecardPanel";
 import {
   GRADES,
   type Grade,
@@ -460,6 +461,11 @@ function InvoiceEditor({
   const [note, setNote] = useState<string | null>(null);
   const [editingLineId, setEditingLineId] = useState<string | null>(null);
   const [stageKey, setStageKey] = useState(0);
+  const [removing, setRemoving] = useState<InvoiceLine | null>(null);
+  // The titlecard is a view, not a route (E-04 d1) — here it is a modal over
+  // the invoice rather than a fourth track, because you open it to check one
+  // thing and go straight back to the line you were on.
+  const [titlecardFor, setTitlecardFor] = useState<string | null>(null);
 
   // Finalize is about stock, not paperwork — it mints sellable InventoryItems
   // but leaves the Invoice open for correction. Only Paid actually locks it
@@ -621,14 +627,8 @@ function InvoiceEditor({
                     mode={invoice.intakeMode}
                     supplier={supplier}
                     onDone={() => setEditingLineId(null)}
-                    onRemove={() => {
-                      const res = app.removeInvoiceLine(invoiceId, l.id);
-                      if (res.blocked) {
-                        setNote("Can't remove that line — one of its copies has already sold.");
-                      } else {
-                        setEditingLineId(null);
-                      }
-                    }}
+                    onRemove={() => setRemoving(l)}
+                    onOpenTitlecard={() => setTitlecardFor(l.recordId)}
                   />
                 ) : (
                   <ReadLineRow
@@ -643,6 +643,8 @@ function InvoiceEditor({
                         `${n} label${n === 1 ? "" : "s"} would print here (stub) — hooked up down the line.`,
                       );
                     }}
+                    onRemove={() => setRemoving(l)}
+                    onOpenTitlecard={() => setTitlecardFor(l.recordId)}
                   />
                 ),
               )}
@@ -702,6 +704,35 @@ function InvoiceEditor({
         onPrintAllLabels={printAllLabels}
         mintedCount={mintedCount}
       />
+
+      {removing && (
+        <RemoveLineModal
+          line={removing}
+          record={app.recordFor(removing.recordId)}
+          onClose={() => setRemoving(null)}
+          onConfirm={() => {
+            const res = app.removeInvoiceLine(invoiceId, removing.id);
+            if (res.blocked) {
+              setNote("Can't remove that line — one of its copies has already sold.");
+            } else {
+              if (editingLineId === removing.id) setEditingLineId(null);
+              setNote("Line removed.");
+            }
+            setRemoving(null);
+          }}
+        />
+      )}
+
+      {titlecardFor && (
+        <Modal title="Titlecard — E-04" wide onClose={() => setTitlecardFor(null)}>
+          <TitlecardPanel
+            recordId={titlecardFor}
+            onStatus={setNote}
+            showCost
+            onToggleShowCost={() => {}}
+          />
+        </Modal>
+      )}
 
       {finalizedCount !== null && (
         <Modal
@@ -1028,6 +1059,57 @@ function StageCard({
   );
 }
 
+// Removing a line is destructive, reachable in one tap from the row, and sits
+// beside two actions that are not — so it asks first, and says what it is
+// about to take with it. A line whose copy has already sold cannot go at all
+// (d4); the store is the one that knows, so this states the rule and lets the
+// attempt report back rather than guessing here.
+function RemoveLineModal({
+  line,
+  record,
+  onClose,
+  onConfirm,
+}: {
+  line: InvoiceLine;
+  record?: RecordEntry;
+  onClose: () => void;
+  onConfirm: () => void;
+}) {
+  const minted = line.itemIds?.length ?? 0;
+  return (
+    <Modal
+      title="Remove this line?"
+      onClose={onClose}
+      foot={
+        <>
+          <button className="btn ghost" onClick={onClose}>
+            Cancel
+          </button>
+          <button className="btn danger" onClick={onConfirm}>
+            Remove line
+          </button>
+        </>
+      }
+    >
+      <div className="stack">
+        <p className="small">
+          <strong>{record ? `${record.artist} — ${record.title}` : line.recordId}</strong>
+          <br />
+          {line.qty} cop{line.qty === 1 ? "y" : "ies"} at {money(line.acceptedPrice)}, cost{" "}
+          {money(line.cost)} each.
+        </p>
+        {minted > 0 && (
+          <div className="callout">
+            {minted} sellable cop{minted === 1 ? "y has" : "ies have"} already been minted from this
+            line and will be removed with it. A copy that has already sold cannot be removed — fix
+            that in E-04 instead (d4).
+          </div>
+        )}
+      </div>
+    </Modal>
+  );
+}
+
 // Row icons. Emoji were doing this job and doing it badly: they render at
 // whatever size and colour the platform's font decides, so ✏ arrived as a
 // tiny coloured pencil that read as a stray mark, and 🏷 as a label tag that
@@ -1066,10 +1148,15 @@ const CrossIcon = () => (
     <path d="M6 6l12 12M18 6L6 18" />
   </svg>
 );
-const RevertIcon = () => (
+// A cross closes things. It was doing duty as "remove this line", which is
+// the opposite of what a cross means everywhere else — so it cancels now, and
+// deleting gets the can.
+const TrashIcon = () => (
   <svg {...ROW_ICON}>
-    <path d="M4 5v5h5" />
-    <path d="M4.6 14a7.5 7.5 0 1 0 1.3-7" />
+    <path d="M4 7h16" />
+    <path d="M9 7V4.5h6V7" />
+    <path d="M6 7l1 12.5A1.5 1.5 0 0 0 8.5 21h7a1.5 1.5 0 0 0 1.5-1.5L18 7" />
+    <path d="M10 11v6M14 11v6" />
   </svg>
 );
 const CheckIcon = () => (
@@ -1108,12 +1195,16 @@ function ReadLineRow({
   locked,
   onEdit,
   onPrintLabel,
+  onRemove,
+  onOpenTitlecard,
 }: {
   line: InvoiceLine;
   record?: RecordEntry;
   locked: boolean;
   onEdit: () => void;
   onPrintLabel: () => void;
+  onRemove: () => void;
+  onOpenTitlecard: () => void;
 }) {
   const marginPct = line.acceptedPrice > 0 ? round2(((line.acceptedPrice - line.cost) / line.acceptedPrice) * 100) : 0;
   const minted = (line.itemIds?.length ?? 0) > 0;
@@ -1124,12 +1215,24 @@ function ReadLineRow({
   return (
     <tr className={belowCost ? "recv-flagged" : undefined}>
       <ArtCell record={record} />
-      <td className="recv-rec" title={record ? `${record.artist} — ${record.title}` : line.recordId}>
-        <span className="t">{record ? `${record.artist} — ${record.title}` : line.recordId}</span>
-        <span className="m">
-          {record ? `${record.label} · ${record.year}` : ""}
-          {line.scannedCode ? ` · ${line.scannedCode}` : ""}
-        </span>
+      <td className="recv-rec">
+        {/* The title is clipped to keep rows short, so it needs somewhere to
+            be read in full — clicking it opens the Record's titlecard (E-04),
+            which is also where you check that what you scanned is what you
+            meant to scan. */}
+        <button
+          type="button"
+          className="recv-rec-open"
+          onClick={onOpenTitlecard}
+          disabled={!record}
+          title={record ? `${record.artist} — ${record.title} — open titlecard` : "No Record"}
+        >
+          <span className="t">{record ? `${record.artist} — ${record.title}` : line.recordId}</span>
+          <span className="m">
+            {record ? `${record.label} · ${record.year}` : ""}
+            {line.scannedCode ? ` · ${line.scannedCode}` : ""}
+          </span>
+        </button>
       </td>
       <td>
         <span className="badge grade">{line.grade}</span>
@@ -1163,6 +1266,19 @@ function ReadLineRow({
           >
             <PrinterIcon />
           </button>
+          {/* Removing a line no longer means opening it first. It still asks,
+              because this is a destructive action on a touch counter sitting
+              next to two that are not. */}
+          {!locked && (
+            <button
+              className="btn ghost sm icon-btn recv-danger"
+              onClick={onRemove}
+              title="Remove this line"
+              aria-label="Remove this line"
+            >
+              <TrashIcon />
+            </button>
+          )}
         </div>
       </td>
     </tr>
@@ -1176,6 +1292,7 @@ function EditLineRow({
   supplier,
   onDone,
   onRemove,
+  onOpenTitlecard,
 }: {
   invoiceId: string;
   line: InvoiceLine;
@@ -1183,6 +1300,7 @@ function EditLineRow({
   supplier: Supplier;
   onDone: () => void;
   onRemove: () => void;
+  onOpenTitlecard: () => void;
 }) {
   const app = useApp();
   const record = app.recordFor(line.recordId);
@@ -1216,11 +1334,19 @@ function EditLineRow({
     <tr className="recv-editing">
       <ArtCell record={record} />
       <td className="recv-rec">
-        <span className="t">{record ? `${record.artist} — ${record.title}` : line.recordId}</span>
-        <span className="m">
-          {record ? `${record.label} · ${record.year}` : ""}
-          {line.scannedCode ? ` · ${line.scannedCode}` : ""}
-        </span>
+        <button
+          type="button"
+          className="recv-rec-open"
+          onClick={onOpenTitlecard}
+          disabled={!record}
+          title={record ? `${record.artist} — ${record.title} — open titlecard` : "No Record"}
+        >
+          <span className="t">{record ? `${record.artist} — ${record.title}` : line.recordId}</span>
+          <span className="m">
+            {record ? `${record.label} · ${record.year}` : ""}
+            {line.scannedCode ? ` · ${line.scannedCode}` : ""}
+          </span>
+        </button>
       </td>
       <td>
         {mode === "Second-hand" ? (
@@ -1286,12 +1412,12 @@ function EditLineRow({
             in its tooltip what accepting a below-cost price does (d35). */}
         <div className="recv-row-acts">
           <button
-            className="btn ghost sm icon-btn"
+            className="btn ghost sm icon-btn recv-danger"
             onClick={onRemove}
             title="Remove this line"
             aria-label="Remove this line"
           >
-            <CrossIcon />
+            <TrashIcon />
           </button>
           <button
             className="btn ghost sm icon-btn"
@@ -1299,7 +1425,7 @@ function EditLineRow({
             title="Cancel — leave the line as it was"
             aria-label="Cancel"
           >
-            <RevertIcon />
+            <CrossIcon />
           </button>
           <button
             className={"btn sm icon-btn" + (belowCost ? " danger" : " primary")}
