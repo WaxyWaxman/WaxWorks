@@ -1,6 +1,6 @@
 # M-01 — Suppliers
 
-**Actor:** Employee (Delete/Merge labeled Admin-only by convention, not enforced)
+**Actor:** Employee, except **setting a margin** and **merging Suppliers**, which are manager-only ([architecture](../architecture.md) A-28a)
 **Status:** Specified
 **Related:** [E-02 Receive inventory](E-02-receive-inventory.md) · [M-02 Re-order](M-02-reorder-inventory.md)
 
@@ -51,7 +51,7 @@ A Record's **Preferred Supplier** (set from its titlecard, [E-04](E-04-manage-in
 
 - Discount drives the suggested retail price at receiving: `suggested_retail = round_up(list_price x (1 + discount / 100))`, applied to the supplier's **pre-discount list price** (decisions 8, 31 — there is no separate Margin field).
 - A Supplier can be flagged **default for second-hand** (decision 27) — this is what Receiving pre-selects when Second-hand intake mode is chosen. There is no dedicated second-hand Supplier; this is a plain field on an ordinary Supplier record.
-- Nothing about a Supplier is manager-gated (decision 30) — decision 3's old "employees never set margins" carve-out is retired.
+- Setting a margin is **manager-only** ([E-02](E-02-receive-inventory.md) d44, [architecture](../architecture.md) A-28a). Creating a Supplier is not — an Employee may add one at the receiving desk and leave it unpriced. E-02 d3's carve-out was struck in error and has been restored.
 
 ---
 
@@ -64,13 +64,16 @@ A Record's **Preferred Supplier** (set from its titlecard, [E-04](E-04-manage-in
 | 3 | Discount is set **per Supplier**, not per category or per item |
 | 4 | Every Supplier add, edit, copy, merge, and second-hand-default change is logged with who and when |
 | 5 | Only one Supplier at a time may carry the second-hand-default flag ([E-02](E-02-receive-inventory.md) decision 27); setting it on one clears it from every other |
-| 6 | **Nothing here is manager- or admin-gated in an enforced sense.** New/Edit/Copy are plain Employee actions. Delete and Merge are labeled Admin-only for when real auth lands, but nothing today actually checks a role |
+| 6 | ~~**Nothing here is manager- or admin-gated in an enforced sense.** New/Edit/Copy are plain Employee actions. Delete and Merge are labeled Admin-only for when real auth lands, but nothing today actually checks a role~~ — **superseded by 11**: this read the retirement of the *manager override* as ungating the flow, which [architecture](../architecture.md) A-28a expressly says it does not |
 | 7 | ~~Discount and Margin are two distinct figures~~ — **superseded**: there is no separate Margin field. Discount is one figure that both describes what this Supplier charges off their own retail and drives the suggested-retail formula at receiving |
 | 8 | **Suppliers opens on the most recently searched card**, not a fixed default or an empty state |
 | 9 | **Merge reassigns every dependent pointer** (Invoice, PendingOrderLine, SupplierClaim, InventoryItem, a Record's preferredSupplierId) to the surviving Supplier rather than rewriting history |
 | 10 | A Record carries an optional **Preferred Supplier**, a default only — the Supplier actually used is recorded per order line, not on the Record |
+| 11 | **Setting a margin and merging Suppliers are manager-only; New, Edit and Copy are plain Employee actions. Supersedes decision 6.** [M-04](M-04-manage-users.md) d8 retired the *manager override* and amends M-04 d3 and d4 **for override-gated actions only** — it did not touch the **manager-only** set, which [architecture](../architecture.md) A-28a names these two members of expressly, and which the [lexicon](../lexicon.md) keeps as a separate term. A Manager authorizes in place by entering their own initials; both names are recorded (M-04 d3, d4). Whether **deleting** a Supplier joins that set is left open below |
 
 ## Open questions
+
+- **Whether deleting a Supplier is manager-only.** Decision 11 settles margin and merge because [architecture](../architecture.md) A-28a names them; it leaves Delete alone because the same row gates "deletions" as an unnamed category, the [lexicon](../lexicon.md)'s *manager-only* entry lists four actions and omits deletions entirely, and [E-07](E-07-manage-customers.md) d12 explicitly ungates deleting a **Customer**. Either A-28a means a narrower set than it reads, or E-07 d12 contradicts it — that is one decision, and it belongs to whoever settles the category rather than to this flow.
 
 - Does changing a Supplier's Discount reprice existing stock retroactively, or future intake only? Decision 2 answers this — future receiving only.
 - Is there a floor/ceiling or MAP (minimum advertised price) constraint?
