@@ -866,25 +866,40 @@ table.data tr.band-row + tr.group-row td { border-top: none; }
 }
 .recv-slab-acts .btn { flex: 1; justify-content: center; }
 
-/* One worklist row: an outstanding PO line, a draft, or a past Invoice. */
+/* One worklist row: an outstanding PO line, a draft, or a past Invoice.
+
+   Two lines, not two columns of stacked text. The faint meta line used to sit
+   beside the count, and at that weight and size the two ran together — a
+   catalogue number reading as part of a quantity. It gets the full width
+   under both now, so the only thing on the count's line is the count. */
 .wl {
-  display: grid; grid-template-columns: 32px minmax(0, 1fr) auto;
-  gap: var(--sp-2); align-items: center; width: 100%; text-align: left; cursor: pointer;
+  display: grid;
+  grid-template-columns: 32px minmax(0, 1fr) auto;
+  grid-template-areas:
+    "art title count"
+    "art meta  meta";
+  column-gap: var(--sp-2); row-gap: 1px;
+  align-items: center; width: 100%; text-align: left; cursor: pointer;
   padding: var(--sp-2) var(--sp-3); border: none; border-bottom: 1px solid var(--c-border);
   border-left: 3px solid transparent; background: var(--c-surface);
   font: inherit; color: var(--c-ink);
 }
+.wl > .recv-art { grid-area: art; align-self: center; }
+.wl .t { grid-area: title; }
+.wl .n { grid-area: count; }
+.wl .m { grid-area: meta; }
 .wl:hover { background: var(--c-surface-2); }
 .wl.on { border-left-color: var(--c-accent); box-shadow: inset 0 0 0 1px var(--c-ink); }
 .wl:focus-visible { outline: 2px solid var(--c-accent); outline-offset: -2px; }
 .wl .t { font-size: var(--fs-sm); font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .wl .m { font-size: var(--fs-xs); color: var(--c-ink-faint); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .wl .n {
-  font-family: var(--font-mono); font-size: var(--fs-sm); font-weight: 700; text-align: right;
+  display: flex; align-items: baseline; gap: 4px; justify-content: flex-end;
+  font-family: var(--font-mono); font-size: var(--fs-sm); font-weight: 700;
   font-variant-numeric: tabular-nums; color: var(--c-ink-soft); white-space: nowrap;
 }
 .wl .n small {
-  display: block; font-family: var(--font-narrow); font-size: 9px; font-weight: 700;
+  font-family: var(--font-narrow); font-size: 9px; font-weight: 700;
   letter-spacing: 0.05em; text-transform: uppercase; color: var(--c-ink-faint);
 }
 

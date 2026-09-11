@@ -248,17 +248,15 @@ export function ReceiveSlab({
               onClick={() => onSelect(iv.id)}
             >
               <span className="recv-art">📦</span>
-              <span style={{ minWidth: 0 }}>
-                <span className="t">
-                  {sup?.shortName} · {iv.invoiceNumber}
-                </span>
-                <span className="m">
-                  {sup?.name} · {iv.intakeMode.toLowerCase()}
-                </span>
+              <span className="t">
+                {sup?.shortName} · {iv.invoiceNumber}
               </span>
               <span className="n">
                 {iv.lines.length}
                 <small>line{iv.lines.length === 1 ? "" : "s"}</small>
+              </span>
+              <span className="m">
+                {sup?.name} · {iv.intakeMode.toLowerCase()}
               </span>
             </button>
           );
@@ -284,22 +282,20 @@ export function ReceiveSlab({
             ) : (
               <span className="recv-art empty">no art</span>
             )}
-            <span style={{ minWidth: 0 }}>
-              <span className="t">
-                {record ? `${record.artist} — ${record.title}` : order.recordId}
-              </span>
-              <span className="m">
-                {record ? `${record.label} · ${record.catalogNo}` : ""}
-                {/* M-02 raises a line before a Manager places it on a PO. It is
-                    still something to receive against, but nothing was ordered
-                    yet — so the row says which it is. */}
-                {order.poNumber ? ` · ${order.poNumber}` : " · not on a PO"}
-                {order.customerId ? " · customer hold" : ""}
-              </span>
+            <span className="t">
+              {record ? `${record.artist} — ${record.title}` : order.recordId}
             </span>
             <span className="n">
               {left}
               <small>{partiallyReceived ? `of ${order.qty}` : "ordered"}</small>
+            </span>
+            <span className="m">
+              {record ? `${record.label} · ${record.catalogNo}` : ""}
+              {/* M-02 raises a line before a Manager places it on a PO. It is
+                  still something to receive against, but nothing was ordered
+                  yet — so the row says which it is. */}
+              {order.poNumber ? ` · ${order.poNumber}` : " · not on a PO"}
+              {order.customerId ? " · customer hold" : ""}
             </span>
           </button>
         ))}
@@ -319,17 +315,15 @@ export function ReceiveSlab({
               onClick={() => onSelect(iv.id)}
             >
               <span className="recv-art">🧾</span>
-              <span style={{ minWidth: 0 }}>
-                <span className="t">
-                  {sup?.shortName} · {iv.invoiceNumber}
-                </span>
-                <span className="m">
-                  {iv.status.toLowerCase()} · {copies} cop{copies === 1 ? "y" : "ies"}
-                </span>
+              <span className="t">
+                {sup?.shortName} · {iv.invoiceNumber}
               </span>
               <span className="n">
                 {money(invoiceTotal(iv))}
                 <small>total</small>
+              </span>
+              <span className="m">
+                {iv.status.toLowerCase()} · {copies} cop{copies === 1 ? "y" : "ies"}
               </span>
             </button>
           );
