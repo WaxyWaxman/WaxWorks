@@ -1,6 +1,6 @@
 # M-03 — Daily summary of sales and inventory
 
-**Actor:** Manager (Undo End of Day labeled Admin-only by convention, not enforced)
+**Actor:** Manager (Undo End of Day is **manager-only**, not a retired *manager override* — [architecture](../architecture.md) A-28a)
 **Status:** Specified — surfaced on **Point of Sale** under **Other Functions** ([E-05](E-05-sell-a-record.md) decision 30), not a screen of its own
 **Related:** [E-05 Point of Sale](E-05-sell-a-record.md) · [E-06 Process a return](E-06-process-a-return.md) · [M-06 Settings](M-06-settings.md)
 
@@ -15,7 +15,7 @@ Closing the day is a real state transition, not just a report: it moves every **
 1. Manager runs **View Subtotal** as often as they like during the day. It produces the same breakdown as the close and changes nothing.
 2. Manager runs **Total Today's Sales** to close. The system produces the breakdown and moves all Current Sales to Closed.
 3. The closed group is a **batch**, carrying its own identifier, the timestamp it was run, and the User who ran it.
-4. **Undo End of Day** reverses a batch, returning its Sales to Current. **Admin** by convention — labeled, not an enforced check (see [E-05](E-05-sell-a-record.md) decision 30).
+4. **Undo End of Day** reverses a batch, returning its Sales to Current. It is **manager-only** ([architecture](../architecture.md) A-28a, and decision 4 below): a Manager authorizes in place by entering their own initials, and both names are recorded ([M-04](M-04-manage-users.md) d3, d4). It is not a *manager override* — that term is retired ([M-04](M-04-manage-users.md) d8), and it never covered this action.
 
 A batch is not the same thing as a calendar day. Sales rung after a close belong to the next batch even if the date hasn't changed, and a shop that closes twice in a day produces two batches.
 
