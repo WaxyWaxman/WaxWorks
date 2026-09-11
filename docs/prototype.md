@@ -61,7 +61,7 @@ implements.
 |---|---|
 | Top menu | One band of equal segments, the active one filled solid, ending in **More** |
 | Point of Sale | Large scan field, large line rows, a total readable across the counter. Actions are placed by **who is waiting** (E-05 decision 28) — counter work on screen, everything else behind the rail. The screen owns the window and its three tracks scroll separately (decision 29), so Finish sale is always on the money rail's floor rather than below the fold; the rail collapses to icons so the sale keeps the width (decision 30) |
-| Receiving | Worklist rail on the left, art-led line table, reconcile as a footer strip — pinned to the viewport so derived vs. stated never scrolls away (E-02 decision 37) |
+| Receiving | The till's three tracks (E-02 decision 38): a retractable worklist slab, the art-led line table, and reconcile as a sticky right-hand track — so derived vs. stated never scrolls away at any line count. Below 1180px reconcile drops to a bottom strip, which is decision 37's original arrangement. The slab shut is a 52px bar — open, new intake, open existing, search — carrying the drafts in flight as a badge and the three most recent finished intakes as tiles |
 | Search | Results rail, titlecard, actions rail |
 
 ### What the band carries

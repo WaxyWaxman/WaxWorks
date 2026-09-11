@@ -99,6 +99,8 @@ Several decisions here amend flow documents. Every one is listed in §9 and has 
 | A-9 | **Tailwind + shadcn/ui.** The [prototype](prototype.md)'s design tokens map onto Tailwind theme variables. |
 | A-10 | **Supabase runs locally in Docker; migrations are committed.** `supabase db reset` gives a reproducible database, which matters when business logic lives in database functions. |
 | A-31 | **The agent configuration is version-controlled.** `.claude/skills/`, `.claude/agents/`, `settings.json` and `launch.json` are tracked; per-machine session state — `settings.local.json`, `worktrees/`, `todos/` and the rest — stays ignored. The skills encode this project's conventions (append-only decision numbering, status in three places, [lexicon](lexicon.md) compliance, propose-don't-ratify), so they are project facts belonging under review alongside `scripts/check_docs.py`, not personal configuration. Same reasoning as A-10: version control is what makes a working environment reproducible. The motivating failure is concrete — skills kept locally drift silently, and an agent enforcing a superseded decision reports correct work as broken. Accepted consequences: two people editing one skill can conflict, and the repository carries opinions about a specific tool that would be cruft if we changed tools. |
+| A-32 | **A second-hand Invoice with no supplier paperwork mints `SH-YYMMDD-n`, not a Store counter value.** Amends A-22. The reference carries the received date, the one fact a walk-in trade-in reliably has, and `-n` sequences a second intake the same day. `invoice_number` stays a plain text column and `(supplier_id, invoice_number)` uniqueness is unchanged, so this is a minting rule rather than a schema change; second-hand still runs under its dedicated Supplier. Amends [E-02](flows/E-02-receive-inventory.md) d1 and d31 (E-02 d39). |
+| A-33 | **Immutability attaches when an Invoice is marked paid, not when it is finalized.** Amends A-22, which had a finalized Invoice opening read-only. Finalize is what makes lines sellable; **paid** in [M-05](flows/M-05-accounts-payable.md) is what freezes the document. Between the two, costs and totals stay editable and lines may be added — a line whose copy has already sold cannot be removed. This resolves a standing contradiction inside [E-02](flows/E-02-receive-inventory.md) between d4 and d31/step 23 (E-02 d40), and it is the reading M-05 already depends on, since an amount that cannot change before settlement makes an amendment against an unpaid Invoice meaningless. Accepted consequence: "finalized" no longer means "finished" — the [lexicon](lexicon.md) entry for *immutable* moves with it, and anything reading an Invoice between finalize and paid must expect its totals to move. |
 
 ---
 
@@ -316,12 +318,13 @@ Each of these has been appended to the document it affects.
 | [PRD](PRD.md) §6 | Multi-store consequences resolved (A-5); catalog provider (A-12); consignment flag (A-26) |
 | [E-01](flows/E-01-authenticate.md) | d9 terminal enrollment (A-3); d10 an open Sale suppresses the lapse (A-19a) |
 | [E-02](flows/E-02-receive-inventory.md) | d27–d36 — photography, multi-PO Invoices, worklist, derived backorders, optional Invoice number, advisory rounding, consignment, tax out of COGS, flags over gates, receiving history |
+| [E-02](flows/E-02-receive-inventory.md) | d39 second-hand reference `SH-YYMMDD-n` (A-32); d40 immutability attaches at paid, not finalize (A-33) |
 | [E-03](flows/E-03-search-inventory.md) | d10 catalog provider is MusicBrainz (A-12) |
 | [E-05](flows/E-05-sell-a-record.md) | d21–d26 — the `open` state, per-Store Sale numbers, locking and attribution, emailed receipts, deposits, advisory rounding |
 | [M-02](flows/M-02-reorder-inventory.md) | d14 batched prefetch (A-12a) |
 | [M-03](flows/M-03-daily-summary.md) | d12 Held Sales absent from the close (A-23); d13 stored and printed summary (A-30) |
 | [M-04](flows/M-04-manage-users.md) | d8 override replaced by review flags (A-28); d9 manager-only retains in-place authorization (A-28a) |
-| [lexicon](lexicon.md) | New terms; *manager override* revised; *Discogs* demoted to one implementation of the catalog provider |
+| [lexicon](lexicon.md) | New terms; *manager override* revised; *Discogs* demoted to one implementation of the catalog provider; *immutable* attaches at paid (A-33) |
 
 ---
 
