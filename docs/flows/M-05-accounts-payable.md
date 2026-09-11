@@ -91,6 +91,12 @@ Loading and redeeming happen at the till ([E-05](E-05-sell-a-record.md)); this i
 - Invoices are keyed by `(supplier, invoice_number)`, not globally (decision 1).
 - A finalized Invoice is **not yet locked**: costs can still be corrected and lines added directly back in E-02 until a Manager marks it **paid** here, which is what makes it immutable. Voiding a paid Invoice is a manager-only amendment handled in [E-04](E-04-manage-inventory.md), appended as a separate artifact against the original record.
 
+**From [M-01](M-01-supplier-margin.md):**
+
+- **An Employee may *view* a Supplier's outstanding balance and trade totals on the Supplier card** ([M-01](M-01-supplier-margin.md) d16). This does not open any part of this flow to them: recording a payment, applying a claim credit, creating a manual entry and clearing entries against each other all remain manager-only, and decision 2 below is unchanged. The distinction is the [lexicon](../lexicon.md)'s — **manager-only** gates an action an Employee cannot *perform*, which was never a statement about what they may see.
+- The Supplier card links through to this screen for the rows behind the figure, rather than restating them ([M-01](M-01-supplier-margin.md) d18). Decision 3's combined list stays the single place those rows are read and worked.
+- A Supplier carries a **billing address** — where payment is remitted — captured on its card ([M-01](M-01-supplier-margin.md) d13). Nothing here consumes it yet.
+
 **From [E-04](E-04-manage-inventory.md):**
 
 - Claims arrive here already raised, batched, sent, and carrying a **Pending** or **Credited** status.
