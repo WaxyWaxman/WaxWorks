@@ -16,6 +16,7 @@ import {
   type Section,
   type Supplier,
 } from "../data/types";
+import { readStored, writeStored } from "../lib/tillMemory";
 import { money, roundUpShelf } from "../lib/money";
 import { countField, figureField, integerOnly, numericOnly } from "../lib/fields";
 import { outstandingQty } from "../lib/orderLines";
@@ -34,24 +35,6 @@ import { useApp } from "../store/AppStore";
 // Per till, not per employee: this is the machine at the receiving desk, the
 // same way the till rail's own open/shut state already is.
 const SLAB_KEY = "waxworks.receive.slab";
-
-function readStored<T>(key: string, fallback: T): T {
-  try {
-    const raw = window.localStorage.getItem(key);
-    return raw == null ? fallback : (JSON.parse(raw) as T);
-  } catch {
-    /* private window, or site data blocked — the slab just forgets */
-    return fallback;
-  }
-}
-
-function writeStored(key: string, value: unknown) {
-  try {
-    window.localStorage.setItem(key, JSON.stringify(value));
-  } catch {
-    /* nothing to do — forgetting is an acceptable outcome here */
-  }
-}
 
 export function Receiving() {
   const app = useApp();

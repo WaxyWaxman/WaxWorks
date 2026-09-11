@@ -10,6 +10,7 @@ import type {
   Supplier,
   SupplierClaim,
   TaxLine,
+  Tender,
 } from "../data/types";
 
 export const lineGross = (l: SaleLine): number => l.qty * l.price;
@@ -53,6 +54,21 @@ export const balanceDue = (sale: Sale, taxLines: TaxLine[]): number =>
   round2(saleTotals(sale, taxLines).grand - tenderedTotal(sale));
 
 export const round2 = (n: number): number => Math.round(n * 100) / 100;
+
+/**
+ * What one tender does to a Customer's A/R balance, signed the way E-07 d4
+ * signs it: positive means the store owes them more (store credit), negative
+ * means they owe the store.
+ *
+ * Lives here rather than inside the store because two things read it now —
+ * the store applies it at tender, and E-07's account track lists the
+ * movements it produced. Two copies of this rule would drift.
+ */
+export function customerBalanceDelta(tender: Pick<Tender, "type" | "amount" | "accountDirection">): number {
+  if (tender.type === "Used Credit") return Math.abs(tender.amount);
+  if (tender.type !== "Account Balance") return 0;
+  return tender.accountDirection === "add" ? Math.abs(tender.amount) : -tender.amount;
+}
 
 // ---- Stock math (E-04): on hand is derived from sellable copies ----
 export const onHand = (recordId: string, inv: InventoryItem[]): number =>
