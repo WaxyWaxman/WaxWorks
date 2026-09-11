@@ -277,6 +277,7 @@ export interface InvoiceLine {
   qty: number; // one InventoryItem is minted per unit on finalize
   itemIds?: string[]; // populated on finalize — not sellable before then
   fromOrderId?: string; // the PendingOrderLine this was received against, if any
+  poNumber?: string; // snapshot of that line's PO at receipt — the PendingOrderLine is consumed when received, so this is the only surviving link (E-02 d43)
 }
 
 // A supplier order line (M-02). `poNumber` unset means the line has been

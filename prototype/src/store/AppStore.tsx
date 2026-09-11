@@ -571,6 +571,7 @@ interface AppContextValue extends AppState {
       grade: Grade;
       qty: number;
       fromOrderId?: string;
+      poNumber?: string;
     },
   ) => void;
   updateInvoiceLine: (

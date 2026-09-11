@@ -2,12 +2,14 @@ import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { Modal } from "../components/Modal";
 import { ReceiveReconcile } from "../components/ReceiveReconcile";
-import { ReceiveSlab, type OutstandingLine } from "../components/ReceiveSlab";
+import { OutstandingPanel } from "../components/OutstandingPanel";
+import { ReceiveSlab } from "../components/ReceiveSlab";
 import { TitlecardPanel } from "../components/TitlecardPanel";
 import {
   GRADES,
   type Grade,
   type IntakeMode,
+  type Invoice,
   type InvoiceLine,
   type PendingOrderLine,
   type RecordEntry,
@@ -58,7 +60,6 @@ export function Receiving() {
   const [creating, setCreating] = useState(false);
   const [opening, setOpening] = useState(false);
   const [term, setTerm] = useState("");
-  const [poFilter, setPoFilter] = useState<string | null>(null);
   const [prefillOrder, setPrefillOrder] = useState<PendingOrderLine | null>(null);
   // Open on arrival: receiving begins by picking what you are receiving
   // against. Used mode gets no different default — an intake with no PO behind
@@ -77,62 +78,46 @@ export function Receiving() {
     [app.invoices],
   );
 
-  // The worklist (d29): outstanding PurchaseOrder lines across ALL open POs,
-  // not scoped to one supplier — suppliers ship several POs in one box (d28).
-  const outstanding: OutstandingLine[] = useMemo(() => {
+  // Invoice search (d36, d43): supplier, number, date, title, barcode, PO.
+  // Title and barcode reach through the lines — "which invoices took that copy
+  // in" is the question only the Invoice side can answer. Null when the box is
+  // empty, which is what lets the slab show its bands instead.
+  const matches = useMemo(() => {
     const q = term.trim().toLowerCase();
-    // Ordered minus received against that PO line across every Invoice (d30).
-    // Partial receipt is not modelled in the prototype store — a received line
-    // is removed outright — so `received` is always 0 today and the row reads
-    // as a plain ordered quantity rather than a fake "n of m".
-    const receivedAgainst = (orderId: string) =>
-      app.invoices.reduce(
-        (n, iv) => n + iv.lines.filter((l) => l.fromOrderId === orderId).reduce((m, l) => m + l.qty, 0),
-        0,
-      );
-
-    return app.pendingOrders
-      .map((order) => {
-        const record = app.recordFor(order.recordId);
-        const received = receivedAgainst(order.id);
-        return {
-          order,
-          record,
-          outstanding: Math.max(0, order.qty - received),
-          partiallyReceived: received > 0,
-        };
-      })
-      .filter(({ order, record, outstanding: left }) => {
-        if (left <= 0) return false;
-        if (poFilter && (order.poNumber ?? "unplaced") !== poFilter) return false;
-        if (!q) return true;
+    if (!q) return null;
+    const hit = (iv: Invoice) => {
+      const sup = app.supplierFor(iv.supplierId);
+      if (
+        iv.invoiceNumber.toLowerCase().includes(q) ||
+        sup?.name.toLowerCase().includes(q) ||
+        sup?.shortName.toLowerCase().includes(q) ||
+        iv.invoiceDate.includes(q) ||
+        iv.receivedDate.includes(q)
+      ) {
+        return true;
+      }
+      return iv.lines.some((l) => {
+        const rec = app.recordFor(l.recordId);
         return (
-          record?.title.toLowerCase().includes(q) ||
-          record?.artist.toLowerCase().includes(q) ||
-          record?.catalogNo.toLowerCase().includes(q) ||
-          (order.scannedCode ?? "").toLowerCase().includes(q) ||
-          (order.poNumber ?? "").toLowerCase().includes(q)
+          (l.scannedCode ?? "").toLowerCase().includes(q) ||
+          rec?.title.toLowerCase().includes(q) ||
+          rec?.artist.toLowerCase().includes(q) ||
+          rec?.catalogNo.toLowerCase().includes(q) ||
+          (rec?.manufacturerUpc ?? "").includes(q) ||
+          // d28 lets one Invoice span several POs, and the link lives on the
+          // line — so "which invoice did PO-1142 arrive on" is answered here.
+          // The snapshot first: receiving a PO line consumes it, so the live
+          // lookup only answers for a line whose order is somehow still open.
+          (l.poNumber ?? app.pendingOrders.find((o) => o.id === l.fromOrderId)?.poNumber ?? "")
+            .toLowerCase()
+            .includes(q)
         );
-      })
-      .sort((a, b) => {
-        const pa = a.order.poNumber ?? "~";
-        const pb = b.order.poNumber ?? "~";
-        return pa.localeCompare(pb) || (a.record?.title ?? "").localeCompare(b.record?.title ?? "");
       });
-  }, [app.pendingOrders, app.invoices, app.records, term, poFilter]);
-
-  // Chips are built from every open PO, not from the filtered list — otherwise
-  // picking one chip would hide the others and strand you inside it.
-  const poCounts = useMemo(() => {
-    const counts = new Map<string, number>();
-    for (const order of app.pendingOrders) {
-      const key = order.poNumber ?? "unplaced";
-      counts.set(key, (counts.get(key) ?? 0) + 1);
-    }
-    return [...counts.entries()]
-      .map(([po, count]) => ({ po, count }))
-      .sort((a, b) => a.po.localeCompare(b.po));
-  }, [app.pendingOrders]);
+    };
+    return [...app.invoices]
+      .filter(hit)
+      .sort((a, b) => (b.finalizedAt ?? b.createdAt).localeCompare(a.finalizedAt ?? a.createdAt));
+  }, [term, app.invoices, app.records, app.suppliers, app.pendingOrders]);
 
   // A URL invoiceId always wins; without one, the oldest open draft stands in,
   // then the most recent finished intake. Picking anything puts it in the URL
@@ -142,13 +127,6 @@ export function Receiving() {
 
   const select = (id: string) => nav(`/receiving/${id}`, { replace: true });
 
-  const pickOrder = (order: PendingOrderLine) => {
-    setPrefillOrder(order);
-    // Picking a worklist line with no invoice open is a request to start one:
-    // the alternative is a silent no-op, which reads as a broken button.
-    if (!selected || selected.status === "Paid") setCreating(true);
-  };
-
   return (
     <div className={"recv-frame" + (slabOpen ? "" : " slab-shut")}>
       <ReceiveSlab
@@ -156,17 +134,13 @@ export function Receiving() {
         onOpenChange={setSlabOpen}
         term={term}
         onTermChange={setTerm}
-        poFilter={poFilter}
-        onPoFilterChange={setPoFilter}
-        outstanding={outstanding}
-        poCounts={poCounts}
         drafts={drafts}
         recent={recent}
+        matches={matches}
         selectedId={selected?.id}
         onSelect={select}
         onNewIntake={() => setCreating(true)}
         onOpenExisting={() => setOpening(true)}
-        onPickOrder={pickOrder}
       />
 
       {selected ? (
@@ -453,12 +427,15 @@ function InvoiceEditor({
   prefillOrder: PendingOrderLine | null;
   onPrefillConsumed: () => void;
 }) {
+  // A line picked out of the worklist stages the same way a scan does — one
+  // path into the staging card, so picking and scanning cannot drift apart.
+  const [stagedOrder, setStagedOrder] = useState<PendingOrderLine | null>(null);
   const app = useApp();
   const invoice = app.invoiceFor(invoiceId)!;
   const supplier = app.supplierFor(invoice.supplierId)!;
 
   const [autoAccept, setAutoAccept] = useState(false);
-  const [note, setNote] = useState<string | null>(null);
+  const [toast, setToast] = useState<string | null>(null);
   const [editingLineId, setEditingLineId] = useState<string | null>(null);
   const [stageKey, setStageKey] = useState(0);
   const [removing, setRemoving] = useState<InvoiceLine | null>(null);
@@ -489,7 +466,15 @@ function InvoiceEditor({
     expectedSellValue > 0 ? round2(((expectedSellValue - enteredTotal) / expectedSellValue) * 100) : 0;
   const belowCostLines = invoice.lines.filter((l) => l.acceptedPrice < l.cost).length;
   const [finalizedCount, setFinalizedCount] = useState<number | null>(null);
-  const [labelsNote, setLabelsNote] = useState<string | null>(null);
+
+  // Confirmations are events, not state: they say something just happened and
+  // then stop being true. One channel, cleared on its own so nobody has to
+  // dismiss a message about a label that printed six scans ago.
+  useEffect(() => {
+    if (!toast) return;
+    const t = window.setTimeout(() => setToast(null), 6000);
+    return () => window.clearTimeout(t);
+  }, [toast]);
 
   const doFinalize = () => {
     if (delta !== 0) app.setInvoiceTotalOverride(invoiceId, enteredTotal);
@@ -499,12 +484,12 @@ function InvoiceEditor({
 
   const doSaveUpdates = () => {
     if (delta !== 0) app.setInvoiceTotalOverride(invoiceId, enteredTotal);
-    setNote("Totals saved.");
+    setToast("Totals saved.");
   };
 
   const mintedCount = invoice.lines.reduce((sum, l) => sum + (l.itemIds?.length ?? 0), 0);
   const printAllLabels = () =>
-    setLabelsNote(
+    setToast(
       `${mintedCount} label${mintedCount === 1 ? "" : "s"} would print here (stub) — hooked up down the line.`,
     );
 
@@ -555,6 +540,13 @@ function InvoiceEditor({
             fixed, a carton turns up late. Only Paid removes it — and then it is
             REPLACED, not deleted, so the track keeps its shape and the absence
             explains itself. */}
+        {/* The worklist, scoped to this Invoice's Supplier (d42). Above the
+            scan slab because it is what you consult BEFORE scanning — what is
+            expected, and afterwards what never turned up. */}
+        {!locked && (
+          <OutstandingPanel invoice={invoice} supplier={supplier} onPick={setStagedOrder} />
+        )}
+
         {locked ? (
           <div className="recv-scan">
             <div className="recv-locked">
@@ -574,27 +566,16 @@ function InvoiceEditor({
             supplier={supplier}
             autoAccept={autoAccept}
             finalized={invoice.status === "Finalized"}
-            prefillOrder={prefillOrder}
-            onPrefillConsumed={onPrefillConsumed}
+            prefillOrder={stagedOrder ?? prefillOrder}
+            onPrefillConsumed={() => {
+              setStagedOrder(null);
+              onPrefillConsumed();
+            }}
             onCommitted={(msg) => {
-              setNote(msg);
+              setToast(msg);
               setStageKey((k) => k + 1);
             }}
           />
-        )}
-
-        {(note || labelsNote || mismatch) && (
-          <div className="recv-notes">
-            {note && <div className="callout ok">{note}</div>}
-            {labelsNote && <div className="callout ok">{labelsNote}</div>}
-            {mismatch && (
-              <div className="callout">
-                Derived subtotal doesn't match the supplier's stated subtotal — a discrepancy
-                warning, not a block. Recheck the lines, or proceed if it's explainable.{" "}
-                <em>(Decision 18.)</em>
-              </div>
-            )}
-          </div>
         )}
 
         <div className="recv-lines">
@@ -639,7 +620,7 @@ function InvoiceEditor({
                     onEdit={() => setEditingLineId(l.id)}
                     onPrintLabel={() => {
                       const n = l.itemIds?.length ?? 0;
-                      setLabelsNote(
+                      setToast(
                         `${n} label${n === 1 ? "" : "s"} would print here (stub) — hooked up down the line.`,
                       );
                     }}
@@ -682,6 +663,19 @@ function InvoiceEditor({
             ))}
           </div>
         </details>
+
+        {/* Events fade; STATES stay put. The discrepancy warning used to sit
+            here as a callout and is a state — it lives in the reconcile
+            verdict strip, which says the same thing and does not push the
+            line table down to say it. */}
+        {toast && (
+          <div className="recv-toast" role="status">
+            <span>{toast}</span>
+            <button className="btn ghost sm" onClick={() => setToast(null)} aria-label="Dismiss">
+              ✕
+            </button>
+          </div>
+        )}
       </section>
 
       <ReceiveReconcile
@@ -713,10 +707,10 @@ function InvoiceEditor({
           onConfirm={() => {
             const res = app.removeInvoiceLine(invoiceId, removing.id);
             if (res.blocked) {
-              setNote("Can't remove that line — one of its copies has already sold.");
+              setToast("Can't remove that line — one of its copies has already sold.");
             } else {
               if (editingLineId === removing.id) setEditingLineId(null);
-              setNote("Line removed.");
+              setToast("Line removed.");
             }
             setRemoving(null);
           }}
@@ -727,7 +721,7 @@ function InvoiceEditor({
         <Modal title="Titlecard — E-04" wide onClose={() => setTitlecardFor(null)}>
           <TitlecardPanel
             recordId={titlecardFor}
-            onStatus={setNote}
+            onStatus={setToast}
             showCost
             onToggleShowCost={() => {}}
           />
@@ -857,6 +851,10 @@ function StageCard({
 
   const commit = () => {
     if (!record) return;
+    // Read the PO off the pending line while it still exists — receiving it
+    // consumes it, and after that nothing on the invoice line would say which
+    // PO the copy arrived against (d43).
+    const order = fromOrderId ? app.pendingOrders.find((o) => o.id === fromOrderId) : undefined;
     app.addInvoiceLine(invoiceId, {
       recordId: record.id,
       scannedCode: scannedCode.trim() || undefined,
@@ -866,6 +864,7 @@ function StageCard({
       grade: mode === "New" ? "M" : grade,
       qty: lineQty,
       fromOrderId: fromOrderId ?? undefined,
+      poNumber: order?.poNumber,
     });
     if (fromOrderId) app.receivePendingOrderLine(fromOrderId);
     onCommitted(
@@ -1242,6 +1241,7 @@ function ReadLineRow({
           <span className="t">{record ? `${record.artist} — ${record.title}` : line.recordId}</span>
           <span className="m">
             {record ? `${record.label} · ${record.year}` : ""}
+            {line.poNumber ? ` · ${line.poNumber}` : ""}
             {line.scannedCode ? ` · ${line.scannedCode}` : ""}
           </span>
         </button>

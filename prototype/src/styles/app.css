@@ -946,6 +946,55 @@ table.data tr.band-row + tr.group-row td { border-top: none; }
    same way — so the slab is the field and the one thing it cannot do for
    itself: look a title up when the code resolves to nothing. */
 .recv-scan-look { width: 38px; height: 38px; flex: none; display: grid; place-items: center; padding: 0; }
+
+/* ---- The outstanding-orders worklist, in the Invoice track (d42) ----
+   Above the scan slab, because it is what you consult BEFORE scanning — what
+   is expected out of this box — and afterwards, what never turned up. Shut by
+   default: a scan attaches on its own (M-02 d20), so this is for the copies
+   that cannot do that for themselves. Shut, it still says what is behind it,
+   the way the till rail's badges do (E-05 d30). */
+.recv-outstanding { flex: none; border-bottom: 1px solid var(--c-border); background: var(--c-surface-2); }
+.recv-outstanding-head {
+  display: flex; align-items: baseline; gap: var(--sp-3); width: 100%; cursor: pointer;
+  padding: var(--sp-2) var(--sp-4); border: none; background: none; font: inherit;
+  color: var(--c-ink); text-align: left;
+}
+.recv-outstanding-head:hover { background: var(--c-surface); }
+.recv-outstanding-head:focus-visible { outline: 2px solid var(--c-accent); outline-offset: -2px; }
+.recv-outstanding-count { font-size: var(--fs-sm); color: var(--c-ink-soft); }
+.recv-outstanding-count strong { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+.recv-outstanding-chev { margin-left: auto; color: var(--c-ink-faint); font-size: var(--fs-xs); }
+.recv-outstanding-body {
+  padding: 0 var(--sp-4) var(--sp-3); display: flex; flex-direction: column; gap: var(--sp-2);
+}
+.recv-outstanding-controls { display: flex; flex-direction: column; gap: var(--sp-2); }
+.recv-outstanding-controls input[type="search"] { font-size: var(--fs-sm); padding: 5px var(--sp-2); }
+/* Capped: this is a reference list read against the lines, not a third track.
+   Past about six rows it would push the scan slab off the screen. */
+.recv-outstanding-list {
+  max-height: 232px; overflow-y: auto;
+  border: 1px solid var(--c-border); background: var(--c-surface);
+}
+.recv-outstanding-list .wl:last-child { border-bottom: none; }
+
+/* ---- Confirmations ----
+   Events, not state. Same pattern as Find's toast: it says something just
+   happened and then stops being true, so it clears itself rather than sitting
+   in the layout pushing the line table down. */
+.recv-toast {
+  flex: none; display: flex; align-items: center; gap: var(--sp-2);
+  margin: 0 var(--sp-4) var(--sp-3); padding: var(--sp-2) var(--sp-3);
+  border: 1px solid var(--c-ink); background: var(--c-surface);
+  box-shadow: var(--shadow-2); font-size: var(--fs-sm);
+}
+.recv-toast > span { flex: 1; min-width: 0; }
+@media (prefers-reduced-motion: no-preference) {
+  .recv-toast { animation: recv-toast-in 140ms ease-out; }
+  @keyframes recv-toast-in {
+    from { opacity: 0; transform: translateY(4px); }
+    to { opacity: 1; transform: none; }
+  }
+}
 /* Paid: the scan slab is REPLACED, not removed, so the track keeps its shape
    and the absence explains itself (d40). */
 .recv-locked {

@@ -1,13 +1,17 @@
 import { useEffect, useRef } from "react";
-import type { Invoice, PendingOrderLine, RecordEntry, Supplier } from "../data/types";
+import type { Invoice, Supplier } from "../data/types";
 import { money } from "../lib/money";
 import { round2 } from "../lib/totals";
 import { useApp } from "../store/AppStore";
 
-// The receiving slab (E-02 d38). Open, it is the worklist d29 asks for —
-// outstanding PurchaseOrder lines across every open PO, searchable by title or
-// barcode and filterable by PO — with the drafts in flight above it and the
-// Invoices received lately below. Shut, it is a 52px bar.
+// The receiving slab (E-02 d38, d42). Invoices, and only Invoices: the drafts
+// in flight and the ones received lately, searched by supplier, number, date,
+// title, barcode or PO number (d36, d43). A title or barcode lists the Invoices
+// that took that copy IN, which is the question the Invoice side can answer.
+//
+// The outstanding-orders worklist used to share this list and this search box,
+// and neither could be searched properly for it. It lives in the Invoice track
+// now (d42), scoped to the open Invoice's Supplier.
 //
 // It PUSHES rather than overlays, the way Find's slab does and unlike the till
 // rail (E-05 d30). The rail overlays because nothing being read should move
@@ -15,50 +19,32 @@ import { useApp } from "../store/AppStore";
 // lines already taken in get read against each other, so an overlay would cover
 // the half you are comparing to.
 
-export interface OutstandingLine {
-  order: PendingOrderLine;
-  record?: RecordEntry;
-  /** Ordered minus received against this PO line, derived not stored (d30). */
-  outstanding: number;
-  /** True once anything has been received against it — partial receipt is not
-      modelled in the prototype store, so today this is always false and the
-      row reads as a plain ordered quantity rather than a fake "n of m". */
-  partiallyReceived: boolean;
-}
-
 export function ReceiveSlab({
   open,
   onOpenChange,
   term,
   onTermChange,
-  poFilter,
-  onPoFilterChange,
-  outstanding,
-  poCounts,
   drafts,
   recent,
+  matches,
   selectedId,
   onSelect,
   onNewIntake,
   onOpenExisting,
-  onPickOrder,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   term: string;
   onTermChange: (term: string) => void;
-  /** null means every open PO. */
-  poFilter: string | null;
-  onPoFilterChange: (po: string | null) => void;
-  outstanding: OutstandingLine[];
-  poCounts: { po: string; count: number }[];
   drafts: Invoice[];
   recent: Invoice[];
+  /** Every Invoice matching the search, once there is one — searching reaches
+      past the drafts and the last three into the whole history (d36). */
+  matches: Invoice[] | null;
   selectedId?: string;
   onSelect: (invoiceId: string) => void;
   onNewIntake: () => void;
   onOpenExisting: () => void;
-  onPickOrder: (order: PendingOrderLine) => void;
 }) {
   const app = useApp();
   const searchRef = useRef<HTMLInputElement>(null);
@@ -139,8 +125,8 @@ export function ReceiveSlab({
               // cursor when the plain chevron opens the slab.
               window.setTimeout(() => searchRef.current?.focus(), 0);
             }}
-            aria-label="Search the worklist"
-            title="Search — opens the slab with the cursor in the box"
+            aria-label="Search invoices"
+            title="Search invoices — opens the slab with the cursor in the box"
           >
             <Magnifier />
           </button>
@@ -204,132 +190,121 @@ export function ReceiveSlab({
           type="search"
           value={term}
           onChange={(e) => onTermChange(e.target.value)}
-          aria-label="Search the worklist — title, artist, barcode, PO number"
-          placeholder="title · barcode · PO no."
+          aria-label="Search invoices — supplier, number, date, title, barcode, PO"
+          placeholder="supplier · invoice no. · date · title · PO"
         />
-        {/* Filterable by PO (d29). The chips narrow the same list rather than
-            switching to a different one, so the bands never move. */}
-        {poCounts.length > 0 && (
-          <div className="slab-chips">
-            <button
-              className={"filter-chip" + (poFilter === null ? " on" : "")}
-              onClick={() => onPoFilterChange(null)}
-            >
-              All POs <span className="count">{outstanding.length}</span>
-            </button>
-            {poCounts.map(({ po, count }) => (
-              <button
-                key={po}
-                className={"filter-chip" + (poFilter === po ? " on" : "")}
-                onClick={() => onPoFilterChange(poFilter === po ? null : po)}
-              >
-                {po === "unplaced" ? "Not on a PO" : po}{" "}
-                <span className="count">{count}</span>
-              </button>
-            ))}
-          </div>
-        )}
+        <p className="xsmall muted" style={{ margin: 0 }}>
+          A title or barcode finds the invoices that took that copy in.
+        </p>
       </div>
 
       <div className="slab-list">
-        <div className="slab-band">
-          <span className="lab">In flight</span>
-          <span className="lab">
-            {drafts.length} draft{drafts.length === 1 ? "" : "s"}
-          </span>
-        </div>
-        {drafts.length === 0 && <p className="xsmall muted slab-empty">No draft open.</p>}
-        {drafts.map((iv) => {
-          const sup = supplierOf(iv);
-          return (
-            <button
-              key={iv.id}
-              className={"wl" + (iv.id === selectedId ? " on" : "")}
-              onClick={() => onSelect(iv.id)}
-            >
-              <span className="recv-art">📦</span>
-              <span className="t">
-                {sup?.shortName} · {iv.invoiceNumber}
+        {/* A search reaches past the drafts and the last three into the whole
+            history (d36), so it replaces the bands rather than filtering
+            them — two lists both claiming to answer one query is worse than
+            one that plainly does. */}
+        {matches ? (
+          <>
+            <div className="slab-band">
+              <span className="lab">Matching</span>
+              <span className="lab">
+                {matches.length} invoice{matches.length === 1 ? "" : "s"}
               </span>
-              <span className="n">
-                {iv.lines.length}
-                <small>line{iv.lines.length === 1 ? "" : "s"}</small>
-              </span>
-              <span className="m">
-                {sup?.name} · {iv.intakeMode.toLowerCase()}
-              </span>
-            </button>
-          );
-        })}
-
-        <div className="slab-band">
-          <span className="lab">Outstanding</span>
-          <span className="lab">{poFilter ?? "all open POs"}</span>
-        </div>
-        {outstanding.length === 0 && (
-          <p className="xsmall muted slab-empty">
-            {term.trim()
-              ? "Nothing outstanding matches that."
-              : "Nothing outstanding. A cold intake with no PO behind it is fine — start one above."}
-          </p>
-        )}
-        {outstanding.map(({ order, record, outstanding: left, partiallyReceived }) => (
-          <button key={order.id} className="wl" onClick={() => onPickOrder(order)}>
-            {/* Art is a stored URL (A-14) and the provider misses often, so the
-                missing state is designed rather than left to a broken image. */}
-            {record ? (
-              <span className="recv-art">{record.art}</span>
-            ) : (
-              <span className="recv-art empty">no art</span>
+            </div>
+            {matches.length === 0 && (
+              <p className="xsmall muted slab-empty">Nothing matches that.</p>
             )}
-            <span className="t">
-              {record ? `${record.artist} — ${record.title}` : order.recordId}
-            </span>
-            <span className="n">
-              {left}
-              <small>{partiallyReceived ? `of ${order.qty}` : "ordered"}</small>
-            </span>
-            <span className="m">
-              {record ? `${record.label} · ${record.catalogNo}` : ""}
-              {/* M-02 raises a line before a Manager places it on a PO. It is
-                  still something to receive against, but nothing was ordered
-                  yet — so the row says which it is. */}
-              {order.poNumber ? ` · ${order.poNumber}` : " · not on a PO"}
-              {order.customerId ? " · customer hold" : ""}
-            </span>
-          </button>
-        ))}
+            {matches.map((iv) => (
+              <InvoiceRow
+                key={iv.id}
+                invoice={iv}
+                supplier={supplierOf(iv)}
+                selected={iv.id === selectedId}
+                onSelect={onSelect}
+                copies={copiesIn(iv)}
+                total={invoiceTotal(iv)}
+              />
+            ))}
+          </>
+        ) : (
+          <>
+            <div className="slab-band">
+              <span className="lab">In flight</span>
+              <span className="lab">
+                {drafts.length} draft{drafts.length === 1 ? "" : "s"}
+              </span>
+            </div>
+            {drafts.length === 0 && <p className="xsmall muted slab-empty">No draft open.</p>}
+            {drafts.map((iv) => (
+              <InvoiceRow
+                key={iv.id}
+                invoice={iv}
+                supplier={supplierOf(iv)}
+                selected={iv.id === selectedId}
+                onSelect={onSelect}
+                copies={copiesIn(iv)}
+                total={invoiceTotal(iv)}
+              />
+            ))}
 
-        <div className="slab-band">
-          <span className="lab">Received lately</span>
-          <span className="lab">as-was</span>
-        </div>
-        {recent.length === 0 && <p className="xsmall muted slab-empty">Nothing received yet.</p>}
-        {recent.map((iv) => {
-          const sup = supplierOf(iv);
-          const copies = copiesIn(iv);
-          return (
-            <button
-              key={iv.id}
-              className={"wl" + (iv.id === selectedId ? " on" : "")}
-              onClick={() => onSelect(iv.id)}
-            >
-              <span className="recv-art">🧾</span>
-              <span className="t">
-                {sup?.shortName} · {iv.invoiceNumber}
-              </span>
-              <span className="n">
-                {money(invoiceTotal(iv))}
-                <small>total</small>
-              </span>
-              <span className="m">
-                {iv.status.toLowerCase()} · {copies} cop{copies === 1 ? "y" : "ies"}
-              </span>
-            </button>
-          );
-        })}
+            <div className="slab-band">
+              <span className="lab">Received lately</span>
+              <span className="lab">as-was</span>
+            </div>
+            {recent.length === 0 && <p className="xsmall muted slab-empty">Nothing received yet.</p>}
+            {recent.map((iv) => (
+              <InvoiceRow
+                key={iv.id}
+                invoice={iv}
+                supplier={supplierOf(iv)}
+                selected={iv.id === selectedId}
+                onSelect={onSelect}
+                copies={copiesIn(iv)}
+                total={invoiceTotal(iv)}
+              />
+            ))}
+          </>
+        )}
       </div>
     </nav>
+  );
+}
+
+// One Invoice, wherever it appears. A draft says what it is carrying; a
+// finished one says what it cost, because those are the two different
+// questions you open them to answer.
+function InvoiceRow({
+  invoice,
+  supplier,
+  selected,
+  onSelect,
+  copies,
+  total,
+}: {
+  invoice: Invoice;
+  supplier?: Supplier;
+  selected: boolean;
+  onSelect: (id: string) => void;
+  copies: number;
+  total: number;
+}) {
+  const draft = invoice.status === "Draft";
+  return (
+    <button className={"wl" + (selected ? " on" : "")} onClick={() => onSelect(invoice.id)}>
+      <span className="recv-art">{draft ? "📦" : "🧾"}</span>
+      <span className="t">
+        {supplier?.shortName} · {invoice.invoiceNumber}
+      </span>
+      <span className="n">
+        {draft ? invoice.lines.length : money(total)}
+        <small>{draft ? `line${invoice.lines.length === 1 ? "" : "s"}` : "total"}</small>
+      </span>
+      <span className="m">
+        {draft
+          ? `${supplier?.name} · ${invoice.intakeMode.toLowerCase()}`
+          : `${invoice.status.toLowerCase()} ${invoice.finalizedAt?.slice(0, 10) ?? ""} · ${copies} cop${copies === 1 ? "y" : "ies"}`}
+      </span>
+    </button>
   );
 }
 
