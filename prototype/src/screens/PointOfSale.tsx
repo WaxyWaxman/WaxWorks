@@ -1,13 +1,14 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { BarcodeInput } from "../components/BarcodeInput";
 import { Modal } from "../components/Modal";
+import { TillRail } from "../components/TillRail";
 import { CURRENT_USER } from "../data/seed";
 import type { InventoryItem, RecordEntry, Sale, SaleLine, TenderType } from "../data/types";
 import type { DayBreakdown } from "../lib/dayBreakdown";
 import { money } from "../lib/money";
 import { resolveScan } from "../lib/resolve";
-import { availableOnHand, balanceDue, saleTotals } from "../lib/totals";
+import { availableOnHand, balanceDue, saleTotals, tenderedTotal } from "../lib/totals";
 import { useApp } from "../store/AppStore";
 
 const TENDERS: TenderType[] = ["Cash", "Credit Card", "Account Balance", "Gift Card", "Pay-out", "Used Credit"];
@@ -45,202 +46,35 @@ export function PointOfSale() {
   }, [saleId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const sale = app.activeSale;
-  const openSales = app.sales.filter((s) => s.state === "Open" && !s.isReturn);
-  const heldSales = app.sales.filter((s) => s.state === "Held" && !s.isReturn);
-  const openReturns = app.sales.filter((s) => s.isReturn && s.state === "Open");
-  const recentCurrent = [...app.sales]
-    .filter((s) => s.state === "Current" && !s.isReturn)
-    .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
-    .slice(0, 5);
 
+  // Three tracks under the band: the rail (what you start), the sale, and the
+  // money. Each scrolls on its own — the page itself does not (E-05 d29).
   return (
-    <div>
-      <div className="page-head">
-        <span className="flow-id">E-05</span>
-        <div>
-          <h1>Point of Sale</h1>
-          <p className="sub">
-            Ring up a Sale and take payment. Split tender, holds, negative inventory, gift cards.
-            Returns start here too — <strong>+ New Return</strong> opens the E-06 editor, which
-            handles the refund and stock routing.
-          </p>
-        </div>
-      </div>
+    <div className="till-frame">
+      <TillRail
+        activeSaleId={sale?.id}
+        onHolds={() => setViewingHolds(true)}
+        onPastSales={() => setSearching(true)}
+        onOtherFunctions={() => setOtherFns(true)}
+      />
 
-      {/* The bar carries what you reach for BEFORE a customer is in front of
-          you, plus a switcher for sales already going. Everything that is only
-          touched when nobody is waiting lives behind Till functions. */}
-      <div className="till-bar">
-        <button className="btn primary" onClick={() => nav(`/sell/${app.newSale()}`)}>
-          + New Sale
-        </button>
-        <button className="btn" onClick={() => nav(`/return/${app.newSale({ isReturn: true })}`)}>
-          + New Return
-        </button>
-
-        <TillFunctions
-          onSearch={() => setSearching(true)}
-          onHolds={() => setViewingHolds(true)}
-          onOtherFns={() => setOtherFns(true)}
-          heldCount={heldSales.length}
-          sale={sale}
-        />
-
-        {openSales.length + openReturns.length + recentCurrent.length > 0 && (
-          <span className="muted xsmall" style={{ marginLeft: "var(--sp-2)" }}>
-            Switch to:
-          </span>
-        )}
-        {openSales.map((s) => (
-          <button
-            key={s.id}
-            className={"btn sm" + (s.id === sale?.id ? " primary" : "")}
-            onClick={() => nav(`/sell/${s.id}`)}
-          >
-            Sale · {s.lines.length} line{s.lines.length !== 1 ? "s" : ""}
-          </button>
-        ))}
-        {openReturns.map((s) => (
-          <button key={s.id} className="btn sm" onClick={() => nav(`/return/${s.id}`)}>
-            Return · {s.lines.length} line{s.lines.length !== 1 ? "s" : ""}
-          </button>
-        ))}
-        {recentCurrent.map((s) => (
-          <button
-            key={s.id}
-            className={"btn sm" + (s.id === sale?.id ? " primary" : "")}
-            onClick={() => nav(`/sell/${s.id}`)}
-          >
-            #{s.saleNumber}
-          </button>
-        ))}
-      </div>
-
-      {!sale && <div className="callout">Start a new Sale or pick one above.</div>}
-      {sale && !sale.isReturn && <SaleEditor key={sale.id} />}
-
-      {searching && <SearchModal onClose={() => setSearching(false)} />}
-      {otherFns && <OtherFunctionsModal onClose={() => setOtherFns(false)} />}
-      {viewingHolds && <HoldsModal onClose={() => setViewingHolds(false)} />}
-    </div>
-  );
-}
-
-
-// Till functions — the same split the top menu uses, one level down. Nothing
-// in here is reached for while a customer is waiting: past sales, the day
-// close, and correcting a Sale that is already tendered.
-function TillFunctions({
-  onSearch,
-  onHolds,
-  onOtherFns,
-  heldCount,
-  sale,
-}: {
-  onSearch: () => void;
-  onHolds: () => void;
-  onOtherFns: () => void;
-  heldCount: number;
-  sale: Sale | null;
-}) {
-  const app = useApp();
-  const nav = useNavigate();
-  const [open, setOpen] = useState(false);
-  const wrapRef = useRef<HTMLDivElement>(null);
-  const btnRef = useRef<HTMLButtonElement>(null);
-
-  useEffect(() => {
-    if (!open) return;
-    const onPointer = (e: PointerEvent) => {
-      if (!wrapRef.current?.contains(e.target as Node)) setOpen(false);
-    };
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key !== "Escape") return;
-      setOpen(false);
-      btnRef.current?.focus();
-    };
-    document.addEventListener("pointerdown", onPointer);
-    document.addEventListener("keydown", onKey);
-    return () => {
-      document.removeEventListener("pointerdown", onPointer);
-      document.removeEventListener("keydown", onKey);
-    };
-  }, [open]);
-
-  const run = (fn: () => void) => {
-    setOpen(false);
-    fn();
-  };
-
-  return (
-    <div className="menu-wrap" ref={wrapRef}>
-      <button
-        ref={btnRef}
-        type="button"
-        className="btn"
-        aria-haspopup="true"
-        aria-expanded={open}
-        onClick={() => setOpen((v) => !v)}
-      >
-        Till functions <span aria-hidden="true">▾</span>
-      </button>
-      {open && (
-        <div className="more-panel" role="menu">
-          <div className="more-group">
-            <div className="more-group-head">Look something up</div>
-            <button className="more-item" role="menuitem" onClick={() => run(onSearch)}>
-              <span>Search past sales</span>
-              <span className="flow">E-05</span>
-            </button>
-            <button className="more-item" role="menuitem" onClick={() => run(onHolds)}>
-              <span>View holds</span>
-              <span className="flow">{heldCount}</span>
-            </button>
-          </div>
-          <div className="more-group">
-            <div className="more-group-head">This sale</div>
-            <button
-              className="more-item"
-              role="menuitem"
-              disabled={!sale || sale.state !== "Current"}
-              title="Voids this Sale and opens a copy of it for correction — preserves the audit trail"
-              onClick={() =>
-                run(() => {
-                  if (!sale) return;
-                  const id = app.editSale(sale.id);
-                  if (id) nav(`/sell/${id}`);
-                })
-              }
-            >
-              <span>Edit (void &amp; duplicate)</span>
-              <span className="flow">E-05</span>
-            </button>
-            <button
-              className="more-item"
-              role="menuitem"
-              disabled={!sale || sale.lines.length === 0}
-              title="New Sale with the same line items — re-scan each copy"
-              onClick={() =>
-                run(() => {
-                  if (!sale) return;
-                  const id = app.copySale(sale.id);
-                  if (id) nav(`/sell/${id}`);
-                })
-              }
-            >
-              <span>Copy to a new Sale</span>
-              <span className="flow">E-05</span>
-            </button>
-          </div>
-          <div className="more-group">
-            <div className="more-group-head">End of day</div>
-            <button className="more-item" role="menuitem" onClick={() => run(onOtherFns)}>
-              <span>Other functions</span>
-              <span className="flow">M-03</span>
+      {sale && !sale.isReturn ? (
+        <SaleEditor key={sale.id} />
+      ) : (
+        <div className="till-nosale">
+          <div className="stack">
+            <div className="lab">No sale open</div>
+            <p className="muted">Start one here, or pick something up from the rail.</p>
+            <button className="btn primary" onClick={() => nav(`/sell/${app.newSale()}`)}>
+              + New sale
             </button>
           </div>
         </div>
       )}
+
+      {searching && <SearchModal onClose={() => setSearching(false)} />}
+      {otherFns && <OtherFunctionsModal onClose={() => setOtherFns(false)} />}
+      {viewingHolds && <HoldsModal onClose={() => setViewingHolds(false)} />}
     </div>
   );
 }
@@ -739,6 +573,11 @@ function SaleEditor() {
   const [loggingContact, setLoggingContact] = useState(false);
   const [noteDraft, setNoteDraft] = useState("");
   const [lookingUp, setLookingUp] = useState(false);
+  // Void and Edit both destroy this Sale, so both go through the same gate:
+  // the money has to be off it first (E-05 d31).
+  const [voiding, setVoiding] = useState<"void" | "edit" | null>(null);
+
+  const latestLog = sale.log.length ? sale.log[sale.log.length - 1] : null;
 
   // Lines/tenders/customer/PO are only editable pre-tender. Once a Sale is
   // Current it's Void-or-Edit(duplicate) only; Closed/Void are read-only.
@@ -782,10 +621,13 @@ function SaleEditor() {
   })();
 
   return (
-    <div className="till">
+    <>
       {/* ---- the sale ---- */}
-      <div className="till-main">
-        <div className="row wrap" style={{ gap: "var(--sp-3)" }}>
+      <section className="till-main">
+        {/* Which sale, what state, and the things done TO it. Void lives here
+            rather than under the money, a thumb-width from the button pressed
+            on every single sale (E-05 d31). */}
+        <div className="till-sale-head">
           <span className="sale-head-label">{sale.isReturn ? "Return" : "Sale"}</span>
           {customer ? (
             <button
@@ -797,7 +639,7 @@ function SaleEditor() {
               {customer.name}
             </button>
           ) : (
-            <button className="btn" onClick={() => setCustPick(true)} disabled={fieldsLocked}>
+            <button className="btn sm" onClick={() => setCustPick(true)} disabled={fieldsLocked}>
               + Add customer
             </button>
           )}
@@ -816,7 +658,10 @@ function SaleEditor() {
               <span className="badge">Open</span>
             )}
           </span>
-          {sale.lockedBy && (
+          {/* Every Open Sale is locked to whoever started it, so saying so on
+              your own sale is noise — and in a fixed header it reads as an
+              error. The lock only matters when somebody else holds it. */}
+          {sale.lockedBy && sale.lockedBy !== CURRENT_USER && (
             <>
               <span className="badge warn">locked · {sale.lockedBy}</span>
               <button className="btn ghost sm" onClick={() => app.forceUnlockSale(sale.id)}>
@@ -824,13 +669,49 @@ function SaleEditor() {
               </button>
             </>
           )}
-          <span className="right muted xsmall">
+          <span className="muted xsmall">
             {sale.lines.length} line{sale.lines.length !== 1 ? "s" : ""}
+          </span>
+
+          <span className="till-sale-acts">
+            {sale.lines.length > 0 && (
+              <button
+                className="btn ghost sm"
+                title="New Sale with the same line items — re-scan each copy"
+                onClick={() => {
+                  const id = app.copySale(sale.id);
+                  if (id) nav(`/sell/${id}`);
+                }}
+              >
+                Copy
+              </button>
+            )}
+            {sale.state === "Current" && (
+              <button
+                className="btn ghost sm"
+                title="Voids this Sale and opens a copy of it for correction — preserves the audit trail"
+                onClick={() => setVoiding("edit")}
+              >
+                Edit
+              </button>
+            )}
+            {sale.state === "Held" ? (
+              <button className="btn danger sm" onClick={() => app.cancelHold(sale.id)}>
+                Cancel hold
+              </button>
+            ) : (
+              (sale.state === "Open" || sale.state === "Current") && (
+                <button className="btn danger sm" onClick={() => setVoiding("void")}>
+                  Void sale
+                </button>
+              )
+            )}
           </span>
         </div>
 
-        {/* Everything on this row is typed while somebody is standing there. */}
-        <div className="row wrap">
+        {/* The customer's terms, and the PO. Context rather than controls, but
+            it stays put — attaching a customer changes every price below it. */}
+        <div className="till-sale-meta">
           {customer && (
             <>
               <span className="badge">disc {customer.globalDiscountPct}%</span>
@@ -871,20 +752,27 @@ function SaleEditor() {
         </div>
 
         {!fieldsLocked && (
-          <div className="scan-slab">
-            <div className="lab" style={{ marginBottom: "var(--sp-1)" }}>
-              Scan the item
+          <div className="till-scan">
+            <div className="scan-slab">
+              <div className="lab" style={{ marginBottom: "var(--sp-1)" }}>
+                Scan the item
+              </div>
+              <BarcodeInput
+                onScan={onScan}
+                placeholder="scan or type…"
+                actionLabel="Lookup"
+                onAction={() => setLookingUp(true)}
+              />
             </div>
-            <BarcodeInput
-              onScan={onScan}
-              placeholder="scan or type…"
-              actionLabel="Lookup"
-              onAction={() => setLookingUp(true)}
-            />
+            {scanNote && (
+              <div className="callout ok" style={{ marginTop: "var(--sp-2)" }}>
+                {scanNote}
+              </div>
+            )}
           </div>
         )}
-        {scanNote && <div className="callout ok">{scanNote}</div>}
 
+        {/* The only thing on this side that scrolls. */}
         <div className="till-lines">
           {sale.lines.map((l) => (
             <LineRow key={l.id} line={l} locked={fieldsLocked} />
@@ -894,9 +782,23 @@ function SaleEditor() {
           )}
         </div>
 
+        {/* The strip already spanned the width of the sale; closed, all it
+            said was how many entries it was hiding. Now it reads the newest
+            one, and still opens for the rest plus the note box. */}
         <details className="till-log">
-          <summary>Log &amp; notes ({sale.log.length})</summary>
-          <div className="xsmall muted stack" style={{ marginBottom: "var(--sp-3)" }}>
+          <summary>
+            <span className="till-log-top">
+              <span className="lab">Log &amp; notes ({sale.log.length})</span>
+              <span className="till-log-chev" aria-hidden="true">▾</span>
+            </span>
+            {latestLog && (
+              <span className="till-log-latest">
+                <time className="mono">{latestLog.at.slice(11, 16)}</time>
+                <span>{latestLog.text}</span>
+              </span>
+            )}
+          </summary>
+          <div className="xsmall muted stack" style={{ margin: "var(--sp-3) 0" }}>
             {sale.log.map((e, i) => (
               <div key={i}>
                 <span className="mono">{e.at}</span> — {e.text}
@@ -923,71 +825,95 @@ function SaleEditor() {
             </button>
           </div>
         </details>
-      </div>
+      </section>
 
-      {/* ---- the money ---- */}
-      <div className="till-slab">
-        <div>
+      {/* ---- the money ----
+          Amount due at the top and Finish sale on the floor are anchors; only
+          the tenders scroll between them, so Finish sale sits in the same
+          place on a one-line cash sale and a six-tender split (E-05 d29). */}
+      <aside className="till-money">
+        <div className="till-money-head">
           <div className="lab">{totals.grand < 0 ? "Refund due" : "Amount due"}</div>
-          <div className="till-due">{money(Math.abs(due) < 0.001 && sale.tenders.length ? 0 : totals.grand)}</div>
-          <div className="xsmall muted" style={{ marginTop: 4 }}>
-            Subtotal {money(totals.subtotal)} · discount −{money(totals.discount)} · tax{" "}
+          <div className="till-due">
+            {money(Math.abs(due) < 0.001 && sale.tenders.length ? 0 : totals.grand)}
+          </div>
+          <div className="xsmall muted till-due-sub">
+            Subtotal {money(totals.subtotal)}
+            {/* A walk-in has no discount, and "−$0.00" is noise on the one
+                number the customer is reading over your shoulder. */}
+            {totals.discount > 0.001 && <> · discount −{money(totals.discount)}</>} · tax{" "}
             {money(totals.tax)}
           </div>
         </div>
 
         <div className="till-rule" />
 
-        {!fieldsLocked && (
-          <>
-            <div className="lab">Take payment</div>
-            <div className="tender-grid">
-              {TENDERS.map((t) => (
-                <button key={t} className="btn" onClick={() => setShowTender(t)}>
-                  {t}
-                </button>
-              ))}
+        <div className="till-money-mid">
+          {!fieldsLocked && (
+            <div>
+              <div className="lab" style={{ marginBottom: "var(--sp-2)" }}>
+                Take payment
+              </div>
+              <div className="tender-grid">
+                {TENDERS.map((t) => (
+                  <button key={t} className="btn" onClick={() => setShowTender(t)}>
+                    {t}
+                  </button>
+                ))}
+              </div>
             </div>
-          </>
-        )}
+          )}
 
-        {sale.tenders.length > 0 && (
-          <div style={{ border: "1px solid var(--c-border)", padding: "var(--sp-3)" }}>
-            {sale.tenders.map((t) => (
-              <div key={t.id} className="tender-line">
-                <span>
-                  {t.type}
-                  {t.type === "Account Balance" && (
-                    <span className={"badge" + (t.accountDirection === "add" ? " ok" : "")}>
-                      {t.accountDirection === "add" ? "add to balance" : "draw down"}
-                    </span>
-                  )}
-                  {t.reference ? ` · ${t.reference}` : ""}
-                  {t.note ? <span className="muted"> — {t.note}</span> : ""}
+          {sale.tenders.length > 0 && (
+            <div className="till-taken">
+              {sale.tenders.map((t) => (
+                <div key={t.id} className="tender-line">
+                  <span>
+                    {t.type}
+                    {t.type === "Account Balance" && (
+                      <span className={"badge" + (t.accountDirection === "add" ? " ok" : "")}>
+                        {t.accountDirection === "add" ? "add to balance" : "draw down"}
+                      </span>
+                    )}
+                    {t.reference ? ` · ${t.reference}` : ""}
+                    {t.note ? <span className="muted"> — {t.note}</span> : ""}
+                  </span>
+                  <span className="row">
+                    <span className="num">{money(t.amount)}</span>
+                    {!fieldsLocked && (
+                      <button className="btn ghost sm" onClick={() => app.removeTender(sale.id, t.id)}>
+                        ✕
+                      </button>
+                    )}
+                  </span>
+                </div>
+              ))}
+              <div className="totals-row grand">
+                <span style={{ color: due > 0.001 ? "var(--c-accent)" : undefined }}>
+                  {due > 0.001 ? "Still owing" : due < -0.001 ? "Change / owed" : "Settled"}
                 </span>
-                <span className="row">
-                  <span className="num">{money(t.amount)}</span>
-                  {!fieldsLocked && (
-                    <button className="btn ghost sm" onClick={() => app.removeTender(sale.id, t.id)}>
-                      ✕
-                    </button>
-                  )}
+                <span className="num" style={{ color: due > 0.001 ? "var(--c-accent)" : undefined }}>
+                  {money(Math.abs(due))}
                 </span>
               </div>
-            ))}
-            <div className="totals-row grand">
-              <span style={{ color: due > 0.001 ? "var(--c-accent)" : undefined }}>
-                {due > 0.001 ? "Still owing" : due < -0.001 ? "Change / owed" : "Settled"}
-              </span>
-              <span className="num" style={{ color: due > 0.001 ? "var(--c-accent)" : undefined }}>
-                {money(Math.abs(due))}
-              </span>
             </div>
-          </div>
-        )}
+          )}
 
-        <div style={{ marginTop: "auto", display: "flex", flexDirection: "column", gap: "var(--sp-2)" }}>
-          {!fieldsLocked && (
+          {sale.state === "Closed" && (
+            <div className="xsmall muted">
+              Closed — no longer editable. Reopen via Other functions on the rail (Admin), or
+              handle as a Return.
+            </div>
+          )}
+          {due < -0.001 && sale.tenders.some((t) => t.type === "Cash") && (
+            <div className="callout ok">Change owed: {money(Math.abs(due))}</div>
+          )}
+        </div>
+
+        {/* The two ways a customer interaction ends: take the money, or park
+            it. Return left for the rail; Void went to the sale header. */}
+        {!fieldsLocked && (
+          <div className="till-money-foot">
             <button
               className="btn primary till-finish"
               disabled={
@@ -998,43 +924,29 @@ function SaleEditor() {
             >
               FINISH SALE
             </button>
-          )}
-          <div className="till-actions">
             <button
-              className="btn"
+              className="btn till-hold"
               disabled={sale.state !== "Open" || (sale.lines.length === 0 && sale.tenders.length === 0)}
               onClick={() => app.holdSale(sale.id)}
             >
               Hold
             </button>
-            <button
-              className="btn danger"
-              disabled={sale.state !== "Open" && sale.state !== "Current"}
-              onClick={() => app.voidSale(sale.id)}
-            >
-              Void
-            </button>
-            {sale.state === "Held" ? (
-              <button className="btn danger" onClick={() => app.cancelHold(sale.id)}>
-                Cancel hold
-              </button>
-            ) : (
-              <button className="btn" onClick={() => nav(`/return/${app.newSale({ isReturn: true })}`)}>
-                Return
-              </button>
-            )}
           </div>
-          {sale.state === "Closed" && (
-            <div className="xsmall muted">
-              Closed — no longer editable. Reopen via Undo End of Day (Till functions → Other
-              functions, Admin) or handle as a Return.
-            </div>
-          )}
-          {due < -0.001 && sale.tenders.some((t) => t.type === "Cash") && (
-            <div className="callout ok">Change owed: {money(Math.abs(due))}</div>
-          )}
-        </div>
-      </div>
+        )}
+      </aside>
+
+      {voiding && (
+        <VoidSaleModal
+          sale={sale}
+          mode={voiding}
+          onClose={() => setVoiding(null)}
+          onDone={(nextId) => {
+            setVoiding(null);
+            if (nextId) nav(`/sell/${nextId}`);
+          }}
+        />
+      )}
+
 
       {/* ---- modals ---- */}
       {picker && (
@@ -1213,7 +1125,136 @@ function SaleEditor() {
           </div>
         </Modal>
       )}
-    </div>
+    </>
+  );
+}
+
+// E-05 d31 — Void (and Edit, which is a Void plus a re-ring) only at zero.
+// Rather than refusing and leaving the operator to work out what to do, this
+// is where the money gets dealt with: refund it, move it onto the Customer's
+// account, or strike the line as never having happened. Each of those is a
+// real reversal — removing a settled Gift Card tender puts the balance back
+// on the card — so the number on screen and the money agree.
+function VoidSaleModal({
+  sale,
+  mode,
+  onClose,
+  onDone,
+}: {
+  sale: Sale;
+  mode: "void" | "edit";
+  onClose: () => void;
+  onDone: (nextId?: string) => void;
+}) {
+  const app = useApp();
+  const live = app.sales.find((s) => s.id === sale.id) ?? sale;
+  const outstanding = tenderedTotal(live);
+  const settled = Math.abs(outstanding) <= 0.005;
+  const customer = app.customerFor(live.customerId);
+  const copies = live.lines.filter((l) => l.inventoryItemId && l.qty > 0).length;
+  const took = outstanding > 0;
+
+  const reverse = (type: "Cash" | "Account Balance") =>
+    app.addTender(live.id, {
+      type,
+      amount: -outstanding,
+      ...(type === "Account Balance" ? { accountDirection: "add" as const } : {}),
+      note: took ? "Reversal before void" : "Collected back before void",
+    });
+
+  const act = () => {
+    if (mode === "edit") {
+      const id = app.editSale(live.id);
+      onDone(id ?? undefined);
+      return;
+    }
+    app.voidSale(live.id);
+    onDone();
+  };
+
+  return (
+    <Modal
+      title={mode === "edit" ? `Edit ${live.saleNumber ? `#${live.saleNumber}` : "sale"}` : "Void sale"}
+      onClose={onClose}
+      foot={
+        <>
+          <button className="btn ghost" onClick={onClose}>
+            Cancel
+          </button>
+          <button className="btn danger" disabled={!settled} onClick={act}>
+            {mode === "edit" ? "Void & duplicate" : "Void sale"}
+          </button>
+        </>
+      }
+    >
+      <div className="stack">
+        {settled ? (
+          <>
+            <p className="small">
+              {mode === "edit"
+                ? "Voids this Sale and opens a copy of it to correct. The original keeps its number and stays in the day's record as voided."
+                : "The Sale keeps its number and stays in the day's record as voided."}
+            </p>
+            {copies > 0 && (
+              <div className="callout">
+                {copies} cop{copies === 1 ? "y" : "ies"} return{copies === 1 ? "s" : ""} to sellable
+                stock.
+              </div>
+            )}
+          </>
+        ) : (
+          <>
+            <div className="callout warn">
+              <strong>{money(Math.abs(outstanding))}</strong> {took ? "was taken on" : "was paid out of"}{" "}
+              this sale. Money has to be accounted for before it can be voided — otherwise the
+              drawer and the day's figures stop agreeing.
+            </div>
+
+            <div className="stack">
+              <div className="lab">On this sale</div>
+              {live.tenders.map((t) => (
+                <div key={t.id} className="tender-line">
+                  <span>
+                    {t.type}
+                    {t.reference ? ` · ${t.reference}` : ""}
+                    {t.note ? <span className="muted"> — {t.note}</span> : ""}
+                  </span>
+                  <span className="row">
+                    <span className="num">{money(t.amount)}</span>
+                    <button
+                      className="btn ghost sm"
+                      title="This payment never happened — strike it and put back whatever it moved"
+                      onClick={() => app.removeTender(live.id, t.id)}
+                    >
+                      ✕
+                    </button>
+                  </span>
+                </div>
+              ))}
+            </div>
+
+            <div className="lab">Account for it</div>
+            <div className="btn-row">
+              <button className="btn" onClick={() => reverse("Cash")}>
+                {took ? "Refund" : "Collect"} {money(Math.abs(outstanding))} cash
+              </button>
+              <button
+                className="btn"
+                disabled={!customer}
+                title={customer ? undefined : "Attach a customer first — an account needs an owner"}
+                onClick={() => reverse("Account Balance")}
+              >
+                {took ? "Put on" : "Charge to"} {customer ? `${customer.name}'s` : "an"} account
+              </button>
+            </div>
+            <p className="xsmall muted">
+              Striking a line says the payment never happened — a mis-key, or a card reversed on the
+              terminal. Refunding or moving it to an account says it did, and this is where it went.
+            </p>
+          </>
+        )}
+      </div>
+    </Modal>
   );
 }
 

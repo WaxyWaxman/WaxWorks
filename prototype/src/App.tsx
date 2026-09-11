@@ -70,8 +70,19 @@ export function App() {
   // showing no active tab at all.
   const onReturn = location.pathname.startsWith("/return");
 
+  // The till is the one screen that owns the whole window rather than
+  // scrolling as a document (E-05 d29): its three tracks scroll
+  // independently underneath the band, so the frame is pinned to the
+  // viewport and the page itself never scrolls.
+  //
+  // Sell only, deliberately. E-06's editor is still laid out as a document
+  // and would simply be clipped by a frame that never scrolls — it needs the
+  // same three-track treatment before it can join, and until then it keeps
+  // the rail-less layout it already had.
+  const atTill = location.pathname.startsWith("/sell");
+
   return (
-    <div className="app">
+    <div className={"app" + (atTill ? " app-till" : "")}>
       <header className="topbar">
         <NavLink to="/" className="brand">
           <span className="dot" /> Wax Works
@@ -94,7 +105,7 @@ export function App() {
         </span>
         <span className="who">{CURRENT_USER} · Till 1 · Prototype</span>
       </header>
-      <main className="main">
+      <main className={"main" + (atTill ? " main-till" : "")}>
         <Routes>
           <Route path="/" element={<Home />} />
           <Route path="/search" element={<Search />} />

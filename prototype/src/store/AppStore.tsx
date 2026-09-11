@@ -7,7 +7,7 @@ import {
 } from "react";
 import { computeDayBreakdown, type DayBreakdown } from "../lib/dayBreakdown";
 import { money } from "../lib/money";
-import { claimTotal, invoiceBalance, payableEntrySignedAmount, round2 } from "../lib/totals";
+import { claimTotal, invoiceBalance, payableEntrySignedAmount, round2, tenderedTotal } from "../lib/totals";
 import {
   CURRENT_USER,
   CUSTOMERS,
@@ -52,6 +52,39 @@ import type {
 
 let seq = 100;
 const uid = (p: string) => `${p}-${++seq}`;
+
+// The money a Tender actually moves — a gift card's balance, a Customer's
+// A/R — as opposed to the number printed on the Sale. `sign` is +1 to apply
+// it and -1 to put it back, so one description of each tender type serves
+// both tendering and reversing; nothing else in the store knows what a type
+// does to a balance. E-05 d32: Void requires the tenders to net zero, which
+// is only honest if reversing one really does return the money.
+function applyTenderEffect(
+  giftCards: GiftCard[],
+  customers: Customer[],
+  tender: Tender,
+  customerId: string | undefined,
+  sign: 1 | -1,
+): { giftCards: GiftCard[]; customers: Customer[] } {
+  let gc = giftCards;
+  let cs = customers;
+  if (tender.type === "Gift Card" && tender.reference) {
+    gc = gc.map((g) =>
+      g.code === tender.reference ? { ...g, balance: Math.max(0, round2(g.balance - sign * tender.amount)) } : g,
+    );
+  }
+  if ((tender.type === "Account Balance" || tender.type === "Used Credit") && customerId) {
+    const delta =
+      tender.type === "Used Credit"
+        ? Math.abs(tender.amount)
+        : tender.accountDirection === "add"
+          ? Math.abs(tender.amount)
+          : -tender.amount;
+    cs = cs.map((c) => (c.id === customerId ? { ...c, balance: round2(c.balance + sign * delta) } : c));
+  }
+  return { giftCards: gc, customers: cs };
+}
+
 // en-CA formats as "YYYY-MM-DD, HH:MM:SS" (with a comma) — every parse site
 // (daysAgo, the follow-up-flag math, PointOfSale's age calc) assumes the
 // plain space-separated form seed data uses, so strip the comma here rather
@@ -435,7 +468,10 @@ interface AppContextValue extends AppState {
   removeTender: (saleId: string, tenderId: string) => void;
   completeSale: (saleId: string) => number;
   holdSale: (saleId: string) => string;
-  voidSale: (saleId: string) => void;
+  // E-05 d31 — refuses unless the tenders net zero, returning how much is
+  // still on the Sale so the caller can offer to refund it, move it onto the
+  // Customer's account, or remove the line.
+  voidSale: (saleId: string) => { voided: boolean; outstanding: number };
   cancelHold: (saleId: string) => void;
   releaseHoldLine: (itemId: string) => { holdRef: string; holdClosed: boolean } | null;
   forceUnlockSale: (saleId: string) => void;
@@ -696,7 +732,11 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
     if (!sale) return null;
     if (sale.state === "Held") return saleId;
     if (sale.state !== "Current") return null;
-    voidSale(saleId);
+    // Edit is a Void plus a re-ring, so it faces the Void gate too (E-05
+    // d31): if the money is still on the original, nothing happens here and
+    // the caller sends the operator to settle it first. Without this the
+    // original would stay Current while a duplicate of it appeared.
+    if (!voidSale(saleId).voided) return null;
     const id = uid("sale");
     const dup: Sale = {
       id,
@@ -972,29 +1012,73 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
       lines: sale.lines.filter((l) => l.id !== lineId),
     }));
 
+  const tenderLogText = (t: Pick<Tender, "type" | "amount" | "accountDirection">) =>
+    `${t.type}${
+      // Account Balance moves money either way — same $ amount every
+      // time — so the log needs to spell out the direction, or every
+      // entry reads identically regardless of which one was picked.
+      t.type === "Account Balance" ? ` (${t.accountDirection === "add" ? "add to balance" : "draw down"})` : ""
+    } ${t.amount < 0 ? "-" : ""}$${Math.abs(t.amount).toFixed(2)}`;
+
   const addTender: AppContextValue["addTender"] = (saleId, t) =>
-    patchSale(saleId, (sale) => ({
-      ...sale,
-      tenders: [...sale.tenders, { ...t, id: uid("tndr") }],
-      log: [
-        ...sale.log,
-        {
-          at: now(),
-          text: `Tender: ${t.type}${
-            // Account Balance moves money either way — same $ amount every
-            // time — so the log needs to spell out the direction, or every
-            // entry reads identically regardless of which one was picked.
-            t.type === "Account Balance" ? ` (${t.accountDirection === "add" ? "add to balance" : "draw down"})` : ""
-          } ${t.amount < 0 ? "-" : ""}$${Math.abs(t.amount).toFixed(2)}`,
-        },
-      ],
-    }));
+    setS((prev) => {
+      const sale = prev.sales.find((x) => x.id === saleId);
+      if (!sale) return prev;
+      const tender: Tender = { ...t, id: uid("tndr") };
+      // On an Open Sale the money hasn't moved yet — completeSale applies
+      // every tender at once. On a Current one it already has, so a tender
+      // added now (a reversal, on the way to voiding) has to move its money
+      // immediately or the screen would show a balance the store never gave
+      // back. E-05 d32.
+      const settled = sale.state === "Current";
+      const moved = settled
+        ? applyTenderEffect(prev.giftCards, prev.customers, tender, sale.customerId, 1)
+        : { giftCards: prev.giftCards, customers: prev.customers };
+      return {
+        ...prev,
+        giftCards: moved.giftCards,
+        customers: moved.customers,
+        sales: prev.sales.map((x) =>
+          x.id === saleId
+            ? {
+                ...x,
+                tenders: [...x.tenders, tender],
+                log: [...x.log, { at: now(), text: `Tender: ${tenderLogText(tender)}` }],
+              }
+            : x,
+        ),
+      };
+    });
 
   const removeTender: AppContextValue["removeTender"] = (saleId, tenderId) =>
-    patchSale(saleId, (sale) => ({
-      ...sale,
-      tenders: sale.tenders.filter((t) => t.id !== tenderId),
-    }));
+    setS((prev) => {
+      const sale = prev.sales.find((x) => x.id === saleId);
+      const tender = sale?.tenders.find((t) => t.id === tenderId);
+      if (!sale || !tender) return prev;
+      // Removing a tender from a Current Sale asserts the payment never
+      // really happened, so whatever it moved has to move back: a gift card
+      // drawn down returns to its balance, an account charge is undone.
+      const settled = sale.state === "Current";
+      const moved = settled
+        ? applyTenderEffect(prev.giftCards, prev.customers, tender, sale.customerId, -1)
+        : { giftCards: prev.giftCards, customers: prev.customers };
+      return {
+        ...prev,
+        giftCards: moved.giftCards,
+        customers: moved.customers,
+        sales: prev.sales.map((x) =>
+          x.id === saleId
+            ? {
+                ...x,
+                tenders: x.tenders.filter((t) => t.id !== tenderId),
+                log: settled
+                  ? [...x.log, { at: now(), text: `Tender removed: ${tenderLogText(tender)} — reversed` }]
+                  : x.log,
+              }
+            : x,
+        ),
+      };
+    });
 
   const completeSale: AppContextValue["completeSale"] = (saleId) => {
     const num = s.nextSaleNumber;
@@ -1005,22 +1089,9 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
       let inventory = prev.inventory;
       if (sale) {
         for (const t of sale.tenders) {
-          if (t.type === "Gift Card" && t.reference) {
-            giftCards = giftCards.map((g) =>
-              g.code === t.reference ? { ...g, balance: Math.max(0, g.balance - t.amount) } : g,
-            );
-          }
-          if ((t.type === "Account Balance" || t.type === "Used Credit") && sale.customerId) {
-            const delta =
-              t.type === "Used Credit"
-                ? Math.abs(t.amount)
-                : t.accountDirection === "add"
-                  ? Math.abs(t.amount)
-                  : -t.amount;
-            customers = customers.map((c) =>
-              c.id === sale.customerId ? { ...c, balance: c.balance + delta } : c,
-            );
-          }
+          const moved = applyTenderEffect(giftCards, customers, t, sale.customerId, 1);
+          giftCards = moved.giftCards;
+          customers = moved.customers;
         }
         // consume sold copies
         const soldItemIds = sale.lines
@@ -1106,9 +1177,21 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
   // Void — Open or Current only (E-05 decision 5): a Held Sale uses Cancel
   // Hold instead, and a Closed Sale can't be voided at all — it's reopened
   // via Undo End of Day (M-03) or handled as a Return (E-06).
+  //
+  // E-05 d31 — and only ever at zero. Voiding used to revert the stock and
+  // walk away from the money: a gift-card sale voided left the card drawn
+  // down to nothing, and because the day breakdown only totals Current
+  // Sales (M-03), the voided tenders left the report while the cash stayed
+  // in the drawer. So the tenders have to net to zero first — refunded,
+  // moved onto the Customer's account, or removed as never having happened
+  // — and `outstanding` tells the caller how much is still unaccounted for.
   const voidSale: AppContextValue["voidSale"] = (saleId) => {
     const sale = s.sales.find((x) => x.id === saleId);
-    if (!sale || sale.state === "Held" || sale.state === "Closed" || sale.state === "Void") return;
+    if (!sale || sale.state === "Held" || sale.state === "Closed" || sale.state === "Void") {
+      return { voided: false, outstanding: 0 };
+    }
+    const outstanding = tenderedTotal(sale);
+    if (Math.abs(outstanding) > 0.005) return { voided: false, outstanding };
     setS((prev) => {
       const onSaleIds = new Set(
         prev.sales.find((x) => x.id === saleId)?.lines.map((l) => l.inventoryItemId).filter((id): id is string => !!id),
@@ -1143,11 +1226,12 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
           }),
         sales: prev.sales.map((x) =>
           x.id === saleId
-            ? { ...x, state: "Void", log: [...x.log, { at: now(), text: "Voided — stock returned, Sale number retained" }] }
+            ? { ...x, state: "Void", log: [...x.log, { at: now(), text: "Voided at zero — stock returned, Sale number retained" }] }
             : x,
         ),
       };
     });
+    return { voided: true, outstanding: 0 };
   };
 
   const cancelHold: AppContextValue["cancelHold"] = (saleId) =>
