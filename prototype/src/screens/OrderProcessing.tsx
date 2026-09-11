@@ -6,6 +6,7 @@ import { TitlecardPanel } from "../components/TitlecardPanel";
 import type { PendingOrderLine, Supplier } from "../data/types";
 import { money } from "../lib/money";
 import { daysAgo, orderReady, separatorCounts } from "../lib/totals";
+import { isOpenOrderLine } from "../lib/orderLines";
 import { useApp } from "../store/AppStore";
 
 // Order Processing (M-02 Phase 2) — a Manager turns Employee-raised pending
@@ -56,7 +57,9 @@ export function OrderProcessing() {
   const pendingStreams = useMemo(() => {
     const map = new Map<string, Stream>();
     for (const line of app.pendingOrders) {
-      if (line.poNumber) continue;
+      // A line survives being received now (M-02 d21), so existence is no
+      // longer the same question as "still waiting to be sent".
+      if (line.poNumber || !isOpenOrderLine(line, app.invoices)) continue;
       const supplier = app.supplierFor(line.supplierId);
       if (!matchesQuery(supplier)) continue;
       const key = streamKey(line.supplierId, line.separator);
@@ -71,12 +74,14 @@ export function OrderProcessing() {
       (a, b) => a.supplier.name.localeCompare(b.supplier.name) || (a.separator ?? "").localeCompare(b.separator ?? ""),
     );
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [app.pendingOrders, app.suppliers, q]);
+  }, [app.pendingOrders, app.invoices, app.suppliers, q]);
 
   const placedStreams = useMemo(() => {
     const map = new Map<string, Stream & { poNumber: string; placedAt: string }>();
     for (const line of app.pendingOrders) {
-      if (!line.poNumber) continue;
+      // Cancelled lines drop out; received ones stay visible on their PO,
+      // because "what did this PO consist of" is a question about the past.
+      if (!line.poNumber || line.status === "Cancelled") continue;
       const supplier = app.supplierFor(line.supplierId);
       if (!matchesQuery(supplier)) continue;
       const key = `${streamKey(line.supplierId, line.separator)}::${line.poNumber}`;
@@ -95,7 +100,7 @@ export function OrderProcessing() {
     }
     return [...map.values()].sort((a, b) => b.placedAt.localeCompare(a.placedAt));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [app.pendingOrders, app.suppliers, q]);
+  }, [app.pendingOrders, app.invoices, app.suppliers, q]);
 
   // Mass-shift a whole pending stream onto a different separator — same
   // merge-on-conflict rule as retargeting one line from View (decision 17),
@@ -103,7 +108,7 @@ export function OrderProcessing() {
   const requestStreamSeparatorChange = (stream: Stream, nextRaw: string | undefined) => {
     const nextKey = nextRaw ?? "";
     if (nextKey === (stream.separator ?? "")) return;
-    const existing = separatorCounts(app.pendingOrders, stream.supplier.id).get(nextKey) ?? 0;
+    const existing = separatorCounts(app.pendingOrders, stream.supplier.id, app.invoices).get(nextKey) ?? 0;
     if (existing > 0) {
       setStreamMerge({ stream, nextSeparator: nextRaw, targetCount: existing });
     } else {
@@ -183,7 +188,7 @@ export function OrderProcessing() {
                     <td onClick={(e) => e.stopPropagation()}>
                       <SeparatorSelect
                         value={stream.separator ?? ""}
-                        knownSeparators={[...separatorCounts(app.pendingOrders, stream.supplier.id).keys()].filter((k) => k !== "")}
+                        knownSeparators={[...separatorCounts(app.pendingOrders, stream.supplier.id, app.invoices).keys()].filter((k) => k !== "")}
                         onChange={(next) => requestStreamSeparatorChange(stream, next)}
                       />
                     </td>
@@ -446,13 +451,18 @@ function ViewOrderModal({
   const lines = useMemo(
     () =>
       app.pendingOrders.filter(
-        (o) => o.supplierId === supplierId && (o.separator ?? "") === sepKey && (editable ? !o.poNumber : o.poNumber === poNumber),
+        (o) =>
+          o.supplierId === supplierId &&
+          (o.separator ?? "") === sepKey &&
+          (editable
+            ? !o.poNumber && isOpenOrderLine(o, app.invoices)
+            : o.poNumber === poNumber && o.status !== "Cancelled"),
       ),
-    [app.pendingOrders, supplierId, sepKey, editable, poNumber],
+    [app.pendingOrders, app.invoices, supplierId, sepKey, editable, poNumber],
   );
 
   // Drives both this modal's per-line Sep dropdown options and the merge check.
-  const sepCounts = useMemo(() => separatorCounts(app.pendingOrders, supplierId), [app.pendingOrders, supplierId]);
+  const sepCounts = useMemo(() => separatorCounts(app.pendingOrders, supplierId, app.invoices), [app.pendingOrders, app.invoices, supplierId]);
 
   const [selectedRecordId, setSelectedRecordId] = useState<string | null>(lines[0]?.recordId ?? null);
   const [showCost, setShowCost] = useState(false);

@@ -71,7 +71,7 @@ Below the pending streams, previously placed PurchaseOrders are listed most-rece
 | **Sort** | Age, title, artist |
 | **Filter** | By PurchaseOrder or supplier |
 | **Re-flag** | Push the follow-up date out another *n* days — used both to chase the supplier and to warn a waiting customer |
-| **Set status** | Mark a line **Backordered** or **Cancelled** |
+| **Set status** | Mark a line **Shipped** (with the supplier's expected date), **Backordered**, or **Cancelled** (decisions 12, 22) |
 
 11. **On receipt** ([E-02](E-02-receive-inventory.md)), a customer-attached line automatically creates a **Held** Sale for that customer, so the copy cannot be sold off the floor before they collect it. The hold's timeline begins there ([E-05](E-05-sell-a-record.md)).
 
@@ -81,7 +81,7 @@ Below the pending streams, previously placed PurchaseOrders are listed most-rece
 
 | Situation | Behavior |
 |---|---|
-| **Delete a pending line** | Low friction — a plain confirmation. If a customer is attached, the warning says so explicitly, because someone will need to be told. |
+| **Delete a pending line** | Low friction — a plain confirmation. If a customer is attached, the warning says so explicitly, because someone will need to be told. A line that has been **placed** is never deleted: it is Cancelled, or it is received (decision 21). |
 | **Cancel a placed line** | Sets status Cancelled and warns clearly: **this does not cancel anything with the supplier.** A person still has to contact them. |
 | **Void a PurchaseOrder** | Manager-only. Returns all unreceived lines on that PO to pending, with the same warning — the paperwork is reversed here, not at the supplier. |
 | **Bulk status update** | Sets every unreceived line on a PO to Cancelled or Backordered at once, for when a supplier confirms a whole order is dead or delayed. |
@@ -137,6 +137,9 @@ Below the pending streams, previously placed PurchaseOrders are listed most-rece
 | 18 | **Re-flag sets a fresh due date — `today + n days`, replacing whatever was there — rather than adding to the old deadline.** "Push the follow-up date out another *n* days" (step 10) was ambiguous between the two; restarting the window is what makes sense for both stated purposes (chasing the supplier again, or telling a waiting customer "n more days") — an *additive* extension would let an already-overdue line's new due date still land in the past. |
 | 19 | **An overdue line always sorts to the top of the on-order screen, but the on-order and overdue groups are each sorted by whatever the current Sort is** (Age/Title/Artist) — overdue-first is a fixed grouping, not a separate sort mode of its own. |
 | 20 | **A scan attaches to a matching PurchaseOrder line automatically; everything else is picked by hand.** Resolves the *Backorder auto-matching* open question's first half. A barcode that matches an outstanding line for that Supplier attaches to it and carries its expected cost and quantity forward, detachable by the employee — asking every time would be a prompt that answers itself on the overwhelming majority of scans. What cannot be matched that way is picked from the worklist Receiving keeps in its Invoice track ([E-02](E-02-receive-inventory.md) d42): an unbarcoded copy has nothing to match on, and a line that attaches to nothing is what leaves a derived backorder open forever (E-02 d30). The question's second half — whether an outstanding backorder should suppress duplicate reorder suggestions — stays open, and waits on suggestions existing at all |
+| 21 | **A placed order line is never deleted — it is Cancelled, or it is received.** Receiving a line does not remove it either. **Clarifies decision 9**, which stays true for a line that has never been placed: nothing has gone to a supplier, so a plain confirmation is right. Once a PO number exists, deletion is the wrong verb — decision 11 returns unreceived lines to pending, decision 12 sets a status on them, and [E-02](E-02-receive-inventory.md) d30 derives what is outstanding as ordered minus received across *every* Invoice. All three need the row to still be there. The motivating failure is concrete: the prototype deleted the line on receipt, which made d30 uncomputable and left a received copy with no recoverable link to the PO it arrived against |
+| 22 | **`Shipped` joins the stored statuses, and carries the supplier's expected date.** **Extends decision 12.** Shipped is information only a supplier can give — unlike Pending and Ordered, which are derived from whether the line has a PO number, and unlike received, which is counted (E-02 d30). A shipped line is a different kind of waiting from a merely placed one, so What's on Order can say "shipped 08/09, due 12/09" rather than only "placed 21 days ago", and sort by the date rather than by age. Accepted consequence: the date is as reliable as the supplier who gave it, and nothing verifies it — an expected date that passes is a prompt to chase, never a state change |
+| 23 | **Every status change is logged on the line** — when, what it moved from and to, and who did it. Same `log` shape the Invoice and the Supplier already carry, for the same reason: "when did this become backordered" is a question someone asks a week later, and a bare current status cannot answer it. Receiving writes to the same log, so a line's history reads as one sequence rather than two |
 
 ---
 

@@ -37,6 +37,7 @@ import type {
   PaymentBatch,
   PaymentMethod,
   PaymentTarget,
+  OrderLineStatus,
   PendingOrderLine,
   RecordEntry,
   ReviewFlag,
@@ -627,7 +628,15 @@ interface AppContextValue extends AppState {
   clearPayableEntries: (entryIds: string[], by: string) => { cleared: boolean };
 
   pendingOrderFor: (id?: string) => PendingOrderLine | undefined;
-  receivePendingOrderLine: (id: string) => PendingOrderLine | null;
+  /** Logs the receipt on the line; the line SURVIVES (M-02 d21). `qty` is
+   *  what this Invoice took in, for the log entry. */
+  receivePendingOrderLine: (id: string, qty?: number) => PendingOrderLine | null;
+  /** Set or clear one of the statuses a person sets (M-02 d12, d22). */
+  setPendingOrderLineStatus: (
+    id: string,
+    status?: OrderLineStatus,
+    expectedDate?: string,
+  ) => void;
 
   // M-02 Phase 1 — an Employee raising a pending line from a titlecard's
   // Order button. Joins the Supplier's pending pile; carries no PO number
@@ -2364,11 +2373,51 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
   // invoice's lines — here that just means it stops being pending. The Invoice
   // side (adding the actual InvoiceLine) is the caller's job, since it needs
   // the invoiceId this function doesn't have.
-  const receivePendingOrderLine: AppContextValue["receivePendingOrderLine"] = (id) => {
+  // A received line SURVIVES (M-02 d21). Deleting it was what made E-02 d30
+  // uncomputable — "ordered minus received across every Invoice" has nothing
+  // to subtract from once the row is gone — and it left a received copy with
+  // no recoverable link to the PO it arrived against. What is outstanding is
+  // derived from the Invoice lines pointing back here; all this does now is
+  // write the receipt into the line's own history.
+  const receivePendingOrderLine: AppContextValue["receivePendingOrderLine"] = (id, qty) => {
     const order = s.pendingOrders.find((o) => o.id === id);
     if (!order) return null;
-    setS((prev) => ({ ...prev, pendingOrders: prev.pendingOrders.filter((o) => o.id !== id) }));
+    const text =
+      qty == null
+        ? "Received"
+        : `Received ${qty} of ${order.qty}${qty < order.qty ? " — remainder still outstanding" : ""}`;
+    setS((prev) => ({
+      ...prev,
+      pendingOrders: prev.pendingOrders.map((o) =>
+        o.id === id ? { ...o, log: [...(o.log ?? []), { at: now(), text: `${text} by ${CURRENT_USER}` }] } : o,
+      ),
+    }));
     return order;
+  };
+
+  // M-02 d12, d22, d23 — the statuses a person sets, each one logged.
+  const setPendingOrderLineStatus: AppContextValue["setPendingOrderLineStatus"] = (
+    id,
+    status,
+    expectedDate,
+  ) => {
+    setS((prev) => ({
+      ...prev,
+      pendingOrders: prev.pendingOrders.map((o) => {
+        if (o.id !== id) return o;
+        const from = o.status ?? (o.poNumber ? "Ordered" : "Pending");
+        const to = status ?? (o.poNumber ? "Ordered" : "Pending");
+        const when = status === "Shipped" && expectedDate ? `, due ${expectedDate}` : "";
+        return {
+          ...o,
+          status,
+          // The date belongs to Shipped; clearing the status clears it too,
+          // rather than leaving a due date on a cancelled line.
+          expectedDate: status === "Shipped" ? expectedDate : undefined,
+          log: [...(o.log ?? []), { at: now(), text: `${from} → ${to}${when} by ${CURRENT_USER}` }],
+        };
+      }),
+    }));
   };
 
   const raisePendingOrderLine: AppContextValue["raisePendingOrderLine"] = (input) => {
@@ -2539,6 +2588,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
       clearPayableEntries,
       pendingOrderFor,
       receivePendingOrderLine,
+      setPendingOrderLineStatus,
       raisePendingOrderLine,
       updatePendingOrderLine,
       deletePendingOrderLine,

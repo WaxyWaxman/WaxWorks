@@ -78,7 +78,7 @@ export function Search() {
         .filter(Boolean)
         .some((f) => String(f).toLowerCase().includes(q));
 
-    const input = { inventory: app.inventory, pendingOrders: app.pendingOrders, sales: app.sales };
+    const input = { inventory: app.inventory, pendingOrders: app.pendingOrders, sales: app.sales, invoices: app.invoices };
     const rows = app.records
       // A catalog-only match is a provider result: when the provider is down
       // it simply isn't there to show (E-03 decision 8).
@@ -95,7 +95,7 @@ export function Search() {
         a.record.artist.localeCompare(b.record.artist),
     );
     return rows;
-  }, [term, app.records, app.inventory, app.pendingOrders, app.sales, app.discogsUp]);
+  }, [term, app.records, app.inventory, app.pendingOrders, app.sales, app.invoices, app.discogsUp]);
 
   const counts = useMemo(() => {
     const c: Record<StockState, number> = { here: 0, coming: 0, before: 0, never: 0 };
@@ -120,9 +120,9 @@ export function Search() {
   const selected = useMemo(() => {
     const record = selectedId ? app.recordFor(selectedId) : undefined;
     if (!record) return undefined;
-    const input = { inventory: app.inventory, pendingOrders: app.pendingOrders, sales: app.sales };
+    const input = { inventory: app.inventory, pendingOrders: app.pendingOrders, sales: app.sales, invoices: app.invoices };
     return { record, facts: stockFacts(record, input) };
-  }, [selectedId, app.records, app.inventory, app.pendingOrders, app.sales]);
+  }, [selectedId, app.records, app.inventory, app.pendingOrders, app.sales, app.invoices]);
   // The pinned selection is not among the rows currently listed — the slab has
   // no highlighted row, and the selection track says so rather than leaving
   // that looking broken.
@@ -136,12 +136,12 @@ export function Search() {
   // Recently viewed resolves against the live catalog every render, so a
   // remembered id for a Record that no longer exists just drops out.
   const recent = useMemo(() => {
-    const input = { inventory: app.inventory, pendingOrders: app.pendingOrders, sales: app.sales };
+    const input = { inventory: app.inventory, pendingOrders: app.pendingOrders, sales: app.sales, invoices: app.invoices };
     return recentIds
       .map((id) => app.recordFor(id))
       .filter((r): r is RecordEntry => Boolean(r))
       .map((r) => ({ record: r, facts: stockFacts(r, input) }));
-  }, [recentIds, app.inventory, app.pendingOrders, app.sales, app.records]);
+  }, [recentIds, app.inventory, app.pendingOrders, app.sales, app.invoices, app.records]);
 
   const doScan = (code: string) => {
     const res = resolveScan(code, app);
