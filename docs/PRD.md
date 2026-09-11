@@ -102,7 +102,7 @@ _Partially derived from E-02. Refine as further flows land._
 | **InventoryItem** | A physical copy of a Record — condition, cost, price, status. Created by receiving, consumed by sale. |
 | **Barcode** | Manufacturer UPC/EAN or a store-generated internal code. Maps to a Record (new) or an individual InventoryItem (second-hand). |
 | **Supplier** | Source of stock. Carries margin config (manager-set). Creatable by employees. |
-| **Invoice** | Inbound receiving document. Draft or finalized; immutable once finalized. Keyed by `(supplier, invoice_number)`. Carries invoice-level freight / tax / misc. |
+| **Invoice** | Inbound receiving document. Draft, finalized, then paid; correctable until paid, immutable after ([E-02](flows/E-02-receive-inventory.md) d40). Keyed by `(supplier, invoice_number)`. Carries invoice-level freight / tax / misc. |
 | **InvoiceLine** | One received item on an invoice — links Record, cost (`Ext. Price`), accepted retail price, condition. |
 | ~~**InvoiceScan**~~ | **Removed** — there is no invoice photography and no document extraction ([E-02](flows/E-02-receive-inventory.md) d27). Invoice-level totals are entered manually. |
 | **CostAdjustment** | The ±2% reconciliation delta; flows into COGS. Beyond ±2% it proceeds and raises a ReviewFlag (E-02 d35). |

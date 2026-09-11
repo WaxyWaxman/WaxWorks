@@ -1,0 +1,1010 @@
+<title>Receive, Three Tracks</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700;800&family=Archivo+Narrow:wght@600;700&display=swap">
+<style>
+/*
+ * E-02 Receiving, re-laid as the till's three tracks.
+ * Palette and type are lifted from prototype/src/styles/tokens.css (SIGNAL)
+ * verbatim — this mock adds no colour of its own, on purpose.
+ */
+:root {
+  --c-bg: #f1f1ef;
+  --c-surface: #ffffff;
+  --c-surface-2: #f7f7f5;
+  --c-surface-3: #e9e9e6;
+  --c-ink: #111111;
+  --c-ink-soft: #55554f;
+  --c-ink-faint: #8a8a84;
+  --c-border: #e4e4e0;
+  --c-border-strong: #ccccc7;
+  --c-accent: #d64500;
+  --c-accent-ink: #ffffff;
+  --c-accent-soft: #fff4ee;
+  --c-ok: #1f6b3f;
+  --c-ok-soft: #eaf3ed;
+  --c-warn: #8a6a1a;
+  --c-warn-soft: #fbf4e4;
+  --c-danger: #c0392b;
+
+  --font-sans: "Archivo", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Helvetica, sans-serif;
+  --font-narrow: "Archivo Narrow", "Archivo", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: ui-monospace, "SF Mono", "Cascadia Mono", "Roboto Mono", Menlo, Consolas, monospace;
+
+  --sp-1: 4px; --sp-2: 8px; --sp-3: 12px; --sp-4: 16px; --sp-5: 24px; --sp-6: 32px;
+  --radius-sm: 2px;
+}
+
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+body {
+  margin: 0; background: var(--c-bg); color: var(--c-ink);
+  font-family: var(--font-sans); font-size: 14px; line-height: 1.45;
+  -webkit-font-smoothing: antialiased;
+}
+.page { max-width: 1580px; margin: 0 auto; padding: var(--sp-6) var(--sp-5) 96px; }
+
+/* ---- page furniture (not part of the app) ---- */
+.masthead { display: flex; align-items: flex-end; gap: var(--sp-5); flex-wrap: wrap; margin-bottom: var(--sp-4); }
+.masthead h1 { font-size: 30px; letter-spacing: -0.03em; margin: 0 0 2px; line-height: 1.05; }
+.masthead p { margin: 0; color: var(--c-ink-soft); max-width: 62ch; font-size: 14.5px; }
+.stamp {
+  font-family: var(--font-narrow); font-weight: 700; font-size: 11px; letter-spacing: 0.12em;
+  text-transform: uppercase; color: var(--c-ink-faint); border: 1px solid var(--c-border-strong);
+  padding: 3px 8px; white-space: nowrap;
+}
+.stamp.live { color: var(--c-accent); border-color: var(--c-accent); }
+
+.controls {
+  display: flex; align-items: center; gap: var(--sp-2); flex-wrap: wrap;
+  border: 1px solid var(--c-border-strong); background: var(--c-surface);
+  padding: var(--sp-2) var(--sp-3); margin-bottom: var(--sp-3);
+}
+.controls .lab { margin-right: var(--sp-1); }
+.toggle {
+  font: inherit; font-size: 12.5px; font-weight: 600; cursor: pointer;
+  border: 1px solid var(--c-border-strong); background: var(--c-surface-2);
+  color: var(--c-ink-soft); padding: 5px 10px; border-radius: var(--radius-sm);
+}
+.toggle:hover { border-color: var(--c-ink); color: var(--c-ink); }
+.toggle[aria-pressed="true"] { background: var(--c-ink); border-color: var(--c-ink); color: #fff; }
+.toggle:focus-visible, .rail-ico:focus-visible, .chip:focus-visible { outline: 2px solid var(--c-accent); outline-offset: 2px; }
+
+/* ---- the app frame ---- */
+.screen {
+  border: 1px solid var(--c-ink); background: var(--c-surface);
+  height: clamp(620px, 82dvh, 880px);
+  display: flex; flex-direction: column; overflow: hidden;
+}
+
+.band {
+  flex: none; height: 58px; display: flex; align-items: stretch;
+  background: var(--c-surface); border-bottom: 2px solid var(--c-ink);
+}
+.band .wordmark {
+  width: 168px; display: flex; align-items: center; padding-left: 18px;
+  font-weight: 800; font-size: 16px; letter-spacing: 0.02em; border-right: 1px solid var(--c-border-strong);
+}
+.band .mode {
+  flex: 1; display: flex; align-items: center; justify-content: center;
+  font-size: 14px; font-weight: 600; letter-spacing: 0.05em; color: var(--c-ink-soft);
+  border-right: 1px solid var(--c-border-strong);
+}
+.band .mode.on { background: var(--c-ink); color: #fff; font-weight: 800; }
+.band .who {
+  width: 172px; display: flex; flex-direction: column; justify-content: center;
+  padding-left: 16px; border-left: 1px solid var(--c-border-strong);
+}
+
+.lab {
+  font-family: var(--font-narrow); font-weight: 700; font-size: 11px; letter-spacing: 0.1em;
+  text-transform: uppercase; color: var(--c-ink-faint);
+}
+.xsmall { font-size: 11px; }
+.small { font-size: 12.5px; }
+.muted { color: var(--c-ink-faint); }
+.num { font-variant-numeric: tabular-nums; }
+.mono { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+
+/* Three tracks. Same skeleton as .till-frame / .find-frame. */
+.frame {
+  flex: 1; min-height: 0; display: grid;
+  grid-template-columns: 320px minmax(0, 1fr) 386px;
+}
+.frame.slab-shut { grid-template-columns: 52px minmax(0, 1fr) 386px; }
+
+/* ============ TRACK 1 — the receiving slab ============ */
+.slab {
+  border-right: 1px solid var(--c-border-strong); background: var(--c-surface-2);
+  display: flex; flex-direction: column; min-height: 0; min-width: 0;
+}
+.slab-head {
+  flex: none; display: flex; align-items: center; gap: var(--sp-2);
+  padding: var(--sp-2) var(--sp-2) var(--sp-2) var(--sp-3);
+  border-bottom: 1px solid var(--c-border-strong);
+}
+.slab-head .lab { flex: 1; }
+.rail-ico {
+  position: relative; width: 38px; height: 38px; flex: none; padding: 0; cursor: pointer;
+  display: grid; place-items: center; font-size: 15px; line-height: 1;
+  border: 1px solid var(--c-border-strong); background: var(--c-surface);
+  color: var(--c-ink); border-radius: var(--radius-sm);
+}
+.rail-ico:hover { border-color: var(--c-ink); }
+.rail-ico.accent { background: var(--c-accent); border-color: var(--c-accent); color: var(--c-accent-ink); }
+.rail-badge {
+  position: absolute; top: -6px; right: -6px; min-width: 16px; height: 16px; padding: 0 4px;
+  background: var(--c-ink); color: #fff; border-radius: 8px;
+  font-family: var(--font-mono); font-size: 10px; font-weight: 700;
+  display: grid; place-items: center; line-height: 1;
+}
+.rail-sep { width: 24px; height: 1px; background: var(--c-border-strong); flex: none; }
+
+.slab-acts { flex: none; display: flex; gap: var(--sp-2); padding: var(--sp-3) var(--sp-3) 0; }
+.slab-acts .btn { flex: 1; justify-content: center; }
+.slab-search {
+  flex: none; padding: var(--sp-3); display: flex; flex-direction: column; gap: var(--sp-2);
+  border-bottom: 1px solid var(--c-border-strong);
+}
+.slab-search input {
+  font: inherit; font-size: 15px; font-weight: 600; width: 100%;
+  border: 2px solid var(--c-ink); background: var(--c-surface); color: var(--c-ink);
+  padding: 7px 10px; border-radius: var(--radius-sm);
+}
+.slab-search input::placeholder { color: var(--c-border-strong); font-weight: 400; }
+.chips { display: flex; flex-wrap: wrap; gap: var(--sp-1); }
+.chip {
+  font: inherit; font-size: 11.5px; font-weight: 600; cursor: pointer;
+  border: 1px solid var(--c-border-strong); background: var(--c-surface); color: var(--c-ink-soft);
+  padding: 3px 7px; border-radius: var(--radius-sm); display: inline-flex; gap: 5px; align-items: center;
+}
+.chip .count { font-family: var(--font-mono); font-size: 10.5px; color: var(--c-ink-faint); }
+.chip:hover { border-color: var(--c-ink); color: var(--c-ink); }
+.chip.on { background: var(--c-ink); border-color: var(--c-ink); color: #fff; }
+.chip.on .count { color: #d5d5d1; }
+
+.slab-list { flex: 1; min-height: 0; overflow-y: auto; }
+.slab-band {
+  position: sticky; top: 0; z-index: 1; background: var(--c-surface-2);
+  border-bottom: 1px solid var(--c-border-strong);
+  padding: var(--sp-3) var(--sp-3) var(--sp-2);
+  display: flex; align-items: baseline; justify-content: space-between; gap: var(--sp-2);
+}
+.wl {
+  display: grid; grid-template-columns: 32px minmax(0, 1fr) auto; gap: var(--sp-2);
+  align-items: center; width: 100%; text-align: left; cursor: pointer;
+  padding: var(--sp-2) var(--sp-3); border: none; border-bottom: 1px solid var(--c-border);
+  border-left: 3px solid transparent; background: var(--c-surface); font: inherit; color: var(--c-ink);
+}
+.wl:hover { background: var(--c-surface-2); }
+.wl.on { border-left-color: var(--c-accent); box-shadow: inset 0 0 0 1px var(--c-ink); }
+.art {
+  width: 32px; height: 32px; display: grid; place-items: center; font-size: 16px; flex: none;
+  border: 1px solid var(--c-border);
+  background: repeating-linear-gradient(135deg, #e2e2de 0 6px, #ececea 6px 12px);
+}
+.art.missing { font-family: var(--font-narrow); font-size: 8px; font-weight: 700; letter-spacing: 0.06em; color: var(--c-ink-faint); }
+.wl .t { font-size: 12.5px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.wl .m { font-size: 11px; color: var(--c-ink-faint); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.wl .n {
+  font-family: var(--font-mono); font-size: 12.5px; font-weight: 700; text-align: right;
+  font-variant-numeric: tabular-nums; color: var(--c-ink-soft); white-space: nowrap;
+}
+.wl .n small {
+  display: block; font-family: var(--font-narrow); font-size: 9px; font-weight: 700;
+  letter-spacing: 0.05em; text-transform: uppercase; color: var(--c-ink-faint);
+}
+
+/* the 52px shut strip */
+.slab-strip {
+  height: 100%; display: flex; flex-direction: column; align-items: center;
+  gap: var(--sp-2); padding: var(--sp-2) 0; min-height: 0;
+}
+.strip-stack { flex: 1; min-height: 0; overflow-y: auto; scrollbar-width: none; display: flex; flex-direction: column; align-items: center; gap: 6px; }
+.strip-stack::-webkit-scrollbar { display: none; }
+.tile {
+  position: relative; width: 38px; height: 38px; flex: none; padding: 0; cursor: pointer;
+  display: grid; place-items: center; border: 1px solid var(--c-border-strong);
+  border-radius: var(--radius-sm); background: var(--c-surface); color: var(--c-ink);
+  font-family: var(--font-narrow); font-size: 10px; font-weight: 700; letter-spacing: 0.04em;
+}
+.tile:hover { border-color: var(--c-ink); }
+.tile.on { border-color: var(--c-ink); box-shadow: inset 3px 0 0 var(--c-accent); }
+/* A finished session carries two data, and only two: who it was from and how
+   many copies came in. The count is mono and faint so the strip still scans
+   as a column of names rather than a table. */
+.tile.done { height: 42px; flex-direction: column; gap: 0; line-height: 1.05; }
+.tile.done .tn { font-family: var(--font-narrow); font-size: 10px; font-weight: 700; letter-spacing: 0.04em; }
+.tile.done .tc { font-family: var(--font-mono); font-size: 9.5px; font-weight: 600; color: var(--c-ink-faint); font-variant-numeric: tabular-nums; }
+.strip-lab {
+  font-family: var(--font-narrow); font-size: 8.5px; font-weight: 700; letter-spacing: 0.12em;
+  text-transform: uppercase; color: var(--c-border-strong); writing-mode: vertical-rl; padding: var(--sp-1) 0;
+}
+
+/* ============ TRACK 2 — the invoice ============ */
+.main { display: flex; flex-direction: column; min-width: 0; min-height: 0; background: var(--c-surface); }
+.main-head {
+  flex: none; display: flex; align-items: center; gap: var(--sp-3); flex-wrap: wrap;
+  padding: var(--sp-2) var(--sp-4); border-bottom: 1px solid var(--c-border); background: var(--c-surface-2);
+}
+.head-label { font-size: 17px; font-weight: 700; letter-spacing: -0.01em; }
+.main-meta {
+  flex: none; display: flex; align-items: center; gap: var(--sp-3); flex-wrap: wrap;
+  padding: 6px var(--sp-4); border-bottom: 1px solid var(--c-border); font-size: 12px; color: var(--c-ink-soft);
+}
+.badge {
+  display: inline-flex; align-items: center; gap: 4px; font-family: var(--font-narrow);
+  font-size: 10.5px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase;
+  border: 1px solid var(--c-border-strong); color: var(--c-ink-soft); padding: 1px 6px; background: var(--c-surface);
+}
+.badge.ok { color: var(--c-ok); border-color: var(--c-ok); background: var(--c-ok-soft); }
+.badge.warn { color: var(--c-warn); border-color: var(--c-warn); background: var(--c-warn-soft); }
+.badge.ink { color: #fff; background: var(--c-ink); border-color: var(--c-ink); }
+.right { margin-left: auto; }
+
+.scan-wrap { flex: none; padding: var(--sp-3) var(--sp-4); border-bottom: 1px solid var(--c-border); }
+.scan-slab { border: 2px solid var(--c-ink); padding: var(--sp-2) var(--sp-4) var(--sp-3); }
+.scan-slab input {
+  width: 100%; border: none; background: transparent; padding: 0; font: inherit;
+  font-size: 28px; font-weight: 600; letter-spacing: 0.02em; color: var(--c-ink);
+}
+.scan-slab input:focus { outline: none; }
+.scan-slab input::placeholder { color: var(--c-border-strong); font-weight: 400; }
+.scan-note { font-size: 11px; color: var(--c-ink-faint); margin-top: 2px; }
+.locked-slab { border: 2px dashed var(--c-border-strong); padding: var(--sp-2) var(--sp-4) var(--sp-3); background: var(--c-surface-2); }
+.locked-text { font-size: 13px; color: var(--c-ink-soft); max-width: 62ch; margin-top: 2px; }
+
+/* the staging card — where a scan lands before it becomes a line */
+.stage { flex: none; border-bottom: 1px solid var(--c-border); background: var(--c-accent-soft); }
+.stage-in {
+  padding: var(--sp-3) var(--sp-4); display: grid; gap: var(--sp-3);
+  grid-template-columns: 44px minmax(0, 1fr);
+}
+.stage .art { width: 44px; height: 44px; font-size: 21px; }
+.stage-title { font-size: 16px; font-weight: 700; line-height: 1.2; }
+.stage-sub { font-size: 11.5px; color: var(--c-ink-soft); }
+.fields { display: flex; gap: var(--sp-3); flex-wrap: wrap; align-items: flex-end; margin-top: var(--sp-2); }
+.field { display: flex; flex-direction: column; gap: 2px; }
+.field > .lab { font-size: 9.5px; }
+.field input, .field select {
+  font: inherit; font-size: 14px; font-weight: 600; padding: 5px 8px; width: 92px;
+  border: 1px solid var(--c-border-strong); background: var(--c-surface); color: var(--c-ink);
+  border-radius: var(--radius-sm); font-variant-numeric: tabular-nums;
+}
+.field.wide input, .field.wide select { width: 132px; }
+.field input:focus, .field select:focus { outline: 2px solid var(--c-accent); outline-offset: -1px; }
+.field .hint { font-size: 10px; color: var(--c-ink-faint); }
+
+.btn {
+  display: inline-flex; align-items: center; gap: 6px; cursor: pointer; font: inherit;
+  font-size: 13px; font-weight: 600; padding: 6px 12px; border-radius: var(--radius-sm);
+  border: 1px solid var(--c-border-strong); background: var(--c-surface); color: var(--c-ink);
+}
+.btn:hover { border-color: var(--c-ink); }
+.btn.ink { background: var(--c-ink); border-color: var(--c-ink); color: #fff; }
+.btn.accent { background: var(--c-accent); border-color: var(--c-accent); color: var(--c-accent-ink); }
+.btn.ghost { border-color: transparent; background: transparent; color: var(--c-ink-soft); }
+.btn.sm { font-size: 11.5px; padding: 3px 8px; }
+
+.lines { flex: 1; min-height: 0; overflow: auto; }
+table.lines-t { width: 100%; border-collapse: collapse; }
+table.lines-t thead th {
+  position: sticky; top: 0; z-index: 2; background: var(--c-surface);
+  font-family: var(--font-narrow); font-weight: 700; font-size: 10px; letter-spacing: 0.08em;
+  text-transform: uppercase; color: var(--c-ink-faint); text-align: left;
+  padding: 6px var(--sp-2); border-bottom: 1px solid var(--c-ink); white-space: nowrap;
+}
+table.lines-t th.n, table.lines-t td.n { text-align: right; font-variant-numeric: tabular-nums; }
+table.lines-t td {
+  padding: 7px var(--sp-2); border-bottom: 1px solid var(--c-border); vertical-align: middle; font-size: 13px;
+}
+table.lines-t tr:first-child td { border-top: none; }
+table.lines-t td:first-child { padding-left: var(--sp-4); width: 36px; padding-right: 0; }
+table.lines-t td:last-child, table.lines-t th:last-child { padding-right: var(--sp-4); }
+.rec .t { display: block; font-size: 13.5px; font-weight: 600; line-height: 1.25; }
+.rec .m { display: block; font-size: 11px; color: var(--c-ink-faint); }
+tr.flagged td { background: var(--c-warn-soft); }
+tr.flagged td:first-child { box-shadow: inset 3px 0 0 var(--c-warn); }
+.pct { font-family: var(--font-mono); font-size: 12px; }
+.pct.bad { color: var(--c-danger); font-weight: 700; }
+
+.log { flex: none; border-top: 1px solid var(--c-border); padding: var(--sp-2) var(--sp-4); background: var(--c-surface-2); }
+.log summary { cursor: pointer; list-style: none; display: flex; align-items: center; gap: var(--sp-2); }
+.log summary::-webkit-details-marker { display: none; }
+.log .latest { font-size: 11.5px; color: var(--c-ink-soft); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.log .entries { display: flex; flex-direction: column; gap: 2px; padding: var(--sp-2) 0; font-size: 11.5px; color: var(--c-ink-faint); }
+
+/* ============ TRACK 3 — reconcile ============ */
+.recon {
+  border-left: 1px solid var(--c-border-strong); background: var(--c-surface);
+  display: flex; flex-direction: column; min-height: 0;
+}
+.recon-head { flex: none; padding: var(--sp-4) var(--sp-4) var(--sp-3); }
+.figure { font-size: 60px; font-weight: 800; line-height: 1; letter-spacing: -0.035em; font-variant-numeric: tabular-nums; }
+.figure-sub { margin-top: 4px; font-size: 11px; color: var(--c-ink-faint); }
+/* The check step 18 turns on. It sits directly under the figure so it cannot
+   be read past, and it carries state in form as well as in words. */
+.verdict {
+  flex: none; display: flex; gap: var(--sp-2); align-items: flex-start;
+  padding: var(--sp-2) var(--sp-4); font-size: 12px; line-height: 1.35;
+  border-top: 1px solid var(--c-border);
+}
+.verdict .mark { font-size: 14px; line-height: 1.2; }
+.verdict.ok { background: var(--c-ok-soft); color: var(--c-ok); }
+.verdict.warn { background: var(--c-warn-soft); color: var(--c-warn); }
+.verdict strong { font-weight: 700; }
+.rule { flex: none; height: 2px; background: var(--c-ink); }
+.recon-mid { flex: 1; min-height: 0; overflow-y: auto; padding: var(--sp-3) var(--sp-4); display: flex; flex-direction: column; gap: var(--sp-4); }
+.sec { display: flex; flex-direction: column; gap: 6px; }
+.sec > .lab { display: block; }
+.row-fig { display: flex; justify-content: space-between; align-items: baseline; gap: var(--sp-2); font-size: 13px; }
+.row-fig .v { font-family: var(--font-mono); font-weight: 600; font-variant-numeric: tabular-nums; }
+.row-fig.delta { border-top: 1px solid var(--c-border); padding-top: 6px; font-weight: 700; }
+.row-fig.delta.warn, .row-fig.delta.warn .v { color: var(--c-warn); }
+.row-fig.delta.ok, .row-fig.delta.ok .v { color: var(--c-ok); }
+.entry { display: flex; justify-content: space-between; align-items: center; gap: var(--sp-2); font-size: 13px; }
+.entry input {
+  font: inherit; font-size: 13px; font-weight: 600; width: 104px; text-align: right;
+  padding: 4px 7px; border: 1px solid var(--c-border-strong); background: var(--c-surface);
+  color: var(--c-ink); border-radius: var(--radius-sm); font-variant-numeric: tabular-nums;
+}
+.entry input:focus { outline: 2px solid var(--c-accent); outline-offset: -1px; }
+.entry input:disabled { background: var(--c-surface-2); color: var(--c-ink-soft); border-style: dashed; cursor: not-allowed; }
+.toggle:disabled { opacity: 0.4; cursor: not-allowed; }
+.entry.total input { border: 2px solid var(--c-ink); font-size: 15px; font-weight: 700; }
+.flags { border: 1px solid var(--c-warn); background: var(--c-warn-soft); padding: var(--sp-2) var(--sp-3); display: flex; flex-direction: column; gap: 5px; }
+.flags .lab { color: var(--c-warn); }
+.flags li { font-size: 11.5px; color: var(--c-warn); }
+.flags ul { margin: 0; padding-left: 16px; display: flex; flex-direction: column; gap: 3px; }
+.recon-foot { flex: none; border-top: 2px solid var(--c-ink); padding: var(--sp-3) var(--sp-4); display: flex; flex-direction: column; gap: var(--sp-2); }
+.finalize { justify-content: center; height: 64px; font-size: 21px; font-weight: 800; letter-spacing: 0.01em; }
+.foot-sub { font-size: 11px; color: var(--c-ink-faint); text-align: center; }
+
+/* ---- notes below the screen ---- */
+.notes { margin-top: var(--sp-6); display: grid; grid-template-columns: repeat(auto-fit, minmax(330px, 1fr)); gap: var(--sp-5); }
+.note h2 {
+  font-family: var(--font-narrow); font-size: 13px; font-weight: 700; letter-spacing: 0.1em;
+  text-transform: uppercase; color: var(--c-ink-faint); margin: 0 0 var(--sp-3);
+  padding-bottom: 5px; border-bottom: 1px solid var(--c-border-strong);
+}
+.note p, .note li { font-size: 13.5px; color: var(--c-ink-soft); }
+.note p { margin: 0 0 var(--sp-3); }
+.note strong { color: var(--c-ink); }
+.note dl { margin: 0; display: flex; flex-direction: column; gap: var(--sp-3); }
+.note dt { font-weight: 700; color: var(--c-ink); font-size: 13.5px; }
+.note dd { margin: 2px 0 0; font-size: 13.5px; color: var(--c-ink-soft); }
+.note ul { margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 6px; }
+.cite { font-family: var(--font-mono); font-size: 11.5px; color: var(--c-ink-faint); }
+.warnbox { border-left: 3px solid var(--c-accent); background: var(--c-accent-soft); padding: var(--sp-3) var(--sp-4); }
+.warnbox p:last-child { margin-bottom: 0; }
+
+@media (prefers-reduced-motion: no-preference) {
+  .frame { transition: grid-template-columns 160ms ease; }
+}
+@media (max-width: 1180px) {
+  .frame, .frame.slab-shut { grid-template-columns: 52px minmax(0, 1fr); grid-template-rows: minmax(0, 1fr) auto; }
+  .slab { grid-row: 1 / -1; }
+  .slab-open-only { display: none; }
+  .main { grid-column: 2; grid-row: 1; }
+  .recon { grid-column: 2; grid-row: 2; border-left: none; border-top: 2px solid var(--c-ink); max-height: 44dvh; }
+}
+</style>
+
+<div class="page">
+
+  <header class="masthead">
+    <div>
+      <h1>Receive, in three tracks</h1>
+      <p>E-02 laid out the way the till and Find already are — a retractable slab on the left, the invoice in the middle, the reconcile figures pinned to the right. Layout mock, not working code.</p>
+    </div>
+    <span class="stamp">branch Receive-UI</span>
+    <span class="stamp live">proposed — not ratified</span>
+  </header>
+
+  <div class="controls">
+    <span class="lab">Mock controls</span>
+    <button class="toggle" id="t-slab" aria-pressed="true">Slab open</button>
+    <button class="toggle" id="t-mismatch" aria-pressed="true">Paperwork mismatch</button>
+    <button class="toggle" id="t-stage" aria-pressed="true">Scan in hand</button>
+    <span class="lab" style="margin-left:var(--sp-3)">Invoice state</span>
+    <button class="toggle state-btn" data-state="Draft" aria-pressed="true">Draft</button>
+    <button class="toggle state-btn" data-state="Finalized" aria-pressed="false">Finalized</button>
+    <button class="toggle state-btn" data-state="Paid" aria-pressed="false">Paid</button>
+    <span class="xsmall muted" style="margin-left:auto">Narrow past 1180px to see reconcile drop to a bottom strip.</span>
+  </div>
+
+  <div class="screen">
+
+    <div class="band">
+      <div class="wordmark">WAX WORKS</div>
+      <div class="mode">SELL</div>
+      <div class="mode">FIND</div>
+      <div class="mode on">RECEIVE</div>
+      <div class="mode">CUSTOMERS</div>
+      <div class="mode" style="border-right:none">MORE</div>
+      <div class="who">
+        <span class="lab">Draft</span>
+        <span class="small">saved 14:19 · R. Dufresne</span>
+      </div>
+    </div>
+
+    <div class="frame" id="frame">
+
+      <!-- ============ TRACK 1 — the receiving slab ============ -->
+      <nav class="slab" aria-label="Receive">
+        <!-- shut: the 52px strip -->
+        <div class="slab-strip" id="strip" hidden>
+          <!-- The bar's own open control, same slot the till rail keeps it in.
+               Search also opens the slab, but it opens it to DO something;
+               this one just gives the width back. -->
+          <button class="rail-ico" id="strip-expand" aria-expanded="false" aria-label="Open the worklist" title="Open worklist">⟩</button>
+          <div class="rail-sep"></div>
+          <button class="rail-ico accent" aria-label="New intake" title="New intake">+</button>
+          <button class="rail-ico" aria-label="Open an existing invoice — 2 drafts in flight" title="Open existing — 2 drafts">
+            📦<span class="rail-badge">2</span>
+          </button>
+          <button class="rail-ico" id="strip-open" aria-label="Search the worklist" title="Search — opens the slab with the cursor in the box">🔍</button>
+          <div class="rail-sep"></div>
+          <div class="strip-stack" role="list" aria-label="Received lately">
+            <span class="strip-lab">lately</span>
+            <button class="tile done" role="listitem" title="INDI 20-5512 — finalized 09/09, 22 copies">
+              <span class="tn">INDI</span><span class="tc">22</span>
+            </button>
+            <button class="tile done" role="listitem" title="WALK SH-260909-1 — finalized 09/09, 8 copies">
+              <span class="tn">WALK</span><span class="tc">8</span>
+            </button>
+            <button class="tile done" role="listitem" title="CRAT 4402 — finalized 08/09, 31 copies">
+              <span class="tn">CRAT</span><span class="tc">31</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- open: head, search, PO filter, worklist -->
+        <div class="slab-open-only" id="slab-open" style="display:flex;flex-direction:column;min-height:0;flex:1">
+          <div class="slab-head">
+            <span class="lab">Receive</span>
+            <button class="rail-ico" id="slab-close" aria-label="Collapse the worklist" title="Collapse — the invoice takes the width">⟨</button>
+          </div>
+
+          <div class="slab-acts">
+            <button class="btn ink">+ New intake</button>
+            <button class="btn">Open existing</button>
+          </div>
+
+          <div class="slab-search">
+            <input type="search" placeholder="title · barcode · PO no." aria-label="Search the worklist by title, barcode or PO number">
+            <div class="chips">
+              <button class="chip on">All <span class="count">14</span></button>
+              <button class="chip">PO-1142 <span class="count">6</span></button>
+              <button class="chip">PO-1150 <span class="count">5</span></button>
+              <button class="chip">PO-1161 <span class="count">3</span></button>
+            </div>
+          </div>
+
+          <div class="slab-list">
+            <div class="slab-band"><span class="lab">In flight</span><span class="lab">2 drafts</span></div>
+            <button class="wl on">
+              <span class="art">📦</span>
+              <span style="min-width:0">
+                <span class="t">FAB1 · INV-88213</span>
+                <span class="m">F.A.B. Distribution · new stock</span>
+              </span>
+              <span class="n">6<small>lines</small></span>
+            </button>
+            <button class="wl">
+              <span class="art">📦</span>
+              <span style="min-width:0">
+                <span class="t">CRAT · 4417</span>
+                <span class="m">Crate Digger Wholesale · new stock</span>
+              </span>
+              <span class="n">2<small>lines</small></span>
+            </button>
+
+            <div class="slab-band"><span class="lab">Outstanding · PO-1142</span><span class="lab">F.A.B.</span></div>
+            <button class="wl">
+              <span class="art">🟣</span>
+              <span style="min-width:0">
+                <span class="t">Prince — Purple Rain</span>
+                <span class="m">Warner Bros. · 25110-1</span>
+              </span>
+              <span class="n">3<small>of 4</small></span>
+            </button>
+            <button class="wl">
+              <span class="art">🌗</span>
+              <span style="min-width:0">
+                <span class="t">Fleetwood Mac — Rumours</span>
+                <span class="m">Warner Bros. · BSK 3010</span>
+              </span>
+              <span class="n">2<small>of 6</small></span>
+            </button>
+            <button class="wl">
+              <span class="art missing">no art</span>
+              <span style="min-width:0">
+                <span class="t">Nas — Illmatic</span>
+                <span class="m">Columbia · C 57684</span>
+              </span>
+              <span class="n">4<small>of 4</small></span>
+            </button>
+            <button class="wl">
+              <span class="art">🔵</span>
+              <span style="min-width:0">
+                <span class="t">Joni Mitchell — Blue</span>
+                <span class="m">Reprise · MS 2038 · customer hold</span>
+              </span>
+              <span class="n">1<small>of 1</small></span>
+            </button>
+
+            <div class="slab-band"><span class="lab">Outstanding · PO-1150</span><span class="lab">F.A.B.</span></div>
+            <button class="wl">
+              <span class="art">🎺</span>
+              <span style="min-width:0">
+                <span class="t">Miles Davis — Kind of Blue</span>
+                <span class="m">Columbia · CL 1355</span>
+              </span>
+              <span class="n">2<small>of 2</small></span>
+            </button>
+            <button class="wl">
+              <span class="art">🦹</span>
+              <span style="min-width:0">
+                <span class="t">Madvillain — Madvillainy</span>
+                <span class="m">Stones Throw · STH2065</span>
+              </span>
+              <span class="n">3<small>of 3</small></span>
+            </button>
+
+            <div class="slab-band"><span class="lab">Received lately</span><span class="lab">as-was</span></div>
+            <button class="wl">
+              <span class="art">🧾</span>
+              <span style="min-width:0">
+                <span class="t">INDI · 20-5512</span>
+                <span class="m">finalized 09/09 · 22 copies</span>
+              </span>
+              <span class="n">$964<small>total</small></span>
+            </button>
+            <button class="wl">
+              <span class="art">🧾</span>
+              <span style="min-width:0">
+                <span class="t">WALK · REF0041</span>
+                <span class="m">finalized 09/09 · second-hand</span>
+              </span>
+              <span class="n">$210<small>total</small></span>
+            </button>
+          </div>
+        </div>
+      </nav>
+
+      <!-- ============ TRACK 2 — the invoice ============ -->
+      <section class="main">
+        <div class="main-head">
+          <span class="head-label">FAB1 · INV-88213</span>
+          <span class="badge ink" id="state-badge">Draft</span>
+          <span class="badge">New stock</span>
+          <label class="right small" id="auto-accept" style="display:inline-flex;gap:6px;align-items:center;cursor:pointer">
+            <input type="checkbox" checked>
+            <span>Auto-accept suggested price</span>
+          </label>
+        </div>
+
+        <div class="main-meta">
+          <span>F.A.B. Distribution</span>
+          <span class="muted">·</span>
+          <span>dated <span class="mono">06/09/2026</span></span>
+          <span class="muted">·</span>
+          <span>received <span class="mono">10/09/2026</span></span>
+          <span class="muted">·</span>
+          <span>supplier discount <span class="mono">60%</span></span>
+          <span class="right xsmall muted">PO-1142, PO-1150</span>
+        </div>
+
+        <div class="scan-wrap" id="scan-wrap">
+          <div class="scan-slab">
+            <span class="lab">Scan</span>
+            <input type="text" placeholder="scan a barcode…" aria-label="Scan a barcode to start a line">
+            <div class="scan-note" id="scan-note" hidden>Finalized and sellable — a late carton can still be scanned in until this invoice is paid <span class="cite">(d4)</span>.</div>
+          </div>
+        </div>
+        <!-- Paid: the slab does not vanish, it says why it is gone. Same band,
+             same height, so the track keeps its shape. -->
+        <div class="scan-wrap" id="locked-wrap" hidden>
+          <div class="locked-slab">
+            <span class="lab">Locked</span>
+            <div class="locked-text">Paid 10/09/2026 by R. Dufresne — this invoice is immutable. Amendments are manager-only, appended against the original in <strong>E-04</strong>.</div>
+          </div>
+        </div>
+
+        <!-- the staging card: a scan lands here, gets its cost, then becomes a line -->
+        <div class="stage" id="stage">
+          <div class="stage-in">
+            <span class="art" style="width:44px;height:44px;font-size:21px">🟣</span>
+            <div style="min-width:0">
+              <div class="stage-title">Prince — Purple Rain</div>
+              <div class="stage-sub">Warner Bros. · 25110-1 · 1984 · local catalog hit · <strong>PO-1142</strong>, 3 of 4 outstanding</div>
+              <div class="fields">
+                <label class="field">
+                  <span class="lab">Cost (ext.)</span>
+                  <input type="text" value="12.40">
+                  <span class="hint">from their paperwork</span>
+                </label>
+                <label class="field">
+                  <span class="lab">List</span>
+                  <input type="text" value="30.99">
+                  <span class="hint">pre-discount</span>
+                </label>
+                <label class="field">
+                  <span class="lab">Sell price</span>
+                  <input type="text" value="32.99">
+                  <span class="hint">sticky · suggested 32.99</span>
+                </label>
+                <label class="field">
+                  <span class="lab">Grade</span>
+                  <select><option>Mint / Sealed</option><option>NM</option><option>VG+</option></select>
+                  <span class="hint">new stock default</span>
+                </label>
+                <label class="field" style="width:64px">
+                  <span class="lab">Qty</span>
+                  <input type="text" value="3" style="width:56px">
+                  <span class="hint">&nbsp;</span>
+                </label>
+                <div class="field">
+                  <span class="lab">Margin</span>
+                  <span class="mono" style="font-size:17px;font-weight:700;color:var(--c-ok)">62.4%</span>
+                  <span class="hint">$61.77 net</span>
+                </div>
+                <button class="btn ink" style="height:31px">Add line ⏎</button>
+                <button class="btn ghost" style="height:31px">Discard</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="lines">
+          <table class="lines-t">
+            <thead>
+              <tr>
+                <th></th><th>Record</th><th>Grade</th>
+                <th class="n">Cost</th><th class="n">Sell</th><th class="n">Margin</th>
+                <th class="n">Qty</th><th class="n">Net</th><th></th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><span class="art">🌗</span></td>
+                <td class="rec"><span class="t">Fleetwood Mac — Rumours</span><span class="m">Warner Bros. · BSK 3010 · PO-1142</span></td>
+                <td><span class="badge">Mint</span></td>
+                <td class="n mono">13.20</td><td class="n mono">34.99</td>
+                <td class="n"><span class="pct">62.3%</span></td>
+                <td class="n mono">4</td><td class="n mono">52.80</td>
+                <td class="n"><button class="btn sm ghost">edit</button></td>
+              </tr>
+              <tr>
+                <td><span class="art missing">no art</span></td>
+                <td class="rec"><span class="t">Nas — Illmatic</span><span class="m">Columbia · C 57684 · PO-1142</span></td>
+                <td><span class="badge">Mint</span></td>
+                <td class="n mono">14.80</td><td class="n mono">36.99</td>
+                <td class="n"><span class="pct">60.0%</span></td>
+                <td class="n mono">4</td><td class="n mono">59.20</td>
+                <td class="n"><button class="btn sm ghost">edit</button></td>
+              </tr>
+              <tr class="flagged">
+                <td><span class="art">🎺</span></td>
+                <td class="rec"><span class="t">Miles Davis — Kind of Blue</span><span class="m">Columbia · CL 1355 · PO-1150</span></td>
+                <td><span class="badge">Mint</span></td>
+                <td class="n mono">18.60</td><td class="n mono">17.99</td>
+                <td class="n"><span class="pct bad">−3.4%</span></td>
+                <td class="n mono">2</td><td class="n mono">37.20</td>
+                <td class="n"><span class="badge warn">flagged</span></td>
+              </tr>
+              <tr>
+                <td><span class="art">🔵</span></td>
+                <td class="rec"><span class="t">Joni Mitchell — Blue</span><span class="m">Reprise · MS 2038 · PO-1142 · holds for M. Okonjo</span></td>
+                <td><span class="badge">Mint</span></td>
+                <td class="n mono">15.10</td><td class="n mono">37.99</td>
+                <td class="n"><span class="pct">60.3%</span></td>
+                <td class="n mono">1</td><td class="n mono">15.10</td>
+                <td class="n"><button class="btn sm ghost">edit</button></td>
+              </tr>
+              <tr>
+                <td><span class="art">🦹</span></td>
+                <td class="rec"><span class="t">Madvillain — Madvillainy</span><span class="m">Stones Throw · STH2065 · PO-1150</span></td>
+                <td><span class="badge">Mint</span></td>
+                <td class="n mono">16.40</td><td class="n mono">41.99</td>
+                <td class="n"><span class="pct">60.9%</span></td>
+                <td class="n mono">3</td><td class="n mono">49.20</td>
+                <td class="n"><button class="btn sm ghost">edit</button></td>
+              </tr>
+              <tr>
+                <td><span class="art">🎸</span></td>
+                <td class="rec"><span class="t">Patti Smith — Horses</span><span class="m">Arista · AL 4066 · no PO — added at the desk</span></td>
+                <td><span class="badge">Mint</span></td>
+                <td class="n mono">12.90</td><td class="n mono">32.99</td>
+                <td class="n"><span class="pct">60.9%</span></td>
+                <td class="n mono">2</td><td class="n mono">25.80</td>
+                <td class="n"><button class="btn sm ghost">edit</button></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <details class="log">
+          <summary>
+            <span class="lab">Log &amp; notes (7)</span>
+            <span class="latest right"><span class="mono">14:19</span> — line added: Madvillainy ×3</span>
+          </summary>
+          <div class="entries">
+            <div><span class="mono">14:19</span> — line added: Madvillainy ×3, cost 16.40</div>
+            <div><span class="mono">14:12</span> — below-cost price accepted on Kind of Blue — review flag raised</div>
+            <div><span class="mono">14:04</span> — stated subtotal entered: 227.70</div>
+            <div><span class="mono">13:58</span> — draft opened against PO-1142 by R. Dufresne</div>
+          </div>
+        </details>
+      </section>
+
+      <!-- ============ TRACK 3 — reconcile ============ -->
+      <aside class="recon">
+        <div class="recon-head">
+          <div class="lab">Invoice total</div>
+          <div class="figure" id="fig-total">$286.72</div>
+          <div class="figure-sub">16 copies · 6 lines · F.A.B. Distribution</div>
+        </div>
+
+        <div class="verdict warn" id="verdict">
+          <span class="mark">▲</span>
+          <span id="verdict-text"><strong>Out by $11.60 against their paperwork</strong> — 5.1%, beyond ±2%. Finalizing proceeds and raises a review flag.</span>
+        </div>
+
+        <div class="rule"></div>
+
+        <div class="recon-mid">
+          <div class="sec">
+            <span class="lab">Ours — derived from the lines</span>
+            <div class="row-fig"><span>Copies received</span><span class="v">16</span></div>
+            <div class="row-fig"><span>Line subtotal</span><span class="v">239.30</span></div>
+          </div>
+
+          <div class="sec">
+            <span class="lab">Theirs — off the paperwork</span>
+            <div class="entry"><span>Stated subtotal</span><input type="text" value="227.70"></div>
+            <div class="entry"><span>Tax</span><input type="text" value="21.02"></div>
+            <div class="entry"><span>Freight</span><input type="text" value="26.40"></div>
+            <div class="entry"><span>Miscellaneous</span><input type="text" value="0.00"></div>
+            <div class="row-fig delta warn" id="delta-row"><span>Difference</span><span class="v" id="delta-v">+11.60</span></div>
+          </div>
+
+          <div class="sec">
+            <span class="lab">Total</span>
+            <div class="entry total"><span>Payable</span><input type="text" value="286.72"></div>
+            <div class="xsmall muted">Tax is excluded from cost of goods — an input tax credit, not a cost <span class="cite">(d34)</span>.</div>
+          </div>
+
+          <div class="sec">
+            <span class="lab">Expected</span>
+            <div class="row-fig"><span>Sell value</span><span class="v">$603.84</span></div>
+            <div class="row-fig"><span>Margin</span><span class="v" style="color:var(--c-ok)">58.1%</span></div>
+            <div class="xsmall muted">Against the full invoice total — informational, not COGS.</div>
+          </div>
+
+          <div class="flags" id="flags">
+            <span class="lab">Review flags · 2</span>
+            <ul>
+              <li>Kind of Blue priced below cost <span class="cite">(d35)</span></li>
+              <li>Total adjustment beyond ±2% <span class="cite">(d35)</span></li>
+            </ul>
+          </div>
+        </div>
+
+        <div class="recon-foot">
+          <button class="btn accent finalize" id="foot-act">Finalize</button>
+          <div class="foot-sub" id="foot-sub">16 copies become sellable · 16 labels · summary prints</div>
+          <button class="btn" id="foot-alt" style="justify-content:center">🏷 Print all labels</button>
+        </div>
+      </aside>
+
+    </div>
+  </div>
+
+  <div class="notes">
+    <section class="note">
+      <h2>What each track is for</h2>
+      <dl>
+        <dt>Left — the receiving slab (retractable)</dt>
+        <dd>What you came here to pick up: drafts in flight, the outstanding PO lines across every open PO, and invoices received lately. Shut, it is a 52px strip carrying the outstanding count and tiles for the invoices in flight. It <strong>pushes</strong> rather than overlays, the way Find's slab does — you read the worklist against the lines you have already taken in, so an overlay would cover the half you are comparing to.</dd>
+        <dt>Middle — the invoice</dt>
+        <dd>Fixed head, fixed scan slab, and only the line list scrolls. The scan field is the biggest thing on the track because Phase 2 is what receiving actually is. A resolved scan lands in a <strong>staging card</strong> under it — cost, list, sell price, grade, qty, live margin — and becomes a line on Enter.</dd>
+        <dt>Right — reconcile (sticky)</dt>
+        <dd>The till's money track, doing the receiving job. Their paperwork figures are entered here, next to ours, because this is where the two get compared. Finalize is the one accent on the screen.</dd>
+      </dl>
+    </section>
+
+    <section class="note">
+      <h2>Moves worth arguing about</h2>
+      <ul>
+        <li><strong>The reconcile strip moves from the footer to the right track.</strong> This contradicts the layout <span class="cite">E-02 d37</span> records. See the box below.</li>
+        <li><strong>The paperwork entry fields move out of the left rail</strong> and into the reconcile track, next to the derived figures they are checked against. That is what frees the left track to be purely the worklist.</li>
+        <li><strong>Line entry moves out of the table.</strong> Today a new line is the last row of the table; here it is a scan slab plus a staging card above the lines, so entry never scrolls away on a 60-line invoice.</li>
+        <li><strong>The headline figure is the invoice total, not the difference.</strong> The difference is the check, but the total is the number staff read aloud and Accounts Payable consumes <span class="cite">(M-05)</span>. The check sits directly beneath it as a verdict strip so it cannot be read past.</li>
+        <li><strong>Receiving gets deep-linkable selection</strong> the way Find has it — <span class="cite">/receive/:invoiceId</span> — so the slab can be clicked from anywhere.</li>
+      </ul>
+    </section>
+
+    <section class="note">
+      <h2>The shut strip</h2>
+      <p>Top to bottom: the <strong>open</strong> chevron in the slot the till rail keeps it in, then <strong>+ New intake</strong> in the accent, <strong>Open existing</strong> carrying a badge for the drafts in flight, and <strong>Search</strong>, which opens the slab with the cursor already in the box. Then the three most recent finished sessions.</p>
+      <p>Search opens the slab too, so the chevron looks redundant until you want the width back without starting an errand. Both exist for the same reason the till rail's chevron does: the bar has to be openable by someone who has not decided what they are opening it for.</p>
+      <p><strong>Not too busy</strong> — on one condition. The copy count is the only second datum on a tile, and it is typographically subordinate: mono, 9.5px, faint, under the short name. The strip still scans as a column of names. It stops working the moment a third datum arrives, so date and total stay in the tooltip.</p>
+      <p>The badge sits on <em>Open existing</em> rather than on Search, because a draft left half-finished is the thing you can actually lose track of. The outstanding worklist is reference — you go looking for it, it does not go looking for you.</p>
+    </section>
+
+    <section class="note">
+      <h2>Second-hand with no paperwork</h2>
+      <p>Two readings of "create one for it", and they land in different flows:</p>
+      <dl>
+        <dt>An invoice reference — what I built</dt>
+        <dd><span class="mono">SH-260910-1</span>: second-hand, the date, and a sequence for the second walk-in of the same day. It replaces d31's store counter, so <strong>d31 needs amending too</strong>.</dd>
+        <dt>An actual PurchaseOrder</dt>
+        <dd>Raising a PO for stock already on the counter inverts M-02 — nothing was ordered, nothing is outstanding, and the worklist would show a line that is complete the instant it exists. I would not do this.</dd>
+      </dl>
+      <p>Bare <span class="mono">0910</span> collides every year and sorts wrong. <span class="mono">SH-260910-1</span> sorts, says what it is, and survives two trade-ins on one afternoon. <strong>Tell me which reading you meant</strong> before I write the row.</p>
+    </section>
+
+    <section class="note">
+      <h2>Finalized and paid — try the state buttons</h2>
+      <p>My answer to "hide the scan bar": <strong>not on Finalized — on Paid.</strong> d4 keeps a finalized invoice editable ("fix a cost, add a line for a carton that turns up late") right up until a manager marks it paid in M-05. Hiding the scan slab at finalize would remove the one control that makes that possible.</p>
+      <p>So: <strong>Draft</strong> scans and finalizes. <strong>Finalized</strong> still scans, with a line under the box saying why it is still open, and the right track's action becomes Save updates. <strong>Paid</strong> locks — and the slab is <em>replaced</em>, not removed, by a same-height dashed band saying what happened and where amendments go. The track keeps its shape, and the absence explains itself instead of leaving a hole.</p>
+    </section>
+
+    <section class="note">
+      <h2>Two rows to append</h2>
+      <div class="warnbox">
+        <p><strong>d38 — amends d37.</strong> The reconcile figures move from a bottom strip to a sticky right-hand track, making Receiving's frame the till's frame (E-05 d29): worklist, invoice, reconcile. d37's reason stands and is better served — the figures never scroll at any line count, and below 1180px they fall back to d37's own bottom strip.</p>
+        <p><strong>d39 — amends d31.</strong> A second-hand intake with no supplier paperwork mints <span class="mono">SH-YYMMDD-n</span> rather than drawing <span class="mono">REF####</span> from a store counter, so the reference says when the stock arrived.</p>
+        <p class="cite" style="color:var(--c-accent)">Status: recommended, not yet ratified. Wording is a draft — say the word and I will write both rows and run the docs gate.</p>
+      </div>
+    </section>
+
+    <section class="note">
+      <h2>A contradiction I hit on the way</h2>
+      <p>Working out the read-only question turned up two rows in E-02 that do not agree, and it predates this branch:</p>
+      <ul>
+        <li><span class="cite">d4</span> — after finalize, lines and totals <strong>stay editable</strong> until a manager marks the invoice paid.</li>
+        <li><span class="cite">d31</span> — an invoice number matching a finalized Invoice <strong>opens it read-only</strong>.</li>
+      </ul>
+      <p>Phase 3 step 23 sides with d31 ("a finalized invoice is immutable"); d4 is the later thinking and is what M-05 assumes. The layout above implements d4. Worth a resolving row either way, since one of them is telling a future reader the wrong thing.</p>
+    </section>
+
+    <section class="note">
+      <h2>Still open</h2>
+      <ul>
+        <li><strong>Push or overlay?</strong> Find pushes, the till overlays. The receiving slab pushes. If scanning feels closer to a transaction than a comparison, it should overlay instead.</li>
+        <li><strong>Do drafts belong in the open worklist,</strong> or only on the shut strip's badge? "In flight" and "Outstanding" are two kinds of thing sharing one list.</li>
+        <li><strong>Does the slab default shut in Used mode?</strong> A second-hand intake has no PO, so the worklist has nothing in it.</li>
+      </ul>
+    </section>
+  </div>
+
+</div>
+
+<script>
+(function () {
+  var frame = document.getElementById("frame");
+  var strip = document.getElementById("strip");
+  var open = document.getElementById("slab-open");
+  var tSlab = document.getElementById("t-slab");
+
+  function setSlab(isOpen) {
+    frame.classList.toggle("slab-shut", !isOpen);
+    strip.hidden = isOpen;
+    open.style.display = isOpen ? "flex" : "none";
+    tSlab.setAttribute("aria-pressed", String(isOpen));
+    tSlab.textContent = isOpen ? "Slab open" : "Slab shut";
+    document.getElementById("strip-expand").setAttribute("aria-expanded", String(isOpen));
+  }
+  tSlab.addEventListener("click", function () {
+    setSlab(tSlab.getAttribute("aria-pressed") !== "true");
+  });
+  document.getElementById("slab-close").addEventListener("click", function () { setSlab(false); });
+  document.getElementById("strip-expand").addEventListener("click", function () { setSlab(true); });
+  // Search opens the slab AND takes the cursor — the errand, not just the width.
+  document.getElementById("strip-open").addEventListener("click", function () {
+    setSlab(true);
+    var box = document.querySelector('.slab-search input[type="search"]');
+    if (box) box.focus();
+  });
+
+  // Matched vs mismatched paperwork — the state the reconcile track exists to carry.
+  var tMis = document.getElementById("t-mismatch");
+  var verdict = document.getElementById("verdict");
+  var vText = document.getElementById("verdict-text");
+  var deltaRow = document.getElementById("delta-row");
+  var deltaV = document.getElementById("delta-v");
+  var flags = document.getElementById("flags");
+
+  tMis.addEventListener("click", function () {
+    var mismatched = tMis.getAttribute("aria-pressed") !== "true";
+    tMis.setAttribute("aria-pressed", String(mismatched));
+    tMis.textContent = mismatched ? "Paperwork mismatch" : "Paperwork matches";
+    verdict.className = "verdict " + (mismatched ? "warn" : "ok");
+    verdict.querySelector(".mark").textContent = mismatched ? "▲" : "✓";
+    vText.innerHTML = mismatched
+      ? "<strong>Out by $11.60 against their paperwork</strong> — 5.1%, beyond ±2%. Finalizing proceeds and raises a review flag."
+      : "<strong>Matches their paperwork.</strong> Our lines and their stated subtotal agree to the cent.";
+    deltaRow.className = "row-fig delta " + (mismatched ? "warn" : "ok");
+    deltaV.textContent = mismatched ? "+11.60" : "0.00";
+    flags.hidden = !mismatched;
+  });
+
+  // The staging card only exists while a scan is in hand.
+  var tStage = document.getElementById("t-stage");
+  var stage = document.getElementById("stage");
+  function setStage(on) {
+    tStage.setAttribute("aria-pressed", String(on));
+    tStage.textContent = on ? "Scan in hand" : "Nothing scanned";
+    stage.hidden = !on;
+  }
+  tStage.addEventListener("click", function () {
+    setStage(tStage.getAttribute("aria-pressed") !== "true");
+  });
+
+  /* ---- Draft → Finalized → Paid ----
+     Three states, not two. d4 keeps a FINALIZED invoice editable — a cost gets
+     fixed, a late carton gets scanned in — so the scan slab stays. Only PAID
+     locks it, and then the slab is replaced rather than removed, so the track
+     keeps its shape and says why. */
+  var stateBtns = Array.prototype.slice.call(document.querySelectorAll(".state-btn"));
+  var badge = document.getElementById("state-badge");
+  var scanWrap = document.getElementById("scan-wrap");
+  var scanNote = document.getElementById("scan-note");
+  var lockedWrap = document.getElementById("locked-wrap");
+  var autoAccept = document.getElementById("auto-accept");
+  var footAct = document.getElementById("foot-act");
+  var footSub = document.getElementById("foot-sub");
+  var footAlt = document.getElementById("foot-alt");
+  var lineActs = document.querySelectorAll("table.lines-t .btn.sm");
+
+  var STATES = {
+    Draft: {
+      badge: "badge ink", scan: true, note: false, locked: false, entry: true,
+      act: "Finalize", actClass: "btn accent finalize",
+      sub: "16 copies become sellable · 16 labels · summary prints",
+      alt: "🏷 Print all labels"
+    },
+    Finalized: {
+      badge: "badge ok", scan: true, note: true, locked: false, entry: true,
+      act: "Save updates", actClass: "btn accent finalize",
+      sub: "Sellable since 14:31 · corrections stay open until this invoice is paid",
+      alt: "🏷 Print all labels"
+    },
+    Paid: {
+      badge: "badge ok", scan: false, note: false, locked: true, entry: false,
+      act: null, actClass: "",
+      sub: "Immutable · settled in Accounts Payable (M-05) on 10/09/2026",
+      alt: "🖨 Reprint summary"
+    }
+  };
+
+  function setState(name) {
+    var s = STATES[name];
+    stateBtns.forEach(function (b) {
+      b.setAttribute("aria-pressed", String(b.dataset.state === name));
+    });
+    badge.className = s.badge;
+    badge.textContent = name;
+    scanWrap.hidden = !s.scan;
+    scanNote.hidden = !s.note;
+    lockedWrap.hidden = !s.locked;
+    autoAccept.hidden = name !== "Draft";
+    if (!s.scan) setStage(false);
+    tStage.disabled = !s.scan;
+
+    // Their paperwork figures stop being editable once the money is settled.
+    document.querySelectorAll(".entry input").forEach(function (i) { i.disabled = !s.entry; });
+    Array.prototype.forEach.call(lineActs, function (b) { b.hidden = !s.entry; });
+
+    footAct.hidden = !s.act;
+    if (s.act) { footAct.textContent = s.act; footAct.className = s.actClass; }
+    footSub.textContent = s.sub;
+    footAlt.textContent = s.alt;
+  }
+  stateBtns.forEach(function (b) {
+    b.addEventListener("click", function () { setState(b.dataset.state); });
+  });
+  setState("Draft");
+})();
+</script>
