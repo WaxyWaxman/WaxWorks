@@ -538,7 +538,7 @@ table.props td:first-child { white-space: nowrap; font-weight: 700; color: var(-
       <p>M-01 laid out the way Sell, Find, Receive and Customers already are — a retractable slab on the left, the open card in the middle, the ledger pinned to the right. Layout mock, not working code. <strong>Third pass:</strong> Discount stays manager-only, the in-flight band groups by kind, bands follow the sort, the row-by-row ledger moved out to A/P, billing and shipping addresses split behind a <em>same as billing</em> lock, and every row is now a way in — click one.</p>
     </div>
     <span class="stamp">branch Suppliers-UI</span>
-    <span class="stamp live">proposed — not ratified</span>
+    <span class="stamp live">decisions recorded — M-01 d12–18</span>
   </header>
 
   <div class="controls">
@@ -888,7 +888,8 @@ table.props td:first-child { white-space: nowrap; font-weight: 700; color: var(-
     </section>
 
     <section class="note wide">
-      <h2>Rows I would append if this is ratified</h2>
+      <h2>Rows appended to M-01</h2>
+      <p>Recorded as <strong>M-01 decisions 12–18</strong>, in that order. Nothing was superseded: Discount stayed manager-only, so d11, E-02 d44 and architecture A-28a all stand as written. M-05 carries the mirror of d16, d18 and the billing address under <em>Inherited from other flows</em>.</p>
       <table class="props">
         <thead><tr><th>Where</th><th>Proposed decision</th></tr></thead>
         <tbody>
@@ -901,28 +902,28 @@ table.props td:first-child { white-space: nowrap; font-weight: 700; color: var(-
             <td><strong>The card is the edit surface, with one exception.</strong> Following E-07 d13 and d18, every field saves on change and New opens a blank card rather than a modal — <em>except Discount</em>, which is the margin field (d7 as superseded) and stays manager-only (d11, E-02 d44, A-28a). A Manager authorizes in place with their own initials; both names are recorded (M-04 d3, d4). Accepted consequence: one field on the card behaves unlike every other field on it, and that is drawn rather than left silent. The card also gains <strong>two addresses</strong> — billing (where payment is remitted) and shipping (where stock ships from) — each line 1, line 2, city, province/state, country, in the shape <code>CustomerAddress</code> already uses. A <strong>Same as billing address</strong> checkbox mirrors shipping onto billing and <em>locks</em> those fields; unticking leaves the copied values as a starting point. Nothing consumes either yet: billing is captured for M-05, shipping for E-04 claim correspondence.</td>
           </tr>
           <tr>
-            <td>M-01 d17</td>
+            <td>M-01 d16</td>
             <td><strong>An Employee may view a Supplier's outstanding A/P and trade totals; every A/P action remains manager-only.</strong> Resolves what the first pass left open. The lexicon's manager-only entry is about <em>performing</em>, not <em>viewing</em>, so this fills a gap rather than reversing a decision — but it needs writing down, because the next person reading "manager-only in its entirety" (M-05 d2) will otherwise reach the opposite conclusion. M-05 carries the mirror note. Recording a payment, applying a credit and creating a manual entry all stay where they are.</td>
           </tr>
           <tr>
-            <td>M-01 d18</td>
+            <td>M-01 d17</td>
             <td><strong>The slab bands by A/P state only when it is sorted by A/P.</strong> A–Z is the default and is a look-up by name; a band across it splits the alphabet in two for no gain. Under <em>Outstanding A/P</em> the split is the ordering, so the band is free. E-07 d17's rule still applies on top — a band that does not actually split the list does not render.</td>
           </tr>
           <tr>
-            <td>M-01 d19</td>
+            <td>M-01 d18</td>
             <td><strong>The ledger track carries the A/P figure, not the rows behind it.</strong> M-05 d3 already shows outstanding Invoices, Pending claims and manual entries in one combined list per supplier, and it is the screen that can act on them. Restating the rows here would mean two places to read the same facts and one of them powerless. The figure links through instead. Same principle governs the rest of the track: <strong>every in-flight and recent-intake row opens the thing it names on the screen that owns it</strong> — a draft or past Invoice in Receiving (deep-linkable as <span class="mono">/receiving/:invoiceId</span>, opening as-finalized per E-02 d36 and A-27), a PO in What's on Order, a claim in Claims.</td>
           </tr>
           <tr>
-            <td>M-01 d15</td>
+            <td>M-01 d14</td>
             <td><strong>The ledger track carries, in order: what is in flight, outstanding A/P, trade over 12 months, and recent intake.</strong> In-flight sits above the money for E-07 d19's reason — a draft Invoice, an overdue PO line and a Pending claim all go stale silently, and this is the screen where that stops being true. It is <strong>grouped by kind — drafts, orders, claims — oldest first inside each, capped at three rows and scrolling</strong>, with the per-kind counts in its label so the cap can never hide that a claim exists. A supplier can carry six or more at once, and unbounded the band would push the A/P figure off a track whose whole purpose is to be fixed. <strong>Received is cost of goods</strong> (<span class="mono">subtotal + freight + misc</span>, inbound tax excluded — A-29, E-02 d34), not the Invoice total, and the track says which it is. Any margin shown states the unallocated-freight caveat (M-03, E-02 d34 consequence). Copies with no Invoice behind them are excluded from Sold and the exclusion is counted on the figure rather than hidden.</td>
           </tr>
           <tr>
-            <td>M-01 d16</td>
+            <td>M-01 d15</td>
             <td><strong>The card's primary action is a ladder:</strong> open the draft Invoice, else process the pending order stream, else start an intake. Record a payment rides underneath as a secondary for a Manager with a balance. Mirrors E-07 d20's shape and its reasoning — the thing that goes stale silently outranks the thing that does not.</td>
           </tr>
           <tr>
-            <td>PRD §7 / M-01 open q.</td>
-            <td><strong>Per-supplier trade totals are a first step onto the reporting surface PRD §7 defers.</strong> Worth recording as such, so that when that surface is built it knows two of its figures already exist here and must agree with it.</td>
+            <td>M-01 open q.</td>
+            <td><strong>Per-Supplier trade totals are a first step onto the reporting surface PRD §7 defers</strong> — recorded as an open question rather than a decision, so that when that surface is built it knows two of its figures already exist here and must agree with them. Two more went in beside it: what a Supplier “year” is (d14 fixes a rolling 12 months because nothing says calendar or fiscal), and whether a Supplier can carry more than two addresses.</td>
           </tr>
         </tbody>
       </table>
