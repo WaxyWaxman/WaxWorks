@@ -1,6 +1,6 @@
 # E-05 — Point of Sale
 
-**Actor:** Employee (Undo End of Day labeled Admin-only by convention, not enforced)
+**Actor:** Employee (Undo End of Day is **manager-only** — [M-03](M-03-daily-summary.md) d4, [architecture](../architecture.md) A-28a)
 **Status:** Specified
 **Related:** [E-03 Search the inventory](E-03-search-inventory.md) · [E-06 Process a return](E-06-process-a-return.md) · [E-07 Manage customers](E-07-manage-customers.md) · [M-03 Daily summary](M-03-daily-summary.md) · [M-06 Settings](M-06-settings.md)
 
