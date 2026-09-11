@@ -89,6 +89,16 @@ export interface Supplier {
   // any Supplier can carry second-hand invoices, this just picks which one
   // to suggest first.
   consignment?: boolean; // M-05 — a real Receiving Invoice from this Supplier displays as "Consignment" rather than "Invoice" in Accounts Payable
+  // M-01 d13. Billing is where payment is remitted; shipping is where stock
+  // ships from — the address a claim is argued against. When
+  // shipSameAsBilling is true (the default, and true of most Suppliers) the
+  // card mirrors billing into the locked shipping fields and `shipping` is
+  // not read: the mirror is derived at render, never a second copy that can
+  // drift. Nothing consumes either yet — billing is captured for M-05,
+  // shipping for E-04 claim correspondence.
+  billing?: PostalAddress;
+  shipping?: PostalAddress;
+  shipSameAsBilling?: boolean;
   log: { at: string; text: string }[];
 }
 
@@ -119,13 +129,19 @@ export type TenderType =
   | "Pay-out"
   | "Used Credit";
 
-export interface CustomerAddress {
+// One address shape, used by both a Customer and a Supplier (M-01 d13) —
+// two shapes would mean two renderers and two validation rules for the same
+// five fields.
+export interface PostalAddress {
   line1?: string;
   line2?: string;
   city?: string;
   provinceState?: string; // 2-letter
   country?: string;
 }
+
+/** @deprecated Kept as the name E-07 already uses. Same shape. */
+export type CustomerAddress = PostalAddress;
 
 export interface Customer {
   id: string; // internal key, never shown

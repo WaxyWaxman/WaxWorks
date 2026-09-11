@@ -556,6 +556,8 @@ interface AppContextValue extends AppState {
   deleteSupplier: (supplierId: string) => void;
   mergeSuppliers: (keepId: string, mergeId: string) => void;
   setDefaultForSecondHand: (supplierId: string) => void;
+  /** Append one line to a Supplier's log without editing a field (M-01 d4). */
+  logSupplier: (supplierId: string, text: string) => void;
   setRecordPreferredSupplier: (recordId: string, supplierId: string | undefined) => void;
   viewSupplier: (supplierId: string) => void;
   addInvoiceLine: (
@@ -1722,6 +1724,17 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
       ),
     }));
 
+  // M-01 d4 wants every change logged, but not every change is a field edit:
+  // a Manager authorising a Discount change is itself worth a row, and
+  // routing it through updateSupplier would file it as "Edited by".
+  const logSupplier: AppContextValue["logSupplier"] = (supplierId, text) =>
+    setS((prev) => ({
+      ...prev,
+      suppliers: prev.suppliers.map((s) =>
+        s.id === supplierId ? { ...s, log: [...s.log, { at: now(), text }] } : s,
+      ),
+    }));
+
   const copySupplier: AppContextValue["copySupplier"] = (supplierId) => {
     const src = s.suppliers.find((x) => x.id === supplierId);
     if (!src) return null;
@@ -2665,6 +2678,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
       createRecordManual,
       addSupplier,
       updateSupplier,
+      logSupplier,
       copySupplier,
       deleteSupplier,
       mergeSuppliers,

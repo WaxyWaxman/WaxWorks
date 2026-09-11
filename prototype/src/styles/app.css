@@ -1473,3 +1473,198 @@ tr.recv-flagged > td:first-child { box-shadow: inset 3px 0 0 var(--c-warn); }
   .cust-figure-sub { display: none; }
   .cust-primary { height: 48px; font-size: var(--fs-md); }
 }
+
+/* ============================================================
+   M-01 SUPPLIERS  (d12-d18)
+   ============================================================
+   The fifth screen on the till's frame (E-05 d29), after Find, Receiving and
+   Customers. It reuses Customers' three-track skeleton wholesale —
+   .cust-frame / .cust-main / .cust-head / .cust-scroll / .cust-group /
+   .cust-grid / .cust-acct / .cust-figure / .cust-acct-foot — and the
+   .slab-* / .hit / .filter-chip family it already shares with Find and
+   Receiving. Only what genuinely differs is below.
+
+   What differs is the shape of the errand: a Supplier is a counterparty with
+   money running one way and stock the other, so the slab row carries a figure
+   AND a state, and the right track's top band is a work queue rather than a
+   single fact. */
+
+.sup-slab {
+  border-right: 1px solid var(--c-border-strong); background: var(--c-surface-2);
+  display: flex; flex-direction: column; min-height: 0; min-width: 0;
+}
+
+/* The shut strip tiles by 4-letter short code, not initials: that code is the
+   Supplier's identity on every invoice they send. Wider than .ini-tile
+   because four monospace characters do not fit in 38px at the tile's weight. */
+.code-tile {
+  position: relative; width: 42px; height: 38px; flex: none; padding: 0; cursor: pointer;
+  display: grid; place-items: center;
+  border: 1px solid var(--c-border-strong); border-radius: var(--radius-sm);
+  background: var(--c-surface); color: var(--c-ink-soft);
+  font-family: var(--font-mono); font-size: 10.5px; font-weight: 700;
+}
+.code-tile:hover { border-color: var(--c-ink); }
+.code-tile.on { border-color: var(--c-ink); box-shadow: inset 3px 0 0 var(--c-accent); color: var(--c-ink); }
+.code-tile:focus-visible { outline: 2px solid var(--c-accent); outline-offset: 2px; }
+.code-tile .bal-dot {
+  position: absolute; bottom: -3px; right: -3px;
+  width: 11px; height: 11px; border: 2px solid var(--c-surface-2);
+}
+/* In-flight is the state that matters when no money is owed either way. */
+.bal-dot.flight { background: var(--c-accent); }
+
+/* ---- the slab row, on two lines ----
+   Find's .hit is one row of three cells. Here the meta line would share the
+   middle column with the figure and end its ellipsis a hair from the money, so
+   it takes a row of its own under the name; the figure's caption drops to that
+   same row, keeping the number and its label together on the right. */
+.hit.sup-hit {
+  grid-template-columns: 42px minmax(0, 1fr) auto;
+  grid-template-rows: auto auto;
+  gap: 1px var(--sp-3);
+  align-items: baseline;
+}
+.hit.sup-hit .code {
+  grid-column: 1; grid-row: 1 / -1; align-self: center;
+  width: 42px; height: 34px; display: grid; place-items: center;
+  border: 1px solid var(--c-border); background: var(--c-surface-2);
+  font-family: var(--font-mono); font-size: 11px; font-weight: 700; color: var(--c-ink-soft);
+}
+.hit.sup-hit .t { grid-column: 2; grid-row: 1; }
+.hit.sup-hit .n { grid-column: 3; grid-row: 1; }
+.hit.sup-hit .m { grid-column: 2; grid-row: 2; }
+.hit.sup-hit .k {
+  grid-column: 3; grid-row: 2; text-align: right; white-space: nowrap;
+  font-family: var(--font-narrow); font-size: 9px; font-weight: 700;
+  letter-spacing: 0.05em; text-transform: uppercase; color: var(--c-ink-faint);
+}
+
+/* ---- the card ---- */
+/* Two controls on one line: a figure beside its basis, an input beside the
+   button that unlocks it. */
+.sup-pair-row { display: flex; gap: var(--sp-2); align-items: center; }
+.sup-pair-row > input, .sup-pair-row > select { min-width: 0; }
+.sup-pair-row > input[type="number"] { flex: 1; }
+.sup-pair > span:first-child {
+  display: block; font-size: var(--fs-xs); font-weight: 700; text-transform: uppercase;
+  letter-spacing: 0.04em; color: var(--c-ink-faint); margin-bottom: 4px;
+}
+
+/* Discount is the one gated field on the card (d13). It is the margin, and
+   setting a margin is manager-only (d11, E-02 d44, A-28a) — so it reads as
+   locked rather than merely disabled, and as live once authorised. */
+.sup-gated > span:first-child { display: flex; align-items: center; gap: 6px; }
+.sup-lock {
+  font-family: var(--font-narrow); font-size: 9.5px; font-weight: 700; letter-spacing: 0.08em;
+  text-transform: uppercase; color: var(--c-warn);
+  border: 1px solid var(--c-warn); background: var(--c-warn-soft); padding: 0 4px;
+}
+.sup-lock.open { color: var(--c-ok); border-color: var(--c-ok); background: var(--c-ok-soft); }
+.sup-gated.open input { border-color: var(--c-ok); }
+
+/* Same-as-billing (d13). A mirrored field reads as DERIVED, not as
+   empty-and-broken — and it is locked, because one that stays typable is one
+   that silently stops mirroring. */
+.sup-same {
+  display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 2px var(--sp-2);
+  align-items: center; cursor: pointer;
+  border: 1px solid var(--c-border-strong); background: var(--c-surface-2);
+  padding: var(--sp-2) var(--sp-3); border-radius: var(--radius-sm);
+}
+.sup-same input[type="checkbox"] { width: 15px; height: 15px; margin: 0; accent-color: var(--c-ink); cursor: pointer; }
+.sup-same > span:nth-of-type(1) {
+  font-size: var(--fs-sm); font-weight: 600; text-transform: none;
+  letter-spacing: 0; color: var(--c-ink); margin: 0;
+}
+.sup-same > .hint { grid-column: 2; margin: 0; }
+.sup-mirrored input:disabled { color: var(--c-ink-faint); font-style: italic; }
+
+/* Copy / Merge / Delete act on the record rather than edit a field, so they
+   sit apart from the card's own head, pinned to the foot of the middle track. */
+.sup-danger {
+  position: absolute; left: 50%; transform: translateX(-50%); bottom: var(--sp-3); z-index: 5;
+  display: flex; gap: var(--sp-2); padding: 6px var(--sp-2);
+  background: var(--c-surface); border: 1px solid var(--c-border-strong);
+  border-radius: var(--radius-sm); box-shadow: 0 3px 12px rgba(17, 17, 17, 0.12);
+}
+
+/* ---- the ledger track ---- */
+/* In flight sits above the money because a draft Invoice, an overdue PO line
+   and a Pending claim all go stale silently and nothing else chases them
+   (d14) — the supplier-side of E-07 d19's reasoning about holds. */
+.sup-flight-head {
+  display: flex; align-items: baseline; justify-content: space-between; gap: var(--sp-2);
+}
+.sup-flight-count {
+  font-family: var(--font-mono); font-size: 10px; color: var(--c-ink-soft);
+}
+/* Three rows fit; past that it scrolls inside itself rather than growing and
+   pushing the figure off a track whose whole purpose is being fixed. The
+   per-kind counts live in the head above, so the cap can never hide that a
+   claim exists. */
+.sup-flight-scroll { max-height: 192px; overflow-y: auto; margin-top: 2px; }
+.sup-flight-scroll.capped { box-shadow: inset 0 -12px 10px -10px rgba(17, 17, 17, 0.22); }
+.sup-flight-type {
+  font-family: var(--font-narrow); font-size: 9px; font-weight: 700; letter-spacing: 0.1em;
+  text-transform: uppercase; color: var(--c-ink-faint);
+  padding-top: var(--sp-2); margin-top: var(--sp-2); border-top: 1px solid var(--c-border);
+}
+.sup-flight-scroll > div:first-child > .sup-flight-type {
+  padding-top: 0; margin-top: 0; border-top: none;
+}
+/* Every row opens the thing it names on the screen that owns it (d18), so
+   they are buttons. */
+.sup-flight-row {
+  display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 2px var(--sp-2);
+  align-items: baseline; width: 100%; text-align: left; font: inherit; color: inherit;
+  cursor: pointer; background: transparent; border: 1px solid transparent;
+  border-radius: var(--radius-sm); padding: 5px 6px; margin: 2px 0 0 -6px;
+}
+.sup-flight-row:hover { background: var(--c-surface); border-color: var(--c-border-strong); }
+.sup-flight-row:hover .sup-flight-go { opacity: 1; }
+.sup-flight-row:focus-visible { outline: 2px solid var(--c-accent); outline-offset: 1px; }
+.sup-flight-go {
+  grid-column: 1 / -1; font-size: 10px; color: var(--c-accent); font-weight: 600; opacity: 0;
+}
+@media (prefers-reduced-motion: no-preference) {
+  .sup-flight-go { transition: opacity 120ms ease; }
+}
+
+/* Recent intake rows open their Invoice in Receiving, as it was finalized
+   (E-02 d36, A-27) — buttons, with the same hover as the rows above. */
+.cust-salerow.sup-intake {
+  width: calc(100% + 12px); margin-left: -6px; padding: 6px;
+  text-align: left; font: inherit; color: inherit; cursor: pointer;
+  background: transparent; border: 1px solid transparent;
+  border-bottom: 1px solid var(--c-border); border-radius: var(--radius-sm);
+}
+.cust-salerow.sup-intake:hover { background: var(--c-surface-2); border-color: var(--c-border-strong); }
+.cust-salerow.sup-intake:focus-visible { outline: 2px solid var(--c-accent); outline-offset: 1px; }
+
+/* The figures in this track are on DIFFERENT bases on purpose — A/P is Invoice
+   totals, Received is cost of goods (A-29, E-02 d34) — so the caveat is part
+   of the track, not a footnote someone may or may not reach. */
+.sup-caveat {
+  display: flex; flex-direction: column; gap: 6px; margin-top: 4px;
+  border-left: 2px solid var(--c-border-strong); padding-left: 8px;
+}
+.sup-caveat p { margin: 0; font-size: 10.5px; color: var(--c-ink-faint); line-height: 1.45; }
+.sup-caveat strong { color: var(--c-ink-soft); }
+.cust-standing .stat .v.in { color: var(--c-warn); }
+.cust-standing .stat .v.out { color: var(--c-ok); }
+
+/* A link that sits inside running text and must not look like a button. */
+.linkish {
+  border: none; background: none; padding: 0; font: inherit; font-size: inherit;
+  color: var(--c-accent); font-weight: 600; cursor: pointer; text-align: left;
+}
+.linkish:hover { text-decoration: underline; }
+
+@media (max-width: 1180px) {
+  .sup-slab { grid-row: 1 / -1; }
+  /* This track has the same two fixed bands above its scroll that Customers'
+     has — a work queue AND a figure — so it takes the same 58dvh. */
+  .sup-flight-scroll { max-height: 132px; }
+  .sup-danger { bottom: auto; top: var(--sp-2); }
+}

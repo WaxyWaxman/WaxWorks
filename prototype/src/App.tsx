@@ -131,6 +131,7 @@ export function App() {
           <Route path="/orders" element={<OrderProcessing />} />
           <Route path="/on-order" element={<WhatsOnOrder />} />
           <Route path="/suppliers" element={<Suppliers />} />
+          <Route path="/suppliers/:supplierId" element={<Suppliers />} />
           <Route path="/payable" element={<AccountsPayable />} />
         </Routes>
       </main>

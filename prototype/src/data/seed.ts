@@ -38,6 +38,11 @@ export const SUPPLIERS: Supplier[] = [
     repName: "Dana Cho",
     repPhone: "514-555-0142",
     mainPhone: "514-555-0100",
+    // The reason M-01 d13 splits the two: cheques go to a Toronto lockbox,
+    // cartons come from the Montreal warehouse.
+    billing: { line1: "PO Box 4471, Station A", city: "Toronto", provinceState: "ON", country: "Canada" },
+    shipping: { line1: "2250 Rue Guy", line2: "Unit 400", city: "Montréal", provinceState: "QC", country: "Canada" },
+    shipSameAsBilling: false,
     log: [{ at: "2026-01-06 09:00:00", text: "Discount set to 60% by RD" }],
   },
   {
@@ -55,6 +60,8 @@ export const SUPPLIERS: Supplier[] = [
     email: "returns@indiedirect.example",
     backordersAllowed: false,
     mainPhone: "212-555-0199",
+    billing: { line1: "118 W 22nd St", city: "New York", provinceState: "NY", country: "United States" },
+    shipSameAsBilling: true,
     log: [{ at: "2026-01-06 09:00:00", text: "Discount set to 50% by RD" }],
   },
   {
@@ -74,6 +81,8 @@ export const SUPPLIERS: Supplier[] = [
     email: "orders@cratedigger.example",
     backordersAllowed: true,
     mainPhone: "438-555-0177",
+    billing: { line1: "77 Avenue Mozart Est", city: "Montréal", provinceState: "QC", country: "Canada" },
+    shipSameAsBilling: true,
     log: [{ at: "2026-01-06 09:00:00", text: "Discount set to 40% by RD" }],
   },
   // A real Supplier record, not a special case — second-hand walk-ins just
@@ -94,6 +103,7 @@ export const SUPPLIERS: Supplier[] = [
     email: "-",
     backordersAllowed: false,
     defaultForSecondHand: true,
+    shipSameAsBilling: true,
     log: [{ at: "2026-01-06 09:00:00", text: "Marked default for second-hand by RD" }],
   },
 ];
