@@ -812,82 +812,251 @@ table.data tr.band-row + tr.group-row td { border-top: none; }
 .till-log-latest > span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .till-log[open] .till-log-latest { display: none; }
 
-/* ---- Receiving (E-02) ----
-   Worklist rail from E, art-led lines from C, and the reconcile strip as a
-   footer rather than a third rail — which is what buys the table its width. */
-.recv {
-  display: grid; grid-template-columns: 280px minmax(0, 1fr);
-  border: 1px solid var(--c-border); background: var(--c-surface);
+/* ---- Receiving (E-02 d38) ----
+   The third screen on the till's frame (E-05 d29), and the same three tracks:
+   the worklist slab you pick from, the Invoice, and the reconcile figures.
+   The frame never scrolls; each track does.
+
+   d38 moved reconcile off the bottom of the viewport and onto a sticky right
+   track. d37's reason is unchanged — derived vs. stated is the check step 18
+   turns on, and it must not scroll away on a 60-line invoice — but a footer
+   was competing for vertical room with the table it sat under. Below 1180px
+   it drops back to a bottom strip, which is d37's own arrangement.
+
+   The slab PUSHES rather than overlays, the way Find's does and unlike the
+   till rail: the worklist and the lines already taken in are read against
+   each other, so an overlay would cover the half you are comparing to. */
+.recv-frame {
+  flex: 1; min-height: 0; min-width: 0;
+  display: grid; grid-template-columns: 320px minmax(0, 1fr) 386px;
+  background: var(--c-surface);
 }
-.recv-rail {
-  border-right: 1px solid var(--c-border-strong); background: var(--c-surface-2);
-  display: flex; flex-direction: column;
-  /* The rail is reference, not a queue you scroll past — it follows the lines. */
-  position: sticky; top: 62px; align-self: start;
-  /* 62px band, and ~64px more for the reconcile strip. A sticky box is clamped
-     by its container's bottom edge, so a rail tall enough to fill the whole
-     viewport gets pushed UP once the lines run out — sliding its own heading
-     under the band. Reserving the strip's height keeps it below the band at
-     every scroll position. */
-  max-height: calc(100vh - 62px - 64px); overflow-y: auto;
+.recv-frame.slab-shut { grid-template-columns: 52px minmax(0, 1fr) 386px; }
+.recv-noinvoice {
+  grid-column: 2 / -1; display: grid; place-items: center;
+  padding: var(--sp-6); color: var(--c-ink-faint); text-align: center;
 }
-.recv-main { display: flex; flex-direction: column; min-width: 0; }
-@media (max-width: 1100px) {
-  .recv { grid-template-columns: minmax(0, 1fr); }
-  .recv-rail {
-    border-right: none; border-bottom: 1px solid var(--c-border-strong);
-    position: static; max-height: none; overflow-y: visible;
+
+@media (max-width: 1180px) {
+  .recv-frame, .recv-frame.slab-shut {
+    grid-template-columns: 52px minmax(0, 1fr);
+    grid-template-rows: minmax(0, 1fr) auto;
+  }
+  .recv-slab { grid-row: 1 / -1; }
+  .recv-main { grid-column: 2; grid-row: 1; }
+  .recv-noinvoice { grid-column: 2; grid-row: 1 / -1; }
+  .recv-recon {
+    grid-column: 2; grid-row: 2;
+    border-left: none; border-top: 2px solid var(--c-ink); max-height: 44dvh;
   }
 }
 
-.recv-rail-sec { padding: var(--sp-3) var(--sp-4); border-bottom: 1px solid var(--c-border); }
-.recv-rail-sec:last-child { border-bottom: none; }
-.recv-rail-sec > .lab { display: block; margin-bottom: var(--sp-2); }
-.recv-rail-sec .field { margin-bottom: var(--sp-2); }
-.recv-rail-sec .field > span { font-size: 9.5px; }
-
-/* One pending order line. Clicking it prefills the entry row. */
-.recv-order {
-  display: block; width: 100%; text-align: left; cursor: pointer;
-  appearance: none; font: inherit; background: var(--c-surface);
-  border: 1px solid var(--c-border); padding: var(--sp-2);
-  margin-bottom: var(--sp-2);
+/* ---- Track 1: the worklist slab ----
+   Shares .slab-head / .slab-search / .slab-chips / .slab-list / .slab-band /
+   .slab-strip with Find rather than restating them — one slab, two errands. */
+.recv-slab {
+  border-right: 1px solid var(--c-border-strong); background: var(--c-surface-2);
+  display: flex; flex-direction: column; min-height: 0; min-width: 0;
 }
-.recv-order:hover { border-color: var(--c-ink); }
-.recv-order .t { font-size: var(--fs-sm); font-weight: 600; display: block; }
-.recv-order .m { font-size: var(--fs-xs); color: var(--c-ink-faint); }
+.recv-slab-acts { flex: none; display: flex; gap: var(--sp-2); padding: var(--sp-3) var(--sp-3) 0; }
+.recv-slab-acts .btn { flex: 1; justify-content: center; }
 
-/* Lines get a leading art tile. Cover art is a stored URL (A-14) and the
-   catalogue misses often, so the empty state is designed, not accidental. */
-.recv-lines { overflow-x: auto; }
+/* One worklist row: an outstanding PO line, a draft, or a past Invoice. */
+.wl {
+  display: grid; grid-template-columns: 32px minmax(0, 1fr) auto;
+  gap: var(--sp-2); align-items: center; width: 100%; text-align: left; cursor: pointer;
+  padding: var(--sp-2) var(--sp-3); border: none; border-bottom: 1px solid var(--c-border);
+  border-left: 3px solid transparent; background: var(--c-surface);
+  font: inherit; color: var(--c-ink);
+}
+.wl:hover { background: var(--c-surface-2); }
+.wl.on { border-left-color: var(--c-accent); box-shadow: inset 0 0 0 1px var(--c-ink); }
+.wl:focus-visible { outline: 2px solid var(--c-accent); outline-offset: -2px; }
+.wl .t { font-size: var(--fs-sm); font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.wl .m { font-size: var(--fs-xs); color: var(--c-ink-faint); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.wl .n {
+  font-family: var(--font-mono); font-size: var(--fs-sm); font-weight: 700; text-align: right;
+  font-variant-numeric: tabular-nums; color: var(--c-ink-soft); white-space: nowrap;
+}
+.wl .n small {
+  display: block; font-family: var(--font-narrow); font-size: 9px; font-weight: 700;
+  letter-spacing: 0.05em; text-transform: uppercase; color: var(--c-ink-faint);
+}
+
+/* Shut, the slab keeps the rail's honesty rule (E-05 d30): the drafts in
+   flight ride the Open-existing icon, because a half-finished draft is the
+   thing you can actually lose track of. The worklist is reference — you go
+   looking for it, it does not go looking for you. */
+.recv-strip-lab {
+  font-family: var(--font-narrow); font-size: 8.5px; font-weight: 700; letter-spacing: 0.12em;
+  text-transform: uppercase; color: var(--c-border-strong);
+  writing-mode: vertical-rl; padding: var(--sp-1) 0; flex: none;
+}
+/* A finished intake carries two data and only two — who it was from, and how
+   many copies came in. The count is mono and faint so the strip still scans
+   as a column of names rather than as a table. A third datum breaks it. */
+.recv-tile {
+  width: 38px; height: 42px; flex: none; padding: 0; cursor: pointer;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 0; line-height: 1.05;
+  border: 1px solid var(--c-border-strong); border-radius: var(--radius-sm);
+  background: var(--c-surface); color: var(--c-ink);
+}
+.recv-tile:hover { border-color: var(--c-ink); }
+.recv-tile.on { border-color: var(--c-ink); box-shadow: inset 3px 0 0 var(--c-accent); }
+.recv-tile:focus-visible { outline: 2px solid var(--c-accent); outline-offset: 2px; }
+.recv-tile .tn { font-family: var(--font-narrow); font-size: 10px; font-weight: 700; letter-spacing: 0.04em; }
+.recv-tile .tc { font-family: var(--font-mono); font-size: 9.5px; font-weight: 600; color: var(--c-ink-faint); font-variant-numeric: tabular-nums; }
+
+/* ---- Track 2: the Invoice ---- */
+.recv-main { display: flex; flex-direction: column; min-width: 0; min-height: 0; background: var(--c-surface); }
+.recv-head {
+  flex: none; display: flex; align-items: center; gap: var(--sp-3); flex-wrap: wrap;
+  padding: var(--sp-2) var(--sp-4); border-bottom: 1px solid var(--c-border); background: var(--c-surface-2);
+}
+.recv-head-label { font-size: 17px; font-weight: 700; letter-spacing: -0.01em; }
+.recv-meta {
+  flex: none; display: flex; align-items: center; gap: var(--sp-3); flex-wrap: wrap;
+  padding: 6px var(--sp-4); border-bottom: 1px solid var(--c-border);
+  font-size: var(--fs-sm); color: var(--c-ink-soft);
+}
+.recv-scan { flex: none; padding: var(--sp-3) var(--sp-4); border-bottom: 1px solid var(--c-border); }
+.recv-scan-note { font-size: var(--fs-xs); color: var(--c-ink-faint); margin-top: 2px; }
+/* Paid: the scan slab is REPLACED, not removed, so the track keeps its shape
+   and the absence explains itself (d40). */
+.recv-locked {
+  border: 2px dashed var(--c-border-strong); background: var(--c-surface-2);
+  padding: var(--sp-2) var(--sp-4) var(--sp-3);
+}
+.recv-locked-text { font-size: var(--fs-base); color: var(--c-ink-soft); max-width: var(--measure); margin-top: 2px; }
+
+/* Where a resolved scan waits while it gets its cost. It is the loudest thing
+   under the scan slab because it is the one row that still needs a decision. */
+.recv-stage { flex: none; border-bottom: 1px solid var(--c-border); background: var(--c-accent-soft); }
+.recv-stage-in {
+  padding: var(--sp-3) var(--sp-4); display: grid; gap: var(--sp-3);
+  grid-template-columns: 44px minmax(0, 1fr);
+}
+.recv-stage .recv-art { width: 44px; height: 44px; font-size: 21px; }
+.recv-stage-title { font-size: var(--fs-md); font-weight: 700; line-height: 1.2; }
+.recv-stage-sub { font-size: var(--fs-xs); color: var(--c-ink-soft); }
+.recv-stage-fields { display: flex; gap: var(--sp-3); flex-wrap: wrap; align-items: flex-end; margin-top: var(--sp-2); }
+.recv-stage-fields .field { margin: 0; }
+.recv-stage-fields .field > span { font-size: 9.5px; }
+.recv-stage-fields input, .recv-stage-fields select { width: 96px; }
+.recv-stage-fields .recv-stage-qty input { width: 58px; }
+.recv-stage-hint { font-size: 10px; color: var(--c-ink-faint); }
+.recv-stage-margin { font-family: var(--font-mono); font-size: 17px; font-weight: 700; }
+
+.recv-lines { flex: 1; min-height: 0; overflow: auto; }
+.recv-lines > .data { width: 100%; }
+.recv-lines > .data thead th {
+  position: sticky; top: 0; z-index: 2; background: var(--c-surface);
+  border-bottom: 1px solid var(--c-ink);
+}
 .recv-art {
-  width: 38px; height: 38px; display: grid; place-items: center; font-size: 18px;
-  background: repeating-linear-gradient(135deg, #e2e2de 0 6px, #ececea 6px 12px);
+  width: 32px; height: 32px; display: grid; place-items: center; font-size: 16px;
   border: 1px solid var(--c-border);
+  background: repeating-linear-gradient(135deg, #e2e2de 0 6px, #ececea 6px 12px);
 }
 .recv-art.empty {
-  background: none; border: 1px dashed var(--c-border-strong);
-  font-size: 8.5px; color: var(--c-ink-faint); letter-spacing: 0.04em;
+  font-family: var(--font-narrow); font-size: 8px; font-weight: 700;
+  letter-spacing: 0.06em; color: var(--c-ink-faint);
 }
 table.data td.recv-art-cell { width: 38px; padding-right: 0; }
-.recv-rec .t { display: block; font-size: var(--fs-base); font-weight: 600; line-height: 1.25; }
-.recv-rec .m { display: block; font-size: var(--fs-xs); color: var(--c-ink-faint); }
-/* The line actions sit in one row, not stacked — the column is narrow and a
-   wrapped pencil-over-cross reads as two unrelated controls. */
-table.data td .btn-row { flex-wrap: nowrap; }
+/* Fixed layout, so the columns are what this track can afford rather than
+   whatever the longest cell asks for. Between two tracks the table has ~574px
+   on a 1280 counter display — the width d38 accepts losing to reconcile — and
+   auto layout spends that on whichever row happens to hold the longest title.
 
-/* The reconcile strip. Sticky to the bottom of the viewport so derived vs.
-   stated never leaves the screen on a 50-100 line invoice — the one thing the
-   footer layout would otherwise have cost us against a pinned rail. */
-.recv-foot {
-  position: sticky; bottom: 0; z-index: 10;
-  border-top: 2px solid var(--c-ink); background: var(--c-surface-2);
-  padding: var(--sp-3) var(--sp-4);
-  display: flex; align-items: center; gap: var(--sp-5); flex-wrap: wrap;
+   The title gets the two lines the row is already tall (Cost and Sell each
+   carry a sub-figure), so it stays readable at this width instead of
+   ellipsising after two words. The meta line under it clips instead: label and
+   year are recognition aids, and the sleeve above them does that job first. */
+.recv-lines > .data { table-layout: fixed; }
+.recv-lines > .data td.recv-art-cell, .recv-lines > .data th:first-child { width: 44px; }
+.recv-lines > .data td:nth-child(3), .recv-lines > .data th:nth-child(3) { width: 52px; }
+.recv-lines > .data td:nth-child(4), .recv-lines > .data th:nth-child(4) { width: 88px; }
+.recv-lines > .data td:nth-child(5), .recv-lines > .data th:nth-child(5) { width: 92px; }
+.recv-lines > .data td:nth-child(6), .recv-lines > .data th:nth-child(6) { width: 44px; }
+.recv-lines > .data td:nth-child(7), .recv-lines > .data th:nth-child(7) { width: 72px; }
+.recv-lines > .data td:last-child, .recv-lines > .data th:last-child { width: 66px; }
+.recv-rec .t {
+  display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2;
+  overflow: hidden; font-size: var(--fs-sm); font-weight: 600; line-height: 1.25;
 }
-.recv-foot .fig { display: flex; flex-direction: column; gap: 1px; }
-.recv-foot .fig > .lab { font-size: 9.5px; }
-.recv-foot .fig > .v { font-size: 20px; font-weight: 700; font-variant-numeric: tabular-nums; }
-.recv-foot .fig.warn > .lab, .recv-foot .fig.warn > .v { color: var(--c-warn); }
-.recv-foot .fig.bad > .lab, .recv-foot .fig.bad > .v { color: var(--c-danger); }
+.recv-rec .m {
+  display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  font-size: var(--fs-xs); color: var(--c-ink-faint);
+}
+/* Figures never wrap — a column that shrinks below its number is unreadable
+   in a way an ellipsised title is not. */
+.recv-lines > .data td.num, .recv-lines > .data th.num { white-space: nowrap; }
+/* Cost and price each carry what they were derived from underneath, so five
+   columns become two without losing a figure (d38's width trade). */
+.recv-fig { display: block; font-variant-numeric: tabular-nums; }
+.recv-fig-sub {
+  display: block; font-size: var(--fs-xs); color: var(--c-ink-faint);
+  font-variant-numeric: tabular-nums;
+}
+.recv-fig-sub.bad { color: var(--c-danger); font-weight: 600; }
+.recv-edit-stack { display: flex; flex-direction: column; gap: 2px; align-items: flex-end; }
+.recv-edit-stack .inline-num, .recv-edit-stack .inline-pct { width: 72px; }
+/* Two buttons, on one line. Three wrapped in this cell's width and took every
+   row to 94px — the table's whole height budget, spent on chrome. */
+.recv-row-acts { display: flex; gap: 2px; justify-content: flex-end; flex-wrap: nowrap; }
+tr.recv-flagged > td { background: var(--c-warn-soft); }
+tr.recv-flagged > td:first-child { box-shadow: inset 3px 0 0 var(--c-warn); }
 .recv-notes { padding: var(--sp-3) var(--sp-4) 0; }
+
+/* ---- Track 3: reconcile ---- */
+.recv-recon {
+  border-left: 1px solid var(--c-border-strong); background: var(--c-surface);
+  display: flex; flex-direction: column; min-height: 0;
+}
+.recv-recon-head { flex: none; padding: var(--sp-4) var(--sp-4) var(--sp-3); }
+.recv-figure {
+  font-size: 54px; font-weight: 800; line-height: 1; letter-spacing: -0.035em;
+  font-variant-numeric: tabular-nums;
+}
+.recv-figure-sub { margin-top: 4px; }
+/* The check step 18 turns on, directly under the figure so it cannot be read
+   past, carrying its state in form as well as in words. */
+.recv-verdict {
+  flex: none; display: flex; gap: var(--sp-2); align-items: flex-start;
+  padding: var(--sp-2) var(--sp-4); font-size: var(--fs-sm); line-height: 1.35;
+  border-top: 1px solid var(--c-border);
+}
+.recv-verdict .mark { flex: none; }
+.recv-verdict.ok { background: var(--c-ok-soft); color: var(--c-ok); }
+.recv-verdict.warn { background: var(--c-warn-soft); color: var(--c-warn); }
+.recv-rule { flex: none; height: 2px; background: var(--c-ink); }
+.recv-recon-mid {
+  flex: 1; min-height: 0; overflow-y: auto;
+  padding: var(--sp-3) var(--sp-4); display: flex; flex-direction: column; gap: var(--sp-4);
+}
+.recv-sec { display: flex; flex-direction: column; gap: 6px; }
+.recv-sec > .lab { display: block; }
+.recv-entry { display: flex; justify-content: space-between; align-items: center; gap: var(--sp-2); font-size: var(--fs-base); }
+.recv-entry input {
+  width: 104px; text-align: right; padding: 4px 7px;
+  font-size: var(--fs-base); font-weight: 600; font-variant-numeric: tabular-nums;
+}
+.recv-entry.total input { border: 2px solid var(--c-ink); font-size: var(--fs-md); font-weight: 700; }
+.recv-delta { border-top: 1px solid var(--c-border); padding-top: 6px; font-weight: 700; }
+.recv-delta.warn, .recv-delta.warn .num { color: var(--c-warn); }
+.recv-delta.ok, .recv-delta.ok .num { color: var(--c-ok); }
+.recv-flags {
+  border: 1px solid var(--c-warn); background: var(--c-warn-soft);
+  padding: var(--sp-2) var(--sp-3); display: flex; flex-direction: column; gap: 5px;
+}
+.recv-flags .lab { color: var(--c-warn); }
+.recv-flags ul { margin: 0; padding-left: 16px; display: flex; flex-direction: column; gap: 3px; }
+.recv-flags li { font-size: var(--fs-xs); color: var(--c-warn); }
+.recv-recon-foot {
+  flex: none; border-top: 2px solid var(--c-ink); padding: var(--sp-3) var(--sp-4);
+  display: flex; flex-direction: column; gap: var(--sp-2);
+}
+.recv-finalize { justify-content: center; height: 64px; font-size: 21px; font-weight: 800; letter-spacing: 0.01em; }
+.recv-foot-sub { font-size: var(--fs-xs); color: var(--c-ink-faint); text-align: center; }
+.recv-foot-alt { justify-content: center; }

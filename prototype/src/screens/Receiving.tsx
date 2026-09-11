@@ -1,5 +1,8 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { useNavigate, useParams } from "react-router-dom";
 import { Modal } from "../components/Modal";
+import { ReceiveReconcile } from "../components/ReceiveReconcile";
+import { ReceiveSlab, type OutstandingLine } from "../components/ReceiveSlab";
 import {
   GRADES,
   type Grade,
@@ -14,86 +17,186 @@ import { money, roundUpShelf } from "../lib/money";
 import { round2 } from "../lib/totals";
 import { useApp } from "../store/AppStore";
 
+// E-02 Receiving, on the till's three-track frame (d38): the worklist slab you
+// pick from, the Invoice, and the reconcile figures. The frame is pinned to the
+// viewport and each track scrolls on its own, so the scan field and the check
+// step 18 turns on are always where they were last time.
+//
+// The selected Invoice is carried in the URL (/receiving/:invoiceId) so it is
+// deep-linkable and survives a reload — the same reason Find carries its
+// Record there.
+
+// Per till, not per employee: this is the machine at the receiving desk, the
+// same way the till rail's own open/shut state already is.
+const SLAB_KEY = "waxworks.receive.slab";
+
+function readStored<T>(key: string, fallback: T): T {
+  try {
+    const raw = window.localStorage.getItem(key);
+    return raw == null ? fallback : (JSON.parse(raw) as T);
+  } catch {
+    /* private window, or site data blocked — the slab just forgets */
+    return fallback;
+  }
+}
+
+function writeStored(key: string, value: unknown) {
+  try {
+    window.localStorage.setItem(key, JSON.stringify(value));
+  } catch {
+    /* nothing to do — forgetting is an acceptable outcome here */
+  }
+}
+
 export function Receiving() {
   const app = useApp();
-  const drafts = app.invoices.filter((iv) => iv.status === "Draft");
-  const finalized = app.invoices.filter((iv) => iv.status === "Finalized");
-  const recent = [...finalized]
-    .sort((a, b) => (b.finalizedAt ?? "").localeCompare(a.finalizedAt ?? ""))
-    .slice(0, 3);
-  const [selectedId, setSelectedId] = useState<string | null>(drafts[0]?.id ?? null);
+  const nav = useNavigate();
+  const { invoiceId } = useParams();
+
   const [creating, setCreating] = useState(false);
   const [opening, setOpening] = useState(false);
-  const selected = app.invoiceFor(selectedId ?? undefined);
+  const [term, setTerm] = useState("");
+  const [poFilter, setPoFilter] = useState<string | null>(null);
+  const [prefillOrder, setPrefillOrder] = useState<PendingOrderLine | null>(null);
+  // Open on arrival: receiving begins by picking what you are receiving
+  // against. Used mode gets no different default — an intake with no PO behind
+  // it still wants New intake and the drafts in flight where it expects them.
+  const [slabOpen, setSlabOpen] = useState(() => readStored(SLAB_KEY, true));
+
+  useEffect(() => writeStored(SLAB_KEY, slabOpen), [slabOpen]);
+
+  const drafts = app.invoices.filter((iv) => iv.status === "Draft");
+  const recent = useMemo(
+    () =>
+      [...app.invoices]
+        .filter((iv) => iv.status !== "Draft")
+        .sort((a, b) => (b.finalizedAt ?? b.createdAt).localeCompare(a.finalizedAt ?? a.createdAt))
+        .slice(0, 3),
+    [app.invoices],
+  );
+
+  // The worklist (d29): outstanding PurchaseOrder lines across ALL open POs,
+  // not scoped to one supplier — suppliers ship several POs in one box (d28).
+  const outstanding: OutstandingLine[] = useMemo(() => {
+    const q = term.trim().toLowerCase();
+    // Ordered minus received against that PO line across every Invoice (d30).
+    // Partial receipt is not modelled in the prototype store — a received line
+    // is removed outright — so `received` is always 0 today and the row reads
+    // as a plain ordered quantity rather than a fake "n of m".
+    const receivedAgainst = (orderId: string) =>
+      app.invoices.reduce(
+        (n, iv) => n + iv.lines.filter((l) => l.fromOrderId === orderId).reduce((m, l) => m + l.qty, 0),
+        0,
+      );
+
+    return app.pendingOrders
+      .map((order) => {
+        const record = app.recordFor(order.recordId);
+        const received = receivedAgainst(order.id);
+        return {
+          order,
+          record,
+          outstanding: Math.max(0, order.qty - received),
+          partiallyReceived: received > 0,
+        };
+      })
+      .filter(({ order, record, outstanding: left }) => {
+        if (left <= 0) return false;
+        if (poFilter && (order.poNumber ?? "unplaced") !== poFilter) return false;
+        if (!q) return true;
+        return (
+          record?.title.toLowerCase().includes(q) ||
+          record?.artist.toLowerCase().includes(q) ||
+          record?.catalogNo.toLowerCase().includes(q) ||
+          (order.scannedCode ?? "").toLowerCase().includes(q) ||
+          (order.poNumber ?? "").toLowerCase().includes(q)
+        );
+      })
+      .sort((a, b) => {
+        const pa = a.order.poNumber ?? "~";
+        const pb = b.order.poNumber ?? "~";
+        return pa.localeCompare(pb) || (a.record?.title ?? "").localeCompare(b.record?.title ?? "");
+      });
+  }, [app.pendingOrders, app.invoices, app.records, term, poFilter]);
+
+  // Chips are built from every open PO, not from the filtered list — otherwise
+  // picking one chip would hide the others and strand you inside it.
+  const poCounts = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const order of app.pendingOrders) {
+      const key = order.poNumber ?? "unplaced";
+      counts.set(key, (counts.get(key) ?? 0) + 1);
+    }
+    return [...counts.entries()]
+      .map(([po, count]) => ({ po, count }))
+      .sort((a, b) => a.po.localeCompare(b.po));
+  }, [app.pendingOrders]);
+
+  // A URL invoiceId always wins; without one, the oldest open draft stands in,
+  // then the most recent finished intake. Picking anything puts it in the URL
+  // and it stops moving.
+  const selectedId = invoiceId ?? drafts[0]?.id ?? recent[0]?.id;
+  const selected = app.invoiceFor(selectedId);
+
+  const select = (id: string) => nav(`/receiving/${id}`, { replace: true });
+
+  const pickOrder = (order: PendingOrderLine) => {
+    setPrefillOrder(order);
+    // Picking a worklist line with no invoice open is a request to start one:
+    // the alternative is a silent no-op, which reads as a broken button.
+    if (!selected || selected.status === "Paid") setCreating(true);
+  };
 
   return (
-    <div>
-      <div className="page-head">
-        <span className="flow-id">E-02</span>
-        <div>
-          <h1>Receive inventory</h1>
-          <p className="sub">
-            Intake a shipment, identify each record, price it, and reconcile against the
-            supplier's invoice. Nothing here is sellable until <strong>Finalize</strong> — E-05
-            already supports negative inventory for exactly this gap (decision 21).
-          </p>
-        </div>
-      </div>
+    <div className={"recv-frame" + (slabOpen ? "" : " slab-shut")}>
+      <ReceiveSlab
+        open={slabOpen}
+        onOpenChange={setSlabOpen}
+        term={term}
+        onTermChange={setTerm}
+        poFilter={poFilter}
+        onPoFilterChange={setPoFilter}
+        outstanding={outstanding}
+        poCounts={poCounts}
+        drafts={drafts}
+        recent={recent}
+        selectedId={selected?.id}
+        onSelect={select}
+        onNewIntake={() => setCreating(true)}
+        onOpenExisting={() => setOpening(true)}
+        onPickOrder={pickOrder}
+      />
 
-      <div className="card" style={{ marginBottom: "var(--sp-4)" }}>
-        <div className="card-body row wrap">
-          <button className="btn primary" onClick={() => setCreating(true)}>
-            + New intake
-          </button>
-          <button className="btn" onClick={() => setOpening(true)}>
-            Open existing
-          </button>
-          <span className="muted xsmall">Open:</span>
-          {drafts.length === 0 && <span className="xsmall muted">none</span>}
-          {drafts.map((iv) => {
-            const supplier = app.supplierFor(iv.supplierId);
-            return (
-              <button
-                key={iv.id}
-                className={"btn sm" + (iv.id === selectedId ? " primary" : "")}
-                onClick={() => setSelectedId(iv.id)}
-              >
-                {supplier?.shortName} {iv.invoiceNumber} · {iv.lines.length} line
-                {iv.lines.length === 1 ? "" : "s"}
-              </button>
-            );
-          })}
-          {recent.length > 0 && (
-            <>
-              <span className="muted xsmall">Recently received:</span>
-              {recent.map((iv) => {
-                const supplier = app.supplierFor(iv.supplierId);
-                return (
-                  <button
-                    key={iv.id}
-                    className={"btn ghost sm" + (iv.id === selectedId ? " primary" : "")}
-                    onClick={() => setSelectedId(iv.id)}
-                  >
-                    {supplier?.shortName} {iv.invoiceNumber}
-                  </button>
-                );
-              })}
-            </>
-          )}
+      {selected ? (
+        <InvoiceEditor
+          key={selected.id}
+          invoiceId={selected.id}
+          prefillOrder={prefillOrder}
+          onPrefillConsumed={() => setPrefillOrder(null)}
+        />
+      ) : (
+        <div className="recv-noinvoice">
+          <div className="stack">
+            <div className="lab">Nothing open</div>
+            <p className="muted">
+              Start an intake here, or pick a draft up from the worklist. A cold invoice with no
+              PO behind it is fully supported.
+            </p>
+            <button className="btn primary" onClick={() => setCreating(true)}>
+              + New intake
+            </button>
+          </div>
         </div>
-      </div>
-
-      {!selected && <div className="callout">Start a new intake, resume a draft, or open an existing invoice above.</div>}
-      {selected && <InvoiceEditor key={selected.id} invoiceId={selected.id} />}
+      )}
 
       {creating && (
-        <NewInvoiceModal onClose={() => setCreating(false)} onCreated={(id) => setSelectedId(id)} />
+        <NewInvoiceModal onClose={() => setCreating(false)} onCreated={(id) => select(id)} />
       )}
       {opening && (
         <OpenExistingModal
           onClose={() => setOpening(false)}
           onPick={(id) => {
-            setSelectedId(id);
+            select(id);
             setOpening(false);
           }}
         />
@@ -339,7 +442,15 @@ function useLinePricing(opts: {
   return { listPrice, discountPct, extPrice, suggested, sellPrice, marginPct, belowCost };
 }
 
-function InvoiceEditor({ invoiceId }: { invoiceId: string }) {
+function InvoiceEditor({
+  invoiceId,
+  prefillOrder,
+  onPrefillConsumed,
+}: {
+  invoiceId: string;
+  prefillOrder: PendingOrderLine | null;
+  onPrefillConsumed: () => void;
+}) {
   const app = useApp();
   const invoice = app.invoiceFor(invoiceId)!;
   const supplier = app.supplierFor(invoice.supplierId)!;
@@ -347,12 +458,11 @@ function InvoiceEditor({ invoiceId }: { invoiceId: string }) {
   const [autoAccept, setAutoAccept] = useState(false);
   const [note, setNote] = useState<string | null>(null);
   const [editingLineId, setEditingLineId] = useState<string | null>(null);
-  const [prefillOrder, setPrefillOrder] = useState<PendingOrderLine | null>(null);
-  const [rowResetKey, setRowResetKey] = useState(0);
+  const [stageKey, setStageKey] = useState(0);
 
   // Finalize is about stock, not paperwork — it mints sellable InventoryItems
-  // but leaves the Invoice open for correction. Only Paid (via Accounts
-  // Payable settling the balance) actually locks it.
+  // but leaves the Invoice open for correction. Only Paid actually locks it
+  // (d40), which is why the scan slab survives Finalized and goes at Paid.
   const locked = invoice.status === "Paid";
 
   const derivedSubtotal = round2(invoice.lines.reduce((sum, l) => sum + l.cost * l.qty, 0));
@@ -368,7 +478,9 @@ function InvoiceEditor({ invoiceId }: { invoiceId: string }) {
   // the full cash outlay (tax/freight/misc included), not a formal COGS
   // figure. Per-item cost/margin is unaffected — see Cost treatment.
   const expectedSellValue = round2(invoice.lines.reduce((sum, l) => sum + l.acceptedPrice * l.qty, 0));
-  const expectedMarginPct = expectedSellValue > 0 ? round2(((expectedSellValue - enteredTotal) / expectedSellValue) * 100) : 0;
+  const expectedMarginPct =
+    expectedSellValue > 0 ? round2(((expectedSellValue - enteredTotal) / expectedSellValue) * 100) : 0;
+  const belowCostLines = invoice.lines.filter((l) => l.acceptedPrice < l.cost).length;
   const [finalizedCount, setFinalizedCount] = useState<number | null>(null);
   const [labelsNote, setLabelsNote] = useState<string | null>(null);
 
@@ -380,156 +492,101 @@ function InvoiceEditor({ invoiceId }: { invoiceId: string }) {
 
   const doSaveUpdates = () => {
     if (delta !== 0) app.setInvoiceTotalOverride(invoiceId, enteredTotal);
+    setNote("Totals saved.");
   };
 
   const mintedCount = invoice.lines.reduce((sum, l) => sum + (l.itemIds?.length ?? 0), 0);
-  const printAllLabels = () => setLabelsNote(`${mintedCount} label${mintedCount === 1 ? "" : "s"} would print here (stub) — hooked up down the line.`);
+  const printAllLabels = () =>
+    setLabelsNote(
+      `${mintedCount} label${mintedCount === 1 ? "" : "s"} would print here (stub) — hooked up down the line.`,
+    );
+
+  const latestLog = invoice.log[invoice.log.length - 1];
 
   return (
-    <div className="recv">
-      {/* ---- rail: what is outstanding, and this invoice's paperwork ---- */}
-      <div className="recv-rail">
-        {!locked && (
-          <div className="recv-rail-sec">
-            <span className="lab">Worklist — {supplier.shortName}</span>
-            <OrdersPanel supplierId={supplier.id} onPick={(order) => setPrefillOrder(order)} />
-          </div>
-        )}
-
-        <div className="recv-rail-sec">
-          <span className="lab">This invoice</span>
-          <div className="xsmall muted" style={{ marginBottom: "var(--sp-2)" }}>
-            {supplier.name}
-            <br />
-            {invoice.invoiceNumber} · {invoice.intakeMode}
-            <br />
-            dated {invoice.invoiceDate || "—"} · received {invoice.receivedDate}
-            <br />
-            supplier discount {supplier.discountPct}% — drives suggested retail (M-01)
-          </div>
-          <label className="field">
-            <span>Stated subtotal (paperwork)</span>
-            <input
-              type="number"
-              step="0.01"
-              disabled={locked}
-              value={invoice.statedSubtotal}
-              onChange={(e) =>
-                app.updateInvoiceTotals(invoiceId, { statedSubtotal: Number(e.target.value) || 0 })
-              }
-            />
-          </label>
-          <label className="field">
-            <span>Tax</span>
-            <input
-              type="number"
-              step="0.01"
-              disabled={locked}
-              value={invoice.tax}
-              onChange={(e) => app.updateInvoiceTotals(invoiceId, { tax: Number(e.target.value) || 0 })}
-            />
-          </label>
-          <label className="field">
-            <span>Freight</span>
-            <input
-              type="number"
-              step="0.01"
-              disabled={locked}
-              value={invoice.freight}
-              onChange={(e) => app.updateInvoiceTotals(invoiceId, { freight: Number(e.target.value) || 0 })}
-            />
-          </label>
-          <label className="field">
-            <span>Miscellaneous</span>
-            <input
-              type="number"
-              step="0.01"
-              disabled={locked}
-              value={invoice.misc}
-              onChange={(e) => app.updateInvoiceTotals(invoiceId, { misc: Number(e.target.value) || 0 })}
-            />
-          </label>
-          <label className="field" style={{ marginBottom: 0 }}>
-            <span>Total — ±2% free, beyond raises a flag</span>
-            <input
-              type="number"
-              step="0.01"
-              disabled={locked}
-              value={totalRaw}
-              onChange={(e) => setTotalOverrideRaw(e.target.value)}
-            />
-          </label>
-        </div>
-
-        <div className="recv-rail-sec">
-          <span className="lab">Expected</span>
-          <div className="totals-row">
-            <span className="xsmall">Sell value</span>
-            <strong className="num">{money(expectedSellValue)}</strong>
-          </div>
-          <div className="totals-row">
-            <span className="xsmall">Margin</span>
-            <strong className="num" style={{ color: expectedMarginPct < 0 ? "var(--c-danger)" : undefined }}>
-              {expectedMarginPct.toFixed(1)}%
-            </strong>
-          </div>
-          <div className="xsmall muted" style={{ marginTop: "var(--sp-2)" }}>
-            Sell value against the full invoice total — informational, not COGS.
-          </div>
-        </div>
-
-        <div className="recv-rail-sec">
-          <details className="till-log">
-            <summary>Log ({invoice.log.length})</summary>
-            <div className="xsmall muted stack">
-              {invoice.log.map((e, i) => (
-                <div key={i}>
-                  <span className="mono">{e.at}</span> — {e.text}
-                </div>
-              ))}
-            </div>
-          </details>
-        </div>
-      </div>
-
-      {/* ---- lines ---- */}
-      <div className="recv-main">
-        <div
-          className="row wrap"
-          style={{
-            padding: "var(--sp-3) var(--sp-4)",
-            borderBottom: "1px solid var(--c-border)",
-            gap: "var(--sp-3)",
-          }}
-        >
-          <span className="sale-head-label">
-            {supplier.shortName} {invoice.invoiceNumber}
+    <>
+      <section className="recv-main">
+        <div className="recv-head">
+          <span className="recv-head-label">
+            {supplier.shortName} · {invoice.invoiceNumber}
           </span>
-          <span className={"badge" + (locked ? " ok" : "")}>{invoice.status}</span>
-          <label className="row xsmall right">
-            <input
-              type="checkbox"
-              checked={autoAccept}
-              onChange={(e) => setAutoAccept(e.target.checked)}
-            />
-            <span>Auto-accept suggested price (step 13)</span>
-          </label>
+          <span className={"badge" + (invoice.status === "Draft" ? "" : " ok")}>{invoice.status}</span>
+          <span className="badge">{invoice.intakeMode}</span>
+          {/* Step 13 — available at any point, but meaningless once nothing
+              more will be priced. */}
+          {!locked && (
+            <label className="row right xsmall" style={{ gap: "var(--sp-2)" }}>
+              <input
+                type="checkbox"
+                checked={autoAccept}
+                onChange={(e) => setAutoAccept(e.target.checked)}
+              />
+              <span>Auto-accept suggested price</span>
+            </label>
+          )}
         </div>
 
-        {invoice.status === "Finalized" && (
-          <div className="recv-notes">
-            <div className="callout">
-              Finalized — its lines are sellable, but the Invoice stays open for correction (fix a
-              cost, add a line for a carton that turns up late) until it's marked paid.
+        <div className="recv-meta">
+          <span>{supplier.name}</span>
+          <span className="muted">·</span>
+          <span>
+            dated <span className="mono">{invoice.invoiceDate || "—"}</span>
+          </span>
+          <span className="muted">·</span>
+          <span>
+            received <span className="mono">{invoice.receivedDate}</span>
+          </span>
+          <span className="muted">·</span>
+          <span>
+            supplier discount <span className="mono">{supplier.discountPct}%</span> — drives
+            suggested retail (M-01)
+          </span>
+        </div>
+
+        {/* The scan slab is the biggest thing on the track because Phase 2 is
+            what receiving actually is. It survives Finalize (d40): a cost gets
+            fixed, a carton turns up late. Only Paid removes it — and then it is
+            REPLACED, not deleted, so the track keeps its shape and the absence
+            explains itself. */}
+        {locked ? (
+          <div className="recv-scan">
+            <div className="recv-locked">
+              <span className="lab">Locked</span>
+              <div className="recv-locked-text">
+                Paid {invoice.paidAt ?? ""} {invoice.paidBy ? `by ${invoice.paidBy}` : ""} — this
+                Invoice is immutable. Amendments are manager-only, appended against the original in{" "}
+                <strong>E-04</strong> (d40).
+              </div>
             </div>
           </div>
+        ) : (
+          <StageCard
+            key={stageKey}
+            invoiceId={invoiceId}
+            mode={invoice.intakeMode}
+            supplier={supplier}
+            autoAccept={autoAccept}
+            finalized={invoice.status === "Finalized"}
+            prefillOrder={prefillOrder}
+            onPrefillConsumed={onPrefillConsumed}
+            onCommitted={(msg) => {
+              setNote(msg);
+              setStageKey((k) => k + 1);
+            }}
+          />
         )}
-        {invoice.status === "Paid" && (
+
+        {(note || labelsNote || mismatch) && (
           <div className="recv-notes">
-            <div className="callout ok">
-              Paid on {invoice.paidAt} by {invoice.paidBy} — now immutable. Corrections from here
-              are manager-only, via E-04.
-            </div>
+            {note && <div className="callout ok">{note}</div>}
+            {labelsNote && <div className="callout ok">{labelsNote}</div>}
+            {mismatch && (
+              <div className="callout">
+                Derived subtotal doesn't match the supplier's stated subtotal — a discrepancy
+                warning, not a block. Recheck the lines, or proceed if it's explainable.{" "}
+                <em>(Decision 18.)</em>
+              </div>
+            )}
           </div>
         )}
 
@@ -540,10 +597,13 @@ function InvoiceEditor({ invoiceId }: { invoiceId: string }) {
                 <th />
                 <th>Record</th>
                 <th>Grade</th>
-                <th className="num">List price</th>
-                <th className="num">Disc%</th>
-                <th className="num">Sell price</th>
-                <th className="num">Margin%</th>
+                {/* Cost-vs-price folds onto two lines per cell rather than
+                    spreading over five columns — the width d38 accepts losing
+                    to the reconcile track comes out of here. Cost leads
+                    because cost is the Ext. Price (d7); list and discount are
+                    what it was derived from, and sit under it. */}
+                <th className="num">Cost</th>
+                <th className="num">Sell</th>
                 <th className="num">Qty</th>
                 <th className="num">Net</th>
                 <th />
@@ -559,6 +619,14 @@ function InvoiceEditor({ invoiceId }: { invoiceId: string }) {
                     mode={invoice.intakeMode}
                     supplier={supplier}
                     onDone={() => setEditingLineId(null)}
+                    onRemove={() => {
+                      const res = app.removeInvoiceLine(invoiceId, l.id);
+                      if (res.blocked) {
+                        setNote("Can't remove that line — one of its copies has already sold.");
+                      } else {
+                        setEditingLineId(null);
+                      }
+                    }}
                   />
                 ) : (
                   <ReadLineRow
@@ -567,12 +635,6 @@ function InvoiceEditor({ invoiceId }: { invoiceId: string }) {
                     record={app.recordFor(l.recordId)}
                     locked={locked}
                     onEdit={() => setEditingLineId(l.id)}
-                    onRemove={() => {
-                      const res = app.removeInvoiceLine(invoiceId, l.id);
-                      if (res.blocked) {
-                        setNote("Can't remove that line — one of its copies has already sold.");
-                      }
-                    }}
                     onPrintLabel={() => {
                       const n = l.itemIds?.length ?? 0;
                       setLabelsNote(
@@ -582,25 +644,10 @@ function InvoiceEditor({ invoiceId }: { invoiceId: string }) {
                   />
                 ),
               )}
-              {!locked && (
-                <NewLineRow
-                  key={rowResetKey}
-                  invoiceId={invoiceId}
-                  mode={invoice.intakeMode}
-                  supplier={supplier}
-                  autoAccept={autoAccept}
-                  prefillOrder={prefillOrder}
-                  onPrefillConsumed={() => setPrefillOrder(null)}
-                  onCommitted={(msg) => {
-                    setNote(msg);
-                    setRowResetKey((k) => k + 1);
-                  }}
-                />
-              )}
               {invoice.lines.length === 0 && (
                 <tr>
-                  <td colSpan={10} className="muted small">
-                    No lines yet — scan a barcode or use Lookup on the row above.
+                  <td colSpan={8} className="muted small">
+                    No lines yet — scan a barcode above, or pick something off the worklist.
                   </td>
                 </tr>
               )}
@@ -608,76 +655,51 @@ function InvoiceEditor({ invoiceId }: { invoiceId: string }) {
           </table>
         </div>
 
-        {(note || labelsNote || mismatch || delta !== 0) && (
-          <div className="recv-notes" style={{ paddingBottom: "var(--sp-3)" }}>
-            {note && <div className="callout ok">{note}</div>}
-            {labelsNote && <div className="callout ok">{labelsNote}</div>}
-            {mismatch && (
-              <div className="callout">
-                Derived subtotal doesn't match the supplier's stated subtotal — a discrepancy
-                warning, not a block. Recheck the lines, or proceed if it's explainable.{" "}
-                <em>(Decision 18.)</em>
+        <details className="till-log">
+          <summary>
+            <span className="till-log-top">
+              <span className="lab">Log &amp; notes ({invoice.log.length})</span>
+              <span className="till-log-chev" aria-hidden="true">
+                ▾
+              </span>
+            </span>
+            {latestLog && (
+              <span className="till-log-latest">
+                <time className="mono">{latestLog.at.slice(11, 16)}</time>
+                <span>{latestLog.text}</span>
+              </span>
+            )}
+          </summary>
+          <div className="xsmall muted stack" style={{ margin: "var(--sp-3) 0" }}>
+            {[...invoice.log].reverse().map((e, i) => (
+              <div key={i}>
+                <span className="mono">{e.at}</span> — {e.text}
               </div>
-            )}
-            {delta !== 0 && (
-              <div className="callout">
-                Adjustment {money(delta)} ({(pctDelta * 100).toFixed(1)}%) — a standalone line into
-                cost of goods, not redistributed across items (decision 21).
-                {beyondTolerance && " Beyond ±2%: proceeds and raises a review flag (M-04 d8)."}
-              </div>
-            )}
+            ))}
           </div>
-        )}
+        </details>
+      </section>
 
-        {/* Reconcile follows the lines down. */}
-        <div className="recv-foot">
-          <div className="fig">
-            <span className="lab">Received</span>
-            <span className="v">{invoice.lines.reduce((n, l) => n + l.qty, 0)}</span>
-          </div>
-          <div className="fig">
-            <span className="lab">Our subtotal</span>
-            <span className="v">{money(derivedSubtotal)}</span>
-          </div>
-          <div className="fig">
-            <span className="lab">Theirs</span>
-            <span className="v">{money(invoice.statedSubtotal)}</span>
-          </div>
-          <div className={"fig" + (mismatch ? " warn" : "")}>
-            <span className="lab">Difference</span>
-            <span className="v">{money(round2(derivedSubtotal - invoice.statedSubtotal))}</span>
-          </div>
-          <div className={"fig" + (beyondTolerance ? " bad" : "")}>
-            <span className="lab">Total</span>
-            <span className="v">{money(enteredTotal)}</span>
-          </div>
-
-          <span className="right btn-row">
-            <button
-              className="btn"
-              onClick={printAllLabels}
-              disabled={mintedCount === 0}
-              title={mintedCount ? "Stub — hooked up down the line" : "Nothing minted yet"}
-            >
-              🏷 Print all labels
-            </button>
-            {invoice.status === "Draft" && (
-              <button
-                className="btn primary lg"
-                disabled={invoice.lines.length === 0}
-                onClick={doFinalize}
-              >
-                Finalize
-              </button>
-            )}
-            {invoice.status === "Finalized" && (
-              <button className="btn primary lg" onClick={doSaveUpdates}>
-                Save updates
-              </button>
-            )}
-          </span>
-        </div>
-      </div>
+      <ReceiveReconcile
+        invoice={invoice}
+        supplier={supplier}
+        onPatchTotals={(patch) => app.updateInvoiceTotals(invoiceId, patch)}
+        derivedSubtotal={derivedSubtotal}
+        mismatch={mismatch}
+        totalRaw={totalRaw}
+        onTotalRawChange={setTotalOverrideRaw}
+        enteredTotal={enteredTotal}
+        delta={delta}
+        pctDelta={pctDelta}
+        beyondTolerance={beyondTolerance}
+        expectedSellValue={expectedSellValue}
+        expectedMarginPct={expectedMarginPct}
+        belowCostLines={belowCostLines}
+        onFinalize={doFinalize}
+        onSaveUpdates={doSaveUpdates}
+        onPrintAllLabels={printAllLabels}
+        mintedCount={mintedCount}
+      />
 
       {finalizedCount !== null && (
         <Modal
@@ -692,71 +714,308 @@ function InvoiceEditor({ invoiceId }: { invoiceId: string }) {
           <div className="callout ok">
             {finalizedCount} cop{finalizedCount === 1 ? "y" : "ies"} now sellable. A letter-size
             summary would print here (decision 22). The Invoice itself stays open for correction
-            until it's marked paid.
+            until it's marked paid (decision 40).
           </div>
         </Modal>
       )}
-    </div>
+    </>
   );
 }
 
-function OrdersPanel({
-  supplierId,
-  onPick,
+// Where a resolved scan waits while it gets its cost — the scan slab, and
+// under it the one row that still needs a decision.
+//
+// This replaces the fillable last row of the line table. On a 60-line invoice
+// that row was below the fold, so entry scrolled away from the scan that fed
+// it; here both are fixed above the scrolling list and neither moves.
+function StageCard({
+  invoiceId,
+  mode,
+  supplier,
+  autoAccept,
+  finalized,
+  prefillOrder,
+  onPrefillConsumed,
+  onCommitted,
 }: {
-  supplierId: string;
-  onPick: (order: PendingOrderLine) => void;
+  invoiceId: string;
+  mode: IntakeMode;
+  supplier: Supplier;
+  autoAccept: boolean;
+  finalized: boolean;
+  prefillOrder: PendingOrderLine | null;
+  onPrefillConsumed: () => void;
+  onCommitted: (msg: string) => void;
 }) {
   const app = useApp();
-  const [term, setTerm] = useState("");
-  const q = term.trim().toLowerCase();
+  const [scannedCode, setScannedCode] = useState("");
+  const [recordId, setRecordId] = useState<string | null>(null);
+  const [fromOrderId, setFromOrderId] = useState<string | null>(null);
+  const [lookupOpen, setLookupOpen] = useState(false);
+  const [listRaw, setListRaw] = useState("0.00");
+  const [discountRaw, setDiscountRaw] = useState("0");
+  const [sellRaw, setSellRaw] = useState<string | null>(null);
+  const [grade, setGrade] = useState<Grade>(mode === "New" ? "M" : "VG");
+  const [qty, setQty] = useState(1);
 
-  const orders = app.pendingOrders.filter((o) => {
-    if (o.supplierId !== supplierId) return false;
-    if (!q) return true;
-    const rec = app.recordFor(o.recordId);
-    return (
-      (rec && (rec.title.toLowerCase().includes(q) || rec.artist.toLowerCase().includes(q))) ||
-      (o.poNumber ?? "").toLowerCase().includes(q)
+  useEffect(() => {
+    if (!prefillOrder) return;
+    setScannedCode(prefillOrder.scannedCode ?? "");
+    setRecordId(prefillOrder.recordId);
+    setFromOrderId(prefillOrder.id);
+    if (prefillOrder.expectedListPrice != null) setListRaw(String(prefillOrder.expectedListPrice));
+    if (prefillOrder.expectedDiscountPct != null) setDiscountRaw(String(prefillOrder.expectedDiscountPct));
+    setQty(prefillOrder.qty);
+    onPrefillConsumed();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [prefillOrder]);
+
+  const record = app.recordFor(recordId ?? undefined);
+
+  // Clearing the record has to clear everything that came WITH it — leaving a
+  // stale cost/discount/sell/qty behind after "pick a different record" would
+  // silently carry pricing from one title onto another.
+  const clearRow = () => {
+    setRecordId(null);
+    setFromOrderId(null);
+    setScannedCode("");
+    setListRaw("0.00");
+    setDiscountRaw("0");
+    setSellRaw(null);
+    setQty(1);
+    setGrade(mode === "New" ? "M" : "VG");
+  };
+
+  const resolveCode = (code: string) => {
+    const trimmed = code.trim();
+    if (!trimmed) return;
+    // Cascade: this supplier's pending orders, then the local catalog
+    // (including a catalog-only match, which "search" collapses into in this
+    // prototype) — no match opens Lookup, decision 24's fallback.
+    const order = app.pendingOrders.find((o) => o.supplierId === supplier.id && o.scannedCode === trimmed);
+    if (order) {
+      setRecordId(order.recordId);
+      setFromOrderId(order.id);
+      if (order.expectedListPrice != null) setListRaw(String(order.expectedListPrice));
+      if (order.expectedDiscountPct != null) setDiscountRaw(String(order.expectedDiscountPct));
+      setQty(order.qty);
+      return;
+    }
+    const rec = app.records.find((r) => r.manufacturerUpc === trimmed);
+    if (rec) {
+      setRecordId(rec.id);
+      setFromOrderId(null);
+      return;
+    }
+    setLookupOpen(true);
+  };
+
+  const { listPrice, discountPct, extPrice, suggested, sellPrice, marginPct, belowCost } =
+    useLinePricing({
+      listRaw,
+      discountRaw,
+      sellRaw,
+      autoAccept,
+      stickyPrice: mode === "New" ? record?.stickyPrice : undefined,
+      supplier,
+    });
+  const ready = !!record && listPrice > 0 && sellPrice > 0;
+  const lineQty = mode === "New" ? qty : 1;
+
+  const commit = () => {
+    if (!record) return;
+    app.addInvoiceLine(invoiceId, {
+      recordId: record.id,
+      scannedCode: scannedCode.trim() || undefined,
+      listPrice,
+      discountPct,
+      acceptedPrice: sellPrice,
+      grade: mode === "New" ? "M" : grade,
+      qty: lineQty,
+      fromOrderId: fromOrderId ?? undefined,
+    });
+    if (fromOrderId) app.receivePendingOrderLine(fromOrderId);
+    onCommitted(
+      `Added ${lineQty}× ${record.artist} — ${record.title} at ${money(sellPrice)} (cost ${money(extPrice)}).`,
     );
-  });
-  // The rail list is short and you are looking for a title you have in your
-  // hand, so it sorts by title only — the sort control the wide panel carried
-  // has nothing left to do at this width.
-  const sorted = [...orders].sort((a, b) => {
-    const ra = app.recordFor(a.recordId)?.title ?? "";
-    const rb = app.recordFor(b.recordId)?.title ?? "";
-    return ra.localeCompare(rb);
-  });
+  };
 
   return (
-    <div>
-      <input
-        type="text"
-        placeholder="Search title or PO…"
-        value={term}
-        onChange={(e) => setTerm(e.target.value)}
-        style={{ marginBottom: "var(--sp-2)" }}
-      />
-      {sorted.map((o) => {
-        const rec = app.recordFor(o.recordId);
-        return (
-          <button key={o.id} className="recv-order" onClick={() => onPick(o)}>
-            <span className="t">{rec ? `${rec.artist} — ${rec.title}` : o.recordId}</span>
-            <span className="m">
-              {o.poNumber ? `${o.poNumber} · placed` : "raised, not placed"} · qty {o.qty}
-              {o.expectedListPrice != null ? ` · ${money(o.expectedListPrice)}` : ""}
-              {o.expectedDiscountPct ? ` (${o.expectedDiscountPct}% off)` : ""}
-            </span>
-          </button>
-        );
-      })}
-      {sorted.length === 0 && (
-        <div className="muted xsmall">
-          No pending orders from this supplier{q ? " matching that search" : ""}.
+    <>
+      <div className="recv-scan">
+        <div className="scan-slab">
+          <div className="lab" style={{ marginBottom: "var(--sp-1)" }}>
+            Scan
+          </div>
+          <div className="row">
+            <input
+              type="text"
+              autoFocus
+              value={scannedCode}
+              placeholder="scan a barcode…"
+              aria-label="Scan a barcode to start a line"
+              onChange={(e) => setScannedCode(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && resolveCode(scannedCode)}
+            />
+            <button className="btn ghost sm" onClick={() => resolveCode(scannedCode)} title="Resolve">
+              ↵
+            </button>
+            <button className="btn ghost sm" onClick={() => setLookupOpen(true)}>
+              Lookup
+            </button>
+          </div>
+          {finalized && (
+            <div className="recv-scan-note">
+              Finalized and sellable — a late carton can still be scanned in until this Invoice is
+              paid (d4, d40).
+            </div>
+          )}
+        </div>
+      </div>
+
+      {record && (
+        <div className="recv-stage">
+          <div className="recv-stage-in">
+            {/* Art is a stored URL (A-14) and the provider misses often, so the
+                missing state is designed rather than left to a broken image. */}
+            {record.art ? (
+              <span className="recv-art">{record.art}</span>
+            ) : (
+              <span className="recv-art empty">no art</span>
+            )}
+            <div style={{ minWidth: 0 }}>
+              <div className="recv-stage-title">
+                {record.artist} — {record.title}
+              </div>
+              <div className="recv-stage-sub">
+                {record.label} · {record.catalogNo} · {record.year}
+                {fromOrderId ? " · against a PO line" : ""}
+                {scannedCode ? ` · ${scannedCode}` : ""}
+              </div>
+
+              <div className="recv-stage-fields">
+                <label className="field">
+                  <span>List price</span>
+                  <input
+                    type="number"
+                    step="0.01"
+                    value={listRaw}
+                    onChange={(e) => setListRaw(e.target.value)}
+                  />
+                  <span className="recv-stage-hint">pre-discount</span>
+                </label>
+                <label className="field">
+                  <span>Disc%</span>
+                  <input
+                    type="number"
+                    value={discountRaw}
+                    onChange={(e) => setDiscountRaw(e.target.value)}
+                  />
+                  <span className="recv-stage-hint">cost {money(extPrice)}</span>
+                </label>
+                <label className="field">
+                  <span>Sell price</span>
+                  {autoAccept ? (
+                    <input type="text" value={money(sellPrice)} disabled />
+                  ) : (
+                    <input
+                      type="number"
+                      step="0.01"
+                      value={sellRaw ?? suggested.toFixed(2)}
+                      onChange={(e) => setSellRaw(e.target.value)}
+                    />
+                  )}
+                  <span className="recv-stage-hint">
+                    {record.stickyPrice != null && mode === "New" ? "sticky · " : ""}suggested{" "}
+                    {money(suggested)}
+                  </span>
+                </label>
+                <label className="field">
+                  <span>Grade</span>
+                  {mode === "Second-hand" ? (
+                    <select value={grade} onChange={(e) => setGrade(e.target.value as Grade)}>
+                      {GRADES.map((g) => (
+                        <option key={g} value={g}>
+                          {g}
+                        </option>
+                      ))}
+                    </select>
+                  ) : (
+                    <input type="text" value="M" disabled />
+                  )}
+                  <span className="recv-stage-hint">
+                    {mode === "Second-hand" ? "graded per copy" : "new stock default"}
+                  </span>
+                </label>
+                <label className="field recv-stage-qty">
+                  <span>Qty</span>
+                  {mode === "New" ? (
+                    <input
+                      type="number"
+                      min={1}
+                      value={qty}
+                      onChange={(e) => setQty(Math.max(1, Number(e.target.value)))}
+                    />
+                  ) : (
+                    <input type="text" value="1" disabled />
+                  )}
+                  <span className="recv-stage-hint">&nbsp;</span>
+                </label>
+                <div className="field">
+                  <span>Margin</span>
+                  {/* With no cost typed yet the margin computes to 100%, which
+                      is a number that invites acceptance and means nothing.
+                      Cost is entered on every receipt (d13) — until it is,
+                      this says so rather than flattering the line. */}
+                  <span
+                    className="recv-stage-margin"
+                    style={{
+                      color: listPrice <= 0
+                        ? "var(--c-ink-faint)"
+                        : belowCost
+                          ? "var(--c-danger)"
+                          : "var(--c-ok)",
+                    }}
+                  >
+                    {listPrice > 0 ? `${marginPct.toFixed(1)}%` : "—"}
+                  </span>
+                  <span className="recv-stage-hint">
+                    {listPrice > 0 ? `${money(extPrice * lineQty)} net` : "enter their cost"}
+                  </span>
+                </div>
+
+                <button
+                  className={"btn" + (belowCost ? " danger" : " primary")}
+                  disabled={!ready}
+                  onClick={commit}
+                  title={
+                    belowCost
+                      ? "Below cost — proceeds and raises a review flag (d35)"
+                      : "Add this line"
+                  }
+                >
+                  {belowCost ? "⚠ Add line (below cost)" : "Add line ⏎"}
+                </button>
+                <button className="btn ghost" onClick={clearRow}>
+                  Discard
+                </button>
+              </div>
+            </div>
+          </div>
         </div>
       )}
-    </div>
+
+      {lookupOpen && (
+        <FindOrCreateRecordModal
+          onClose={() => setLookupOpen(false)}
+          onPick={(rec) => {
+            setRecordId(rec.id);
+            setFromOrderId(null);
+            setLookupOpen(false);
+          }}
+        />
+      )}
+    </>
   );
 }
 
@@ -780,22 +1039,24 @@ function ReadLineRow({
   record,
   locked,
   onEdit,
-  onRemove,
   onPrintLabel,
 }: {
   line: InvoiceLine;
   record?: RecordEntry;
   locked: boolean;
   onEdit: () => void;
-  onRemove: () => void;
   onPrintLabel: () => void;
 }) {
   const marginPct = line.acceptedPrice > 0 ? round2(((line.acceptedPrice - line.cost) / line.acceptedPrice) * 100) : 0;
   const minted = (line.itemIds?.length ?? 0) > 0;
+  // Below cost proceeds and raises a review flag rather than blocking (d35) —
+  // so the row has to carry the flag, or the only place it appears is a queue
+  // nobody is looking at while the shipment is open.
+  const belowCost = line.acceptedPrice < line.cost;
   return (
-    <tr>
+    <tr className={belowCost ? "recv-flagged" : undefined}>
       <ArtCell record={record} />
-      <td className="recv-rec">
+      <td className="recv-rec" title={record ? `${record.artist} — ${record.title}` : line.recordId}>
         <span className="t">{record ? `${record.artist} — ${record.title}` : line.recordId}</span>
         <span className="m">
           {record ? `${record.label} · ${record.year}` : ""}
@@ -805,23 +1066,26 @@ function ReadLineRow({
       <td>
         <span className="badge grade">{line.grade}</span>
       </td>
-      <td className="num">{money(line.listPrice)}</td>
-      <td className="num">{line.discountPct}%</td>
-      <td className="num">{money(line.acceptedPrice)}</td>
-      <td className="num small muted">{marginPct.toFixed(1)}%</td>
+      <td className="num">
+        <span className="recv-fig">{money(line.cost)}</span>
+        <span className="recv-fig-sub">
+          {line.listPrice.toFixed(2)} −{line.discountPct}%
+        </span>
+      </td>
+      <td className="num">
+        <span className="recv-fig">{money(line.acceptedPrice)}</span>
+        <span className={"recv-fig-sub" + (belowCost ? " bad" : "")}>
+          {belowCost ? "below cost" : `${marginPct.toFixed(1)}% margin`}
+        </span>
+      </td>
       <td className="num">{line.qty}</td>
       <td className="num">{money(line.cost * line.qty)}</td>
       <td className="num">
-        <div className="btn-row" style={{ justifyContent: "flex-end" }}>
+        <div className="recv-row-acts">
           {!locked && (
-            <>
-              <button className="btn ghost sm" onClick={onEdit} title="Edit this line">
-                ✏
-              </button>
-              <button className="btn ghost sm" onClick={onRemove} title="Remove this line">
-                ✕
-              </button>
-            </>
+            <button className="btn ghost sm" onClick={onEdit} title="Edit this line">
+              ✏
+            </button>
           )}
           <button
             className="btn ghost sm"
@@ -843,12 +1107,14 @@ function EditLineRow({
   mode,
   supplier,
   onDone,
+  onRemove,
 }: {
   invoiceId: string;
   line: InvoiceLine;
   mode: IntakeMode;
   supplier: Supplier;
   onDone: () => void;
+  onRemove: () => void;
 }) {
   const app = useApp();
   const record = app.recordFor(line.recordId);
@@ -902,10 +1168,24 @@ function EditLineRow({
         )}
       </td>
       <td className="num">
-        <input className="inline-num" type="number" step="0.01" value={listRaw} onChange={(e) => setListRaw(e.target.value)} />
-      </td>
-      <td className="num">
-        <input className="inline-pct" type="number" value={discountRaw} onChange={(e) => setDiscountRaw(e.target.value)} />
+        <span className="recv-edit-stack">
+          <input
+            className="inline-num"
+            type="number"
+            step="0.01"
+            value={listRaw}
+            onChange={(e) => setListRaw(e.target.value)}
+            aria-label="List price — pre-discount"
+          />
+          <input
+            className="inline-pct"
+            type="number"
+            value={discountRaw}
+            onChange={(e) => setDiscountRaw(e.target.value)}
+            aria-label="Supplier discount %"
+          />
+        </span>
+        <span className="recv-fig-sub">= {money(extPrice)}</span>
       </td>
       <td className="num">
         <input
@@ -914,9 +1194,12 @@ function EditLineRow({
           step="0.01"
           value={sellRaw ?? ""}
           onChange={(e) => setSellRaw(e.target.value)}
+          aria-label="Sell price"
         />
+        <span className={"recv-fig-sub" + (belowCost ? " bad" : "")}>
+          {belowCost ? "below cost" : `${marginPct.toFixed(1)}% margin`}
+        </span>
       </td>
-      <td className="num small muted">{marginPct.toFixed(1)}%</td>
       <td className="num">
         {mode === "New" ? (
           <input
@@ -933,6 +1216,9 @@ function EditLineRow({
       <td className="num small muted">{money(extPrice * (mode === "New" ? qty : 1))}</td>
       <td className="num">
         <div className="btn-row" style={{ justifyContent: "flex-end" }}>
+          <button className="btn ghost sm" onClick={onRemove} title="Remove this line">
+            Remove
+          </button>
           <button className="btn ghost sm" onClick={onDone}>
             Cancel
           </button>
@@ -945,223 +1231,6 @@ function EditLineRow({
           </button>
         </div>
       </td>
-    </tr>
-  );
-}
-
-function NewLineRow({
-  invoiceId,
-  mode,
-  supplier,
-  autoAccept,
-  prefillOrder,
-  onPrefillConsumed,
-  onCommitted,
-}: {
-  invoiceId: string;
-  mode: IntakeMode;
-  supplier: Supplier;
-  autoAccept: boolean;
-  prefillOrder: PendingOrderLine | null;
-  onPrefillConsumed: () => void;
-  onCommitted: (msg: string) => void;
-}) {
-  const app = useApp();
-  const [scannedCode, setScannedCode] = useState("");
-  const [recordId, setRecordId] = useState<string | null>(null);
-  const [fromOrderId, setFromOrderId] = useState<string | null>(null);
-  const [lookupOpen, setLookupOpen] = useState(false);
-  const [listRaw, setListRaw] = useState("0.00");
-  const [discountRaw, setDiscountRaw] = useState("0");
-  const [sellRaw, setSellRaw] = useState<string | null>(null);
-  const [grade, setGrade] = useState<Grade>(mode === "New" ? "M" : "VG");
-  const [qty, setQty] = useState(1);
-
-  useEffect(() => {
-    if (!prefillOrder) return;
-    setScannedCode(prefillOrder.scannedCode ?? "");
-    setRecordId(prefillOrder.recordId);
-    setFromOrderId(prefillOrder.id);
-    if (prefillOrder.expectedListPrice != null) setListRaw(String(prefillOrder.expectedListPrice));
-    if (prefillOrder.expectedDiscountPct != null) setDiscountRaw(String(prefillOrder.expectedDiscountPct));
-    setQty(prefillOrder.qty);
-    onPrefillConsumed();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [prefillOrder]);
-
-  const record = app.recordFor(recordId ?? undefined);
-
-  // Clearing the record has to clear everything that came WITH it — leaving
-  // a stale cost/discount/sell/qty behind after "pick a different record"
-  // would silently carry pricing from one title onto another.
-  const clearRow = () => {
-    setRecordId(null);
-    setFromOrderId(null);
-    setScannedCode("");
-    setListRaw("0.00");
-    setDiscountRaw("0");
-    setSellRaw(null);
-    setQty(1);
-    setGrade(mode === "New" ? "M" : "VG");
-  };
-
-  const resolveCode = (code: string) => {
-    const trimmed = code.trim();
-    if (!trimmed) return;
-    // Cascade: this supplier's pending orders, then the local catalog
-    // (including a catalog-only match, which "search" collapses
-    // into in this prototype) — no match opens Lookup, decision 24's fallback.
-    const order = app.pendingOrders.find((o) => o.supplierId === supplier.id && o.scannedCode === trimmed);
-    if (order) {
-      setRecordId(order.recordId);
-      setFromOrderId(order.id);
-      if (order.expectedListPrice != null) setListRaw(String(order.expectedListPrice));
-      if (order.expectedDiscountPct != null) setDiscountRaw(String(order.expectedDiscountPct));
-      setQty(order.qty);
-      return;
-    }
-    const rec = app.records.find((r) => r.manufacturerUpc === trimmed);
-    if (rec) {
-      setRecordId(rec.id);
-      setFromOrderId(null);
-      return;
-    }
-    setLookupOpen(true);
-  };
-
-  const { listPrice, discountPct, extPrice, suggested, sellPrice, marginPct, belowCost } = useLinePricing({
-    listRaw,
-    discountRaw,
-    sellRaw,
-    autoAccept,
-    stickyPrice: mode === "New" ? record?.stickyPrice : undefined,
-    supplier,
-  });
-  const ready = !!record && listPrice > 0 && sellPrice > 0;
-
-  const commit = () => {
-    if (!record) return;
-    app.addInvoiceLine(invoiceId, {
-      recordId: record.id,
-      scannedCode: scannedCode.trim() || undefined,
-      listPrice,
-      discountPct,
-      acceptedPrice: sellPrice,
-      grade: mode === "New" ? "M" : grade,
-      qty: mode === "New" ? qty : 1,
-      fromOrderId: fromOrderId ?? undefined,
-    });
-    if (fromOrderId) app.receivePendingOrderLine(fromOrderId);
-    const n = mode === "New" ? qty : 1;
-    onCommitted(`Added ${n}× ${record.artist} — ${record.title} at ${money(sellPrice)} (cost ${money(extPrice)}).`);
-  };
-
-  return (
-    <tr>
-      <ArtCell record={record} />
-      <td>
-        {!record ? (
-          <div className="row">
-            <input
-              type="text"
-              value={scannedCode}
-              placeholder="Scan or type…"
-              onChange={(e) => setScannedCode(e.target.value)}
-              onKeyDown={(e) => e.key === "Enter" && resolveCode(scannedCode)}
-              style={{ width: 130 }}
-            />
-            <button className="btn ghost sm" onClick={() => resolveCode(scannedCode)} title="Resolve">
-              ↵
-            </button>
-            <button className="btn ghost sm" onClick={() => setLookupOpen(true)}>
-              Lookup
-            </button>
-          </div>
-        ) : (
-          <span className="mono small">{scannedCode || "—"}</span>
-        )}
-      </td>
-      <td>
-        {record ? (
-          <div className="row">
-            <span className="small">
-              {record.artist} — {record.title}
-            </span>
-            <button className="btn ghost sm" onClick={clearRow} title="Clear — pick a different record">
-              ✕
-            </button>
-          </div>
-        ) : (
-          <span className="muted small">Not resolved yet</span>
-        )}
-      </td>
-      <td>
-        {mode === "Second-hand" ? (
-          <select value={grade} onChange={(e) => setGrade(e.target.value as Grade)}>
-            {GRADES.map((g) => (
-              <option key={g} value={g}>
-                {g}
-              </option>
-            ))}
-          </select>
-        ) : (
-          <span className="badge grade">M</span>
-        )}
-      </td>
-      <td className="num">
-        <input className="inline-num" type="number" step="0.01" value={listRaw} onChange={(e) => setListRaw(e.target.value)} />
-      </td>
-      <td className="num">
-        <input className="inline-pct" type="number" value={discountRaw} onChange={(e) => setDiscountRaw(e.target.value)} />
-      </td>
-      <td className="num">
-        {autoAccept ? (
-          money(sellPrice)
-        ) : (
-          <input
-            className="inline-num"
-            type="number"
-            step="0.01"
-            value={sellRaw ?? suggested.toFixed(2)}
-            onChange={(e) => setSellRaw(e.target.value)}
-          />
-        )}
-      </td>
-      <td className="num small muted">{marginPct.toFixed(1)}%</td>
-      <td className="num">
-        {mode === "New" ? (
-          <input
-            className="inline-num"
-            type="number"
-            min={1}
-            value={qty}
-            onChange={(e) => setQty(Math.max(1, Number(e.target.value)))}
-          />
-        ) : (
-          1
-        )}
-      </td>
-      <td className="num small muted">{money(extPrice * (mode === "New" ? qty : 1))}</td>
-      <td className="num">
-        <button
-          className={"btn sm" + (belowCost ? " danger" : " primary")}
-          disabled={!ready}
-          onClick={commit}
-          title={belowCost ? "Below cost — proceeds and raises a review flag" : "Add this line"}
-        >
-          {belowCost ? "⚠" : "✓"}
-        </button>
-      </td>
-      {lookupOpen && (
-        <FindOrCreateRecordModal
-          onClose={() => setLookupOpen(false)}
-          onPick={(rec) => {
-            setRecordId(rec.id);
-            setFromOrderId(null);
-            setLookupOpen(false);
-          }}
-        />
-      )}
     </tr>
   );
 }

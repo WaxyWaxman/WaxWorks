@@ -79,13 +79,16 @@ export function App() {
   // stranding you on a screen with no way back to a Sale in flight.
   const atTill = location.pathname.startsWith("/sell") || onReturn;
 
-  // Find is the second screen built this way. Three tracks only work if the
-  // frame is fixed: a page that scrolls as one document cannot keep the
-  // search box and the stock answer where they were. Deliberately scoped to
-  // these screens rather than made a global rule — the long tables
-  // (Receiving, Order Processing, Accounts Payable) are read top to bottom
-  // and lose more than they gain from a fixed frame.
-  const ownsWindow = atTill || location.pathname.startsWith("/search");
+  // Find was the second screen built this way, Receiving is the third (E-02
+  // d38). Three tracks only work if the frame is fixed: a page that scrolls as
+  // one document cannot keep the scan field and the reconcile check where they
+  // were. Still scoped to these screens rather than made a global rule — the
+  // remaining long tables (Order Processing, Accounts Payable) are read top to
+  // bottom and lose more than they gain from a fixed frame.
+  const ownsWindow =
+    atTill ||
+    location.pathname.startsWith("/search") ||
+    location.pathname.startsWith("/receiving");
 
   return (
     <div className={"app" + (ownsWindow ? " app-fixed" : "")}>
@@ -122,6 +125,7 @@ export function App() {
           <Route path="/claims" element={<Claims />} />
           <Route path="/customers" element={<Customers />} />
           <Route path="/receiving" element={<Receiving />} />
+          <Route path="/receiving/:invoiceId" element={<Receiving />} />
           <Route path="/orders" element={<OrderProcessing />} />
           <Route path="/on-order" element={<WhatsOnOrder />} />
           <Route path="/suppliers" element={<Suppliers />} />

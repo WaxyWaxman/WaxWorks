@@ -91,6 +91,31 @@ function applyTenderEffect(
 // than patch every `.replace(" ", "T")` call site.
 const now = () => new Date().toLocaleString("en-CA", { hour12: false }).replace(",", "");
 
+// E-02 d39 — `SH-YYMMDD-n` for a second-hand intake with no supplier
+// paperwork. Accepts the received date in either the ISO form the seed uses
+// or DD/MM/YYYY as typed at the desk; anything unparseable falls back to
+// today, because a reference that exists beats a blank one.
+function mintSecondHandRef(receivedDate: string, invoices: Invoice[]): string {
+  const raw = (receivedDate ?? "").trim();
+  const iso = /^(\d{4})-(\d{2})-(\d{2})/.exec(raw);
+  const dmy = /^(\d{2})\/(\d{2})\/(\d{4})/.exec(raw);
+  let y: string, m: string, d: string;
+  if (iso) [, y, m, d] = iso;
+  else if (dmy) [, d, m, y] = dmy;
+  else {
+    const t = new Date();
+    y = String(t.getFullYear());
+    m = String(t.getMonth() + 1).padStart(2, "0");
+    d = String(t.getDate()).padStart(2, "0");
+  }
+  const stem = `SH-${y.slice(2)}${m}${d}`;
+  // Sequence against what already exists for that day rather than a counter,
+  // so the number cannot drift from the references actually on file.
+  const taken = invoices.filter((iv) => iv.invoiceNumber.startsWith(stem + "-")).length;
+  return `${stem}-${taken + 1}`;
+}
+
+
 interface AppState {
   records: RecordEntry[];
   inventory: InventoryItem[];
@@ -1599,7 +1624,19 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
     const id = uid("inv");
     // No supplier paperwork to key off — auto-generate our own reference
     // rather than block opening the invoice on a number that doesn't exist.
-    const invoiceNumber = input.invoiceNumber.trim() || `REF${String(s.nextInvoiceRef).padStart(4, "0")}`;
+    //
+    // A second-hand intake mints from the RECEIVED DATE rather than a store
+    // counter (E-02 d39, A-32): the day the stock arrived is the one fact a
+    // walk-in trade-in reliably has, and a counter value tells you nothing
+    // when you find the reference again six months later. `-n` sequences a
+    // second intake the same day, counted against the references already
+    // minted for that date rather than a global counter — so the sequence is
+    // per-day and reads as one.
+    const invoiceNumber =
+      input.invoiceNumber.trim() ||
+      (input.intakeMode === "Second-hand"
+        ? mintSecondHandRef(input.receivedDate, s.invoices)
+        : `REF${String(s.nextInvoiceRef).padStart(4, "0")}`);
     const invoice: Invoice = {
       id,
       ...input,
@@ -1620,7 +1657,10 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
     setS((prev) => ({
       ...prev,
       invoices: [invoice, ...prev.invoices],
-      nextInvoiceRef: input.invoiceNumber.trim() ? prev.nextInvoiceRef : prev.nextInvoiceRef + 1,
+      nextInvoiceRef:
+        input.invoiceNumber.trim() || input.intakeMode === "Second-hand"
+          ? prev.nextInvoiceRef
+          : prev.nextInvoiceRef + 1,
     }));
     return id;
   };
