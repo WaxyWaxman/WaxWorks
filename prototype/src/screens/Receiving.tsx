@@ -14,6 +14,7 @@ import {
   type Supplier,
 } from "../data/types";
 import { money, roundUpShelf } from "../lib/money";
+import { countField, figureField, integerOnly, numericOnly } from "../lib/fields";
 import { round2 } from "../lib/totals";
 import { useApp } from "../store/AppStore";
 
@@ -898,19 +899,18 @@ function StageCard({
                 <label className="field">
                   <span>List price</span>
                   <input
-                    type="number"
-                    step="0.01"
+                    {...figureField}
                     value={listRaw}
-                    onChange={(e) => setListRaw(e.target.value)}
+                    onChange={(e) => setListRaw(numericOnly(e.target.value))}
                   />
                   <span className="recv-stage-hint">pre-discount</span>
                 </label>
                 <label className="field">
                   <span>Disc%</span>
                   <input
-                    type="number"
+                    {...figureField}
                     value={discountRaw}
-                    onChange={(e) => setDiscountRaw(e.target.value)}
+                    onChange={(e) => setDiscountRaw(numericOnly(e.target.value))}
                   />
                   <span className="recv-stage-hint">cost {money(extPrice)}</span>
                 </label>
@@ -920,10 +920,9 @@ function StageCard({
                     <input type="text" value={money(sellPrice)} disabled />
                   ) : (
                     <input
-                      type="number"
-                      step="0.01"
+                      {...figureField}
                       value={sellRaw ?? suggested.toFixed(2)}
-                      onChange={(e) => setSellRaw(e.target.value)}
+                      onChange={(e) => setSellRaw(numericOnly(e.target.value))}
                     />
                   )}
                   <span className="recv-stage-hint">
@@ -952,10 +951,9 @@ function StageCard({
                   <span>Qty</span>
                   {mode === "New" ? (
                     <input
-                      type="number"
-                      min={1}
+                      {...countField}
                       value={qty}
-                      onChange={(e) => setQty(Math.max(1, Number(e.target.value)))}
+                      onChange={(e) => setQty(Math.max(1, Number(integerOnly(e.target.value))))}
                     />
                   ) : (
                     <input type="text" value="1" disabled />
@@ -1150,7 +1148,7 @@ function EditLineRow({
   };
 
   return (
-    <tr>
+    <tr className="recv-editing">
       <ArtCell record={record} />
       <td className="recv-rec">
         <span className="t">{record ? `${record.artist} — ${record.title}` : line.recordId}</span>
@@ -1175,29 +1173,27 @@ function EditLineRow({
       <td className="num">
         <input
           className="inline-num"
-          type="number"
-          step="0.01"
+          {...figureField}
           value={listRaw}
-          onChange={(e) => setListRaw(e.target.value)}
+          onChange={(e) => setListRaw(numericOnly(e.target.value))}
           aria-label="List price — pre-discount"
         />
       </td>
       <td className="num">
         <input
           className="inline-pct"
-          type="number"
+          {...figureField}
           value={discountRaw}
-          onChange={(e) => setDiscountRaw(e.target.value)}
+          onChange={(e) => setDiscountRaw(numericOnly(e.target.value))}
           aria-label="Supplier discount %"
         />
       </td>
       <td className="num">
         <input
           className="inline-num"
-          type="number"
-          step="0.01"
+          {...figureField}
           value={sellRaw ?? ""}
-          onChange={(e) => setSellRaw(e.target.value)}
+          onChange={(e) => setSellRaw(numericOnly(e.target.value))}
           aria-label="Sell price"
         />
       </td>
@@ -1208,10 +1204,10 @@ function EditLineRow({
         {mode === "New" ? (
           <input
             className="inline-num"
-            type="number"
-            min={1}
+            {...countField}
             value={qty}
-            onChange={(e) => setQty(Math.max(1, Number(e.target.value)))}
+            onChange={(e) => setQty(Math.max(1, Number(integerOnly(e.target.value))))}
+            aria-label="Quantity"
           />
         ) : (
           1
@@ -1219,19 +1215,33 @@ function EditLineRow({
       </td>
       <td className="num small muted">{money(extPrice * (mode === "New" ? qty : 1))}</td>
       <td className="num">
-        <div className="btn-row" style={{ justifyContent: "flex-end" }}>
-          <button className="btn ghost sm" onClick={onRemove} title="Remove this line">
-            Remove
+        {/* Icons, like the read row's — three word-buttons wrapped in this
+            column and took the edited row to 94px, twice every other row.
+            Each carries its title and label, and the save button still says
+            in its tooltip what accepting a below-cost price does (d35). */}
+        <div className="recv-row-acts">
+          <button
+            className="btn ghost sm"
+            onClick={onRemove}
+            title="Remove this line"
+            aria-label="Remove this line"
+          >
+            ✕
           </button>
-          <button className="btn ghost sm" onClick={onDone}>
-            Cancel
+          <button className="btn ghost sm" onClick={onDone} title="Cancel" aria-label="Cancel">
+            ↺
           </button>
           <button
             className={"btn sm" + (belowCost ? " danger" : " primary")}
             onClick={save}
-            title={belowCost ? "Below cost — proceeds and raises a review flag" : "Save"}
+            title={
+              belowCost
+                ? "Save — below cost, proceeds and raises a review flag (d35)"
+                : "Save this line"
+            }
+            aria-label={belowCost ? "Save — below cost, raises a review flag" : "Save this line"}
           >
-            {belowCost ? "⚠ Save (below cost)" : "✓ Save"}
+            {belowCost ? "⚠" : "✓"}
           </button>
         </div>
       </td>

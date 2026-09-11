@@ -1,4 +1,5 @@
 import type { Invoice, Supplier } from "../data/types";
+import { figureField, numericOnly } from "../lib/fields";
 import { money } from "../lib/money";
 import { round2 } from "../lib/totals";
 
@@ -122,11 +123,10 @@ export function ReceiveReconcile({
           <div className="recv-entry total">
             <span>Payable</span>
             <input
-              type="number"
-              step="0.01"
+              {...figureField}
               disabled={locked}
               value={totalRaw}
-              onChange={(e) => onTotalRawChange(e.target.value)}
+              onChange={(e) => onTotalRawChange(numericOnly(e.target.value, true))}
               aria-label="Invoice total — ±2% free, beyond raises a review flag"
             />
           </div>
@@ -301,11 +301,10 @@ function PaperworkFields({
         <label className="recv-entry" key={key}>
           <span>{label}</span>
           <input
-            type="number"
-            step="0.01"
+            {...figureField}
             disabled={locked}
             value={invoice[key]}
-            onChange={(e) => onPatch({ [key]: Number(e.target.value) || 0 })}
+            onChange={(e) => onPatch({ [key]: Number(numericOnly(e.target.value)) || 0 })}
           />
         </label>
       ))}

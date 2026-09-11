@@ -1012,15 +1012,22 @@ table.data td.recv-art-cell { width: 38px; padding-right: 0; }
    where a number that loses its column is simply unreadable. Record still
    gets the two lines the row is tall enough for. */
 .recv-lines > .data { table-layout: fixed; }
-.recv-lines > .data td.recv-art-cell, .recv-lines > .data th:first-child { width: 40px; }
-.recv-lines > .data td:nth-child(3), .recv-lines > .data th:nth-child(3) { width: 48px; }
-.recv-lines > .data td:nth-child(4), .recv-lines > .data th:nth-child(4) { width: 68px; }
-.recv-lines > .data td:nth-child(5), .recv-lines > .data th:nth-child(5) { width: 52px; }
-.recv-lines > .data td:nth-child(6), .recv-lines > .data th:nth-child(6) { width: 68px; }
-.recv-lines > .data td:nth-child(7), .recv-lines > .data th:nth-child(7) { width: 58px; }
-.recv-lines > .data td:nth-child(8), .recv-lines > .data th:nth-child(8) { width: 40px; }
-.recv-lines > .data td:nth-child(9), .recv-lines > .data th:nth-child(9) { width: 68px; }
-.recv-lines > .data td:last-child, .recv-lines > .data th:last-child { width: 62px; }
+/* The shared table's 12px of side padding is 240px across ten columns — more
+   than the Record column gets. At that rate a 40px Qty column left its edit
+   input 16px wide. 6px here, with the track's own padding restored at the two
+   outer edges so the table still sits inside the margin. */
+.recv-lines > .data td, .recv-lines > .data th { padding-left: 6px; padding-right: 6px; }
+.recv-lines > .data td:first-child, .recv-lines > .data th:first-child { padding-left: var(--sp-4); }
+.recv-lines > .data td:last-child, .recv-lines > .data th:last-child { padding-right: var(--sp-4); }
+.recv-lines > .data td.recv-art-cell, .recv-lines > .data th:first-child { width: 56px; }
+.recv-lines > .data td:nth-child(3), .recv-lines > .data th:nth-child(3) { width: 44px; }
+.recv-lines > .data td:nth-child(4), .recv-lines > .data th:nth-child(4) { width: 70px; }
+.recv-lines > .data td:nth-child(5), .recv-lines > .data th:nth-child(5) { width: 54px; }
+.recv-lines > .data td:nth-child(6), .recv-lines > .data th:nth-child(6) { width: 70px; }
+.recv-lines > .data td:nth-child(7), .recv-lines > .data th:nth-child(7) { width: 54px; }
+.recv-lines > .data td:nth-child(8), .recv-lines > .data th:nth-child(8) { width: 46px; }
+.recv-lines > .data td:nth-child(9), .recv-lines > .data th:nth-child(9) { width: 64px; }
+.recv-lines > .data td:last-child, .recv-lines > .data th:last-child { width: 72px; }
 /* One line each, clipped. The cell is already two lines tall with the meta
    under it, and letting the title take a second one put every row at 64px —
    vertical is the scarcer resource on this screen, since the count of lines
@@ -1041,8 +1048,20 @@ table.data td.recv-art-cell { width: 38px; padding-right: 0; }
    reads as a bad deal rather than as the thing that raises a flag (d35). */
 .recv-margin { font-variant-numeric: tabular-nums; }
 .recv-margin.bad { color: var(--c-danger); font-weight: 700; }
-.recv-lines > .data td .inline-num { width: 100%; }
-.recv-lines > .data td .inline-pct { width: 100%; }
+/* An inline figure field inherits the full-size control's padding — 8px and
+   12px — and a number input's spinner on top of that. In a 68px column that
+   left about 32px for the digits, so you could not read what you were typing.
+   Tight padding, no spinner, right-aligned and tabular so the value sits
+   where the read row's value sat. */
+.recv-lines > .data td .inline-num,
+.recv-lines > .data td .inline-pct {
+  width: 100%; padding: 3px 5px; text-align: right;
+  font-size: var(--fs-sm); font-variant-numeric: tabular-nums;
+}
+/* An edited row is the one row you are working in — say so, the way a picked
+   worklist line does, so it is findable after scrolling away and back. */
+.recv-lines > .data tr.recv-editing > td { background: var(--c-surface-2); }
+.recv-lines > .data tr.recv-editing > td:first-child { box-shadow: inset 3px 0 0 var(--c-ink); }
 /* Two buttons, on one line. Three wrapped in this cell's width and took every
    row to 94px — the table's whole height budget, spent on chrome. */
 .recv-row-acts { display: flex; gap: 2px; justify-content: flex-end; flex-wrap: nowrap; }
