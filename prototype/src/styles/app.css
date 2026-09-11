@@ -847,10 +847,15 @@ table.data tr.band-row + tr.group-row td { border-top: none; }
 }
 
 @media (max-width: 1180px) {
-  .recv-frame, .recv-frame.slab-shut {
-    grid-template-columns: 52px minmax(0, 1fr);
+  /* Follows Find rather than the old rule here: the slab keeps its 288px when
+     OPEN and only takes 52px when shut. Forcing 52px in both states squeezed
+     the open panel — which ReceiveSlab still renders — into the strip's
+     column, smearing the worklist vertically. */
+  .recv-frame {
+    grid-template-columns: 288px minmax(0, 1fr);
     grid-template-rows: minmax(0, 1fr) auto;
   }
+  .recv-frame.slab-shut { grid-template-columns: 52px minmax(0, 1fr); }
   .recv-slab { grid-row: 1 / -1; }
   .recv-main { grid-column: 2; grid-row: 1; }
   .recv-noinvoice { grid-column: 2; grid-row: 1 / -1; }

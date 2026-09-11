@@ -380,9 +380,12 @@ tr.flagged td:first-child { box-shadow: inset 3px 0 0 var(--c-warn); }
   .frame { transition: grid-template-columns 160ms ease; }
 }
 @media (max-width: 1180px) {
-  .frame, .frame.slab-shut { grid-template-columns: 52px minmax(0, 1fr); grid-template-rows: minmax(0, 1fr) auto; }
+  /* The slab keeps its 320px when OPEN and only takes 52px when shut. Forcing
+     52px in both states left the column empty at narrow width: the open panel
+     was hidden here while the strip stayed hidden by the toggle's own state. */
+  .frame { grid-template-columns: 320px minmax(0, 1fr); grid-template-rows: minmax(0, 1fr) auto; }
+  .frame.slab-shut { grid-template-columns: 52px minmax(0, 1fr); }
   .slab { grid-row: 1 / -1; }
-  .slab-open-only { display: none; }
   .main { grid-column: 2; grid-row: 1; }
   .recon { grid-column: 2; grid-row: 2; border-left: none; border-top: 2px solid var(--c-ink); max-height: 44dvh; }
 }
