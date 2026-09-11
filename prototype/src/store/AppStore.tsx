@@ -470,8 +470,9 @@ interface AppContextValue extends AppState {
   holdSale: (saleId: string) => string;
   // E-05 d31 — refuses unless the tenders net zero, returning how much is
   // still on the Sale so the caller can offer to refund it, move it onto the
-  // Customer's account, or remove the line.
-  voidSale: (saleId: string) => { voided: boolean; outstanding: number };
+  // Customer's account, or remove the line. E-06 d10 — also refuses while a
+  // Return has routed stock, since putting that back is its own job.
+  voidSale: (saleId: string) => { voided: boolean; outstanding: number; routedCopies: number };
   cancelHold: (saleId: string) => void;
   releaseHoldLine: (itemId: string) => { holdRef: string; holdClosed: boolean } | null;
   forceUnlockSale: (saleId: string) => void;
@@ -1188,13 +1189,28 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
   const voidSale: AppContextValue["voidSale"] = (saleId) => {
     const sale = s.sales.find((x) => x.id === saleId);
     if (!sale || sale.state === "Held" || sale.state === "Closed" || sale.state === "Void") {
-      return { voided: false, outstanding: 0 };
+      return { voided: false, outstanding: 0, routedCopies: 0 };
     }
     const outstanding = tenderedTotal(sale);
-    if (Math.abs(outstanding) > 0.005) return { voided: false, outstanding };
+    // E-06 d10 — a routed copy is already back on the shelf (or re-graded, or
+    // written off), and putting it back where it came from is a different
+    // operation from voiding the paperwork. Void refuses while any line on a
+    // Return is routed rather than quietly leaving stock in the wrong place.
+    const routedCopies = sale.lines.filter((l) => l.stockRouted).length;
+    if (routedCopies > 0) return { voided: false, outstanding, routedCopies };
+    if (Math.abs(outstanding) > 0.005) return { voided: false, outstanding, routedCopies: 0 };
     setS((prev) => {
+      // Only copies this Sale consumed come back. A Return's lines are
+      // negative quantities against copies that are already sold — there is
+      // nothing to give back, and marking them sellable would put stock on
+      // the floor the store never took in (and free a held copy outright).
+      // Same test completeSale uses to decide what a Sale consumed.
       const onSaleIds = new Set(
-        prev.sales.find((x) => x.id === saleId)?.lines.map((l) => l.inventoryItemId).filter((id): id is string => !!id),
+        prev.sales
+          .find((x) => x.id === saleId)
+          ?.lines.filter((l) => l.qty > 0)
+          .map((l) => l.inventoryItemId)
+          .filter((id): id is string => !!id),
       );
       return {
         ...prev,
@@ -1224,14 +1240,20 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
             // history, only same-day stock that hasn't been totalled off yet.
             return { ...i, status: "sellable" as const, heldByCustomerId: undefined };
           }),
-        sales: prev.sales.map((x) =>
-          x.id === saleId
-            ? { ...x, state: "Void", log: [...x.log, { at: now(), text: "Voided at zero — stock returned, Sale number retained" }] }
-            : x,
-        ),
+        sales: prev.sales.map((x) => {
+          if (x.id !== saleId) return x;
+          // Say what actually happened rather than one fixed sentence: a
+          // Return gives no copies back, and a draft has no number to retain.
+          const returned = onSaleIds.size;
+          const text =
+            "Voided at zero" +
+            (returned ? ` — ${returned} cop${returned === 1 ? "y" : "ies"} returned to stock` : "") +
+            (x.saleNumber ? `${returned ? "," : " —"} Sale number ${x.saleNumber} retained` : "");
+          return { ...x, state: "Void", log: [...x.log, { at: now(), text }] };
+        }),
       };
     });
-    return { voided: true, outstanding: 0 };
+    return { voided: true, outstanding: 0, routedCopies: 0 };
   };
 
   const cancelHold: AppContextValue["cancelHold"] = (saleId) =>

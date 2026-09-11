@@ -1,15 +1,23 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { Modal } from "../components/Modal";
+import { TillRail } from "../components/TillRail";
+import { VoidSaleModal } from "../components/VoidSaleModal";
 import { GRADES, type Grade } from "../data/types";
 import { money } from "../lib/money";
 import { balanceDue, saleTotals } from "../lib/totals";
 import { useApp } from "../store/AppStore";
 
-// Entered exclusively from E-05 Point of Sale → + New Return (mirrors how
-// /sell/:saleId is never itself a nav item). A Return is a Sale with isReturn set, so a
-// stray /sell/:id link to one, or a /return/:id link to an ordinary Sale,
-// redirects to the screen that actually knows how to edit it.
+// Entered exclusively from the till rail's + New return (mirrors how
+// /sell/:saleId is never itself a nav item). A Return is a Sale with isReturn
+// set, so a stray /sell/:id link to one, or a /return/:id link to an ordinary
+// Sale, redirects to the screen that actually knows how to edit it.
+//
+// E-06 d9 — the same three tracks as the till (E-05 d29): the rail, the
+// Return, and the money, each scrolling on its own with Finish return pinned
+// to the money's floor. A Return is a till transaction, so the rail follows
+// you into it rather than stranding you on a screen with no way back to a
+// Sale in flight.
 export function ReturnScreen() {
   const app = useApp();
   const nav = useNavigate();
@@ -21,31 +29,30 @@ export function ReturnScreen() {
   }, [sale, nav]);
 
   return (
-    <div>
-      <div className="page-head">
-        <span className="flow-id">E-06</span>
-        <div>
-          <h1>Process a return</h1>
-          <p className="sub">
-            A Return is a <strong>negative-quantity line</strong> on a Sale — not a separate
-            document. No receipt, no time window, no manager approval. Refund and stock disposition
-            are recorded independently.
-          </p>
-        </div>
-      </div>
+    <div className="till-frame">
+      <TillRail activeSaleId={sale?.id} />
 
-      {!sale && <p className="muted">Unknown Return — start one from E-05 Point of Sale → + New Return.</p>}
-      {sale && sale.isReturn && (
-        <ReturnEditor
-          saleId={sale.id}
-          onRestart={() => nav(`/return/${app.newSale({ isReturn: true })}`)}
-        />
+      {sale && sale.isReturn ? (
+        <ReturnEditor key={sale.id} saleId={sale.id} />
+      ) : (
+        <div className="till-nosale">
+          <div className="stack">
+            <div className="lab">Unknown return</div>
+            <p className="muted">Start one from the rail.</p>
+            <button
+              className="btn primary"
+              onClick={() => nav(`/return/${app.newSale({ isReturn: true })}`)}
+            >
+              + New return
+            </button>
+          </div>
+        </div>
       )}
     </div>
   );
 }
 
-function ReturnEditor({ saleId, onRestart }: { saleId: string; onRestart: () => void }) {
+function ReturnEditor({ saleId }: { saleId: string }) {
   const app = useApp();
   const sale = app.sales.find((s) => s.id === saleId)!;
   const totals = saleTotals(sale, app.taxLines);
@@ -55,195 +62,312 @@ function ReturnEditor({ saleId, onRestart }: { saleId: string; onRestart: () => 
   const [addItem, setAddItem] = useState(false);
   const [routeItem, setRouteItem] = useState<{ lineId: string; itemId: string } | null>(null);
   const [receipt, setReceipt] = useState(false);
+  const [voiding, setVoiding] = useState(false);
+  const [noteDraft, setNoteDraft] = useState("");
 
   const unroutedCopies = useMemo(
     () => sale.lines.filter((l) => l.qty < 0 && l.inventoryItemId && !l.stockRouted).length,
     [sale.lines],
   );
 
+  const finished = !!sale.saleNumber;
+  const latestLog = sale.log.length ? sale.log[sale.log.length - 1] : null;
+
   return (
-    <div className="sell">
-      <div className="stack">
-        <div className="card">
-          <div className="card-head">
-            Return {sale.saleNumber ? `#${sale.saleNumber}` : <span className="badge">Draft</span>}
-            <button className="btn ghost sm" onClick={onRestart}>
-              start another
-            </button>
-          </div>
-          <div className="card-body stack">
-            <div className="row wrap">
-              <CustomerAttach saleId={sale.id} />
-              {customer && <span className="badge ok">balance {money(customer.balance)}</span>}
-            </div>
-            <button className="btn" disabled={!!sale.saleNumber} onClick={() => setAddItem(true)}>
+    <>
+      {/* ---- the return ---- */}
+      <section className="till-main">
+        <div className="till-sale-head">
+          <span className="sale-head-label">Return</span>
+          <CustomerAttach saleId={sale.id} />
+          <span className="sale-head-meta">
+            {finished ? (
+              <>
+                #{sale.saleNumber}{" "}
+                <span className={"badge" + (sale.state === "Closed" ? "" : " ok")}>{sale.state}</span>
+              </>
+            ) : sale.state === "Void" ? (
+              <span className="badge warn">Void</span>
+            ) : (
+              <span className="badge">Draft</span>
+            )}
+          </span>
+          <span className="muted xsmall">
+            {sale.lines.length} line{sale.lines.length !== 1 ? "s" : ""}
+          </span>
+
+          <span className="till-sale-acts">
+            {(sale.state === "Open" || sale.state === "Current") && (
+              <button className="btn danger sm" onClick={() => setVoiding(true)}>
+                Void return
+              </button>
+            )}
+          </span>
+        </div>
+
+        <div className="till-sale-meta">
+          {customer && (
+            <span className={"badge " + (customer.balance >= 0 ? "ok" : "warn")}>
+              balance {money(customer.balance)}
+            </span>
+          )}
+          <span className="muted xsmall">
+            A Return is a negative-quantity line on a Sale — no receipt, no time window, no manager
+            approval. Refund and stock disposition are recorded independently.
+          </span>
+        </div>
+
+        {/* Where the till puts its scan field: the way a line gets onto this
+            document. The copy, the prior Sale it links to and the refund are
+            settled together, so it opens a form rather than resolving a scan
+            straight onto the Return. */}
+        {!finished && (
+          <div className="till-scan">
+            <button className="btn primary till-add-return" onClick={() => setAddItem(true)}>
               + Add returned item
             </button>
           </div>
-        </div>
+        )}
 
-        <div className="card">
-          <div className="card-head">Lines</div>
-          <div className="card-body" style={{ padding: 0 }}>
-            <table className="data">
-              <thead>
-                <tr>
-                  <th>Item</th>
-                  <th className="num">Qty</th>
-                  <th className="num">Refund</th>
-                  <th>Link</th>
-                  <th className="num">Net</th>
-                  <th>Stock routed?</th>
-                </tr>
-              </thead>
-              <tbody>
-                {sale.lines.map((l) => {
-                  const routed = !!l.stockRouted;
-                  return (
-                    <tr key={l.id}>
-                      <td>
-                        {l.title}
-                        {l.grade && <> · <span className="badge grade">{l.grade}</span></>}
-                        <div className="xsmall muted">{l.note}</div>
-                      </td>
-                      <td className="num">{l.qty}</td>
-                      <td className="num">
-                        <input
-                          className="inline-num"
-                          type="number"
-                          step="0.01"
-                          value={l.price}
-                          disabled={!!sale.saleNumber}
-                          onChange={(e) => app.updateLine(sale.id, l.id, { price: Number(e.target.value) })}
-                        />
-                      </td>
-                      <td className="small">{l.linkedSaleNumber ? `#${l.linkedSaleNumber}` : "—"}</td>
-                      <td className="num">{money(l.qty * l.price)}</td>
-                      <td>
-                        {l.inventoryItemId ? (
-                          routed ? (
-                            <span className="badge ok">{l.routedTo}</span>
-                          ) : (
-                            <button
-                              className="btn sm"
-                              onClick={() => setRouteItem({ lineId: l.id, itemId: l.inventoryItemId! })}
-                            >
-                              Route stock →
-                            </button>
-                          )
+        <div className="till-lines">
+          <table className="data">
+            <thead>
+              <tr>
+                <th>Item</th>
+                <th className="num">Qty</th>
+                <th className="num">Refund</th>
+                <th>Link</th>
+                <th className="num">Net</th>
+                <th>Stock routed?</th>
+              </tr>
+            </thead>
+            <tbody>
+              {sale.lines.map((l) => {
+                const routed = !!l.stockRouted;
+                return (
+                  <tr key={l.id}>
+                    <td>
+                      {l.title}
+                      {l.grade && (
+                        <>
+                          {" · "}
+                          <span className="badge grade">{l.grade}</span>
+                        </>
+                      )}
+                      <div className="xsmall muted">{l.note}</div>
+                    </td>
+                    <td className="num">{l.qty}</td>
+                    <td className="num">
+                      <input
+                        className="inline-num"
+                        type="number"
+                        step="0.01"
+                        value={l.price}
+                        disabled={finished}
+                        onChange={(e) =>
+                          app.updateLine(sale.id, l.id, { price: Number(e.target.value) })
+                        }
+                      />
+                    </td>
+                    <td className="small">{l.linkedSaleNumber ? `#${l.linkedSaleNumber}` : "—"}</td>
+                    <td className="num">{money(l.qty * l.price)}</td>
+                    <td>
+                      {l.inventoryItemId ? (
+                        routed ? (
+                          <span className="badge ok">{l.routedTo}</span>
                         ) : (
-                          <span className="muted xsmall">n/a</span>
-                        )}
-                      </td>
-                    </tr>
-                  );
-                })}
-                {sale.lines.length === 0 && (
-                  <tr>
-                    <td colSpan={6} className="muted small">
-                      No returned items yet.
+                          <button
+                            className="btn sm"
+                            onClick={() => setRouteItem({ lineId: l.id, itemId: l.inventoryItemId! })}
+                          >
+                            Route stock →
+                          </button>
+                        )
+                      ) : (
+                        <span className="muted xsmall">n/a</span>
+                      )}
                     </td>
                   </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
+                );
+              })}
+              {sale.lines.length === 0 && (
+                <tr>
+                  <td colSpan={6} className="muted small">
+                    No returned items yet.
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
         </div>
 
-        <div className="card">
-          <div className="card-head">Log</div>
-          <div className="card-body xsmall muted stack">
+        <details className="till-log">
+          <summary>
+            <span className="till-log-top">
+              <span className="lab">Log &amp; notes ({sale.log.length})</span>
+              <span className="till-log-chev" aria-hidden="true">
+                ▾
+              </span>
+            </span>
+            {latestLog && (
+              <span className="till-log-latest">
+                <time className="mono">{latestLog.at.slice(11, 16)}</time>
+                <span>{latestLog.text}</span>
+              </span>
+            )}
+          </summary>
+          <div className="xsmall muted stack" style={{ margin: "var(--sp-3) 0" }}>
             {sale.log.map((e, i) => (
               <div key={i}>
                 <span className="mono">{e.at}</span> — {e.text}
               </div>
             ))}
           </div>
-        </div>
-      </div>
-
-      <div className="stack">
-        <div className="card">
-          <div className="card-head">Refund</div>
-          <div className="card-body">
-            <div className="totals-row">
-              <span>Subtotal</span>
-              <span className="num">{money(totals.subtotal)}</span>
-            </div>
-            <div className="totals-row">
-              <span>Tax</span>
-              <span className="num">{money(totals.tax)}</span>
-            </div>
-            <div className="totals-row grand">
-              <span>Refund due</span>
-              <span className="num">{money(Math.abs(totals.grand))}</span>
-            </div>
-            {sale.tenders.map((t) => (
-              <div key={t.id} className="tender-line">
-                <span>{t.type}</span>
-                <span className="num">{money(t.amount)}</span>
-              </div>
-            ))}
-            <div className="totals-row grand">
-              <span>{Math.abs(due) < 0.001 ? "Settled" : "Unsettled"}</span>
-              <span className="num">{money(Math.abs(due))}</span>
-            </div>
+          <div className="btn-row">
+            <input
+              type="text"
+              value={noteDraft}
+              onChange={(e) => setNoteDraft(e.target.value)}
+              placeholder="Add a note…"
+              style={{ flex: 1 }}
+            />
+            <button
+              className="btn sm"
+              disabled={!noteDraft.trim()}
+              onClick={() => {
+                app.addLog(sale.id, noteDraft.trim());
+                setNoteDraft("");
+              }}
+            >
+              Add note
+            </button>
           </div>
-          {!sale.saleNumber && sale.lines.length > 0 && (
-            <div className="card-body btn-row">
-              <button
-                className="btn"
-                onClick={() =>
-                  app.addTender(sale.id, { type: "Cash", amount: totals.grand, note: "Refund paid from till" })
-                }
-              >
-                Refund to cash
-              </button>
-              <button
-                className="btn"
-                disabled={!customer}
-                title={customer ? "" : "Requires a Customer"}
-                onClick={() =>
-                  app.addTender(sale.id, { type: "Account Balance", amount: totals.grand, note: "Refund to account balance" })
-                }
-              >
-                Refund to account balance
-              </button>
+        </details>
+      </section>
+
+      {/* ---- the money ---- */}
+      <aside className="till-money">
+        <div className="till-money-head">
+          <div className="lab">Refund due</div>
+          <div className="till-due">{money(Math.abs(totals.grand))}</div>
+          <div className="xsmall muted till-due-sub">
+            Subtotal {money(Math.abs(totals.subtotal))} · tax {money(Math.abs(totals.tax))}
+          </div>
+        </div>
+
+        <div className="till-rule" />
+
+        <div className="till-money-mid">
+          {!finished && sale.lines.length > 0 && (
+            <div>
+              <div className="lab" style={{ marginBottom: "var(--sp-2)" }}>
+                Give the refund
+              </div>
+              <div className="tender-grid">
+                <button
+                  className="btn"
+                  onClick={() =>
+                    app.addTender(sale.id, {
+                      type: "Cash",
+                      amount: totals.grand,
+                      note: "Refund paid from till",
+                    })
+                  }
+                >
+                  Cash
+                </button>
+                <button
+                  className="btn"
+                  disabled={!customer}
+                  title={customer ? "" : "Requires a Customer"}
+                  onClick={() =>
+                    app.addTender(sale.id, {
+                      type: "Account Balance",
+                      amount: totals.grand,
+                      accountDirection: "add",
+                      note: "Refund to account balance",
+                    })
+                  }
+                >
+                  Account balance
+                </button>
+              </div>
+            </div>
+          )}
+
+          {sale.tenders.length > 0 && (
+            <div className="till-taken">
+              {sale.tenders.map((t) => (
+                <div key={t.id} className="tender-line">
+                  <span>
+                    {t.type}
+                    {t.note ? <span className="muted"> — {t.note}</span> : ""}
+                  </span>
+                  <span className="row">
+                    <span className="num">{money(t.amount)}</span>
+                    {!finished && (
+                      <button
+                        className="btn ghost sm"
+                        onClick={() => app.removeTender(sale.id, t.id)}
+                      >
+                        ✕
+                      </button>
+                    )}
+                  </span>
+                </div>
+              ))}
+              <div className="totals-row grand">
+                <span style={{ color: Math.abs(due) > 0.001 ? "var(--c-accent)" : undefined }}>
+                  {Math.abs(due) < 0.001 ? "Settled" : "Unsettled"}
+                </span>
+                <span
+                  className="num"
+                  style={{ color: Math.abs(due) > 0.001 ? "var(--c-accent)" : undefined }}
+                >
+                  {money(Math.abs(due))}
+                </span>
+              </div>
+            </div>
+          )}
+
+          {!finished && (
+            <div className="xsmall muted">
+              Returned stock isn't back on the shelf until routed (E-06 step 6). Refund amount and
+              disposition are independent — full refund + write-off is a valid combination.
+            </div>
+          )}
+          {!finished && unroutedCopies > 0 && (
+            <div className="callout">
+              {unroutedCopies} returned cop{unroutedCopies > 1 ? "ies" : "y"} still{" "}
+              {unroutedCopies > 1 ? "need" : "needs"} routing.
+            </div>
+          )}
+          {!finished && sale.lines.length > 0 && Math.abs(due) > 0.001 && (
+            <div className="callout">Refund not yet given — Cash or Account balance above.</div>
+          )}
+          {finished && (
+            <div className="xsmall muted">
+              Tendered as negative amounts against their tender — they flow into the M-03 close as
+              negatives, not netted into gross sales (E-06 decision 8).
             </div>
           )}
         </div>
 
-        {!sale.saleNumber && (
-          <div className="card">
-            <div className="card-body btn-row">
-              <button
-                className="btn primary lg"
-                disabled={sale.lines.length === 0 || Math.abs(due) > 0.001 || unroutedCopies > 0}
-                onClick={() => {
-                  app.completeSale(sale.id);
-                  setReceipt(true);
-                }}
-              >
-                Finish return
-              </button>
-            </div>
-            <div className="card-body xsmall muted">
-              Returned stock isn’t back on the shelf until routed (E-06 step 6). Refund amount and
-              disposition are independent — full refund + write-off is a valid combination.
-              {unroutedCopies > 0 && (
-                <div className="callout" style={{ marginTop: 4 }}>
-                  {unroutedCopies} returned cop{unroutedCopies > 1 ? "ies" : "y"} still need routing.
-                </div>
-              )}
-              {Math.abs(due) > 0.001 && (
-                <div className="callout" style={{ marginTop: 4 }}>
-                  Refund not yet tendered — choose “Refund to cash” or “account balance” above.
-                </div>
-              )}
-            </div>
+        {!finished && (
+          <div className="till-money-foot">
+            <button
+              className="btn primary till-finish"
+              disabled={sale.lines.length === 0 || Math.abs(due) > 0.001 || unroutedCopies > 0}
+              onClick={() => {
+                app.completeSale(sale.id);
+                setReceipt(true);
+              }}
+            >
+              FINISH RETURN
+            </button>
           </div>
         )}
-      </div>
+      </aside>
 
       {addItem && <AddReturnedItem saleId={sale.id} onClose={() => setAddItem(false)} />}
       {routeItem && (
@@ -254,15 +378,26 @@ function ReturnEditor({ saleId, onRestart }: { saleId: string; onRestart: () => 
           onClose={() => setRouteItem(null)}
         />
       )}
+      {voiding && (
+        <VoidSaleModal sale={sale} mode="void" onClose={() => setVoiding(false)} onDone={() => setVoiding(false)} />
+      )}
       {receipt && (
-        <Modal title="Return complete" onClose={() => setReceipt(false)} foot={<button className="btn primary" onClick={() => setReceipt(false)}>Done</button>}>
+        <Modal
+          title="Return complete"
+          onClose={() => setReceipt(false)}
+          foot={
+            <button className="btn primary" onClick={() => setReceipt(false)}>
+              Done
+            </button>
+          }
+        >
           <div className="callout ok">
             Return tendered as negative amounts against their tender — they flow into the M-03 close
             as negatives, not netted into gross sales (E-06 decision 8).
           </div>
         </Modal>
       )}
-    </div>
+    </>
   );
 }
 
@@ -273,9 +408,20 @@ function CustomerAttach({ saleId }: { saleId: string }) {
   const [open, setOpen] = useState(false);
   return (
     <>
-      <button className="btn sm" onClick={() => setOpen(true)} disabled={!!sale.saleNumber}>
-        {c ? `Customer: ${c.name}` : "Attach customer (optional)"}
-      </button>
+      {c ? (
+        <button
+          className="sale-head-customer-btn"
+          onClick={() => setOpen(true)}
+          disabled={!!sale.saleNumber}
+          title="Change customer"
+        >
+          {c.name}
+        </button>
+      ) : (
+        <button className="btn sm" onClick={() => setOpen(true)} disabled={!!sale.saleNumber}>
+          + Add customer
+        </button>
+      )}
       {open && (
         <Modal title="Attach customer" onClose={() => setOpen(false)}>
           <table className="data">

@@ -490,6 +490,16 @@ table.data tr.band-row + tr.group-row td { border-top: none; }
   display: flex; flex-direction: column; gap: var(--sp-2);
   padding: var(--sp-3) var(--sp-4);
 }
+/* E-06 keeps a table here rather than the till's art-led rows: a Return line
+   carries columns a Sale line does not — what it links back to, and where
+   the copy went. The header sticks so those columns survive scrolling. */
+.till-lines > .data { align-self: start; width: 100%; }
+.till-lines > .data thead th {
+  position: sticky; top: calc(var(--sp-3) * -1); z-index: 1; background: var(--c-surface);
+}
+/* Stands where the till's scan field stands — the way a line gets onto the
+   document — so the two screens read the same from the top down. */
+.till-add-return { width: 100%; justify-content: center; height: 52px; font-size: 17px; }
 .till-line {
   display: grid; grid-template-columns: 50px minmax(0, 1fr) auto auto;
   gap: var(--sp-3); align-items: center;

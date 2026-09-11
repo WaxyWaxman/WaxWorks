@@ -75,11 +75,10 @@ export function App() {
   // independently underneath the band, so the frame is pinned to the
   // viewport and the page itself never scrolls.
   //
-  // Sell only, deliberately. E-06's editor is still laid out as a document
-  // and would simply be clipped by a frame that never scrolls — it needs the
-  // same three-track treatment before it can join, and until then it keeps
-  // the rail-less layout it already had.
-  const atTill = location.pathname.startsWith("/sell");
+  // Both till screens: a Return is a till transaction, and E-06 now has the
+  // same three tracks (E-06 d9), so the rail follows you across rather than
+  // stranding you on a screen with no way back to a Sale in flight.
+  const atTill = location.pathname.startsWith("/sell") || onReturn;
 
   return (
     <div className={"app" + (atTill ? " app-till" : "")}>

@@ -4,6 +4,7 @@ import type { Sale } from "../data/types";
 import { money } from "../lib/money";
 import { saleTotals } from "../lib/totals";
 import { useApp } from "../store/AppStore";
+import { HoldsModal, OtherFunctionsModal, SearchModal } from "./TillFunctions";
 
 // The till rail (E-05 d30). Closed it is a 52px strip of the things you
 // START — new sale, new return, holds, past sales. Open it is a drawer of
@@ -73,22 +74,21 @@ const Magnifier = () => (
   </svg>
 );
 
-export function TillRail({
-  activeSaleId,
-  onHolds,
-  onPastSales,
-  onOtherFunctions,
-}: {
-  activeSaleId?: string;
-  onHolds: () => void;
-  onPastSales: () => void;
-  onOtherFunctions: () => void;
-}) {
+export function TillRail({ activeSaleId }: { activeSaleId?: string }) {
   const app = useApp();
   const nav = useNavigate();
   const [open, setOpen] = useState(loadRailOpen);
+  // The rail owns its own functions rather than asking the screen to host
+  // them, so mounting the rail is all a screen has to do to get them.
+  const [holds, setHolds] = useState(false);
+  const [pastSales, setPastSales] = useState(false);
+  const [otherFns, setOtherFns] = useState(false);
   const closeRef = useRef<HTMLButtonElement>(null);
   const openRef = useRef<HTMLButtonElement>(null);
+
+  const onHolds = () => setHolds(true);
+  const onPastSales = () => setPastSales(true);
+  const onOtherFunctions = () => setOtherFns(true);
 
   const setRail = (next: boolean) => {
     setOpen(next);
@@ -275,6 +275,10 @@ export function TillRail({
           </div>
         </div>
       )}
+
+      {holds && <HoldsModal onClose={() => setHolds(false)} />}
+      {pastSales && <SearchModal onClose={() => setPastSales(false)} />}
+      {otherFns && <OtherFunctionsModal onClose={() => setOtherFns(false)} />}
     </nav>
   );
 }
