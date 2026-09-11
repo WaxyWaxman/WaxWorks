@@ -207,12 +207,30 @@ export function ReceiveReconcile({
           disabled={mintedCount === 0}
           title={mintedCount ? "Stub — hooked up down the line" : "Nothing minted yet"}
         >
-          🏷 Print all labels
+          <PrinterIcon /> Print all labels
         </button>
       </div>
     </aside>
   );
 }
+
+const PrinterIcon = () => (
+  <svg
+    width={15}
+    height={15}
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth={1.9}
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    aria-hidden="true"
+  >
+    <path d="M7 9V3h10v6" />
+    <path d="M7 18H5a2 2 0 0 1-2-2v-4a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v4a2 2 0 0 1-2 2h-2" />
+    <path d="M7 14h10v7H7z" />
+  </svg>
+);
 
 // Said in words as well as in colour, because "is this invoice right" is the
 // question the whole track exists to answer and a coloured number alone does

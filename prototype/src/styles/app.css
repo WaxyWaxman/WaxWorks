@@ -1019,15 +1019,17 @@ table.data td.recv-art-cell { width: 38px; padding-right: 0; }
 .recv-lines > .data td, .recv-lines > .data th { padding-left: 6px; padding-right: 6px; }
 .recv-lines > .data td:first-child, .recv-lines > .data th:first-child { padding-left: var(--sp-4); }
 .recv-lines > .data td:last-child, .recv-lines > .data th:last-child { padding-right: var(--sp-4); }
-.recv-lines > .data td.recv-art-cell, .recv-lines > .data th:first-child { width: 56px; }
+.recv-lines > .data td.recv-art-cell, .recv-lines > .data th:first-child { width: 48px; }
 .recv-lines > .data td:nth-child(3), .recv-lines > .data th:nth-child(3) { width: 44px; }
 .recv-lines > .data td:nth-child(4), .recv-lines > .data th:nth-child(4) { width: 70px; }
-.recv-lines > .data td:nth-child(5), .recv-lines > .data th:nth-child(5) { width: 54px; }
+.recv-lines > .data td:nth-child(5), .recv-lines > .data th:nth-child(5) { width: 52px; }
 .recv-lines > .data td:nth-child(6), .recv-lines > .data th:nth-child(6) { width: 70px; }
-.recv-lines > .data td:nth-child(7), .recv-lines > .data th:nth-child(7) { width: 54px; }
-.recv-lines > .data td:nth-child(8), .recv-lines > .data th:nth-child(8) { width: 46px; }
-.recv-lines > .data td:nth-child(9), .recv-lines > .data th:nth-child(9) { width: 64px; }
-.recv-lines > .data td:last-child, .recv-lines > .data th:last-child { width: 72px; }
+.recv-lines > .data td:nth-child(7), .recv-lines > .data th:nth-child(7) { width: 52px; }
+.recv-lines > .data td:nth-child(8), .recv-lines > .data th:nth-child(8) { width: 44px; }
+.recv-lines > .data td:nth-child(9), .recv-lines > .data th:nth-child(9) { width: 62px; }
+/* Wide enough for the edit row's THREE buttons, not the read row's two —
+   sized to the busier state, or they spill over the Net figure next door. */
+.recv-lines > .data td:last-child, .recv-lines > .data th:last-child { width: 96px; }
 /* One line each, clipped. The cell is already two lines tall with the meta
    under it, and letting the title take a second one put every row at 64px —
    vertical is the scarcer resource on this screen, since the count of lines
@@ -1062,9 +1064,14 @@ table.data td.recv-art-cell { width: 38px; padding-right: 0; }
    worklist line does, so it is findable after scrolling away and back. */
 .recv-lines > .data tr.recv-editing > td { background: var(--c-surface-2); }
 .recv-lines > .data tr.recv-editing > td:first-child { box-shadow: inset 3px 0 0 var(--c-ink); }
-/* Two buttons, on one line. Three wrapped in this cell's width and took every
-   row to 94px — the table's whole height budget, spent on chrome. */
-.recv-row-acts { display: flex; gap: 2px; justify-content: flex-end; flex-wrap: nowrap; }
+/* On one line, and inside the cell. Wrapping took every row to 94px; letting
+   them overflow instead put the remove cross on top of the Net figure. Square
+   icon buttons with a known width are what keeps the column honest. */
+.recv-row-acts { display: flex; gap: 3px; justify-content: flex-end; flex-wrap: nowrap; overflow: hidden; }
+.icon-btn {
+  width: 26px; height: 24px; padding: 0; flex: none;
+  display: inline-grid; place-items: center;
+}
 tr.recv-flagged > td { background: var(--c-warn-soft); }
 tr.recv-flagged > td:first-child { box-shadow: inset 3px 0 0 var(--c-warn); }
 .recv-notes { padding: var(--sp-3) var(--sp-4) 0; }

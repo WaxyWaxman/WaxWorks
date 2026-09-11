@@ -1028,6 +1028,65 @@ function StageCard({
   );
 }
 
+// Row icons. Emoji were doing this job and doing it badly: they render at
+// whatever size and colour the platform's font decides, so ✏ arrived as a
+// tiny coloured pencil that read as a stray mark, and 🏷 as a label tag that
+// nobody connected with printing. These are line icons on currentColor, the
+// same way the slab's are, so they take the button's colour and stay legible
+// at 15px.
+const ROW_ICON = {
+  width: 15,
+  height: 15,
+  viewBox: "0 0 24 24",
+  fill: "none",
+  stroke: "currentColor",
+  strokeWidth: 1.9,
+  strokeLinecap: "round",
+  strokeLinejoin: "round",
+  "aria-hidden": true,
+} as const;
+
+const PencilIcon = () => (
+  <svg {...ROW_ICON}>
+    <path d="M4 20h4L19 9a2.83 2.83 0 0 0-4-4L4 16v4z" />
+    <path d="M14.5 5.5l4 4" />
+  </svg>
+);
+// A printer, not a luggage tag — the thing that comes out of it is what the
+// button does.
+const PrinterIcon = () => (
+  <svg {...ROW_ICON}>
+    <path d="M7 9V3h10v6" />
+    <path d="M7 18H5a2 2 0 0 1-2-2v-4a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v4a2 2 0 0 1-2 2h-2" />
+    <path d="M7 14h10v7H7z" />
+  </svg>
+);
+const CrossIcon = () => (
+  <svg {...ROW_ICON}>
+    <path d="M6 6l12 12M18 6L6 18" />
+  </svg>
+);
+const RevertIcon = () => (
+  <svg {...ROW_ICON}>
+    <path d="M4 5v5h5" />
+    <path d="M4.6 14a7.5 7.5 0 1 0 1.3-7" />
+  </svg>
+);
+const CheckIcon = () => (
+  <svg {...ROW_ICON}>
+    <path d="M5 12.5l4.5 4.5L19 7" />
+  </svg>
+);
+// Saving a below-cost price is not the same act as saving — it raises a review
+// flag (d35) — so it does not wear the same mark.
+const AlertIcon = () => (
+  <svg {...ROW_ICON}>
+    <path d="M12 4.5L21 19.5H3L12 4.5z" />
+    <path d="M12 10v4" />
+    <path d="M12 17.2v.1" />
+  </svg>
+);
+
 // Cover art is a stored URL (A-14) and the catalogue misses often, so the
 // missing state is designed rather than left to a broken image. All three row
 // renderers use this one cell so an edited line never shifts against a read one.
@@ -1086,17 +1145,23 @@ function ReadLineRow({
       <td className="num">
         <div className="recv-row-acts">
           {!locked && (
-            <button className="btn ghost sm" onClick={onEdit} title="Edit this line">
-              ✏
+            <button
+              className="btn ghost sm icon-btn"
+              onClick={onEdit}
+              title="Edit this line"
+              aria-label="Edit this line"
+            >
+              <PencilIcon />
             </button>
           )}
           <button
-            className="btn ghost sm"
+            className="btn ghost sm icon-btn"
             onClick={onPrintLabel}
             disabled={!minted}
             title={minted ? "Print label — stub, hooked up down the line" : "Print label — nothing minted yet"}
+            aria-label="Print label"
           >
-            🏷
+            <PrinterIcon />
           </button>
         </div>
       </td>
@@ -1221,18 +1286,23 @@ function EditLineRow({
             in its tooltip what accepting a below-cost price does (d35). */}
         <div className="recv-row-acts">
           <button
-            className="btn ghost sm"
+            className="btn ghost sm icon-btn"
             onClick={onRemove}
             title="Remove this line"
             aria-label="Remove this line"
           >
-            ✕
-          </button>
-          <button className="btn ghost sm" onClick={onDone} title="Cancel" aria-label="Cancel">
-            ↺
+            <CrossIcon />
           </button>
           <button
-            className={"btn sm" + (belowCost ? " danger" : " primary")}
+            className="btn ghost sm icon-btn"
+            onClick={onDone}
+            title="Cancel — leave the line as it was"
+            aria-label="Cancel"
+          >
+            <RevertIcon />
+          </button>
+          <button
+            className={"btn sm icon-btn" + (belowCost ? " danger" : " primary")}
             onClick={save}
             title={
               belowCost
@@ -1241,7 +1311,7 @@ function EditLineRow({
             }
             aria-label={belowCost ? "Save — below cost, raises a review flag" : "Save this line"}
           >
-            {belowCost ? "⚠" : "✓"}
+            {belowCost ? <AlertIcon /> : <CheckIcon />}
           </button>
         </div>
       </td>
