@@ -1,53 +1,76 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { BarcodeInput } from "../components/BarcodeInput";
-import { ReserveModal } from "../components/ReserveModal";
-import { TitlecardPanel } from "../components/TitlecardPanel";
+import { FindAnswer } from "../components/FindAnswer";
+import { FindSelection } from "../components/FindSelection";
+import { FindSlab, type Hit } from "../components/FindSlab";
 import type { RecordEntry } from "../data/types";
 import { resolveScan } from "../lib/resolve";
 import { money } from "../lib/money";
-import {
-  STOCK_HEADING,
-  STOCK_LABEL,
-  STOCK_STATES,
-  stampAgo,
-  stampLead,
-  stockFacts,
-  stockRank,
-  type StockFacts,
-  type StockState,
-} from "../lib/stockState";
+import { stockFacts, stockRank, type StockState } from "../lib/stockState";
 import { useApp } from "../store/AppStore";
 
-// E-03 Search and E-04 Titlecard share one screen: the titlecard for the
-// selected Record sits at the top, search + results below it to find or
-// switch to a different one. Selection is carried in the URL (recordId) so
-// it's deep-linkable and independent of what the search box currently
-// filters — picking a new Record doesn't lose your place if you go on to
-// type a different search term.
+// E-03 Find and E-04 Titlecard share one screen, now laid out as the till's
+// three tracks (E-05 d29): the slab you look in, the Record you picked, and
+// the answer to the question the customer actually asked. The frame is pinned
+// to the viewport and each track scrolls on its own, so the search box and the
+// actions are always where they were last time.
 //
-// Results are one ranked list carrying STOCK STATE — here now, on the way,
-// had before, never stocked (see lib/stockState). E-03 already put all four
-// kinds of thing in scope; what it never said was how an employee tells them
-// apart while a customer waits. The band heading is the answer to "do you
-// have it?", and the right-hand stamp adds the half that decides a reorder:
-// how long since one moved.
+// Selection is carried in the URL (recordId) so it is deep-linkable and
+// independent of what the search box currently filters — a selection survives
+// typing a different search term, which is what makes the recent strip safe to
+// click from.
+//
+// Results are one ranked list carrying STOCK STATE — here now, on the way, had
+// before, never stocked (see lib/stockState). E-03 already put all four kinds
+// of thing in scope; what it never said was how an employee tells them apart
+// while a customer waits.
+
+// Per till, not per employee: this is the machine at the counter, the same way
+// the till rail's own open/shut state already is.
+const SLAB_KEY = "waxworks.find.slab";
+const RECENT_KEY = "waxworks.find.recent";
+const RECENT_MAX = 9;
+
+function readStored<T>(key: string, fallback: T): T {
+  try {
+    const raw = window.localStorage.getItem(key);
+    return raw == null ? fallback : (JSON.parse(raw) as T);
+  } catch {
+    /* private window, or site data blocked — the slab just forgets */
+    return fallback;
+  }
+}
+
+function writeStored(key: string, value: unknown) {
+  try {
+    window.localStorage.setItem(key, JSON.stringify(value));
+  } catch {
+    /* nothing to do — forgetting is an acceptable outcome here */
+  }
+}
+
 export function Search() {
   const app = useApp();
   const nav = useNavigate();
   const { recordId } = useParams();
-  const [term, setTerm] = useState("blue");
+
+  const [term, setTerm] = useState("");
   const [statusMsg, setStatusMsg] = useState<string | null>(null);
-  const [reserveRecord, setReserveRecord] = useState<RecordEntry | null>(null);
   // Cost is hidden by default — a customer standing at the counter can read
-  // this screen too. One toggle (in the titlecard's Copies card) covers both
-  // the panel above and the nested cost figures in the results table below.
+  // this screen too. One toggle covers the copies table and everything nested.
   const [showCost, setShowCost] = useState(false);
   // Null means "all four states". Filtering narrows the same ranked list
   // rather than switching to a different one, so the bands never move.
-  const [stateFilter, setStateFilter] = useState<StockState | null>(null);
+  const [filter, setFilter] = useState<StockState | null>(null);
+  // Open on arrival, cursor in the box: Find begins with a search. (The till
+  // rail starts shut for the opposite reason — a sale begins with a scan.)
+  const [slabOpen, setSlabOpen] = useState(() => readStored(SLAB_KEY, true));
+  const [recentIds, setRecentIds] = useState<string[]>(() => readStored<string[]>(RECENT_KEY, []));
 
-  const scored = useMemo(() => {
+  useEffect(() => writeStored(SLAB_KEY, slabOpen), [slabOpen]);
+  useEffect(() => writeStored(RECENT_KEY, recentIds), [recentIds]);
+
+  const hits: Hit[] = useMemo(() => {
     const q = term.trim().toLowerCase();
     const match = (r: RecordEntry) =>
       !q ||
@@ -76,22 +99,49 @@ export function Search() {
 
   const counts = useMemo(() => {
     const c: Record<StockState, number> = { here: 0, coming: 0, before: 0, never: 0 };
-    for (const row of scored) c[row.facts.state] += 1;
+    for (const h of hits) c[h.facts.state] += 1;
     return c;
-  }, [scored]);
+  }, [hits]);
 
-  const results = useMemo(
-    () => (stateFilter ? scored.filter((r) => r.facts.state === stateFilter) : scored),
-    [scored, stateFilter],
+  const visible = useMemo(
+    () => (filter ? hits.filter((h) => h.facts.state === filter) : hits),
+    [hits, filter],
   );
 
-  // Selection defaults to the last-searched/added item (E-04) — the top
-  // result — but a URL recordId always wins, so a selection survives typing
-  // a new search term into the box below.
-  const selectedId = recordId ?? results[0]?.record.id ?? scored[0]?.record.id;
-  const selectedRecord = app.recordFor(selectedId);
+  // A URL recordId always wins. Without one, the top visible result stands in
+  // — but the moment something is picked it goes in the URL and stops moving,
+  // which is what lets the recent strip be clicked while a stale search term
+  // is still in the box.
+  const selectedId = recordId ?? visible[0]?.record.id ?? hits[0]?.record.id;
+  // Resolved against the CATALOG, not against the result list. Looking it up
+  // in the results would make the selection a function of the search box —
+  // type a term the pinned Record doesn't match and the middle and right
+  // tracks would empty out, which is the opposite of what pinning it is for.
+  const selected = useMemo(() => {
+    const record = selectedId ? app.recordFor(selectedId) : undefined;
+    if (!record) return undefined;
+    const input = { inventory: app.inventory, pendingOrders: app.pendingOrders, sales: app.sales };
+    return { record, facts: stockFacts(record, input) };
+  }, [selectedId, app.records, app.inventory, app.pendingOrders, app.sales]);
+  // The pinned selection is not among the rows currently listed — the slab has
+  // no highlighted row, and the selection track says so rather than leaving
+  // that looking broken.
+  const offList = Boolean(recordId) && !visible.some((h) => h.record.id === selectedId);
 
-  const select = (id: string) => nav(`/search/${id}`, { replace: true });
+  const select = (id: string) => {
+    nav(`/search/${id}`, { replace: true });
+    setRecentIds((prev) => [id, ...prev.filter((r) => r !== id)].slice(0, RECENT_MAX));
+  };
+
+  // Recently viewed resolves against the live catalog every render, so a
+  // remembered id for a Record that no longer exists just drops out.
+  const recent = useMemo(() => {
+    const input = { inventory: app.inventory, pendingOrders: app.pendingOrders, sales: app.sales };
+    return recentIds
+      .map((id) => app.recordFor(id))
+      .filter((r): r is RecordEntry => Boolean(r))
+      .map((r) => ({ record: r, facts: stockFacts(r, input) }));
+  }, [recentIds, app.inventory, app.pendingOrders, app.sales, app.records]);
 
   const doScan = (code: string) => {
     const res = resolveScan(code, app);
@@ -102,281 +152,73 @@ export function Search() {
       setStatusMsg(`Manufacturer UPC → Record: ${res.record.title}.`);
       select(res.record.id);
     } else if (res.kind === "giftcard") {
-      setStatusMsg(`Gift card ${res.card.code} — balance ${money(res.card.balance)}. (Handled at the till, not search.)`);
+      setStatusMsg(
+        `Gift card ${res.card.code} — balance ${money(res.card.balance)}. (Handled at the till, not Find.)`,
+      );
     } else if (res.kind === "nontracked") {
-      setStatusMsg(`Non-tracked item ${res.item.code}. (Handled at the till, not search.)`);
+      setStatusMsg(`Non-tracked item ${res.item.code}. (Handled at the till, not Find.)`);
     } else {
       setStatusMsg(`No match for “${code}”.`);
     }
   };
 
   return (
-    <div>
-      {selectedRecord ? (
-        <TitlecardPanel
-          recordId={selectedRecord.id}
-          onStatus={setStatusMsg}
-          showCost={showCost}
-          onToggleShowCost={() => setShowCost((v) => !v)}
-        />
+    <div className={"find-frame" + (slabOpen ? "" : " slab-shut")}>
+      <FindSlab
+        open={slabOpen}
+        onOpenChange={setSlabOpen}
+        term={term}
+        onTermChange={setTerm}
+        onScan={doScan}
+        providerDown={!app.discogsUp}
+        hits={hits}
+        counts={counts}
+        filter={filter}
+        onFilterChange={setFilter}
+        selectedId={selectedId}
+        onSelect={select}
+        recent={recent}
+      />
+
+      {selected ? (
+        <>
+          <FindSelection
+            record={selected.record}
+            facts={selected.facts}
+            showCost={showCost}
+            onToggleShowCost={() => setShowCost((v) => !v)}
+            onStatus={setStatusMsg}
+            offList={offList}
+            onClearSearch={() => {
+              setTerm("");
+              setFilter(null);
+            }}
+          />
+          <FindAnswer record={selected.record} facts={selected.facts} onStatus={setStatusMsg} />
+        </>
       ) : (
-        <div className="callout">No item selected yet — search for something below.</div>
+        // Only reachable with nothing selected AND nothing to fall back to —
+        // a search that matched no Record at all.
+        <div className="find-nosel">
+          <div>
+            <h2>Nothing found</h2>
+            <p className="muted">
+              {app.discogsUp
+                ? "No Record matches that search. Try fewer words, or scan the sleeve."
+                : "The catalog provider is unreachable, so catalog-only matches are hidden. Local inventory is unaffected."}
+            </p>
+          </div>
+        </div>
       )}
 
-      <hr className="hr" style={{ margin: "var(--sp-5) 0" }} />
-
-      <div className="card" style={{ marginBottom: "var(--sp-4)" }}>
-        <div className="card-body stack">
-          <label className="field" style={{ margin: 0 }}>
-            <span>Search — artist, title, label, catalog no., genre, Section, UPC</span>
-            <input
-              type="search"
-              value={term}
-              autoFocus
-              onChange={(e) => setTerm(e.target.value)}
-              placeholder="try: blue · rumours · jazz · warner · radiohead"
-            />
-          </label>
-          <BarcodeInput onScan={doScan} placeholder="…or scan a barcode to resolve directly" />
-          {statusMsg && <div className="callout ok">{statusMsg}</div>}
-          {!app.discogsUp && (
-            <div className="callout danger">
-              The catalog provider is unreachable — catalog-only rows are hidden. Local inventory
-              and every till function are unaffected. <em>(E-03 decision 8 — visible, not silent.)</em>
-            </div>
-          )}
-        </div>
-      </div>
-
-      <div className="card">
-        <div className="card-head">
-          Results
-          <span className="muted xsmall">
-            {results.length} shown{stateFilter ? ` of ${scored.length}` : ""} · E-03
-          </span>
-        </div>
-
-        <div
-          className="card-body row wrap"
-          style={{ gap: "var(--sp-2)", borderBottom: "1px solid var(--c-border)" }}
-        >
-          <button
-            className={"filter-chip" + (stateFilter === null ? " on" : "")}
-            onClick={() => setStateFilter(null)}
-          >
-            All <span className="count">{scored.length}</span>
+      {statusMsg && (
+        <div className="find-toast">
+          <span>{statusMsg}</span>
+          <button className="btn ghost sm" onClick={() => setStatusMsg(null)} aria-label="Dismiss">
+            ✕
           </button>
-          {STOCK_STATES.map((st) => (
-            <button
-              key={st}
-              className={"filter-chip" + (stateFilter === st ? " on" : "")}
-              onClick={() => setStateFilter(stateFilter === st ? null : st)}
-              disabled={counts[st] === 0}
-            >
-              <span className={"stock-dot " + st} />
-              {STOCK_LABEL[st]} <span className="count">{counts[st]}</span>
-            </button>
-          ))}
         </div>
-
-        <div className="card-body" style={{ padding: 0 }}>
-          <table className="data">
-            <thead>
-              <tr>
-                <th>Record</th>
-                <th>Format · Year</th>
-                <th className="num">On hand</th>
-                <th className="num">Avail.</th>
-                <th className="num">Held</th>
-                <th>Stock</th>
-                <th />
-              </tr>
-            </thead>
-            <tbody>
-              {results.length === 0 && (
-                <tr>
-                  <td colSpan={7} className="small muted" style={{ padding: "var(--sp-4)" }}>
-                    Nothing matches that search in this band.
-                  </td>
-                </tr>
-              )}
-              {results.map(({ record: r, facts }, i) => {
-                const copies = app.inventory.filter(
-                  (c) => c.recordId === r.id && c.status !== "sold",
-                );
-                const sellable = copies.filter((c) => c.status === "sellable");
-                const isSelected = r.id === selectedId;
-                const startsBand = i === 0 || results[i - 1].facts.state !== facts.state;
-                return (
-                  <FragmentRow key={r.id}>
-                    {startsBand && (
-                      <tr className="band-row">
-                        <td colSpan={7}>
-                          <span className={"stock-chip " + facts.state}>
-                            <span className={"stock-dot " + facts.state} />
-                            {STOCK_HEADING[facts.state]}
-                          </span>
-                        </td>
-                      </tr>
-                    )}
-                    <tr
-                      className={"group-row row-click" + (isSelected ? " selected" : "")}
-                      onClick={() => select(r.id)}
-                    >
-                      <td>
-                        <div className="row">
-                          <span className={"stock-dot " + facts.state} />
-                          <span className="cover" style={{ width: 34, height: 34, fontSize: 16 }}>
-                            {r.art}
-                          </span>
-                          <div>
-                            <div>
-                              {r.artist} — {r.title}
-                            </div>
-                            <div className="xsmall muted">
-                              {r.label} · {r.catalogNo} · {r.genre} · {r.section}
-                            </div>
-                          </div>
-                        </div>
-                      </td>
-                      <td className="small">
-                        {r.format} · {r.year}
-                      </td>
-                      <td className="num">{facts.onHand || "—"}</td>
-                      <td className="num">{facts.available || "—"}</td>
-                      <td className="num">{facts.held || "—"}</td>
-                      <td>
-                        <StockStamp facts={facts} />
-                      </td>
-                      <td className="num">
-                        <div className="btn-row" style={{ justifyContent: "flex-end" }}>
-                          <button
-                            className="btn sm"
-                            title="M-02 — not in this pass"
-                            onClick={(e) => e.stopPropagation()}
-                          >
-                            Order
-                          </button>
-                          {sellable.length > 0 && (
-                            <button
-                              className="btn sm"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setReserveRecord(r);
-                              }}
-                            >
-                              Put on hold
-                            </button>
-                          )}
-                        </div>
-                      </td>
-                    </tr>
-                    {copies.map((c) => (
-                      <tr
-                        key={c.id}
-                        className={"nested row-click" + (isSelected ? " selected" : "")}
-                        onClick={() => select(r.id)}
-                      >
-                        <td className="small">
-                          <span className="badge grade">{c.grade}</span>{" "}
-                          {c.backroom && <span className="badge warn">Backroom</span>}{" "}
-                          {c.status === "held" && <span className="badge">Held</span>}
-                          <span className="mono muted"> {c.internalBarcode}</span>
-                          {c.conditionNote && <div className="xsmall muted">{c.conditionNote}</div>}
-                        </td>
-                        <td className="small muted">cost {showCost ? money(c.cost) : "••••"}</td>
-                        <td className="num" colSpan={4}>
-                          {money(c.price)}
-                        </td>
-                        <td />
-                      </tr>
-                    ))}
-                    {copies.length === 0 && (
-                      <tr
-                        className={"nested row-click" + (isSelected ? " selected" : "")}
-                        onClick={() => select(r.id)}
-                      >
-                        <td colSpan={7} className="small muted">
-                          <NoCopiesLine facts={facts} />
-                        </td>
-                      </tr>
-                    )}
-                  </FragmentRow>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
-      </div>
-
-      {reserveRecord && (
-        <ReserveModal
-          record={reserveRecord}
-          items={app.inventory.filter(
-            (i) => i.recordId === reserveRecord.id && i.status === "sellable",
-          )}
-          onClose={() => setReserveRecord(null)}
-          onDone={(confirmation) => {
-            setReserveRecord(null);
-            setStatusMsg(confirmation);
-          }}
-        />
       )}
     </div>
-  );
-}
-
-function FragmentRow({ children }: { children: React.ReactNode }) {
-  return <>{children}</>;
-}
-
-// The right-hand stamp: what we have, and how long since one moved. Recency is
-// the half that answers "is this a title that sells?" — a record we have had
-// three times and sold out of reads very differently from one that sat.
-function StockStamp({ facts }: { facts: StockFacts }) {
-  const ago = stampAgo(facts);
-  return (
-    <div className="stock-stamp">
-      <div className={"lead " + facts.state}>{stampLead(facts)}</div>
-      {ago && <div className="ago">{ago}</div>}
-      {facts.state === "here" && facts.onOrder > 0 && (
-        <div className="ago">+{facts.onOrder} on order</div>
-      )}
-      {/* Raised but not placed is worth showing and worth keeping distinct —
-          it is not a promise anyone can make to a customer yet (M-02). */}
-      {facts.raised > 0 && <div className="ago">{facts.raised} being ordered</div>}
-    </div>
-  );
-}
-
-// A Record with no copies is not one situation but three, and telling them
-// apart is the whole point of the stock states.
-function NoCopiesLine({ facts }: { facts: StockFacts }) {
-  if (facts.state === "coming") {
-    return (
-      <>
-        None on hand — {facts.onOrder} on order, so “it’s coming” is answerable without leaving the
-        screen.
-      </>
-    );
-  }
-  if (facts.state === "before") {
-    return (
-      <>
-        None on hand — but we have stocked it before
-        {facts.everSold > 0 ? `, and sold ${facts.everSold}` : ""}.{" "}
-        {facts.raised > 0
-          ? `${facts.raised} raised on a supplier stream, not placed yet (M-02).`
-          : "Orderable."}
-      </>
-    );
-  }
-  return (
-    <>
-      Catalog match — we have never stocked this.{" "}
-      {facts.raised > 0
-        ? `${facts.raised} raised on a supplier stream, not placed yet (M-02).`
-        : "“No, but we can order it.”"}
-    </>
   );
 }

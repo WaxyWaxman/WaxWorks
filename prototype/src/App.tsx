@@ -70,18 +70,25 @@ export function App() {
   // showing no active tab at all.
   const onReturn = location.pathname.startsWith("/return");
 
-  // The till is the one screen that owns the whole window rather than
-  // scrolling as a document (E-05 d29): its three tracks scroll
-  // independently underneath the band, so the frame is pinned to the
-  // viewport and the page itself never scrolls.
+  // The till owns the whole window rather than scrolling as a document
+  // (E-05 d29): its three tracks scroll independently underneath the band, so
+  // the frame is pinned to the viewport and the page itself never scrolls.
   //
   // Both till screens: a Return is a till transaction, and E-06 now has the
   // same three tracks (E-06 d9), so the rail follows you across rather than
   // stranding you on a screen with no way back to a Sale in flight.
   const atTill = location.pathname.startsWith("/sell") || onReturn;
 
+  // Find is the second screen built this way. Three tracks only work if the
+  // frame is fixed: a page that scrolls as one document cannot keep the
+  // search box and the stock answer where they were. Deliberately scoped to
+  // these screens rather than made a global rule — the long tables
+  // (Receiving, Order Processing, Accounts Payable) are read top to bottom
+  // and lose more than they gain from a fixed frame.
+  const ownsWindow = atTill || location.pathname.startsWith("/search");
+
   return (
-    <div className={"app" + (atTill ? " app-till" : "")}>
+    <div className={"app" + (ownsWindow ? " app-fixed" : "")}>
       <header className="topbar">
         <NavLink to="/" className="brand">
           <span className="dot" /> Wax Works
@@ -104,7 +111,7 @@ export function App() {
         </span>
         <span className="who">{CURRENT_USER} · Till 1 · Prototype</span>
       </header>
-      <main className={"main" + (atTill ? " main-till" : "")}>
+      <main className={"main" + (ownsWindow ? " main-fixed" : "")}>
         <Routes>
           <Route path="/" element={<Home />} />
           <Route path="/search" element={<Search />} />

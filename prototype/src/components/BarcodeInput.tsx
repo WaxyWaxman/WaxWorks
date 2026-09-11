@@ -23,6 +23,7 @@ export function BarcodeInput({
   samples = POS_SAMPLES,
   actionLabel = "Scan",
   onAction,
+  collapsibleSamples = false,
 }: {
   onScan: (code: string) => void;
   placeholder?: string;
@@ -33,6 +34,8 @@ export function BarcodeInput({
   // resolving the typed text as a scan) — Enter still always scans.
   actionLabel?: string;
   onAction?: (value: string) => void;
+  /** Fold the sample chips away — for narrow hosts like Find's slab. */
+  collapsibleSamples?: boolean;
 }) {
   const [v, setV] = useState("");
   const submit = () => {
@@ -54,19 +57,29 @@ export function BarcodeInput({
           {actionLabel}
         </button>
       </div>
-      <div className="row wrap xsmall">
-        <span className="muted">Quick scan:</span>
-        {samples.map((s) => (
-          <button
-            key={s.code}
-            className="btn sm"
-            title={s.code}
-            onClick={() => onScan(s.code)}
-          >
-            {s.label}
-          </button>
-        ))}
-      </div>
+      {collapsibleSamples ? (
+        // Find's slab is 320px wide: ten chips laid out flat push the result
+        // list off the bottom of the track, which is the one thing on that
+        // screen that has to stay visible. Folded away, they are still one
+        // click from a reviewer who wants them.
+        <details className="quick-scan">
+          <summary className="xsmall muted">Quick scan ({samples.length})</summary>
+          <div className="row wrap xsmall">{samples.map(sampleChip)}</div>
+        </details>
+      ) : (
+        <div className="row wrap xsmall">
+          <span className="muted">Quick scan:</span>
+          {samples.map(sampleChip)}
+        </div>
+      )}
     </div>
   );
+
+  function sampleChip(s: { code: string; label: string }) {
+    return (
+      <button key={s.code} className="btn sm" title={s.code} onClick={() => onScan(s.code)}>
+        {s.label}
+      </button>
+    );
+  }
 }
