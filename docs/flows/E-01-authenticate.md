@@ -67,11 +67,12 @@ The model is built so that adding real credentials later does not change the sha
 | 3 | v1 identification is **initials only**; no passwords, PINs, or fobs |
 | 4 | Sessions lapse after **15 minutes** of inactivity |
 | 5 | With no active session, actions requiring attribution prompt for initials inline rather than forcing a full sign-in |
-| 6 | A manager override is entered at the point of override and does not replace the active Employee session |
+| 6 | ~~A manager override is entered at the point of override and does not replace the active Employee session~~ — **superseded by 11**: the *override* is retired ([M-04](M-04-manage-users.md) d8), but authorizing in place survives for **manager-only** actions |
 | 7 | Draft Invoices survive a session lapse |
 | 8 | In v1 a User belongs to exactly one Store |
 | 9 | **A terminal enrolls to a Store once** and holds a real authenticated session carrying that Store. Row-level security scopes on the terminal's Store; initials are attribution on top ([architecture](../architecture.md) A-3) |
 | 10 | **An Open Sale suppresses the 15-minute lapse** on its terminal. Closes the open question below (A-19a) |
+| 11 | **A Manager authorizing a manager-only action enters their own initials at the point of the action, without replacing the Employee's session; both names are recorded. Supersedes decision 6**, which named the retired *manager override*. [M-04](M-04-manage-users.md) d8 retired that term and the actions it gated now raise a **ReviewFlag** instead — but d8 amends M-04 d3 and d4 **for override-gated actions only**, leaving the in-place mechanism unchanged for the manager-only set [architecture](../architecture.md) A-28a still gates. Step 6 of the Flow above already reads this way |
 
 ---
 
