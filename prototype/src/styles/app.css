@@ -24,10 +24,11 @@ code, .mono { font-family: var(--font-mono); font-size: 0.92em; }
    The top menu is one full-width band of equal segments, the active one
    filled solid. No rounded pills, no gaps: the band is the navigation. */
 .app { min-height: 100%; display: flex; flex-direction: column; }
-/* The till owns the window instead of scrolling as a document (E-05 d29):
-   its three tracks each scroll on their own under the band, so Finish sale
-   and the scan field are always where they were last time. */
-.app-till { height: 100dvh; overflow: hidden; }
+/* A screen that owns the window instead of scrolling as a document (E-05
+   d29): its tracks each scroll on their own under the band, so Finish sale,
+   the scan field and Find's search box are always where they were last time.
+   The till and Find; see App.tsx for why it stops there. */
+.app-fixed { height: 100dvh; overflow: hidden; }
 .topbar {
   display: flex; align-items: stretch; height: 62px;
   background: var(--c-surface); color: var(--c-ink);
@@ -120,9 +121,9 @@ code, .mono { font-family: var(--font-mono); font-size: 0.92em; }
    on a 1440 display. What the cap was really buying was a readable measure,
    and that survives as --measure below. */
 .main { flex: 1; width: 100%; padding: var(--sp-5) var(--sp-6); }
-/* No page padding and no heading on the till — the white goes to the edges
-   and the sale gets the whole usable area. */
-.main-till { padding: 0; min-height: 0; display: flex; overflow: hidden; }
+/* No page padding and no page heading on a fixed-frame screen — the white
+   goes to the edges and the tracks get the whole usable area. */
+.main-fixed { padding: 0; min-height: 0; display: flex; overflow: hidden; }
 
 /* Running prose does not want the full width of a wide display. Anything that
    is a sentence rather than data gets a measure; tables, rails and slabs do
@@ -555,6 +556,228 @@ table.data tr.band-row + tr.group-row td { border-top: none; }
 .tender-grid .btn { justify-content: center; height: 56px; font-size: 15.5px; font-weight: 500; }
 .till-finish { justify-content: center; height: 70px; font-size: 23px; font-weight: 800; letter-spacing: 0.01em; }
 .till-hold { justify-content: center; height: 44px; }
+
+/* ---- Find (E-03 + E-04) ----
+   The till's frame, turned to a different job. Three tracks: the slab you
+   look in, the Record you picked, and the answer to the question the customer
+   actually asked. Like the till, the frame never scrolls and each track does.
+
+   The slab differs from the till rail in one deliberate way: it PUSHES rather
+   than overlays. The rail lies over the sale because nothing being read should
+   move mid-transaction; Find is the opposite errand, where the list and the
+   titlecard are read against each other, and an overlay would cover the half
+   you are comparing to. */
+.find-frame {
+  position: relative;
+  flex: 1; min-height: 0; min-width: 0;
+  display: grid; grid-template-columns: 320px minmax(0, 1fr) 344px;
+  background: var(--c-surface);
+}
+.find-frame.slab-shut { grid-template-columns: 52px minmax(0, 1fr) 344px; }
+
+/* ---- Track 1: the finding slab ---- */
+.find-slab {
+  border-right: 1px solid var(--c-border-strong); background: var(--c-surface-2);
+  display: flex; flex-direction: column; min-height: 0; min-width: 0;
+}
+.slab-head {
+  flex: none; display: flex; align-items: center; gap: var(--sp-2);
+  padding: var(--sp-2) var(--sp-2) var(--sp-2) var(--sp-3);
+  border-bottom: 1px solid var(--c-border-strong);
+}
+.slab-head .lab { flex: 1; }
+.slab-search {
+  flex: none; padding: var(--sp-3); border-bottom: 1px solid var(--c-border-strong);
+  display: flex; flex-direction: column; gap: var(--sp-2);
+}
+/* The search box is to Find what the scan slab is to the till: the thing the
+   screen exists to do, so it reads as a slab rather than a form control. */
+.slab-search > input[type="search"] {
+  font-size: var(--fs-md); font-weight: 600; border: 2px solid var(--c-ink);
+}
+.slab-search > input[type="search"]::placeholder { color: var(--c-border-strong); font-weight: 400; }
+/* The accent is spent once per screen, and on Find that is the action on the
+   answer track. The scan button keeps its weight without taking the orange. */
+.slab-search .btn.primary {
+  background: var(--c-surface); color: var(--c-ink); border-color: var(--c-ink);
+}
+.slab-search .btn.primary:hover { background: var(--c-surface-2); border-color: var(--c-ink); }
+.quick-scan > summary { cursor: pointer; padding: 2px 0; list-style-position: inside; }
+.quick-scan > summary:hover { color: var(--c-ink); }
+.quick-scan > .row { margin-top: var(--sp-2); }
+
+.slab-chips {
+  flex: none; display: flex; flex-wrap: wrap; gap: var(--sp-1);
+  padding: var(--sp-2) var(--sp-3); border-bottom: 1px solid var(--c-border-strong);
+}
+.slab-list { flex: 1; min-height: 0; overflow-y: auto; }
+.slab-band {
+  position: sticky; top: 0; z-index: 1; background: var(--c-surface-2);
+  border-bottom: 1px solid var(--c-border-strong);
+  padding: var(--sp-3) var(--sp-3) var(--sp-2);
+}
+.slab-empty { padding: var(--sp-5) var(--sp-3); color: var(--c-ink-faint); font-size: var(--fs-sm); text-align: center; }
+
+/* One result. The copies that used to nest under it live in the middle track
+   now, where there is room to show grade, cost, price and barcode properly --
+   E-03 d3's content, moved rather than dropped. */
+.hit {
+  display: grid; grid-template-columns: 34px minmax(0, 1fr) auto;
+  gap: var(--sp-2); align-items: center; width: 100%; text-align: left; cursor: pointer;
+  padding: var(--sp-2) var(--sp-3); border: none; border-bottom: 1px solid var(--c-border);
+  border-left: 3px solid transparent; background: var(--c-surface);
+  font: inherit; color: var(--c-ink);
+}
+.hit:hover { background: var(--c-surface-2); }
+.hit.on { border-left-color: var(--c-accent); box-shadow: inset 0 0 0 1px var(--c-ink); }
+.hit:focus-visible { outline: 2px solid var(--c-accent); outline-offset: -2px; }
+.hit .art {
+  width: 34px; height: 34px; display: grid; place-items: center; font-size: 17px;
+  border: 1px solid var(--c-border);
+  background: repeating-linear-gradient(135deg, #e2e2de 0 6px, #ececea 6px 12px);
+}
+.hit .t { font-size: var(--fs-sm); font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.hit .m { font-size: var(--fs-xs); color: var(--c-ink-faint); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.hit .n {
+  font-family: var(--font-mono); font-size: var(--fs-sm); font-weight: 700;
+  font-variant-numeric: tabular-nums; color: var(--c-ink-soft); text-align: right; white-space: nowrap;
+}
+.hit .n small {
+  display: block; font-family: var(--font-sans); font-size: 9.5px; font-weight: 600;
+  letter-spacing: 0.04em; text-transform: uppercase; color: var(--c-ink-faint);
+}
+
+/* ---- The shut strip ----
+   52px. The magnifier keeps the rail's honesty rule (E-05 d30) by carrying the
+   result count; below it, the Records actually opened, newest first, so the
+   strip is a way back rather than only a way out. */
+.slab-strip {
+  height: 100%; display: flex; flex-direction: column; align-items: center;
+  gap: var(--sp-2); padding: var(--sp-2) 0; min-height: 0;
+}
+.slab-strip .rail-sep { flex: none; }
+.slab-recent {
+  flex: 1; min-height: 0; overflow-y: auto; scrollbar-width: none;
+  display: flex; flex-direction: column; align-items: center; gap: 6px; padding-bottom: var(--sp-2);
+}
+.slab-recent::-webkit-scrollbar { display: none; }
+.recent-tile {
+  position: relative; width: 38px; height: 38px; flex: none; padding: 0; cursor: pointer;
+  display: grid; place-items: center; font-size: 18px;
+  border: 1px solid var(--c-border-strong); border-radius: var(--radius-sm);
+  color: var(--c-ink); background: repeating-linear-gradient(135deg, #e2e2de 0 6px, #ececea 6px 12px);
+}
+.recent-tile:hover { border-color: var(--c-ink); }
+.recent-tile.on { border-color: var(--c-ink); box-shadow: inset 3px 0 0 var(--c-accent); }
+.recent-tile:focus-visible { outline: 2px solid var(--c-accent); outline-offset: 2px; }
+/* Each tile keeps its own state dot, so the strip carries per-Record state
+   rather than the band tallies it replaced. */
+.recent-tile .stock-dot {
+  position: absolute; bottom: -3px; right: -3px; width: 9px; height: 9px;
+  border: 2px solid var(--c-surface-2);
+}
+.slab-recent-empty {
+  font-family: var(--font-mono); font-size: 9px; color: var(--c-border-strong);
+  writing-mode: vertical-rl; letter-spacing: 0.14em; text-transform: uppercase; padding-top: var(--sp-2);
+}
+
+/* ---- Track 2: the selection ---- */
+.find-main { display: flex; flex-direction: column; min-width: 0; min-height: 0; background: var(--c-surface); }
+.find-head {
+  flex: none; display: flex; align-items: flex-start; gap: var(--sp-4);
+  padding: var(--sp-4); border-bottom: 2px solid var(--c-ink);
+}
+.find-head h2 { margin: 0; font-size: var(--fs-xl); letter-spacing: -0.025em; line-height: 1.1; text-wrap: balance; }
+.find-head .by { font-size: var(--fs-md); font-weight: 600; color: var(--c-ink-soft); margin-bottom: 2px; }
+.find-head .badges { display: flex; flex-wrap: wrap; gap: var(--sp-2); margin-top: var(--sp-2); align-items: center; }
+/* Said out loud rather than left as a list with no highlighted row: the
+   selection is pinned and the search has moved on without it. */
+.badge.offlist { border-style: dashed; cursor: pointer; }
+.find-scroll {
+  flex: 1; min-height: 0; overflow-y: auto;
+  padding: var(--sp-4); display: flex; flex-direction: column; gap: var(--sp-5);
+}
+.find-nosel { grid-column: 2 / -1; display: grid; place-items: center; padding: var(--sp-6); color: var(--c-ink-faint); text-align: center; }
+
+/* ---- Track 3: the answer ----
+   Head and foot fixed, only the totals between them scroll -- so the actions
+   sit where Finish sale sits, in the same place on a one-copy Record and a
+   six-copy one. */
+.find-answer {
+  border-left: 2px solid var(--c-ink); background: var(--c-surface);
+  display: flex; flex-direction: column; min-height: 0;
+}
+.answer-head { flex: none; padding: var(--sp-4) var(--sp-4) var(--sp-3); }
+/* AVAILABLE, not on hand: the number you can actually promise someone. A held
+   copy is already somebody else's. The line beneath carries the rest. */
+.answer-big { font-size: 58px; font-weight: 800; line-height: 1; letter-spacing: -0.035em; font-variant-numeric: tabular-nums; }
+.answer-big.coming { color: var(--c-stock-coming); }
+.answer-big.before, .answer-big.never { color: var(--c-ink-faint); }
+.answer-say { margin-top: 6px; font-size: var(--fs-md); font-weight: 600; }
+.answer-sub { margin-top: 2px; font-size: var(--fs-sm); color: var(--c-ink-faint); }
+.answer-rule { flex: none; height: 2px; background: var(--c-ink); }
+.answer-mid {
+  flex: 1; min-height: 0; overflow-y: auto; padding: var(--sp-3) var(--sp-4);
+  display: flex; flex-direction: column; gap: var(--sp-4);
+}
+.answer-foot {
+  flex: none; padding: var(--sp-3) var(--sp-4) var(--sp-4);
+  border-top: 2px solid var(--c-ink); background: var(--c-surface);
+  display: flex; flex-direction: column; gap: var(--sp-2);
+}
+.answer-foot .btn.primary { height: 60px; font-size: 19px; font-weight: 800; justify-content: center; }
+.answer-acts { display: grid; grid-template-columns: 1fr 1fr; gap: var(--sp-2); }
+.answer-acts .btn { height: 40px; justify-content: center; }
+
+/* A fact grid instead of a two-column table -- the middle track is wide, and
+   catalog fields read better side by side than stacked. */
+.facts { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 0 var(--sp-5); }
+.fact {
+  display: flex; justify-content: space-between; align-items: baseline; gap: var(--sp-3);
+  padding: 6px 0; border-bottom: 1px solid var(--c-border); font-size: var(--fs-sm);
+  min-width: 0;
+}
+.fact .k { color: var(--c-ink-faint); flex: none; }
+/* min-width:0 so a long value or a select shrinks with its column instead of
+   setting the grid a floor wider than the track. */
+.fact .v { font-weight: 600; text-align: right; min-width: 0; overflow-wrap: anywhere; }
+.fact .v select { max-width: 100%; }
+/* The page body never scrolls sideways: a table wider than the track scrolls
+   inside its own box. */
+.find-table { overflow-x: auto; }
+.find-sect { display: flex; flex-direction: column; gap: var(--sp-2); }
+.find-sect > .head {
+  display: flex; align-items: baseline; justify-content: space-between; gap: var(--sp-3);
+  border-bottom: 1px solid var(--c-border-strong); padding-bottom: var(--sp-1);
+}
+
+/* A scan result, a hold confirmation, a cleared adjustment. On a scrolling
+   page these lived inline above the results; in a fixed frame there is no
+   "above" that is guaranteed to be in view, so they surface over the frame
+   and are dismissed rather than scrolled past. */
+.find-toast {
+  position: absolute; left: 50%; bottom: var(--sp-5); transform: translateX(-50%);
+  z-index: 12; max-width: min(620px, calc(100% - var(--sp-6)));
+  display: flex; align-items: flex-start; gap: var(--sp-3);
+  padding: var(--sp-3) var(--sp-3) var(--sp-3) var(--sp-4);
+  background: var(--c-ink); color: #fff; box-shadow: var(--shadow-2);
+  font-size: var(--fs-sm); line-height: 1.4;
+}
+.find-toast .btn.ghost { color: #fff; flex: none; margin-top: -2px; }
+.find-toast .btn.ghost:hover { background: rgba(255, 255, 255, 0.16); }
+
+/* Under ~1180 the answer cannot sit beside the selection and keep its figure
+   legible, so it drops to a band underneath -- same move the till makes. */
+@media (max-width: 1180px) {
+  .find-frame { grid-template-columns: 320px minmax(0, 1fr); grid-template-rows: minmax(0, 1fr) auto; }
+  .find-frame.slab-shut { grid-template-columns: 52px minmax(0, 1fr); }
+  .find-slab { grid-row: 1 / -1; }
+  .find-main { grid-column: 2; grid-row: 1; }
+  .find-nosel { grid-column: 2; grid-row: 1 / -1; }
+  .find-answer { grid-column: 2; grid-row: 2; border-left: none; border-top: 2px solid var(--c-ink); max-height: 42dvh; }
+  .answer-big { font-size: 42px; }
+}
+
 
 /* ---- Menus outside the top band ----
    Same panel, anchored left, for a trigger that is an ordinary button. */
