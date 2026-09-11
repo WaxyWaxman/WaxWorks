@@ -36,7 +36,7 @@ It shows:
 | **Reserve** | Employee | Creates a **Held** Sale ([E-05](E-05-sell-a-record.md)), prompting for a quantity, or attaches a customer to an existing order line ([M-02](M-02-reorder-inventory.md)). |
 | **Order** | Employee | Raises a pending order line ([M-02](M-02-reorder-inventory.md)). |
 | **Claim** | Employee | Raises a return or credit claim against the supplier Invoice the copy arrived on — see below. |
-| **Void or amend Invoice** | **Manager** | Inherited from E-02. A finalized Invoice is immutable; the amendment is appended as a separate artifact against the original record, never an in-place edit. |
+| **Void or amend Invoice** | **Manager** | Inherited from E-02. A **paid** Invoice is immutable ([E-02](E-02-receive-inventory.md) d40) — before that it is corrected in E-02 itself. The amendment is appended as a separate artifact against the original record, never an in-place edit. |
 | **Delete Record** | **Manager** | Removes a catalog Record. Past Sales referencing it are unaffected — line values are snapshotted (E-05 decision 13). |
 
 ### Pricing outside receiving
