@@ -6,6 +6,8 @@ import { TitlecardPanel } from "../components/TitlecardPanel";
 import type { PendingOrderLine, Supplier } from "../data/types";
 import { money } from "../lib/money";
 import { daysAgo, orderReady, separatorCounts } from "../lib/totals";
+import { isOpenOrderLine, receivedAgainst } from "../lib/orderLines";
+import { ManagerOverride } from "../components/ManagerOverride";
 import { useApp } from "../store/AppStore";
 
 // Order Processing (M-02 Phase 2) — a Manager turns Employee-raised pending
@@ -44,6 +46,7 @@ export function OrderProcessing() {
   const [statusMsg, setStatusMsg] = useState<string | null>(null);
   const [supplierQuery, setSupplierQuery] = useState("");
   const [processing, setProcessing] = useState<Stream | null>(null);
+  const [voiding, setVoiding] = useState<string | null>(null);
   const [viewing, setViewing] = useState<{ supplierId: string; separator?: string; poNumber?: string } | null>(null);
   const [streamMerge, setStreamMerge] = useState<{ stream: Stream; nextSeparator: string | undefined; targetCount: number } | null>(
     null,
@@ -56,7 +59,9 @@ export function OrderProcessing() {
   const pendingStreams = useMemo(() => {
     const map = new Map<string, Stream>();
     for (const line of app.pendingOrders) {
-      if (line.poNumber) continue;
+      // A line survives being received now (M-02 d21), so existence is no
+      // longer the same question as "still waiting to be sent".
+      if (line.poNumber || !isOpenOrderLine(line, app.invoices)) continue;
       const supplier = app.supplierFor(line.supplierId);
       if (!matchesQuery(supplier)) continue;
       const key = streamKey(line.supplierId, line.separator);
@@ -71,12 +76,14 @@ export function OrderProcessing() {
       (a, b) => a.supplier.name.localeCompare(b.supplier.name) || (a.separator ?? "").localeCompare(b.separator ?? ""),
     );
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [app.pendingOrders, app.suppliers, q]);
+  }, [app.pendingOrders, app.invoices, app.suppliers, q]);
 
   const placedStreams = useMemo(() => {
     const map = new Map<string, Stream & { poNumber: string; placedAt: string }>();
     for (const line of app.pendingOrders) {
-      if (!line.poNumber) continue;
+      // Cancelled lines drop out; received ones stay visible on their PO,
+      // because "what did this PO consist of" is a question about the past.
+      if (!line.poNumber || line.status === "Cancelled") continue;
       const supplier = app.supplierFor(line.supplierId);
       if (!matchesQuery(supplier)) continue;
       const key = `${streamKey(line.supplierId, line.separator)}::${line.poNumber}`;
@@ -95,7 +102,7 @@ export function OrderProcessing() {
     }
     return [...map.values()].sort((a, b) => b.placedAt.localeCompare(a.placedAt));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [app.pendingOrders, app.suppliers, q]);
+  }, [app.pendingOrders, app.invoices, app.suppliers, q]);
 
   // Mass-shift a whole pending stream onto a different separator — same
   // merge-on-conflict rule as retargeting one line from View (decision 17),
@@ -103,7 +110,7 @@ export function OrderProcessing() {
   const requestStreamSeparatorChange = (stream: Stream, nextRaw: string | undefined) => {
     const nextKey = nextRaw ?? "";
     if (nextKey === (stream.separator ?? "")) return;
-    const existing = separatorCounts(app.pendingOrders, stream.supplier.id).get(nextKey) ?? 0;
+    const existing = separatorCounts(app.pendingOrders, stream.supplier.id, app.invoices).get(nextKey) ?? 0;
     if (existing > 0) {
       setStreamMerge({ stream, nextSeparator: nextRaw, targetCount: existing });
     } else {
@@ -183,7 +190,7 @@ export function OrderProcessing() {
                     <td onClick={(e) => e.stopPropagation()}>
                       <SeparatorSelect
                         value={stream.separator ?? ""}
-                        knownSeparators={[...separatorCounts(app.pendingOrders, stream.supplier.id).keys()].filter((k) => k !== "")}
+                        knownSeparators={[...separatorCounts(app.pendingOrders, stream.supplier.id, app.invoices).keys()].filter((k) => k !== "")}
                         onChange={(next) => requestStreamSeparatorChange(stream, next)}
                       />
                     </td>
@@ -232,6 +239,7 @@ export function OrderProcessing() {
                 <th className="num">Cust.-attached</th>
                 <th className="num">Sell total</th>
                 <th className="num">Est. cost</th>
+                <th />
               </tr>
             </thead>
             <tbody>
@@ -245,7 +253,16 @@ export function OrderProcessing() {
                       setViewing({ supplierId: stream.supplier.id, separator: stream.separator, poNumber: stream.poNumber })
                     }
                   >
-                    <td className="mono small">{stream.poNumber}</td>
+                    <td className="mono small">
+                      {stream.poNumber}
+                      {/* A voided PO keeps the lines already received (d24), so
+                          it stays listed — but it must not read as live. */}
+                      {voidedPo(stream.lines) && (
+                        <span className="badge danger" style={{ marginLeft: 6 }}>
+                          voided
+                        </span>
+                      )}
+                    </td>
                     <td>
                       {stream.supplier.name} <span className="mono xsmall muted">({stream.supplier.shortName})</span>
                     </td>
@@ -258,12 +275,25 @@ export function OrderProcessing() {
                     <td className="num">{m.customerCount}</td>
                     <td className="num">{money(m.sellTotal)}</td>
                     <td className="num">{money(m.estCost)}</td>
+                    <td className="num" onClick={(e) => e.stopPropagation()}>
+                      {/* Manager-only (A-28a), authorised in place. The cell
+                          swallows the click so voiding never doubles as
+                          opening the PO underneath it. */}
+                      <button
+                        className="btn ghost sm"
+                        disabled={voidedPo(stream.lines)}
+                        title={voidedPo(stream.lines) ? "Already voided" : "Void this PO"}
+                        onClick={() => setVoiding(stream.poNumber)}
+                      >
+                        Void
+                      </button>
+                    </td>
                   </tr>
                 );
               })}
               {placedStreams.length === 0 && (
                 <tr>
-                  <td colSpan={9} className="small muted">
+                  <td colSpan={10} className="small muted">
                     No PurchaseOrders placed yet{q ? ` matching "${supplierQuery}"` : ""}.
                   </td>
                 </tr>
@@ -272,6 +302,10 @@ export function OrderProcessing() {
           </table>
         </div>
       </div>
+
+      {voiding && (
+        <VoidPoModal poNumber={voiding} onClose={() => setVoiding(null)} onDone={setStatusMsg} />
+      )}
 
       {processing && (
         <ProcessModal
@@ -334,6 +368,153 @@ export function OrderProcessing() {
         </Modal>
       )}
     </div>
+  );
+}
+
+// Voiding reverses OUR paperwork and nothing else (M-02 d10) — so the dialog
+// leads with that, and then says line by line what it is about to do, because
+// d24 makes the answer different for each one depending on how much arrived.
+// Derived rather than stored on a PurchaseOrder, because the prototype has no
+// PurchaseOrder entity — the lines a void left behind carry the stamp.
+function voidedPo(lines: PendingOrderLine[]): boolean {
+  return lines.some((l) => Boolean(l.poVoidedAt));
+}
+
+function VoidPoModal({
+  poNumber,
+  onClose,
+  onDone,
+}: {
+  poNumber: string;
+  onClose: () => void;
+  onDone: (msg: string) => void;
+}) {
+  const app = useApp();
+  const [authorising, setAuthorising] = useState(false);
+
+  const lines = app.pendingOrders.filter((o) => o.poNumber === poNumber);
+  const plan = lines.map((o) => {
+    const received = receivedAgainst(o.id, app.invoices);
+    const rec = app.recordFor(o.recordId);
+    return {
+      id: o.id,
+      title: rec ? `${rec.artist} — ${rec.title}` : o.recordId,
+      qty: o.qty,
+      received,
+      customer: o.customerId ? app.customerFor(o.customerId)?.name : undefined,
+      fate:
+        received >= o.qty
+          ? ("untouched" as const)
+          : received === 0
+            ? ("returned" as const)
+            : ("split" as const),
+    };
+  });
+  const counts = {
+    returned: plan.filter((l) => l.fate === "returned").length,
+    split: plan.filter((l) => l.fate === "split").length,
+    untouched: plan.filter((l) => l.fate === "untouched").length,
+  };
+  const attached = plan.filter((l) => l.customer && l.fate !== "untouched");
+
+  const doVoid = (by: string) => {
+    const res = app.voidPurchaseOrder(poNumber, by);
+    const parts = [
+      res.returned ? `${res.returned} returned to pending` : "",
+      res.split ? `${res.split} part-received, remainder returned` : "",
+      res.untouched ? `${res.untouched} already received and left alone` : "",
+    ].filter(Boolean);
+    onDone(`${poNumber} voided — ${parts.join(", ")}. The supplier has not been told.`);
+    setAuthorising(false);
+    onClose();
+  };
+
+  if (authorising) {
+    return (
+      <ManagerOverride
+        reason={`Void ${poNumber} — ${counts.returned + counts.split} line${counts.returned + counts.split === 1 ? "" : "s"} affected`}
+        onConfirm={doVoid}
+        onCancel={() => setAuthorising(false)}
+      />
+    );
+  }
+
+  return (
+    <Modal
+      title={`Void ${poNumber}?`}
+      wide
+      onClose={onClose}
+      foot={
+        <>
+          <button className="btn ghost" onClick={onClose}>
+            Cancel
+          </button>
+          <button
+            className="btn danger"
+            disabled={counts.returned + counts.split === 0}
+            onClick={() => setAuthorising(true)}
+          >
+            Void this PO
+          </button>
+        </>
+      }
+    >
+      <div className="stack">
+        <div className="callout">
+          <strong>This does not cancel anything with the supplier.</strong> It reverses our own
+          paperwork only — a person still has to contact them (decision 10).
+        </div>
+
+        <table className="data">
+          <thead>
+            <tr>
+              <th>Line</th>
+              <th className="num">Ordered</th>
+              <th className="num">Received</th>
+              <th>What happens</th>
+            </tr>
+          </thead>
+          <tbody>
+            {plan.map((l) => (
+              <tr key={l.id}>
+                <td>
+                  {l.title}
+                  {l.customer && <span className="badge warn" style={{ marginLeft: 6 }}>for {l.customer}</span>}
+                </td>
+                <td className="num">{l.qty}</td>
+                <td className="num">{l.received}</td>
+                <td className="small">
+                  {l.fate === "returned" && "Returns to pending, whole"}
+                  {l.fate === "split" && (
+                    <>
+                      Keeps the {l.received} received; <strong>{l.qty - l.received}</strong> returns
+                      to pending as a new line <em>(decision 24)</em>
+                    </>
+                  )}
+                  {l.fate === "untouched" && <span className="muted">Already received — untouched</span>}
+                </td>
+              </tr>
+            ))}
+            {plan.length === 0 && (
+              <tr>
+                <td colSpan={4} className="small muted">
+                  Nothing left on this PO to void.
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+
+        {attached.length > 0 && (
+          <div className="callout warn">
+            {attached.length} line{attached.length === 1 ? "" : "s"} on this PO{" "}
+            {attached.length === 1 ? "is" : "are"} attached to a customer. The line goes back to
+            pending with the attachment intact, but somebody will need to be told the order was
+            reversed (decision 9).
+          </div>
+        )}
+      </div>
+    </Modal>
   );
 }
 
@@ -446,13 +627,18 @@ function ViewOrderModal({
   const lines = useMemo(
     () =>
       app.pendingOrders.filter(
-        (o) => o.supplierId === supplierId && (o.separator ?? "") === sepKey && (editable ? !o.poNumber : o.poNumber === poNumber),
+        (o) =>
+          o.supplierId === supplierId &&
+          (o.separator ?? "") === sepKey &&
+          (editable
+            ? !o.poNumber && isOpenOrderLine(o, app.invoices)
+            : o.poNumber === poNumber && o.status !== "Cancelled"),
       ),
-    [app.pendingOrders, supplierId, sepKey, editable, poNumber],
+    [app.pendingOrders, app.invoices, supplierId, sepKey, editable, poNumber],
   );
 
   // Drives both this modal's per-line Sep dropdown options and the merge check.
-  const sepCounts = useMemo(() => separatorCounts(app.pendingOrders, supplierId), [app.pendingOrders, supplierId]);
+  const sepCounts = useMemo(() => separatorCounts(app.pendingOrders, supplierId, app.invoices), [app.pendingOrders, app.invoices, supplierId]);
 
   const [selectedRecordId, setSelectedRecordId] = useState<string | null>(lines[0]?.recordId ?? null);
   const [showCost, setShowCost] = useState(false);

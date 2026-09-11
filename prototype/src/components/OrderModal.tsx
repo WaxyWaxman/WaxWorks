@@ -36,7 +36,7 @@ export function OrderModal({
   const [followUpRaw, setFollowUpRaw] = useState("");
 
   const supplier = app.supplierFor(supplierId);
-  const knownSeparators = supplierId ? [...separatorCounts(app.pendingOrders, supplierId).keys()].filter((k) => k !== "") : [];
+  const knownSeparators = supplierId ? [...separatorCounts(app.pendingOrders, supplierId, app.invoices).keys()].filter((k) => k !== "") : [];
   const followUpDays = followUpRaw.trim() ? Math.max(0, Number(followUpRaw) || 0) : undefined;
   const ready = !!supplierId && qty >= 1 && sellPrice > 0;
 

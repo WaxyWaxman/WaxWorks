@@ -12,6 +12,7 @@ import {
   heldCount,
   onHand,
 } from "../lib/totals";
+import { isOpenOrderLine, outstandingQty } from "../lib/orderLines";
 import { useApp } from "../store/AppStore";
 
 // The titlecard is a view, not a route of its own (E-04 decision 1) — it's
@@ -45,9 +46,18 @@ export function TitlecardPanel({
   const outstandingOversold = app.inventory.filter(
     (i) => i.recordId === record.id && i.oversold && !i.oversoldReconciledAt,
   );
-  const recordOrders = app.pendingOrders.filter((o) => o.recordId === record.id);
-  const pendingOrderQty = recordOrders.filter((o) => !o.poNumber).reduce((n, o) => n + o.qty, 0);
-  const onOrderQty = recordOrders.filter((o) => o.poNumber).reduce((n, o) => n + o.qty, 0);
+  // Outstanding, not ordered: a received line stays on file now (M-02 d21),
+  // and counting its full quantity would show stock as still coming after it
+  // arrived.
+  const recordOrders = app.pendingOrders.filter(
+    (o) => o.recordId === record.id && isOpenOrderLine(o, app.invoices),
+  );
+  const pendingOrderQty = recordOrders
+    .filter((o) => !o.poNumber)
+    .reduce((n, o) => n + outstandingQty(o, app.invoices), 0);
+  const onOrderQty = recordOrders
+    .filter((o) => o.poNumber)
+    .reduce((n, o) => n + outstandingQty(o, app.invoices), 0);
   const saleFor = (itemId: string) => app.sales.find((sale) => sale.lines.some((l) => l.inventoryItemId === itemId));
 
   const doRemoveHold = (c: InventoryItem) => {

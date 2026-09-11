@@ -18,6 +18,7 @@ import {
 } from "../data/types";
 import { money, roundUpShelf } from "../lib/money";
 import { countField, figureField, integerOnly, numericOnly } from "../lib/fields";
+import { outstandingQty } from "../lib/orderLines";
 import { round2 } from "../lib/totals";
 import { useApp } from "../store/AppStore";
 
@@ -792,7 +793,10 @@ function StageCard({
     setFromOrderId(prefillOrder.id);
     if (prefillOrder.expectedListPrice != null) setListRaw(String(prefillOrder.expectedListPrice));
     if (prefillOrder.expectedDiscountPct != null) setDiscountRaw(String(prefillOrder.expectedDiscountPct));
-    setQty(prefillOrder.qty);
+    // What is LEFT on the line, not what was ordered. A line survives partial
+    // receipt now (M-02 d21), so defaulting to the ordered quantity would
+    // quietly take in two of a pair whose first copy arrived last week.
+    setQty(Math.max(1, outstandingQty(prefillOrder, app.invoices)));
     onPrefillConsumed();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [prefillOrder]);
@@ -825,7 +829,7 @@ function StageCard({
       setFromOrderId(order.id);
       if (order.expectedListPrice != null) setListRaw(String(order.expectedListPrice));
       if (order.expectedDiscountPct != null) setDiscountRaw(String(order.expectedDiscountPct));
-      setQty(order.qty);
+      setQty(Math.max(1, outstandingQty(order, app.invoices)));
       return;
     }
     const rec = app.records.find((r) => r.manufacturerUpc === trimmed);
@@ -866,7 +870,8 @@ function StageCard({
       fromOrderId: fromOrderId ?? undefined,
       poNumber: order?.poNumber,
     });
-    if (fromOrderId) app.receivePendingOrderLine(fromOrderId);
+    // The line survives (M-02 d21); this writes the receipt into its log.
+    if (fromOrderId) app.receivePendingOrderLine(fromOrderId, lineQty);
     onCommitted(
       `Added ${lineQty}× ${record.artist} — ${record.title} at ${money(sellPrice)} (cost ${money(extPrice)}).`,
     );

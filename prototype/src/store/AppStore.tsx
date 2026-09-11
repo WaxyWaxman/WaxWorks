@@ -37,6 +37,7 @@ import type {
   PaymentBatch,
   PaymentMethod,
   PaymentTarget,
+  OrderLineStatus,
   PendingOrderLine,
   RecordEntry,
   ReviewFlag,
@@ -627,7 +628,23 @@ interface AppContextValue extends AppState {
   clearPayableEntries: (entryIds: string[], by: string) => { cleared: boolean };
 
   pendingOrderFor: (id?: string) => PendingOrderLine | undefined;
-  receivePendingOrderLine: (id: string) => PendingOrderLine | null;
+  /** Logs the receipt on the line; the line SURVIVES (M-02 d21). `qty` is
+   *  what this Invoice took in, for the log entry. */
+  receivePendingOrderLine: (id: string, qty?: number) => PendingOrderLine | null;
+  /**
+   * Reverse our own paperwork for a PurchaseOrder (M-02 d11, d24). Never
+   * touches the supplier — somebody still has to tell them (d10).
+   */
+  voidPurchaseOrder: (
+    poNumber: string,
+    by?: string,
+  ) => { returned: number; split: number; untouched: number };
+  /** Set or clear one of the statuses a person sets (M-02 d12, d22). */
+  setPendingOrderLineStatus: (
+    id: string,
+    status?: OrderLineStatus,
+    expectedDate?: string,
+  ) => void;
 
   // M-02 Phase 1 — an Employee raising a pending line from a titlecard's
   // Order button. Joins the Supplier's pending pile; carries no PO number
@@ -2364,11 +2381,143 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
   // invoice's lines — here that just means it stops being pending. The Invoice
   // side (adding the actual InvoiceLine) is the caller's job, since it needs
   // the invoiceId this function doesn't have.
-  const receivePendingOrderLine: AppContextValue["receivePendingOrderLine"] = (id) => {
+  // A received line SURVIVES (M-02 d21). Deleting it was what made E-02 d30
+  // uncomputable — "ordered minus received across every Invoice" has nothing
+  // to subtract from once the row is gone — and it left a received copy with
+  // no recoverable link to the PO it arrived against. What is outstanding is
+  // derived from the Invoice lines pointing back here; all this does now is
+  // write the receipt into the line's own history.
+  const receivePendingOrderLine: AppContextValue["receivePendingOrderLine"] = (id, qty) => {
     const order = s.pendingOrders.find((o) => o.id === id);
     if (!order) return null;
-    setS((prev) => ({ ...prev, pendingOrders: prev.pendingOrders.filter((o) => o.id !== id) }));
+    const text =
+      qty == null
+        ? "Received"
+        : `Received ${qty} of ${order.qty}${qty < order.qty ? " — remainder still outstanding" : ""}`;
+    setS((prev) => ({
+      ...prev,
+      pendingOrders: prev.pendingOrders.map((o) =>
+        o.id === id ? { ...o, log: [...(o.log ?? []), { at: now(), text: `${text} by ${CURRENT_USER}` }] } : o,
+      ),
+    }));
     return order;
+  };
+
+  // M-02 d11 + d24 — voiding reverses OUR paperwork, never the supplier's
+  // (d10). Three things can happen to a line on the voided PO, and which one
+  // depends on how much of it actually arrived:
+  //
+  //   nothing received  → returns to pending whole, as d11 always said
+  //   some received     → the line keeps what arrived (its quantity drops to
+  //                       that) and the remainder is raised as a NEW pending
+  //                       line. Neither half can simply go: the received
+  //                       copies are on the shelf and their link to the
+  //                       Invoice is what E-02 d30 counts, and the remainder
+  //                       is still wanted.
+  //   fully received    → untouched. There is nothing to reverse.
+  const voidPurchaseOrder: AppContextValue["voidPurchaseOrder"] = (poNumber, by) => {
+    const onPo = s.pendingOrders.filter((o) => o.poNumber === poNumber);
+    if (onPo.length === 0) return { returned: 0, split: 0, untouched: 0 };
+
+    const stamp = now();
+    const who = `${CURRENT_USER}${by ? ` (manager ${by})` : ""}`;
+    let returned = 0;
+    let split = 0;
+    let untouched = 0;
+    const raised: PendingOrderLine[] = [];
+
+    const next = s.pendingOrders.map((o) => {
+      if (o.poNumber !== poNumber) return o;
+      const received = s.invoices.reduce(
+        (n, iv) => n + iv.lines.filter((l) => l.fromOrderId === o.id).reduce((m, l) => m + l.qty, 0),
+        0,
+      );
+
+      if (received >= o.qty) {
+        untouched += 1;
+        return {
+          ...o,
+          poVoidedAt: stamp,
+          log: [...(o.log ?? []), { at: stamp, text: `PO ${poNumber} voided — already received in full, unchanged. By ${who}` }],
+        };
+      }
+
+      if (received === 0) {
+        returned += 1;
+        return {
+          ...o,
+          poNumber: undefined,
+          placedAt: undefined,
+          // A status the supplier reported about an order that no longer
+          // exists is not information, it is a leftover.
+          status: undefined,
+          expectedDate: undefined,
+          log: [...(o.log ?? []), { at: stamp, text: `PO ${poNumber} voided — returned to pending. By ${who}` }],
+        };
+      }
+
+      // Part received: split (d24).
+      split += 1;
+      const remainder = o.qty - received;
+      const newId = uid("po-line");
+      raised.push({
+        ...o,
+        id: newId,
+        qty: remainder,
+        poNumber: undefined,
+        placedAt: undefined,
+        status: undefined,
+        expectedDate: undefined,
+        createdAt: stamp,
+        createdBy: CURRENT_USER,
+        log: [
+          {
+            at: stamp,
+            text: `Raised from the void of PO ${poNumber} — ${remainder} of ${o.qty} never arrived. By ${who}`,
+          },
+        ],
+      });
+      return {
+        ...o,
+        qty: received,
+        poVoidedAt: stamp,
+        log: [
+          ...(o.log ?? []),
+          {
+            at: stamp,
+            text: `PO ${poNumber} voided — kept the ${received} received; ${remainder} returned to pending as a new line. By ${who}`,
+          },
+        ],
+      };
+    });
+
+    setS((prev) => ({ ...prev, pendingOrders: [...raised, ...next] }));
+    return { returned, split, untouched };
+  };
+
+  // M-02 d12, d22, d23 — the statuses a person sets, each one logged.
+  const setPendingOrderLineStatus: AppContextValue["setPendingOrderLineStatus"] = (
+    id,
+    status,
+    expectedDate,
+  ) => {
+    setS((prev) => ({
+      ...prev,
+      pendingOrders: prev.pendingOrders.map((o) => {
+        if (o.id !== id) return o;
+        const from = o.status ?? (o.poNumber ? "Ordered" : "Pending");
+        const to = status ?? (o.poNumber ? "Ordered" : "Pending");
+        const when = status === "Shipped" && expectedDate ? `, due ${expectedDate}` : "";
+        return {
+          ...o,
+          status,
+          // The date belongs to Shipped; clearing the status clears it too,
+          // rather than leaving a due date on a cancelled line.
+          expectedDate: status === "Shipped" ? expectedDate : undefined,
+          log: [...(o.log ?? []), { at: now(), text: `${from} → ${to}${when} by ${CURRENT_USER}` }],
+        };
+      }),
+    }));
   };
 
   const raisePendingOrderLine: AppContextValue["raisePendingOrderLine"] = (input) => {
@@ -2539,6 +2688,8 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
       clearPayableEntries,
       pendingOrderFor,
       receivePendingOrderLine,
+      setPendingOrderLineStatus,
+      voidPurchaseOrder,
       raisePendingOrderLine,
       updatePendingOrderLine,
       deletePendingOrderLine,

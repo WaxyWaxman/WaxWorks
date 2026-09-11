@@ -107,6 +107,7 @@ Consequence to accept knowingly: per-item margin reporting reflects only supplie
 
 - Receiving a **customer-attached** PurchaseOrder line automatically creates a **Held** Sale for that customer ([E-05](E-05-sell-a-record.md)), so the copy cannot be sold off the floor before they collect it. The hold's timeline starts at receipt.
 - **A scan attaches to a matching PurchaseOrder line automatically** (M-02 d20), carrying that line's expected cost and quantity into pricing; the employee may detach it. Anything that cannot be matched by barcode — an unbarcoded copy above all — is picked from the worklist instead (d42), which is what keeps a derived backorder (d30) able to close.
+- **Receiving a PurchaseOrder line does not consume it** (M-02 d21). The line survives with its status and its log, which is what makes d30's outstanding quantity — ordered minus received across every Invoice — computable at all, and what lets a part-shipped line be received twice.
 
 **From [E-05](E-05-sell-a-record.md):**
 

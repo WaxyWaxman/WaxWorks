@@ -305,7 +305,33 @@ export interface PendingOrderLine {
   followUpSetAt?: string; // when the follow-up window last started — createdAt if unset; updated by Re-flag (Phase 3, What's on Order)
   createdBy?: string;
   createdAt: string;
+  /**
+   * Only the statuses a PERSON sets (M-02 d12, d22). Pending vs Ordered is
+   * derived from whether `poNumber` is set, and received vs outstanding is
+   * counted off the Invoice lines that point back here (E-02 d30) — storing
+   * either would be a second copy of a fact the data already answers, and two
+   * copies drift. Undefined means nobody has said anything about this line.
+   */
+  status?: OrderLineStatus;
+  /** The supplier's own expected date, set with `shipped` (d22). Nothing
+   *  verifies it — a date that passes is a prompt to chase, not a state. */
+  expectedDate?: string;
+  /** Every status change, and receipt (d23). Same shape the Invoice and the
+   *  Supplier already carry, so a line's history reads as one sequence. */
+  log?: { at: string; text: string }[];
+  /**
+   * Stamped on the lines a void LEAVES on their PO — the ones already
+   * received, which keep their link to the Invoice that took them in (d24).
+   * The prototype has no PurchaseOrder entity to hold the fact, so the surviving
+   * lines carry it and the PO row derives "voided" from them; without it a
+   * voided PO reads as live in Previously placed.
+   */
+  poVoidedAt?: string;
 }
+
+/** A placed line is never deleted — it is Cancelled, or it is received (d21). */
+export type OrderLineStatus = "Shipped" | "Backordered" | "Cancelled";
+export const ORDER_LINE_STATUSES: OrderLineStatus[] = ["Shipped", "Backordered", "Cancelled"];
 
 // ---- Accounts payable (M-05) ----
 export type PaymentMethod = "Cheque" | "Credit Card" | "EFT" | "Cash";

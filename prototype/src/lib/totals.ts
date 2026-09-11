@@ -1,3 +1,4 @@
+import { isOpenOrderLine } from "./orderLines";
 import type {
   InventoryItem,
   Invoice,
@@ -184,10 +185,16 @@ export function payableEntryContribution(e: PayableEntry, batches: PaymentBatch[
 // options and the merge check, wherever one appears: raising a line (Phase
 // 1), Order Processing's pending table (a whole-stream shift), and View's
 // per-line dropdown.
-export function separatorCounts(pendingOrders: PendingOrderLine[], supplierId: string): Map<string, number> {
+export function separatorCounts(
+  pendingOrders: PendingOrderLine[],
+  supplierId: string,
+  invoices: Invoice[],
+): Map<string, number> {
   const counts = new Map<string, number>();
   for (const o of pendingOrders) {
+    // Received and cancelled lines are not waiting to be sent anywhere.
     if (o.supplierId !== supplierId || o.poNumber) continue;
+    if (!isOpenOrderLine(o, invoices)) continue;
     const key = o.separator ?? "";
     counts.set(key, (counts.get(key) ?? 0) + 1);
   }

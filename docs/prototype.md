@@ -119,15 +119,28 @@ that is a separate question nobody has answered yet._
   freight are plain manually-entered fields, full stop, with no camera or extraction simulation
   standing in for it. Barcode-to-record matching is local-only (no live catalog-provider call, no
   multi-match picker); a code with no local match goes straight to the search-or-create fallback.
-  Backorder mechanics are unmodelled, per E-02's own open question.
-- Receiving's Orders panel and Order Processing (M-02) now share one `PendingOrderLine` array —
-  `poNumber` unset means still pending, set means already placed, which is what Receiving looks up
-  against. There is no reorder suggestion and no backorder lifecycle once a line isn't fully
-  received.
+- Receiving's Orders panel and Order Processing (M-02) share one `PendingOrderLine` array, and a
+  **placed line is never deleted** (M-02 decision 21): receiving it writes to its log rather than
+  removing it. So existence stopped being the same question as "still coming", and every screen
+  derives instead — `poNumber` unset means pending, set means placed, and what is outstanding is
+  ordered minus received across every Invoice (E-02 decision 30), all through `lib/orderLines.ts`.
+  **Partial receipt is real**: a line reads "1 of 2", stays on What's on Order as *Part received*,
+  and the staging card prefills the remainder rather than the ordered quantity, so picking it again
+  cannot silently over-receive. There is still no reorder suggestion.
 - **Order Processing (M-02) is Phases 1 and 2, plus part of Phase 3.** A stream moves from
   Pending to Previously placed once Processed, then to What's on Order until it's received —
-  tracking, search/sort/filter, and re-flag are built there. **Set status** (Backordered/Cancelled)
-  and **voiding a PO** aren't. Sending an Email order is simulated as a composed preview plus a
+  tracking, search/sort/filter, re-flag and **Set status** are built there — Shipped (carrying the
+  supplier's expected date), Backordered and Cancelled, the statuses a *person* sets (decisions 12,
+  22), each written to the line's own log with what it moved from and to (decision 23). Pending and
+  Ordered are not offered because they are derived from whether the line has a PO number, and
+  Received is not offered because it is counted off the Invoices — a status contradicting the count
+  would be a second, wrong answer. **Voiding a PO** is built too, on the Previously-placed table and
+  manager-authorised in place (A-28a): the dialog leads with the fact that nothing is cancelled at
+  the supplier (decision 10), then says line by line what will happen, because decision 24 makes the
+  answer different for each — a fully unreceived line returns to pending whole, a part-received one
+  keeps what arrived and its remainder is raised as a fresh pending line, and a fully received one
+  is untouched. A voided PO keeps the lines already received, so it stays listed, badged **voided**
+  and with its Void action spent. Phase 3 is now complete. Sending an Email order is simulated as a composed preview plus a
   Supplier log entry, not a real send.
 - On the line-entry row, "List price" is the pre-discount figure off the paperwork and "Sell
   price" replaces "Accepted price" — Disc% and Margin% are new. **Resolved:** the row used to

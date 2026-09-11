@@ -1,4 +1,11 @@
-import type { InventoryItem, PendingOrderLine, RecordEntry, Sale } from "../data/types";
+import { outstandingQty } from "./orderLines";
+import type {
+  InventoryItem,
+  Invoice,
+  PendingOrderLine,
+  RecordEntry,
+  Sale,
+} from "../data/types";
 import { availableOnHand, heldCount, onHand } from "./totals";
 
 // ---- Stock state (E-03) ----
@@ -49,6 +56,8 @@ export interface StockFacts {
 interface StockInput {
   inventory: InventoryItem[];
   pendingOrders: PendingOrderLine[];
+  /** Needed to derive what is still outstanding on a PO line (E-02 d30). */
+  invoices: Invoice[];
   sales: Sale[];
 }
 
@@ -69,9 +78,17 @@ export function stockFacts(record: RecordEntry, input: StockInput): StockFacts {
   // employee telling a customer their record is on its way when no order
   // exists — so only placed lines count, and raised ones are reported
   // separately.
+  //
+  // A line survives being received now (M-02 d21), so existence no longer
+  // means "still coming" — these count the OUTSTANDING quantity, and a
+  // Cancelled line counts for nothing. Reading the row's own qty here would
+  // tell a customer their record is on the way after it had already landed
+  // and sold.
   const forRecord = input.pendingOrders.filter((o) => o.recordId === record.id);
-  const onOrder = forRecord.filter((o) => o.poNumber).reduce((sum, o) => sum + o.qty, 0);
-  const raised = forRecord.filter((o) => !o.poNumber).reduce((sum, o) => sum + o.qty, 0);
+  const outstanding = (o: PendingOrderLine) => outstandingQty(o, input.invoices);
+  const open = forRecord.filter((o) => o.status !== "Cancelled");
+  const onOrder = open.filter((o) => o.poNumber).reduce((sum, o) => sum + outstanding(o), 0);
+  const raised = open.filter((o) => !o.poNumber).reduce((sum, o) => sum + outstanding(o), 0);
 
   let everSold = 0;
   let lastSoldAt: string | undefined;

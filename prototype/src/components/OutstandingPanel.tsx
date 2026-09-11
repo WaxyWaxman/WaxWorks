@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import type { Invoice, PendingOrderLine, Supplier } from "../data/types";
+import { isOpenOrderLine, outstandingQty, receivedAgainst } from "../lib/orderLines";
 import { useApp } from "../store/AppStore";
 
 // The outstanding-orders worklist (E-02 d42). It lives here, in the Invoice
@@ -41,24 +42,16 @@ export function OutstandingPanel({
 
   const rows: OutstandingRow[] = useMemo(() => {
     // Ordered minus received against that PO line across every Invoice (d30).
-    // Partial receipt is not modelled in the prototype store — a received line
-    // is removed outright — so `received` is 0 today and a row reads as a plain
-    // ordered quantity rather than a fake "n of m".
-    const receivedAgainst = (orderId: string) =>
-      app.invoices.reduce(
-        (n, iv) =>
-          n + iv.lines.filter((l) => l.fromOrderId === orderId).reduce((m, l) => m + l.qty, 0),
-        0,
-      );
-
+    // Real now that a received line survives (M-02 d21) — a part-shipped line
+    // genuinely reads "3 of 4" and can be received again.
     return app.pendingOrders
-      .filter((o) => o.supplierId === supplier.id)
+      .filter((o) => o.supplierId === supplier.id && isOpenOrderLine(o, app.invoices))
       .map((order) => {
         const record = app.recordFor(order.recordId);
-        const received = receivedAgainst(order.id);
+        const received = receivedAgainst(order.id, app.invoices);
         return {
           order,
-          outstanding: Math.max(0, order.qty - received),
+          outstanding: outstandingQty(order, app.invoices),
           partiallyReceived: received > 0,
           label: record ? `${record.artist} — ${record.title}` : order.recordId,
           meta:
@@ -66,11 +59,12 @@ export function OutstandingPanel({
             // M-02 raises a line before a Manager places it on a PO. It is
             // still something to receive against, but nothing was ordered yet.
             (order.poNumber ? ` · ${order.poNumber}` : " · not on a PO") +
-            (order.customerId ? " · customer hold" : ""),
+            (order.customerId ? " · customer hold" : "") +
+            (order.status ? ` · ${order.status.toLowerCase()}` : "") +
+            (order.expectedDate ? ` due ${order.expectedDate}` : ""),
           art: record?.art,
         };
       })
-      .filter((r) => r.outstanding > 0)
       .sort(
         (a, b) =>
           (a.order.poNumber ?? "~").localeCompare(b.order.poNumber ?? "~") ||
