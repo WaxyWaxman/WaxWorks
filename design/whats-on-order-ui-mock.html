@@ -479,6 +479,30 @@ table.sheet input.qty {
   padding: 2px 5px; border: 1px solid var(--c-border-strong); border-radius: var(--radius-sm); text-align: right;
 }
 table.sheet .newly { animation: flash 900ms ease-out; }
+
+/* d29 — a mark, never a block. It names the existing line, because "you have
+   one of these on order" is only actionable if you can see WHICH and how old. */
+.dupe {
+  display: block; font-size: 10.5px; color: var(--c-warn); font-weight: 600; margin-top: 1px;
+}
+.dupe .mono { font-weight: 700; }
+table.sheet tr.has-dupe td { background: var(--c-warn-soft); }
+
+/* Discard asks first and says what it is about to destroy (d30). */
+.confirm {
+  position: absolute; inset: 0; z-index: 30; display: grid; place-items: center;
+  background: rgba(17,17,17,0.42); padding: var(--sp-5);
+}
+.confirm-box {
+  background: var(--c-surface); border: 1px solid var(--c-ink); max-width: 400px;
+  padding: var(--sp-4); box-shadow: 0 8px 28px rgba(17,17,17,0.3);
+}
+.confirm-box h3 { margin: 0 0 var(--sp-2); font-size: 18px; letter-spacing: -0.02em; }
+.confirm-box p { margin: 0 0 var(--sp-3); font-size: 13px; color: var(--c-ink-soft); }
+.confirm-acts { display: flex; gap: var(--sp-2); justify-content: flex-end; }
+
+/* The slab advertises an open draft, so "leave open" is never "lose it". */
+.resume { box-shadow: inset 3px 0 0 var(--c-accent); }
 @keyframes flash { from { background: var(--c-accent-soft); } to { background: transparent; } }
 @media (prefers-reduced-motion: reduce) { table.sheet .newly { animation: none; } }
 
@@ -546,7 +570,7 @@ table.props td:first-child { white-space: nowrap; font-weight: 700; color: var(-
       <p>M-02 Phase 3 laid out the way Sell, Find, Receive, Customers and Suppliers already are — a retractable slab on the left, the work in the middle, the thing you are acting on pinned to the right. Layout mock, not working code. The two modals go away: <strong>Set status</strong> and <strong>Re-flag</strong> become the right track, which is also where the line's log finally becomes readable. <strong>Bulk entry</strong> is a second mode of the middle track, with <em>two destinations</em> — raise as pending, or record as already placed. M-02 d25&ndash;d28 are recorded.</p>
     </div>
     <span class="stamp">branch WhatsOnOrder-UI</span>
-    <span class="stamp live">decisions recorded — M-02 d25–d28</span>
+    <span class="stamp live">decisions recorded — M-02 d25–d30</span>
   </header>
 
   <div class="controls">
@@ -604,6 +628,7 @@ table.props td:first-child { white-space: nowrap; font-weight: 700; color: var(-
 
           <div class="slab-acts">
             <button class="btn ink" id="new-btn">＋ Order placed elsewhere</button>
+            <button class="btn accent resume" id="resume-btn" hidden></button>
           </div>
 
           <div class="slab-search">
@@ -646,14 +671,27 @@ table.props td:first-child { white-space: nowrap; font-weight: 700; color: var(-
         </div>
 
         <!-- --- bulk-entry mode --- -->
-        <div id="entry-mode" hidden style="display:flex;flex-direction:column;min-height:0;flex:1">
+        <div id="entry-mode" hidden style="display:flex;flex-direction:column;min-height:0;flex:1;position:relative">
           <div class="main-head entry-head">
             <div style="min-width:0">
               <h2>Record an order placed elsewhere</h2>
               <div class="badges" id="e-badges"></div>
             </div>
             <div class="head-acts">
-              <button class="btn sm" id="entry-cancel">Cancel</button>
+              <button class="btn sm" id="entry-leave">← Leave open</button>
+              <button class="btn sm danger" id="entry-discard">Discard batch</button>
+            </div>
+          </div>
+
+          <div class="confirm" id="discard-confirm" hidden>
+            <div class="confirm-box">
+              <h3>Discard this batch?</h3>
+              <p id="discard-say"></p>
+              <p class="xsmall muted">Leaving it open instead keeps every line and puts it back on the slab, where you can pick it up after you have served whoever just walked up <span class="cite">(d30)</span>.</p>
+              <div class="confirm-acts">
+                <button class="btn" id="discard-no">Keep it open</button>
+                <button class="btn danger" id="discard-yes">Discard</button>
+              </div>
             </div>
           </div>
 
@@ -838,6 +876,23 @@ table.props td:first-child { white-space: nowrap; font-weight: 700; color: var(-
       <p><strong>It also gives the separator its job back.</strong> The first pass said the separator had no work here, and for the placed route that is still true — d3's streams are a property of the <em>pending</em> pile. A bulk-raised pending batch is exactly such a stream. So the field is not a special case: it appears when the destination is pending and is absent when it is placed, which is the field working as specified.</p>
       <p><strong>Why the choice is at the head, not a second button at the foot.</strong> The two routes need different fields. A foot-level <em>add to pending</em> would silently discard a PO reference and a placed-on date you had already typed — and an order somebody believes is placed, sitting quietly in the pending pile, is a worse failure than any keystroke it saves. At the head the fields follow the choice, the foot button says exactly what will happen, and the scan-first-decide-after instinct survives: flip the toggle whenever you like, the lines stay.</p>
       <p><strong>The gate falls out for free.</strong> A PurchaseOrder is manager-created; a pending line is not. So an Employee is offered one destination and a Manager both — two routes that genuinely differ rather than one route with a switch.</p>
+    </section>
+
+    <section class="note">
+      <h2>Leaving is not discarding</h2>
+      <p><strong>Cancel was one button doing two jobs.</strong> It read as destructive and behaved as <em>back</em> — it dropped you on the on-order list and the batch went with it, unannounced. Either meaning is defensible; having both in one control is not, and the failure is silent in both directions: you press it meaning <em>back</em> and lose a stack, or you press it meaning <em>throw this away</em> and it quietly survives.</p>
+      <p>So there are two controls. <strong>← Leave open</strong> keeps every line and hands you back the on-order screen. <strong>Discard batch</strong> asks first, and the question names what it is about to destroy — <em>"3 lines (7 units) will be thrown away"</em> — because a confirmation that does not say what it costs is a dialog people learn to dismiss. Discarding an <em>empty</em> batch asks nothing: there is nothing to lose, and a prompt that always answers itself is how people stop reading prompts.</p>
+      <p><strong>Leaving only works if you can get back.</strong> An open batch is announced where you left from: the slab's action button becomes <em>↩ Resume batch — 3 lines</em>, and the shut strip's tile carries the count. That is the half your instinct was pointing at, and it is the half that makes <em>leave</em> safe — a batch you can leave but cannot find again is a batch you have lost.</p>
+      <p>The shape is not new. <span class="cite">E-02 d4</span> already says a draft Invoice is <strong>"draft-persisted and resumable; deletable before finalize"</strong>, for exactly this reason: a stack half scanned at the counter gets interrupted by whoever walks up next. An order draft is that same thing on the ordering side, so <strong>d30 borrows the shape rather than inventing one</strong>.</p>
+      <p><strong>It comes with a bill, and the bill is paid in M-01.</strong> Anything that persists can be forgotten, and a forgotten draft going stale in silence is precisely what M-01 d14's in-flight band exists to catch — which is why an open order draft now joins that band as a fourth kind, alongside draft Invoices, open POs and Pending claims. That commitment is written into <em>M-01's</em> Inherited section, not left sitting in M-02 where the screen that has to honour it would never see it.</p>
+    </section>
+
+    <section class="note">
+      <h2>The mark, and why it never blocks</h2>
+      <p>d28 left the sheet blind: no on hand, no minimum on hand, no sight of an existing line. d29 gives back the one piece that actually costs money to miss — <strong>this title is already outstanding with this supplier</strong> — and gives it back as a <em>mark</em>.</p>
+      <p><strong>Not a block, because the sheet cannot know whether the duplicate is a mistake.</strong> Ordering more of something already on order is ordinary when the first order is late, short, or backordered <span class="cite">(d12)</span>. A block would refuse a legitimate order with no way through, and the workaround people find for that is to stop using the sheet.</p>
+      <p>So the mark <strong>names the line</strong> — <em>"Already on order — IDS-88213, ordered, 9d, 3 outstanding"</em> — rather than showing a warning triangle. A bare "duplicate!" tells you to go somewhere else and look it up; the PO number, the state and the age let you decide where you stand. The batch panel counts how many are marked, so a long sheet does not hide them below the fold.</p>
+      <p><strong>What stays open:</strong> whether the titlecard route shows the same mark. It has the stock context this sheet lacks, so it <em>can</em> — but nothing says it does, and a shop that learns to trust the mark in one place will be surprised by its absence in the other. Recorded as an open question on M-02 rather than assumed.</p>
     </section>
 
     <section class="note">
@@ -1291,6 +1346,15 @@ function renderScope() {
 // ---------------------------------------------------------------------------
 // Bulk entry
 // ---------------------------------------------------------------------------
+/**
+ * d29 — the open line this scan would duplicate, or null. Marks, never blocks:
+ * the sheet cannot know whether a duplicate is a mistake, and reordering
+ * something already on order is ordinary when the first order is late or short.
+ */
+function existingOpenLine(rid, sup) {
+  return LINES.find((l) => l.rid === rid && l.sup === sup && outstanding(l) > 0 && l.status !== "Cancelled") || null;
+}
+
 function poTaken(ref) {
   return LINES.some((l) => l.po.toLowerCase() === ref.trim().toLowerCase());
 }
@@ -1338,9 +1402,11 @@ function renderEntryForm() {
   $("e-body").innerHTML = S.entry.lines.length
     ? S.entry.lines.map((row, i) => {
         const r = rec(row.rid);
-        return `<tr${S.lastAdded === i ? ' class="newly"' : ""}>
+        const dupe = existingOpenLine(row.rid, S.entry.sup);
+        const cls = [S.lastAdded === i ? "newly" : "", dupe ? "has-dupe" : ""].filter(Boolean).join(" ");
+        return `<tr${cls ? ` class="${cls}"` : ""}>
           <td><input class="qty" type="number" min="1" value="${row.qty}" data-qty="${i}"></td>
-          <td><strong>${esc(r.artist)}</strong> — ${esc(r.title)}</td>
+          <td><strong>${esc(r.artist)}</strong> — ${esc(r.title)}${dupe ? `<span class="dupe">Already on order — <span class="mono">${esc(dupe.po)}</span>, ${stateOf(dupe).toLowerCase()}, ${ageOf(dupe)}d, ${outstanding(dupe)} outstanding</span>` : ""}</td>
           <td class="mono xsmall muted">${esc(r.cat)}</td>
           <td class="r mono">${money(r.price, STORE_CUR)}</td>
           <td class="r"><button class="btn sm ghost danger" data-drop="${i}" title="Remove">✕</button></td>
@@ -1390,6 +1456,11 @@ function renderBatch() {
         </div>
         <div class="caveat">Readiness gates the <em>processing</em> screen <span class="cite">(M-02 step 4, M-01)</span>. It gates nothing here: the order already went out. A batch below the minimum is a fact about an order that exists.${s.minAmt > 0 && s.cur !== STORE_CUR ? ` <strong>Which currency the minimum amount is in is not recorded</strong> — M-01 gives it a <em>basis</em> (Net / Retail) but no currency, so this comparison is unitless and shown bare.` : ""}</div>
       </div>
+      ${(() => { const d = lines.filter((r) => existingOpenLine(r.rid, S.entry.sup)); return d.length ? `
+      <div class="sec">
+        <span class="lab">Already on order</span>
+        <div class="caveat" style="border-left-color:var(--c-warn);color:var(--c-warn)">${d.length} of these ${d.length === 1 ? "is" : "are"} already outstanding with ${esc(s.name)}. Marked, not blocked — reordering something late or short is ordinary, and only you know which this is <span class="cite">(d29)</span>.</div>
+      </div>` : ""; })()}
       <div class="sec">
         <span class="lab">What this does</span>
         ${placed ? `
@@ -1424,6 +1495,18 @@ function render() {
   $("slab-open").hidden = !S.slabOpen;
   $("strip").hidden = S.slabOpen;
   $("t-slab").setAttribute("aria-pressed", String(S.slabOpen));
+
+  // An open draft is announced wherever you are, in both slab states — a batch
+  // you can leave but cannot find again is a batch you have lost (d30).
+  const draftN = S.entry.lines.length;
+  const open = draftN > 0 && S.mode !== "entry";
+  $("resume-btn").hidden = !open;
+  $("new-btn").hidden = open;
+  if (open) $("resume-btn").textContent = `↩ Resume batch — ${draftN} line${draftN === 1 ? "" : "s"}`;
+  $("strip-new").innerHTML = open
+    ? `↩<span class="rail-badge">${draftN}</span>`
+    : "＋";
+  $("strip-new").title = open ? `Resume the open batch — ${draftN} lines` : "Record an order placed elsewhere";
   document.querySelectorAll(".mode-btn").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.mode === S.mode)));
   document.querySelectorAll(".role-btn").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.role === S.role)));
   $("track-mode").hidden = S.mode !== "track";
@@ -1439,8 +1522,28 @@ $("t-slab").onclick = () => { S.slabOpen = !S.slabOpen; render(); };
 $("slab-collapse").onclick = () => { S.slabOpen = false; render(); };
 $("strip-expand").onclick = () => { S.slabOpen = true; render(); };
 document.querySelectorAll(".mode-btn").forEach((b) => (b.onclick = () => { S.mode = b.dataset.mode; render(); }));
-$("new-btn").onclick = $("strip-new").onclick = () => { S.mode = "entry"; S.slabOpen = true; render(); $("e-scan").focus(); };
-$("entry-cancel").onclick = () => { S.mode = "track"; render(); };
+$("new-btn").onclick = $("resume-btn").onclick = $("strip-new").onclick = () => {
+  S.mode = "entry"; S.slabOpen = true; render(); $("e-scan").focus();
+};
+// d30 — two jobs, two controls. Leaving keeps the batch; discarding asks
+// first and names what it is about to destroy.
+$("entry-leave").onclick = () => { S.mode = "track"; render(); };
+$("entry-discard").onclick = () => {
+  const n = S.entry.lines.length;
+  if (!n) { S.mode = "track"; render(); return; }   // nothing to lose, nothing to ask
+  const units = S.entry.lines.reduce((a, r) => a + r.qty, 0);
+  $("discard-say").innerHTML = `<strong>${n} line${n === 1 ? "" : "s"}</strong> (${units} unit${units === 1 ? "" : "s"}) will be thrown away. This cannot be undone.`;
+  $("discard-confirm").hidden = false;
+};
+$("discard-no").onclick = () => { $("discard-confirm").hidden = true; };
+$("discard-yes").onclick = () => {
+  const n = S.entry.lines.length;
+  $("discard-confirm").hidden = true;
+  S.entry = { sup: S.entry.sup, dest: S.entry.dest, po: "", sep: "", date: "2026-09-12", flag: 14, lines: [], err: "" };
+  S.mode = "track";
+  render();
+  toast(`Batch discarded — ${n} line${n === 1 ? "" : "s"} thrown away.`);
+};
 
 $("q").oninput = (e) => { S.q = e.target.value; S.sel = null; render(); };
 $("sort").onchange = (e) => { S.sort = e.target.value; render(); };
