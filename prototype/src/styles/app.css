@@ -1869,10 +1869,20 @@ tr.recv-flagged > td:first-child { box-shadow: inset 3px 0 0 var(--c-warn); }
 .wo-dest-opt .dt { font-size: var(--fs-sm); font-weight: 700; }
 .wo-dest-opt .dm { font-size: var(--fs-xs); color: var(--c-ink-soft); line-height: 1.35; }
 
-/* d29 — a mark, never a block. It names the line it found, because "you have
-   one of these on order" is only actionable if you can see which. */
-.wo-dupe { display: block; font-size: var(--fs-xs); color: var(--c-warn); font-weight: 600; margin-top: 1px; }
-table.data tr.has-dupe td { background: var(--c-warn-soft); }
+/* d33 — what is already here or coming, stated and not judged. These are the
+   figures the titlecard shows for free; the sheet has no titlecard, which is
+   the whole of d28's accepted consequence. Zeroes stay visible and grey so
+   every row reads the same shape, and a non-zero carries itself without an
+   alarm colour — d32 made the duplicate the ordinary case, and an amber row
+   that fires on the ordinary case is one people learn to scroll past. */
+.wo-stockline {
+  display: block; margin-top: 1px;
+  font-family: var(--font-mono); font-size: var(--fs-xs); color: var(--c-ink-faint);
+  /* One line, always. Stacked over four rows these figures stop being a
+     glance and become something to read, which defeats the point of them. */
+  white-space: nowrap;
+}
+.wo-stockline .on { color: var(--c-ink); font-weight: 700; }
 
 /* ---- Track 3: the line ---- */
 .wo-track {
