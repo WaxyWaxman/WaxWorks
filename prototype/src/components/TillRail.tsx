@@ -5,6 +5,7 @@ import { money } from "../lib/money";
 import { saleTotals } from "../lib/totals";
 import { useApp } from "../store/AppStore";
 import { HoldsModal, OtherFunctionsModal, SearchModal } from "./TillFunctions";
+import { ChevronLeft, ChevronRight } from "./Chevrons";
 
 // The till rail (E-05 d30). Closed it is a 52px strip of the things you
 // START — new sale, new return, holds, past sales. Open it is a drawer of
@@ -40,16 +41,6 @@ function saveRailOpen(open: boolean) {
 
 const ICON = { width: 19, height: 19, viewBox: "0 0 24 24", fill: "none", stroke: "currentColor" } as const;
 
-const ChevronRight = () => (
-  <svg {...ICON} strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-    <path d="M9 5l7 7-7 7" />
-  </svg>
-);
-const ChevronLeft = () => (
-  <svg {...ICON} strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-    <path d="M15 5l-7 7 7 7" />
-  </svg>
-);
 const Plus = () => (
   <svg {...ICON} strokeWidth="2" strokeLinecap="round" aria-hidden="true">
     <path d="M12 5v14M5 12h14" />
