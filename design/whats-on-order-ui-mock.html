@@ -436,6 +436,22 @@ body {
 .f .err { font-size: 10.5px; color: var(--c-danger); font-weight: 600; }
 .f.mono-in input { font-family: var(--font-mono); }
 
+/* The destination chooser. Two real options side by side rather than a
+   checkbox, because the two routes differ in fields, gate and consequence —
+   a tickbox would understate that (d28). */
+.dest { display: grid; grid-template-columns: 1fr 1fr; gap: var(--sp-2); }
+.dest-opt {
+  display: flex; flex-direction: column; gap: 3px; text-align: left; cursor: pointer; font: inherit;
+  border: 1px solid var(--c-border-strong); background: var(--c-surface); color: var(--c-ink);
+  padding: var(--sp-3); border-radius: var(--radius-sm);
+}
+.dest-opt:hover { border-color: var(--c-ink); }
+.dest-opt[aria-pressed="true"] { border-color: var(--c-ink); box-shadow: inset 3px 0 0 var(--c-accent); background: var(--c-surface-2); }
+.dest-opt:disabled { opacity: 0.4; cursor: not-allowed; }
+.dest-opt:focus-visible { outline: 2px solid var(--c-accent); outline-offset: 2px; }
+.dest-opt .dt { font-size: 13.5px; font-weight: 700; }
+.dest-opt .dm { font-size: 11px; color: var(--c-ink-soft); line-height: 1.35; }
+
 /* The scan sheet. Big box, cursor lives in it, everything else already set. */
 .sheet-scan {
   display: flex; flex-direction: column; gap: 6px;
@@ -527,10 +543,10 @@ table.props td:first-child { white-space: nowrap; font-weight: 700; color: var(-
   <header class="masthead">
     <div>
       <h1>What's on Order, in three tracks</h1>
-      <p>M-02 Phase 3 laid out the way Sell, Find, Receive, Customers and Suppliers already are — a retractable slab on the left, the work in the middle, the thing you are acting on pinned to the right. Layout mock, not working code. The two modals go away: <strong>Set status</strong> and <strong>Re-flag</strong> become the right track, which is also where the line's log finally becomes readable. <strong>Bulk entry</strong> is proposed as a second mode of the middle track, and needs decisions appended to M-02 before it is built.</p>
+      <p>M-02 Phase 3 laid out the way Sell, Find, Receive, Customers and Suppliers already are — a retractable slab on the left, the work in the middle, the thing you are acting on pinned to the right. Layout mock, not working code. The two modals go away: <strong>Set status</strong> and <strong>Re-flag</strong> become the right track, which is also where the line's log finally becomes readable. <strong>Bulk entry</strong> is a second mode of the middle track, with <em>two destinations</em> — raise as pending, or record as already placed. M-02 d25&ndash;d28 are recorded.</p>
     </div>
     <span class="stamp">branch WhatsOnOrder-UI</span>
-    <span class="stamp live">proposed — not ratified</span>
+    <span class="stamp live">decisions recorded — M-02 d25–d28</span>
   </header>
 
   <div class="controls">
@@ -540,6 +556,10 @@ table.props td:first-child { white-space: nowrap; font-weight: 700; color: var(-
     <span class="lab">Mode</span>
     <button class="toggle mode-btn" data-mode="track" aria-pressed="true">Tracking</button>
     <button class="toggle mode-btn" data-mode="entry" aria-pressed="false">Bulk entry</button>
+    <span class="ctl-sep"></span>
+    <span class="lab">Viewer</span>
+    <button class="toggle role-btn" data-role="manager" aria-pressed="true">Manager</button>
+    <button class="toggle role-btn" data-role="employee" aria-pressed="false">Employee</button>
     <span class="ctl-sep"></span>
     <span class="xsmall muted">Search, scan, chips, sort, PO scoping and line selection are all live. Today is <span class="mono">12/09/2026</span>. Try scanning <span class="mono">075992511018</span>.</span>
   </div>
@@ -630,10 +650,7 @@ table.props td:first-child { white-space: nowrap; font-weight: 700; color: var(-
           <div class="main-head entry-head">
             <div style="min-width:0">
               <h2>Record an order placed elsewhere</h2>
-              <div class="badges">
-                <span class="badge accent">Proposed — M-02 has no decision for this yet</span>
-                <span class="badge ink">Manager</span>
-              </div>
+              <div class="badges" id="e-badges"></div>
             </div>
             <div class="head-acts">
               <button class="btn sm" id="entry-cancel">Cancel</button>
@@ -643,6 +660,22 @@ table.props td:first-child { white-space: nowrap; font-weight: 700; color: var(-
           <div class="entry-scroll">
             <div class="group">
               <div class="group-head">
+                <span class="lab">Where these lines go</span>
+                <span class="xsmall muted">Chosen here, not at the foot — so no field on screen is about to be discarded <span class="cite">(d28)</span></span>
+              </div>
+              <div class="dest">
+                <button class="dest-opt" data-dest="pending">
+                  <span class="dt">Raise as pending</span>
+                  <span class="dm">Joins this supplier's pending pile to be processed and sent the normal way. Plain Phase 1 <span class="cite">(d1)</span> — an Employee may do this.</span>
+                </button>
+                <button class="dest-opt" data-dest="placed">
+                  <span class="dt">Already placed elsewhere</span>
+                  <span class="dm">The order went out on their website or over the phone. Born placed, carrying their reference <span class="cite">(d25)</span>. Manager-only.</span>
+                </button>
+              </div>
+              <div class="xsmall muted" id="dest-say" style="margin-top:-4px"></div>
+
+              <div class="group-head" style="margin-top:var(--sp-2)">
                 <span class="lab">The order</span>
                 <span class="xsmall muted">Set once, stamped on every line below</span>
               </div>
@@ -658,7 +691,7 @@ table.props td:first-child { white-space: nowrap; font-weight: 700; color: var(-
                   <span class="hint">Free-text, need not be numeric <span class="cite">(d16)</span>. Leave blank to mint our next one. Auto-numbering skips whatever you type here.</span>
                   <span class="err" id="e-po-err" hidden></span>
                 </label>
-                <label class="f">
+                <label class="f" id="e-date-f">
                   <span class="lab">Placed on</span>
                   <input type="date" id="e-date" value="2026-09-12">
                   <span class="hint"><strong>Not today by default in real use.</strong> You ordered on their site days ago; stamping <em>now</em> would start the follow-up window late and put the line in the wrong place in an age sort <span class="cite">(d8, d18, d19)</span>.</span>
@@ -668,11 +701,14 @@ table.props td:first-child { white-space: nowrap; font-weight: 700; color: var(-
                   <input type="number" id="e-flag" value="14" min="0">
                   <span class="hint">Every line carries one <span class="cite">(d8)</span>. Counted from <em>Placed on</em>, not from now.</span>
                 </label>
-                <div class="f wide">
-                  <span class="lab">Not offered here</span>
-                  <div class="caveat" style="margin-top:0">
-                    <strong>No ordering separator.</strong> A separator splits a supplier's <em>pending</em> lines into independently sendable streams <span class="cite">(d3)</span>. These lines were never in a stream — they are born placed — so the field would have no job. <strong>No send.</strong> Nothing is emailed and no document is printed: the order already went out <span class="cite">(d6)</span>.
-                  </div>
+                <label class="f mono-in" id="e-sep-f">
+                  <span class="lab">Ordering separator</span>
+                  <input type="text" id="e-sep" maxlength="1" placeholder="blank">
+                  <span class="hint">One optional letter, splitting this supplier's pending lines into independently sendable streams <span class="cite">(d3)</span>. Blank joins the regular pile. Landing on a separator already in use prompts to merge <span class="cite">(d17)</span>.</span>
+                </label>
+                <div class="f wide" id="e-caveat-f">
+                  <span class="lab">What this destination changes</span>
+                  <div class="caveat" style="margin-top:0" id="e-caveat"></div>
                 </div>
               </div>
             </div>
@@ -716,10 +752,10 @@ table.props td:first-child { white-space: nowrap; font-weight: 700; color: var(-
   <div class="notes">
 
     <section class="note wide">
-      <h2>Before this is built: what M-02 has to say first</h2>
+      <h2>What M-02 now says</h2>
       <div class="warnbox">
         <p><strong>The layout needs no decisions.</strong> Three tracks, a retractable slab and a sticky right column are how this app already works — E-05 d29 by way of E-02 d38, E-07 d17 and M-01 d17. Folding the two modals into track 3 changes no behaviour: <em>Set status</em> and <em>Re-flag</em> do exactly what <span class="cite">d12, d22, d8, d18</span> already say, in a place that does not cover the table.</p>
-        <p><strong>Bulk entry needs one decision row, and it is an extension, not a supersession.</strong> M-02 d1 says ordering is two-stage — Employees raise pending lines, Managers process them into POs. A line entered here is <strong>born placed</strong> and never passes through Phase 1. d1 does not forbid that; it never contemplated it. But someone reading d1 alone would conclude the opposite, so it has to be written down in the house pattern — the way d21 clarifies d9 and d22 extends d12. Proposed wording is below. <em>Status: recommended, not yet ratified.</em></p>
+        <p><strong>Bulk entry took four rows, and every one is an extension rather than a supersession.</strong> M-02 d1 says ordering is two-stage — Employees raise pending lines, Managers process them into POs. A line recorded as already placed is <strong>born placed</strong> and never passes through Phase 1; d1 does not forbid that, it never contemplated it. <strong>d28 is the one that came out of review</strong>, and it makes the sheet better than the version that went in: the same scan sheet also raises <em>pending</em> lines, which is plain Phase 1 by another door and therefore needs <em>less</em> justification than d25's route, not more.</p>
         <p><strong>What it is worth.</strong> Not paperwork tidiness. <span class="cite">d20</span> makes a receiving scan attach automatically to a matching PO line for that supplier and carry its expected cost and quantity forward. Without these lines on file, a box from a website order arrives as a <em>cold invoice</em> — fully supported <span class="cite">(E-02:17)</span>, but every line is priced and picked by hand. With them, it receives like any other PO. That is the argument, and it is a receiving argument, not an ordering one.</p>
       </div>
 
@@ -736,6 +772,10 @@ table.props td:first-child { white-space: nowrap; font-weight: 700; color: var(-
         <tr>
           <td>M-02 d27</td>
           <td><strong>Recording an order queues the catalogue metadata prefetch, the same as processing a stream does.</strong> Step 8 says prefetch is queued <em>on placement</em>; this is a placement. Without it, the one case bulk entry exists to serve — receiving a box against a website order — is also the case that misses locally on every scan and falls back to live lookup <span class="cite">(M-02 Inherited, A-12a)</span>. <em>Not a new obligation</em>, an explicit reading of step 8 for a placement route it predates.</td>
+        </tr>
+        <tr>
+          <td>M-02 d28 <span class="badge ok">recorded</span></td>
+          <td><strong>The bulk entry sheet has two destinations, chosen at its head: raise the lines as <em>pending</em>, or record them as already <em>placed</em> (d25).</strong> Three things follow from the choice rather than being separately configurable. The <strong>separator</strong> is offered only for pending — d3's streams are a property of the pending pile, and a line born placed was never in one. The <strong>PO reference and placed-on date</strong> are offered only for placed. And the <strong>gate differs</strong>: raising pending lines is an Employee action <span class="cite">(d1)</span>, recording a PurchaseOrder is manager-only <span class="cite">(lexicon)</span> — toggle the viewer above and watch the placed option go away. The destination sits at the head rather than as a second button at the foot so no field on screen is ever about to be silently discarded. Switching keeps whatever is already scanned. <em>Accepted consequence:</em> the sheet has no stock context, so bulk raising can create a second pending line for a title already on order.</td>
         </tr>
       </table>
     </section>
@@ -793,6 +833,14 @@ table.props td:first-child { white-space: nowrap; font-weight: 700; color: var(-
     </section>
 
     <section class="note">
+      <h2>Two destinations, one sheet</h2>
+      <p>The sheet was built for orders placed on a supplier's website. The obvious next question — <em>why can't it also raise a normal order?</em> — turns out to have a better answer than "it can't". <strong>Raising pending lines in bulk is plain Phase 1.</strong> d1 says Employees raise pending lines; steps 1&ndash;3 describe the titlecard door without ever making it the only one. The pending destination needs <em>less</em> justification than the placed one.</p>
+      <p><strong>It also gives the separator its job back.</strong> The first pass said the separator had no work here, and for the placed route that is still true — d3's streams are a property of the <em>pending</em> pile. A bulk-raised pending batch is exactly such a stream. So the field is not a special case: it appears when the destination is pending and is absent when it is placed, which is the field working as specified.</p>
+      <p><strong>Why the choice is at the head, not a second button at the foot.</strong> The two routes need different fields. A foot-level <em>add to pending</em> would silently discard a PO reference and a placed-on date you had already typed — and an order somebody believes is placed, sitting quietly in the pending pile, is a worse failure than any keystroke it saves. At the head the fields follow the choice, the foot button says exactly what will happen, and the scan-first-decide-after instinct survives: flip the toggle whenever you like, the lines stay.</p>
+      <p><strong>The gate falls out for free.</strong> A PurchaseOrder is manager-created; a pending line is not. So an Employee is offered one destination and a Manager both — two routes that genuinely differ rather than one route with a switch.</p>
+    </section>
+
+    <section class="note">
       <h2>Whose currency each figure is in</h2>
       <p>The first draft of this mock printed the retail total in the Supplier's currency. That is wrong, and M-01 d14 already says so: <strong>"a foreign-currency Supplier shows its own currency; the store equivalent needs the configured rate <span class="cite">(M-06)</span> and is not invented."</strong> The rule cuts both ways — ours is not to be shown as theirs either.</p>
       <p>So: <strong>sell price and retail are ours, always CAD</strong>, because a sell price is a shelf price. <strong>Estimated cost is also CAD</strong>, because M-02 step 4 derives it from our retail less their discount — it is a store-currency number that happens to approximate a foreign invoice. Indie Direct Supply will invoice in <span class="mono">USD</span>, the screen says so, and <strong>nothing here converts</strong>. The prototype is already honest about this in Accounts Payable <span class="cite">(prototype.md:161)</span>; this screen should not be the one that starts inventing rates.</p>
@@ -803,6 +851,7 @@ table.props td:first-child { white-space: nowrap; font-weight: 700; color: var(-
       <h2>Open, and deliberately left open</h2>
       <ul>
         <li><strong>A reference that collides with one of ours.</strong> <code>poNumberTaken</code> exists <span class="cite">(AppStore.tsx:687)</span> and the field rejects a duplicate — but d16 only says auto-numbering <em>skips</em> a manually entered number. Whether a collision should be refused outright or merged into the existing PO is not decided, and this mock refuses it without claiming that is the answer.</li>
+        <li><strong>Duplicate raising.</strong> d28's accepted consequence: the sheet cannot see stock or existing lines, so nothing stops a second pending line for a title already on order. Whether it should warn — and whether that warning blocks or merely marks — is now an open question on M-02. It is <em>adjacent to</em> the duplicate-suppression half of <em>Reorder suggestion</em>, which is about generated suggestions rather than a person scanning a stack.</li>
         <li><strong>A scan that matches nothing.</strong> The record has to exist before a line can point at it. Whether bulk entry can mint a Record inline or must send you to E-04 first is undecided; the mock says so and stops.</li>
         <li><strong>Customer attachment on a bulk line.</strong> d13 creates a Held Sale on receipt of a customer-attached line. Nothing says an entered-after-the-fact line cannot carry one, and it plainly could — but the whole point of this sheet is speed, and a per-line customer picker is the slowest field there is. Left off, and named here rather than quietly dropped.</li>
         <li><strong>Order acknowledgements</strong> <span class="cite">(M-02, open)</span> is untouched. Recording an order placed elsewhere is not the same as knowing the supplier has it.</li>
@@ -924,7 +973,8 @@ const S = {
   sort: "age",
   scope: "all",        // "all" | a PO number
   sel: null,           // selected line id
-  entry: { sup: "indi", po: "", date: "2026-09-12", flag: 14, lines: [], err: "" },
+  role: "manager",
+  entry: { sup: "indi", dest: "placed", po: "", sep: "", date: "2026-09-12", flag: 14, lines: [], err: "" },
   lastAdded: null,
 };
 
@@ -1254,7 +1304,30 @@ function renderEntryForm() {
   const s = SUPPLIERS[S.entry.sup];
   $("e-sup-hint").innerHTML = `Order via <strong>${esc(s.via)}</strong> · discount ${s.disc}% · ${s.cur}${s.via === "Their Website" ? " — this is the case the sheet exists for." : ""}`;
 
+  // d28 — the gate differs by destination, so an Employee is offered one and a
+  // Manager both. Forcing it here rather than merely disabling the button keeps
+  // the sheet from ever showing fields the viewer could not use.
+  const placed = S.entry.dest === "placed";
+  document.querySelectorAll(".dest-opt").forEach((b) => {
+    const isPlaced = b.dataset.dest === "placed";
+    b.setAttribute("aria-pressed", String(isPlaced === placed));
+    b.disabled = isPlaced && S.role !== "manager";
+  });
+  $("e-po-f").hidden = !placed;
+  $("e-date-f").hidden = !placed;
+  $("e-sep-f").hidden = placed;
+  $("e-badges").innerHTML = placed
+    ? `<span class="badge accent">Recorded as placed <span class="cite">(d25)</span></span><span class="badge ink">Manager only</span>`
+    : `<span class="badge">Raised as pending — plain Phase 1 <span class="cite">(d1)</span></span><span class="badge ok">Employee or Manager</span>`;
+  $("dest-say").innerHTML = placed
+    ? `Nothing is sent: no email, no printable document <span class="cite">(d6)</span>. The order already went out.`
+    : `These join the pending pile. Nothing is sent yet either — a Manager processes the stream and sends it <span class="cite">(step 6)</span>.`;
+  $("e-caveat").innerHTML = placed
+    ? `<strong>No ordering separator.</strong> A separator splits a supplier's <em>pending</em> lines into independently sendable streams <span class="cite">(d3)</span>. These lines were never in a stream — they are born placed — so the field would have no job. <strong>No PO of ours is minted</strong> unless you leave the reference blank.`
+    : `<strong>No PO reference and no placed-on date.</strong> Neither exists yet: a pending line has not been sent anywhere <span class="cite">(d1)</span>, so its age runs from when it was raised and the PO number is assigned when the stream is Processed <span class="cite">(step 7)</span>. <strong>The separator is offered instead</strong> — this batch is exactly the kind of stream d3 exists to keep apart.`;
+
   $("e-po").value = S.entry.po;
+  $("e-sep").value = S.entry.sep;
   $("e-date").value = S.entry.date;
   $("e-flag").value = S.entry.flag;
   const bad = Boolean(S.entry.err);
@@ -1284,7 +1357,8 @@ function renderBatch() {
   const retail = lines.reduce((n, r) => n + r.qty * rec(r.rid).price, 0);
   const cost = retail * (1 - s.disc / 100);
   const ref = S.entry.po.trim();
-  const ok = lines.length > 0 && !S.entry.err;
+  const placed = S.entry.dest === "placed";
+  const ok = lines.length > 0 && !(placed && S.entry.err);
 
   // Informational only — the order has already been placed, so nothing gates
   // on the minimum (M-02 step 4 shows readiness on the PROCESSING screen).
@@ -1297,7 +1371,9 @@ function renderBatch() {
     <div class="waiting${ok ? " live" : " none"}">
       <div class="lab"><span>This batch</span><span class="xsmall mono">${lines.length} line${lines.length === 1 ? "" : "s"}</span></div>
       <div class="w-name">${esc(s.name)}</div>
-      <div class="w-sub">${ref ? `<span class="mono">${esc(ref)}</span> — their reference` : "No reference yet — ours will be minted on placement"} · placed ${age <= 0 ? "today" : age + "d ago"}</div>
+      <div class="w-sub">${placed
+        ? `${ref ? `<span class="mono">${esc(ref)}</span> — their reference` : "No reference yet — ours will be minted on placement"} · placed ${age <= 0 ? "today" : age + "d ago"}`
+        : `Pending stream${S.entry.sep.trim() ? ` <span class="mono">${esc(S.entry.sep.trim().toUpperCase())}</span>` : " — regular pile"} · no PO until it is processed`}</div>
     </div>
     <div class="acct-head">
       <div class="lab">Estimated cost</div>
@@ -1315,17 +1391,28 @@ function renderBatch() {
         <div class="caveat">Readiness gates the <em>processing</em> screen <span class="cite">(M-02 step 4, M-01)</span>. It gates nothing here: the order already went out. A batch below the minimum is a fact about an order that exists.${s.minAmt > 0 && s.cur !== STORE_CUR ? ` <strong>Which currency the minimum amount is in is not recorded</strong> — M-01 gives it a <em>basis</em> (Net / Retail) but no currency, so this comparison is unitless and shown bare.` : ""}</div>
       </div>
       <div class="sec">
-        <span class="lab">What placing this does</span>
-        <div class="logline"><span class="at">1</span><span>Writes ${lines.length || "n"} line${lines.length === 1 ? "" : "s"} already carrying <span class="mono">${esc(ref || "PO-1046")}</span> — born placed, never pending <span class="cite">(proposed d25)</span>.</span></div>
-        <div class="logline"><span class="at">2</span><span>Stamps <span class="mono">${esc(S.entry.date.split("-").reverse().join("/"))}</span> as the placed date, so the follow-up window and the age sort are right from the first render <span class="cite">(proposed d26)</span>.</span></div>
-        <div class="logline"><span class="at">3</span><span>Queues the MusicBrainz metadata prefetch for these titles, so receiving the box hits the local database <span class="cite">(step 8, proposed d27)</span>.</span></div>
-        <div class="logline"><span class="at">4</span><span>Writes the reason into each line's log — “recorded as placed, ordered on their website” — so the history says where it came from <span class="cite">(d23)</span>.</span></div>
+        <span class="lab">What this does</span>
+        ${placed ? `
+        <div class="logline"><span class="at">1</span><span>Writes ${lines.length || "n"} line${lines.length === 1 ? "" : "s"} already carrying <span class="mono">${esc(ref || "PO-1046")}</span> — born placed, never pending <span class="cite">(d25)</span>.</span></div>
+        <div class="logline"><span class="at">2</span><span>Stamps <span class="mono">${esc(S.entry.date.split("-").reverse().join("/"))}</span> as the placed date, so the follow-up window and the age sort are right from the first render <span class="cite">(d26)</span>.</span></div>
+        <div class="logline"><span class="at">3</span><span>Queues the MusicBrainz metadata prefetch for these titles, so receiving the box hits the local database <span class="cite">(step 8, d27)</span>.</span></div>
+        <div class="logline"><span class="at">4</span><span>Writes the reason into each line's log — “recorded as placed, ordered on their website” <span class="cite">(d23)</span>.</span></div>
         <div class="logline"><span class="at">5</span><span><strong>Sends nothing.</strong> No email, no printable document <span class="cite">(d6)</span>. The order already went out.</span></div>
+        ` : `
+        <div class="logline"><span class="at">1</span><span>Raises ${lines.length || "n"} <strong>pending</strong> line${lines.length === 1 ? "" : "s"} against ${esc(s.name)}${S.entry.sep.trim() ? `, separator <span class="mono">${esc(S.entry.sep.trim().toUpperCase())}</span>` : ""} — plain Phase 1 <span class="cite">(d1, d28)</span>.</span></div>
+        <div class="logline"><span class="at">2</span><span>They join the pending pile and appear on the <strong>order processing</strong> screen as one stream, grouped by supplier + separator <span class="cite">(d4)</span>.</span></div>
+        <div class="logline"><span class="at">3</span><span><strong>No PO number and no placed date yet</strong> — both are assigned when a Manager Processes the stream <span class="cite">(step 7)</span>.</span></div>
+        <div class="logline"><span class="at">4</span><span>No prefetch yet either: it is queued <em>on placement</em> <span class="cite">(step 8)</span>, which has not happened.</span></div>
+        <div class="logline"><span class="at">5</span><span><strong>Nothing reaches the supplier.</strong> Processing the stream is what sends it <span class="cite">(step 6)</span>.</span></div>
+        `}
       </div>
+      ${placed ? "" : `<div class="sec"><div class="caveat">This sheet cannot see stock. Unlike the titlecard route it shows no on hand, no minimum on hand and no existing outstanding line, so it can raise a <strong>second</strong> pending line for a title already on order <span class="cite">(d28, accepted consequence)</span>. Whether it should warn is an open question, not a decision.</div></div>`}
     </div>
     <div class="acct-foot">
-      <button class="btn accent primary" data-act="place"${ok ? "" : " disabled"}>Place ${lines.length || ""} line${lines.length === 1 ? "" : "s"}<br>on ${esc(ref || "our next PO")}</button>
-      <div class="foot-sub">${S.entry.err ? S.entry.err : ok ? "They go straight onto this screen as ordered." : "Add at least one line."}</div>
+      <button class="btn accent primary" data-act="place"${ok ? "" : " disabled"}>${placed
+        ? `Place ${lines.length || ""} line${lines.length === 1 ? "" : "s"}<br>on ${esc(ref || "our next PO")}`
+        : `Add ${lines.length || ""} line${lines.length === 1 ? "" : "s"}<br>to the pending pile`}</button>
+      <div class="foot-sub">${placed && S.entry.err ? S.entry.err : !ok ? "Add at least one line." : placed ? "They go straight onto this screen as ordered." : "They go to order processing, not to this screen — nothing is on order until the stream is sent."}</div>
     </div>`;
 }
 
@@ -1338,6 +1425,7 @@ function render() {
   $("strip").hidden = S.slabOpen;
   $("t-slab").setAttribute("aria-pressed", String(S.slabOpen));
   document.querySelectorAll(".mode-btn").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.mode === S.mode)));
+  document.querySelectorAll(".role-btn").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.role === S.role)));
   $("track-mode").hidden = S.mode !== "track";
   $("entry-mode").hidden = S.mode !== "entry";
 
@@ -1422,6 +1510,19 @@ function footAct(act) {
 }
 
 // ---- entry-mode wiring ----
+document.querySelectorAll(".role-btn").forEach((b) => (b.onclick = () => {
+  S.role = b.dataset.role;
+  // An Employee cannot record a PurchaseOrder (d28), so the sheet falls back to
+  // the destination they can actually use rather than showing a dead option.
+  if (S.role !== "manager" && S.entry.dest === "placed") S.entry.dest = "pending";
+  render();
+}));
+document.querySelectorAll(".dest-opt").forEach((b) => (b.onclick = () => {
+  if (b.disabled) return;
+  S.entry.dest = b.dataset.dest;   // the scanned lines survive the switch (d28)
+  render();
+}));
+$("e-sep").oninput = (e) => { S.entry.sep = e.target.value; renderBatch(); };
 $("e-sup").onchange = (e) => { S.entry.sup = e.target.value; render(); };
 $("e-po").oninput = (e) => {
   S.entry.po = e.target.value;
@@ -1471,6 +1572,16 @@ $("e-body").oninput = (e) => {
 
 function placeBatch() {
   const s = SUPPLIERS[S.entry.sup];
+  if (S.entry.dest === "pending") {
+    // Pending lines never appear on THIS screen — "on order" is placed AND
+    // still expected. They go to order processing. Saying so is the point.
+    const n = S.entry.lines.length;
+    toast(`${n} pending line${n === 1 ? "" : "s"} raised against ${s.name}${S.entry.sep.trim() ? `, separator ${S.entry.sep.trim().toUpperCase()}` : ""} — waiting on order processing, not on order yet.`);
+    S.entry = { sup: S.entry.sup, dest: "pending", po: "", sep: "", date: "2026-09-12", flag: 14, lines: [], err: "" };
+    S.mode = "track";
+    render();
+    return;
+  }
   const ref = S.entry.po.trim() || "PO-1046";
   const stamp = new Date().toLocaleDateString("en-GB", { day: "2-digit", month: "2-digit" }) + " " +
                 new Date().toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" });
@@ -1483,7 +1594,7 @@ function placeBatch() {
     });
   }
   toast(`${n} line${n === 1 ? "" : "s"} recorded on ${ref}. Metadata prefetch queued.`);
-  S.entry = { sup: S.entry.sup, po: "", date: "2026-09-12", flag: 14, lines: [], err: "" };
+  S.entry = { sup: S.entry.sup, dest: "placed", po: "", sep: "", date: "2026-09-12", flag: 14, lines: [], err: "" };
   S.mode = "track";
   S.scope = ref;
   render();
