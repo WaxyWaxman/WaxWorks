@@ -1668,3 +1668,290 @@ tr.recv-flagged > td:first-child { box-shadow: inset 3px 0 0 var(--c-warn); }
   .sup-flight-scroll { max-height: 132px; }
   .sup-danger { bottom: auto; top: var(--sp-2); }
 }
+
+/* ============================================================
+   M-02 WHAT'S ON ORDER  (d25-d30)
+   ============================================================
+   The sixth screen on the till's frame (E-05 d29), after Find, Receiving,
+   Customers and Suppliers. Same 320 / 1fr / 344 skeleton, same slab, same
+   sticky right track — this screen earns no special width.
+
+   It shares .slab-head / .slab-search / .slab-chips / .slab-list /
+   .slab-strip / .filter-chip / .cust-standing / .cust-group / .cust-grid /
+   .cust-primary / .cust-foot-sub with the four before it rather than
+   restating them. Only what differs is below. */
+.wo-frame {
+  position: relative;
+  flex: 1; min-height: 0; min-width: 0;
+  display: grid; grid-template-columns: 320px minmax(0, 1fr) 344px;
+  background: var(--c-surface);
+}
+.wo-frame.slab-shut { grid-template-columns: 52px minmax(0, 1fr) 344px; }
+
+/* ---- Track 1: the order slab ---- */
+.wo-slab {
+  border-right: 1px solid var(--c-border-strong); background: var(--c-surface-2);
+  display: flex; flex-direction: column; min-height: 0; min-width: 0;
+}
+.wo-slab-acts { flex: none; display: flex; gap: var(--sp-2); padding: var(--sp-3) var(--sp-3) 0; }
+.wo-slab-acts .btn { flex: 1; justify-content: center; }
+.wo-sortbar {
+  flex: none; display: flex; align-items: center; gap: var(--sp-2);
+  padding: 6px var(--sp-3); border-bottom: 1px solid var(--c-border-strong);
+}
+.wo-sortbar select { flex: 1; font-size: var(--fs-xs); font-weight: 600; padding: 3px 6px; }
+
+/* The scan box is a peer of the search, not a control tucked under it — a
+   barcode is how you look up the line in your hand. */
+.wo-scanbox { display: flex; gap: 6px; align-items: center; }
+.wo-scanbox input {
+  flex: 1; min-width: 0; font-family: var(--font-mono);
+  font-size: var(--fs-sm); font-weight: 600; padding: 5px 8px;
+  border: 1px dashed var(--c-border-strong); border-radius: var(--radius-sm);
+  background: var(--c-surface); color: var(--c-ink);
+}
+.wo-scanbox input:focus { outline: 2px solid var(--c-accent); outline-offset: -1px; border-style: solid; }
+
+/* Overdue is the one chip state anybody has to act on, so it is the one that
+   carries colour before it is pressed. */
+.filter-chip.hot { border-color: var(--c-danger); color: var(--c-danger); }
+.filter-chip.hot .count { color: var(--c-danger); }
+.filter-chip.hot.on { background: var(--c-danger); border-color: var(--c-danger); color: #fff; }
+.filter-chip.hot.on .count { color: #fbdcd7; }
+
+/* One PurchaseOrder, two rows — the same skeleton as Suppliers' .sup. The tile
+   carries the number's tail, because for a recorded order that number is the
+   SUPPLIER's reference and is the only thing identifying it. */
+.po-row {
+  display: grid; grid-template-columns: 44px minmax(0, 1fr) auto; gap: 1px var(--sp-3);
+  align-items: baseline; width: 100%; text-align: left; cursor: pointer;
+  padding: var(--sp-2) var(--sp-3); border: none; border-bottom: 1px solid var(--c-border);
+  border-left: 3px solid transparent; background: var(--c-surface); font: inherit; color: var(--c-ink);
+}
+.po-row:hover { background: var(--c-surface-2); }
+.po-row.on { border-left-color: var(--c-accent); box-shadow: inset 0 0 0 1px var(--c-ink); }
+.po-row:focus-visible { outline: 2px solid var(--c-accent); outline-offset: -2px; }
+/* A PO whose lines all fell out of the current search stays listed but recedes
+   — scoping to it is still legal, it just has nothing matching in it. */
+.po-row.dim { opacity: 0.42; }
+.po-row .code {
+  grid-column: 1; grid-row: 1 / -1; align-self: center;
+  width: 44px; height: 34px; display: grid; place-items: center;
+  border: 1px solid var(--c-border); background: var(--c-surface-2);
+  font-family: var(--font-mono); font-size: var(--fs-xs); font-weight: 700; color: var(--c-ink-soft);
+}
+.po-row.ext .code { border-style: dashed; border-color: var(--c-ink-faint); }
+.po-row .t {
+  grid-column: 2; grid-row: 1; display: flex; align-items: baseline; gap: 5px;
+  font-size: var(--fs-sm); font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.po-row .m {
+  grid-column: 2; grid-row: 2; font-size: var(--fs-xs); color: var(--c-ink-faint);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.po-row .n {
+  grid-column: 3; grid-row: 1; font-family: var(--font-mono); font-size: var(--fs-sm);
+  font-weight: 700; text-align: right; font-variant-numeric: tabular-nums; color: var(--c-ink-soft);
+}
+.po-row .n.late { color: var(--c-danger); }
+.po-row .k {
+  grid-column: 3; grid-row: 2; text-align: right; white-space: nowrap;
+  font-family: var(--font-narrow); font-size: 9px; font-weight: 700;
+  letter-spacing: 0.05em; text-transform: uppercase; color: var(--c-ink-faint);
+}
+/* The permanent first row: step 9 lists lines oldest first ACROSS everything,
+   so the cross-PO view is never something you have to find your way back to. */
+.po-row.all { background: var(--c-surface-2); border-bottom: 2px solid var(--c-ink); }
+.po-row.all .code { border-color: var(--c-ink); background: var(--c-ink); color: #fff; }
+
+/* Order state as a dot — colour means STATE, the way Find's stock dots do. */
+.ord-dot { width: 9px; height: 9px; border-radius: 50%; flex: none; display: inline-block; }
+.ord-dot.late { background: var(--c-danger); }
+.ord-dot.back { background: var(--c-warn); }
+.ord-dot.ship { background: var(--c-ok); }
+.ord-dot.plain { background: var(--c-border-strong); }
+.po-tile {
+  position: relative; width: 38px; height: 38px; flex: none; padding: 0; cursor: pointer;
+  display: grid; place-items: center; border: 1px solid var(--c-border-strong);
+  border-radius: var(--radius-sm); background: var(--c-surface); color: var(--c-ink-soft);
+  font-family: var(--font-mono); font-size: 10.5px; font-weight: 700;
+}
+.po-tile:hover { border-color: var(--c-ink); }
+.po-tile.on { border-color: var(--c-ink); box-shadow: inset 3px 0 0 var(--c-accent); color: var(--c-ink); }
+.po-tile .ord-dot { position: absolute; bottom: -3px; right: -3px; width: 11px; height: 11px; border: 2px solid var(--c-surface-2); }
+
+/* ---- Track 2: the lines ---- */
+.wo-main { display: flex; flex-direction: column; min-width: 0; min-height: 0; background: var(--c-surface); }
+.wo-main-head {
+  flex: none; display: flex; align-items: flex-start; gap: var(--sp-3); flex-wrap: wrap;
+  padding: var(--sp-3) var(--sp-4); border-bottom: 2px solid var(--c-ink);
+}
+.wo-main-head h2 { margin: 0; font-size: 27px; letter-spacing: -0.025em; line-height: 1.1; }
+.wo-main-head.entry { background: var(--c-accent-soft); }
+.wo-head-acts { margin-left: auto; display: flex; gap: var(--sp-2); align-items: center; }
+.wo-list { flex: 1; min-height: 0; overflow-y: auto; }
+.wo-entry-scroll {
+  flex: 1; min-height: 0; overflow-y: auto; padding: var(--sp-4);
+  display: flex; flex-direction: column; gap: var(--sp-5);
+}
+
+/* d19 — overdue-first is a fixed GROUPING, not a sort of its own, so it gets a
+   band rather than rows silently floating to the top. */
+.wo-grp {
+  position: sticky; top: 0; z-index: 1;
+  display: flex; align-items: baseline; justify-content: space-between; gap: var(--sp-2);
+  padding: var(--sp-2) var(--sp-4); background: var(--c-surface-2);
+  border-top: 1px solid var(--c-border-strong); border-bottom: 1px solid var(--c-border-strong);
+}
+.wo-grp:first-child { border-top: none; }
+.wo-grp.late { background: var(--c-danger-soft); border-color: var(--c-danger); }
+.wo-grp.late .lab { color: var(--c-danger); }
+
+/* One order line. A button, because it opens in track 3. Age is the first
+   column and the biggest thing in the row, because age is what this screen is
+   about. */
+.wo-row {
+  display: grid; grid-template-columns: 46px minmax(0, 1fr) auto auto auto; gap: 2px var(--sp-3);
+  align-items: baseline; width: 100%; text-align: left; cursor: pointer; font: inherit; color: var(--c-ink);
+  padding: var(--sp-2) var(--sp-4); background: var(--c-surface);
+  border: none; border-bottom: 1px solid var(--c-border); border-left: 3px solid transparent;
+}
+.wo-row:hover { background: var(--c-surface-2); }
+.wo-row.on { border-left-color: var(--c-accent); box-shadow: inset 0 0 0 1px var(--c-ink); }
+.wo-row:focus-visible { outline: 2px solid var(--c-accent); outline-offset: -2px; }
+.wo-row .age {
+  grid-column: 1; grid-row: 1 / -1; align-self: center; text-align: right; line-height: 1;
+  font-family: var(--font-mono); font-size: var(--fs-md); font-weight: 700;
+  font-variant-numeric: tabular-nums; color: var(--c-ink-faint);
+}
+.wo-row.late .age { color: var(--c-danger); }
+.wo-row .age em {
+  display: block; font-style: normal; font-family: var(--font-narrow);
+  font-size: 8.5px; letter-spacing: 0.08em; text-transform: uppercase; margin-top: 2px;
+}
+.wo-row .t {
+  grid-column: 2; grid-row: 1; font-size: var(--fs-sm); font-weight: 600;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.wo-row .m {
+  grid-column: 2; grid-row: 2; font-size: var(--fs-xs); color: var(--c-ink-faint);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.wo-row .m .who { color: var(--c-accent); font-weight: 600; }
+.wo-row .q { grid-column: 3; grid-row: 1 / -1; align-self: center; text-align: right; white-space: nowrap; }
+.wo-row .q .v { font-family: var(--font-mono); font-size: var(--fs-base); font-weight: 700; font-variant-numeric: tabular-nums; }
+.wo-row .q .k {
+  display: block; font-family: var(--font-narrow); font-size: 8.5px; font-weight: 700;
+  letter-spacing: 0.06em; text-transform: uppercase; color: var(--c-ink-faint);
+}
+.wo-row .s {
+  grid-column: 4; grid-row: 1 / -1; align-self: center; width: 106px;
+  display: flex; flex-direction: column; align-items: flex-end; gap: 2px;
+}
+.wo-row .p {
+  grid-column: 5; grid-row: 1 / -1; align-self: center; text-align: right; width: 62px;
+  font-size: var(--fs-sm); font-weight: 700; font-variant-numeric: tabular-nums; color: var(--c-ink-soft);
+}
+
+/* The destination chooser (d28) — two real options side by side rather than a
+   tickbox, because the routes differ in fields, gate and consequence. */
+.wo-dest { display: grid; grid-template-columns: 1fr 1fr; gap: var(--sp-2); }
+.wo-dest-opt {
+  display: flex; flex-direction: column; gap: 3px; text-align: left; cursor: pointer; font: inherit;
+  border: 1px solid var(--c-border-strong); background: var(--c-surface); color: var(--c-ink);
+  padding: var(--sp-3); border-radius: var(--radius-sm);
+}
+.wo-dest-opt:hover { border-color: var(--c-ink); }
+.wo-dest-opt[aria-pressed="true"] {
+  border-color: var(--c-ink); background: var(--c-surface-2); box-shadow: inset 3px 0 0 var(--c-accent);
+}
+.wo-dest-opt:focus-visible { outline: 2px solid var(--c-accent); outline-offset: 2px; }
+.wo-dest-opt .dt { font-size: var(--fs-sm); font-weight: 700; }
+.wo-dest-opt .dm { font-size: var(--fs-xs); color: var(--c-ink-soft); line-height: 1.35; }
+
+/* d29 — a mark, never a block. It names the line it found, because "you have
+   one of these on order" is only actionable if you can see which. */
+.wo-dupe { display: block; font-size: var(--fs-xs); color: var(--c-warn); font-weight: 600; margin-top: 1px; }
+table.data tr.has-dupe td { background: var(--c-warn-soft); }
+
+/* ---- Track 3: the line ---- */
+.wo-track {
+  border-left: 2px solid var(--c-ink); background: var(--c-surface);
+  display: flex; flex-direction: column; min-height: 0;
+}
+/* Who is waiting sits above the age for the reason Waiting sits above the
+   balance on the Customer card: a late line with a name on it is a phone call
+   somebody is owed, not a supplier problem you get to eventually. */
+.wo-waiting {
+  flex: none; padding: var(--sp-3) var(--sp-4);
+  border-bottom: 1px solid var(--c-border); background: var(--c-surface-2);
+}
+.wo-waiting.live { background: var(--c-accent-soft); box-shadow: inset 3px 0 0 var(--c-ink); }
+.wo-waiting .lab { display: flex; align-items: baseline; justify-content: space-between; gap: var(--sp-2); }
+.wo-w-name { font-size: var(--fs-md); font-weight: 700; margin-top: 2px; }
+.wo-w-name.none { font-size: var(--fs-sm); font-weight: 600; color: var(--c-ink-faint); }
+.wo-w-sub { font-size: var(--fs-xs); color: var(--c-ink-soft); margin-top: 1px; }
+.wo-w-row { font-size: var(--fs-sm); margin-top: 2px; }
+
+.wo-track-head { flex: none; padding: var(--sp-3) var(--sp-4); }
+.wo-figure { font-size: 46px; font-weight: 800; line-height: 1; letter-spacing: -0.035em; font-variant-numeric: tabular-nums; }
+.wo-figure.late { color: var(--c-danger); }
+.wo-figure.nil { color: var(--c-ink-faint); font-size: 24px; font-weight: 700; }
+.wo-figure-say { margin-top: 4px; font-size: var(--fs-sm); font-weight: 600; }
+.wo-figure-sub { margin-top: 2px; font-size: var(--fs-xs); color: var(--c-ink-faint); }
+.wo-rule { flex: none; height: 2px; background: var(--c-ink); }
+.wo-track-mid {
+  flex: 1; min-height: 0; overflow-y: auto; padding: var(--sp-3) var(--sp-4);
+  display: flex; flex-direction: column; gap: var(--sp-4);
+}
+.wo-sec { display: flex; flex-direction: column; gap: 6px; }
+.wo-sec-empty { font-size: var(--fs-xs); color: var(--c-ink-faint); padding: 4px 0; }
+.wo-title { font-size: var(--fs-md); font-weight: 700; line-height: 1.2; }
+.wo-caveat {
+  font-size: var(--fs-xs); color: var(--c-ink-faint);
+  border-left: 2px solid var(--c-border-strong); padding-left: 7px;
+}
+.wo-caveat.warn { color: var(--c-warn); border-left-color: var(--c-warn); }
+.cust-standing .stat .v.part { color: var(--c-warn); }
+
+/* d23's log, on the floor of the scroll — the same place History sits on the
+   Customer card and the Log on the Supplier card. */
+.wo-logline {
+  display: grid; grid-template-columns: 74px minmax(0, 1fr); gap: var(--sp-2);
+  padding: 5px 0; border-bottom: 1px solid var(--c-border); font-size: var(--fs-xs);
+}
+.wo-logline .at { color: var(--c-ink-faint); }
+
+/* Set status and Re-flag, inline in the track rather than over the table. */
+.wo-editor {
+  display: flex; flex-direction: column; gap: var(--sp-2);
+  border: 1px solid var(--c-ink); background: var(--c-surface-2);
+  padding: var(--sp-3); border-radius: var(--radius-sm);
+}
+.wo-editor .field { margin: 0; }
+.wo-editor .btn-row { justify-content: flex-end; }
+
+.wo-track-foot {
+  flex: none; border-top: 2px solid var(--c-ink); background: var(--c-surface);
+  padding: var(--sp-3) var(--sp-4); display: flex; flex-direction: column; gap: 6px;
+}
+
+/* Under ~1180 the right track drops to a band underneath, the same move every
+   other screen makes. 58dvh like Customers and Suppliers, because this track
+   also carries two fixed bands above its scroll — Waiting AND the age. */
+@media (max-width: 1180px) {
+  .wo-frame { grid-template-columns: 320px minmax(0, 1fr); grid-template-rows: minmax(0, 1fr) auto; }
+  .wo-frame.slab-shut { grid-template-columns: 52px minmax(0, 1fr); }
+  .wo-slab { grid-row: 1 / -1; }
+  .wo-main { grid-column: 2; grid-row: 1; }
+  .wo-track {
+    grid-column: 2; grid-row: 2;
+    border-left: none; border-top: 2px solid var(--c-ink); max-height: 58dvh;
+  }
+  .wo-waiting, .wo-track-head { padding: var(--sp-2) var(--sp-4); }
+  .wo-figure { font-size: 34px; }
+  .wo-figure-sub { display: none; }
+  .wo-dest { grid-template-columns: 1fr; }
+  .wo-row { grid-template-columns: 46px minmax(0, 1fr) auto auto; }
+  .wo-row .p { display: none; }
+}

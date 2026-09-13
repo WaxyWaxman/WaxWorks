@@ -8,8 +8,9 @@ import { SeparatorSelect } from "./SeparatorSelect";
 
 // A Record's current shelf price — the sticky price for New stock, else
 // whatever an existing (unsold) copy is priced at. Just a default; freely
-// overridden below.
-function defaultSellPrice(record: RecordEntry, inventory: InventoryItem[]): number {
+// overridden below. Exported because the bulk sheet needs the same default
+// for the same reason (M-02 step 2), and two copies of it would drift.
+export function defaultSellPrice(record: RecordEntry, inventory: InventoryItem[]): number {
   if (record.stickyPrice) return record.stickyPrice;
   const copy = inventory.find((i) => i.recordId === record.id && i.status !== "sold");
   return copy?.price ?? 0;

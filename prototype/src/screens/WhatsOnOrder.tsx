@@ -1,65 +1,190 @@
 import { useMemo, useState } from "react";
-import { BarcodeInput } from "../components/BarcodeInput";
-import { Modal } from "../components/Modal";
-import { ORDER_LINE_STATUSES } from "../data/types";
-import type { Invoice, OrderLineStatus, PendingOrderLine } from "../data/types";
+import {
+  blankDraft,
+  BulkOrderBatch,
+  BulkOrderSheet,
+  type BulkDraft,
+} from "../components/BulkOrderSheet";
+import { OrderLineTrack, OrderScopeTrack } from "../components/OrderLineTrack";
+import { OrderSlab, type OrderChip, type OrderSort, type PoRow } from "../components/OrderSlab";
+import type { PendingOrderLine } from "../data/types";
 import { money } from "../lib/money";
-import { daysAgo, followUpDueAt, isFollowUpOverdue } from "../lib/totals";
 import { isPlacedOrderLine, orderLineState, outstandingQty } from "../lib/orderLines";
+import { readStored, writeStored } from "../lib/tillMemory";
+import { daysAgo, followUpDueAt, isFollowUpOverdue } from "../lib/totals";
 import { useApp } from "../store/AppStore";
 
-// What's on Order (M-02 Phase 3) — every placed line still expected.
+// What's on Order (M-02 Phase 3), laid out as the till's three tracks — the
+// same frame as Sell, Find, Receive, Customers and Suppliers (E-05 d29 by way
+// of E-02 d38, E-07 d17, M-01 d17). The frame is pinned to the viewport and
+// each track scrolls on its own, so the search box and the primary action are
+// always where they were last time.
 //
-// "Still expected" is derived, not stored, and that is the whole change here.
-// A line used to be DELETED when it was received, so "on order" could be read
-// off existence: still in the array with a PO number. M-02 d21 stops that —
-// a placed line is never deleted, it is Cancelled or it is received — so the
-// question is now placed AND outstanding AND not cancelled, with outstanding
-// counted off the Invoice lines pointing back at it (E-02 d30). That is what
-// makes a part-received line readable: 2 of 5, still waiting for three.
+// "On order" is placed AND still expected. A line survives being received now
+// (d21), so filtering on `poNumber` alone would keep listing copies already on
+// the shelf — `isPlacedOrderLine` is the one place that question is answered.
 //
-// Set status covers the statuses a PERSON sets — Shipped with the supplier's
-// expected date, Backordered, Cancelled (d12, d22) — each one written to the
-// line's own log (d23). Pending and Ordered are not offered because they are
-// derived from whether the line has a PO number, and Received is not offered
-// because it is counted: a status contradicting the count would just be a
-// second, wrong answer. Voiding a PO is still not built.
-type SortKey = "age" | "title" | "artist";
+// Both of Phase 3's modals moved into track 3, which is also where the line's
+// log (d23) finally becomes readable without opening the thing that changes it.
 
-const SAMPLE_CODES = [
-  { code: "081227971609", label: "UPC · Blue" },
-  { code: "075992511018", label: "UPC · Purple Rain" },
-  { code: "888751545519", label: "UPC · Kind of Blue" },
-  { code: "060758004321", label: "UPC · Horses" },
-];
+const SLAB_KEY = "waxworks.onorder.slab";
+const DRAFT_KEY = "waxworks.onorder.draft";
 
 export function WhatsOnOrder() {
   const app = useApp();
-  const [query, setQuery] = useState("");
-  const [statusMsg, setStatusMsg] = useState<string | null>(null);
-  const [sortKey, setSortKey] = useState<SortKey>("age");
-  const [supplierFilter, setSupplierFilter] = useState("");
-  const [poFilter, setPoFilter] = useState("");
-  const [reflagTarget, setReflagTarget] = useState<PendingOrderLine | null>(null);
-  const [statusTarget, setStatusTarget] = useState<PendingOrderLine | null>(null);
 
-  // "On order" is placed AND still expected. A line survives being received
-  // now (M-02 d21), so filtering on `poNumber` alone would keep listing copies
-  // that are already on the shelf.
+  const [slabOpen, setSlabOpen] = useState(() => readStored(SLAB_KEY, true));
+  const [query, setQuery] = useState("");
+  const [chip, setChip] = useState<OrderChip>("all");
+  const [sort, setSort] = useState<OrderSort>("age");
+  const [scope, setScope] = useState("all");
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [statusMsg, setStatusMsg] = useState<string | null>(null);
+
+  // d30 — an unfinished batch is a draft: it persists immediately and is
+  // resumable, the same shape E-02 d4 gives a draft Invoice, because a stack
+  // half scanned at the counter is interrupted by whoever walks up next.
+  // Held in till memory rather than in the store: it is not an entity anyone
+  // else can see, and nothing downstream reads it.
+  const [draft, setDraft] = useState<BulkDraft | null>(() =>
+    readStored<BulkDraft | null>(DRAFT_KEY, null),
+  );
+  const [sheetOpen, setSheetOpen] = useState(false);
+  const [discarding, setDiscarding] = useState(false);
+
+  const saveSlab = (open: boolean) => {
+    setSlabOpen(open);
+    writeStored(SLAB_KEY, open);
+  };
+  const saveDraft = (next: BulkDraft | null) => {
+    setDraft(next);
+    writeStored(DRAFT_KEY, next);
+  };
+
   const onOrder = useMemo(
     () => app.pendingOrders.filter((o) => isPlacedOrderLine(o, app.invoices)),
     [app.pendingOrders, app.invoices],
   );
 
-  const suppliersOnOrder = useMemo(
-    () => app.suppliers.filter((sup) => onOrder.some((o) => o.supplierId === sup.id)).sort((a, b) => a.name.localeCompare(b.name)),
-    [app.suppliers, onOrder],
+  const matches = (o: PendingOrderLine, q: string) => {
+    if (!q) return true;
+    const rec = app.recordFor(o.recordId);
+    const sup = app.supplierFor(o.supplierId);
+    return [
+      rec?.artist,
+      rec?.title,
+      rec && `${rec.artist} — ${rec.title}`, // matches what a scan fills the box with
+      rec?.catalogNo,
+      rec?.manufacturerUpc,
+      o.poNumber,
+      sup?.name,
+      sup?.shortName,
+    ]
+      .filter(Boolean)
+      .some((f) => String(f).toLowerCase().includes(q));
+  };
+
+  const searched = useMemo(
+    () => onOrder.filter((o) => matches(o, query.trim().toLowerCase())),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [onOrder, query, app.records, app.suppliers],
   );
-  const posOnOrder = useMemo(
-    () =>
-      [...new Set(onOrder.filter((o) => !supplierFilter || o.supplierId === supplierFilter).map((o) => o.poNumber!))].sort(),
-    [onOrder, supplierFilter],
+
+  // Chip counts are of what the SEARCH left and not of the current scope —
+  // otherwise a chip reading 3 filters to nothing. Same rule Customers uses.
+  const counts = useMemo(() => {
+    const c: Record<OrderChip, number> = {
+      all: searched.length,
+      late: 0,
+      shipped: 0,
+      backordered: 0,
+      part: 0,
+      waiting: 0,
+    };
+    for (const o of searched) {
+      if (isFollowUpOverdue(o)) c.late += 1;
+      if (o.status === "Shipped") c.shipped += 1;
+      if (o.status === "Backordered") c.backordered += 1;
+      if (orderLineState(o, app.invoices) === "Part received") c.part += 1;
+      if (o.customerId) c.waiting += 1;
+    }
+    return c;
+  }, [searched, app.invoices]);
+
+  const chipped = useMemo(() => {
+    switch (chip) {
+      case "late":
+        return searched.filter(isFollowUpOverdue);
+      case "shipped":
+        return searched.filter((o) => o.status === "Shipped");
+      case "backordered":
+        return searched.filter((o) => o.status === "Backordered");
+      case "part":
+        return searched.filter((o) => orderLineState(o, app.invoices) === "Part received");
+      case "waiting":
+        return searched.filter((o) => o.customerId);
+      default:
+        return searched;
+    }
+  }, [searched, chip, app.invoices]);
+
+  const pos: PoRow[] = useMemo(() => {
+    const by = new Map<string, PoRow>();
+    for (const o of onOrder) {
+      const po = o.poNumber!;
+      if (!by.has(po)) {
+        by.set(po, {
+          poNumber: po,
+          supplier: app.supplierFor(o.supplierId),
+          lines: [],
+          oldest: o.placedAt ?? o.createdAt,
+          overdue: 0,
+          external: false,
+          matched: false,
+        });
+      }
+      const row = by.get(po)!;
+      row.lines.push(o);
+      if (isFollowUpOverdue(o)) row.overdue += 1;
+      if (o.recordedAt) row.external = true;
+      if ((o.placedAt ?? o.createdAt) < row.oldest) row.oldest = o.placedAt ?? o.createdAt;
+      if (searched.includes(o)) row.matched = true;
+    }
+    return [...by.values()].sort((a, b) => a.oldest.localeCompare(b.oldest));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [onOrder, searched, app.suppliers]);
+
+  const cmp = useMemo(
+    () => (a: PendingOrderLine, b: PendingOrderLine) => {
+      if (sort === "age") {
+        return (a.placedAt ?? a.createdAt).localeCompare(b.placedAt ?? b.createdAt);
+      }
+      const ra = app.recordFor(a.recordId);
+      const rb = app.recordFor(b.recordId);
+      return sort === "title"
+        ? (ra?.title ?? "").localeCompare(rb?.title ?? "")
+        : (ra?.artist ?? "").localeCompare(rb?.artist ?? "");
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [sort, app.records],
   );
+
+  const scoped = useMemo(
+    () => (scope === "all" ? chipped : chipped.filter((o) => o.poNumber === scope)),
+    [chipped, scope],
+  );
+
+  // d19 — overdue is a fixed GROUPING and each group is sorted by whatever the
+  // current sort is, rather than overdue being a sort mode of its own.
+  const { late, rest } = useMemo(
+    () => ({
+      late: scoped.filter(isFollowUpOverdue).sort(cmp),
+      rest: scoped.filter((o) => !isFollowUpOverdue(o)).sort(cmp),
+    }),
+    [scoped, cmp],
+  );
+
+  const selected = selectedId ? onOrder.find((o) => o.id === selectedId) ?? null : null;
 
   const doScan = (code: string) => {
     const rec = app.records.find((r) => r.manufacturerUpc === code.trim());
@@ -68,396 +193,288 @@ export function WhatsOnOrder() {
       setStatusMsg(`Matched ${rec.artist} — ${rec.title} by UPC.`);
     } else {
       setQuery(code.trim());
-      setStatusMsg(`No catalog UPC match for "${code}" — filtering as a keyword instead.`);
+      setStatusMsg(`No catalog UPC match for “${code}” — filtering as a keyword instead.`);
     }
+    setSelectedId(null);
   };
 
-  const rows = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    const filtered = onOrder.filter((o) => {
-      if (supplierFilter && o.supplierId !== supplierFilter) return false;
-      if (poFilter && o.poNumber !== poFilter) return false;
-      if (!q) return true;
-      const rec = app.recordFor(o.recordId);
-      const sup = app.supplierFor(o.supplierId);
-      return [
-        rec?.artist,
-        rec?.title,
-        rec && `${rec.artist} — ${rec.title}`, // matches what a UPC scan fills the box with, and what the row displays
-        rec?.catalogNo,
-        rec?.manufacturerUpc,
-        o.poNumber,
-        sup?.name,
-        sup?.shortName,
-      ]
-        .filter(Boolean)
-        .some((f) => String(f).toLowerCase().includes(q));
-    });
+  const poError =
+    draft && draft.dest === "placed" && draft.poNumber.trim() && app.poNumberTaken(draft.poNumber.trim())
+      ? `${draft.poNumber.trim()} is already in use — auto-numbering skips it (d16), but whether a collision merges or is refused is undecided.`
+      : "";
 
-    const cmp = (a: PendingOrderLine, b: PendingOrderLine): number => {
-      if (sortKey === "age") return a.createdAt.localeCompare(b.createdAt); // oldest first
-      const ra = app.recordFor(a.recordId);
-      const rb = app.recordFor(b.recordId);
-      if (sortKey === "title") return (ra?.title ?? "").localeCompare(rb?.title ?? "");
-      return (ra?.artist ?? "").localeCompare(rb?.artist ?? "");
-    };
+  const openSheet = () => {
+    if (!draft) saveDraft(blankDraft(app.suppliers[0]?.id ?? ""));
+    setSheetOpen(true);
+  };
 
-    // Overdue lines always surface at the top (M-02 §"Tracking what's on
-    // order", step 9), sorted the same way as everything else within each
-    // group rather than by a separate rule.
-    const overdue = filtered.filter((o) => isFollowUpOverdue(o)).sort(cmp);
-    const rest = filtered.filter((o) => !isFollowUpOverdue(o)).sort(cmp);
-    return [...overdue, ...rest];
-  }, [onOrder, query, supplierFilter, poFilter, sortKey, app]);
+  const commit = () => {
+    if (!draft) return;
+    if (draft.dest === "placed") {
+      const res = app.recordPlacedOrder({
+        supplierId: draft.supplierId,
+        poNumber: draft.poNumber.trim() || undefined,
+        placedOn: draft.placedOn,
+        followUpDays: draft.followUpDays,
+        lines: draft.lines,
+      });
+      if (!res) return;
+      setStatusMsg(
+        `${res.lineCount} line${res.lineCount === 1 ? "" : "s"} (${res.unitCount} units) recorded on ${res.poNumber}. Nothing was sent — the order already went out (d25).`,
+      );
+      setScope(res.poNumber);
+    } else {
+      for (const l of draft.lines) {
+        app.raisePendingOrderLine({
+          recordId: l.recordId,
+          supplierId: draft.supplierId,
+          separator: draft.separator.trim() || undefined,
+          qty: l.qty,
+          sellPrice: l.sellPrice,
+          followUpDays: draft.followUpDays,
+        });
+      }
+      const sup = app.supplierFor(draft.supplierId);
+      setStatusMsg(
+        `${draft.lines.length} pending line${draft.lines.length === 1 ? "" : "s"} raised against ${sup?.name}${draft.separator.trim() ? `, separator ${draft.separator.trim()}` : ""} — waiting on Order Processing, not on order yet.`,
+      );
+    }
+    saveDraft(null);
+    setSheetOpen(false);
+    setSelectedId(null);
+  };
+
+  const waiting = scoped
+    .filter((o) => o.customerId)
+    .map((o) => ({
+      line: o,
+      name: app.customerFor(o.customerId)?.name ?? "A customer",
+      late: isFollowUpOverdue(o),
+      title: app.recordFor(o.recordId)?.title ?? o.recordId,
+    }));
 
   return (
-    <div>
-      <div className="page-head">
-        <span className="flow-id">M-02</span>
-        <div>
-          <h1>What's on Order</h1>
-          <p className="sub">
-            Every individual line placed on a PurchaseOrder and not yet received, oldest first.
-            Lines past their follow-up flag surface at the top in red. Set status (Backordered /
-            Cancelled) and voiding a PO aren't built yet — this is tracking only.
-          </p>
-        </div>
-      </div>
+    <div className={"wo-frame" + (slabOpen ? "" : " slab-shut")}>
+      <OrderSlab
+        open={slabOpen}
+        onOpenChange={saveSlab}
+        query={query}
+        onQueryChange={(q) => {
+          setQuery(q);
+          setSelectedId(null);
+        }}
+        onScan={doScan}
+        chip={chip}
+        onChipChange={(c) => {
+          setChip(c);
+          setSelectedId(null);
+        }}
+        counts={counts}
+        sort={sort}
+        onSortChange={setSort}
+        pos={pos}
+        totalLines={searched.length}
+        totalOverdue={counts.late}
+        scope={scope}
+        onScopeChange={(s) => {
+          setScope(s);
+          setSelectedId(null);
+        }}
+        onNewBatch={openSheet}
+        draftLineCount={sheetOpen ? 0 : (draft?.lines.length ?? 0)}
+      />
 
-      <div className="card" style={{ marginBottom: "var(--sp-4)" }}>
-        <div className="card-body stack">
-          <label className="field" style={{ margin: 0 }}>
-            <span>Search — artist, title, catalog no., UPC, PO, or supplier</span>
-            <input
-              type="search"
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              placeholder="try: blue · PO-1042 · F.A.B."
-            />
-          </label>
-          <BarcodeInput onScan={doScan} placeholder="…or scan a barcode to filter directly" samples={SAMPLE_CODES} />
-          <div className="row wrap" style={{ gap: "var(--sp-3)" }}>
-            <label className="field" style={{ margin: 0 }}>
-              <span>Sort</span>
-              <select value={sortKey} onChange={(e) => setSortKey(e.target.value as SortKey)}>
-                <option value="age">Age (oldest first)</option>
-                <option value="title">Title</option>
-                <option value="artist">Artist</option>
-              </select>
-            </label>
-            <label className="field" style={{ margin: 0 }}>
-              <span>Filter — supplier</span>
-              <select
-                value={supplierFilter}
-                onChange={(e) => {
-                  setSupplierFilter(e.target.value);
-                  setPoFilter("");
-                }}
-              >
-                <option value="">All suppliers</option>
-                {suppliersOnOrder.map((sup) => (
-                  <option key={sup.id} value={sup.id}>
-                    {sup.name} ({sup.shortName})
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label className="field" style={{ margin: 0 }}>
-              <span>Filter — PO</span>
-              <select value={poFilter} onChange={(e) => setPoFilter(e.target.value)}>
-                <option value="">All POs</option>
-                {posOnOrder.map((po) => (
-                  <option key={po} value={po}>
-                    {po}
-                  </option>
-                ))}
-              </select>
-            </label>
-          </div>
-          {statusMsg && <div className="callout ok">{statusMsg}</div>}
-        </div>
-      </div>
+      {sheetOpen && draft ? (
+        <>
+          <BulkOrderSheet
+            draft={draft}
+            onChange={(patch) => saveDraft({ ...draft, ...patch })}
+            onLeave={() => setSheetOpen(false)}
+            onDiscardAsk={() => (draft.lines.length ? setDiscarding(true) : setSheetOpen(false))}
+            onDiscardCancel={() => setDiscarding(false)}
+            onDiscard={() => {
+              const n = draft.lines.length;
+              setDiscarding(false);
+              saveDraft(null);
+              setSheetOpen(false);
+              setStatusMsg(`Batch discarded — ${n} line${n === 1 ? "" : "s"} thrown away.`);
+            }}
+            poError={poError}
+            discarding={discarding}
+          />
+          <BulkOrderBatch draft={draft} poError={poError} onCommit={commit} />
+        </>
+      ) : (
+        <>
+          <section className="wo-main">
+            <div className="wo-main-head">
+              <div style={{ minWidth: 0 }}>
+                <h2>{scope === "all" ? "Everything on order" : scope}</h2>
+                <div className="row wrap" style={{ gap: "var(--sp-2)", marginTop: 6 }}>
+                  {scope === "all" ? (
+                    <>
+                      <span className="badge mono">
+                        {scoped.length} line{scoped.length === 1 ? "" : "s"}
+                      </span>
+                      <span className="badge">
+                        {scoped.reduce((n, l) => n + outstandingQty(l, app.invoices), 0)} units
+                        outstanding
+                      </span>
+                    </>
+                  ) : (
+                    <>
+                      <span className="badge ink">
+                        {pos.find((p) => p.poNumber === scope)?.supplier?.name ?? "—"}
+                      </span>
+                      {pos.find((p) => p.poNumber === scope)?.external && (
+                        <span className="badge accent">recorded — placed elsewhere</span>
+                      )}
+                    </>
+                  )}
+                  {late.length > 0 && (
+                    <span className="badge danger">{late.length} overdue</span>
+                  )}
+                  {chip !== "all" && <span className="badge accent">filtered</span>}
+                </div>
+              </div>
+            </div>
 
-      <div className="card">
-        <div className="card-head">
-          On order
-          <span className="muted xsmall">{rows.length} line{rows.length === 1 ? "" : "s"}</span>
-        </div>
-        <div className="card-body" style={{ padding: 0 }}>
-          <table className="data">
-            <thead>
-              <tr>
-                <th className="num">Age</th>
-                <th>Item</th>
-                <th>Supplier</th>
-                <th>PO</th>
-                <th>Status</th>
-                <th className="num">Qty</th>
-                <th className="num">Sell price</th>
-                <th>Customer</th>
-                <th>Follow-up</th>
-                <th />
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map((line) => {
-                const rec = app.recordFor(line.recordId);
-                const sup = app.supplierFor(line.supplierId);
-                const cust = app.customerFor(line.customerId);
-                const overdue = isFollowUpOverdue(line);
-                const due = followUpDueAt(line);
-                return (
-                  <tr key={line.id} className={overdue ? "overdue" : undefined}>
-                    <td className="num">{daysAgo(line.createdAt)}d</td>
-                    <td>{rec ? `${rec.artist} — ${rec.title}` : line.recordId}</td>
-                    <td>
-                      {sup?.name} <span className="mono xsmall muted">({sup?.shortName})</span>
-                    </td>
-                    <td className="mono small">{line.poNumber}</td>
-                    <td>
-                      <OrderStatusCell line={line} invoices={app.invoices} />
-                    </td>
-                    {/* Outstanding, not ordered — a part-received line is
-                        still waiting for the remainder (E-02 d30). */}
-                    <td className="num">
-                      {outstandingQty(line, app.invoices)}
-                      {outstandingQty(line, app.invoices) !== line.qty && (
-                        <span className="xsmall muted"> of {line.qty}</span>
-                      )}
-                    </td>
-                    <td className="num">{money(line.sellPrice)}</td>
-                    <td className="small">{cust ? cust.name : "—"}</td>
-                    <td>
-                      {due == null ? (
-                        <span className="muted small">— none set —</span>
-                      ) : overdue ? (
-                        <span className="badge danger">
-                          Overdue {Math.floor((Date.now() - due) / 86400000)}d
-                        </span>
-                      ) : (
-                        <span className="small muted">Due in {Math.ceil((due - Date.now()) / 86400000)}d</span>
-                      )}
-                    </td>
-                    <td className="num">
-                      <div className="btn-row" style={{ justifyContent: "flex-end" }}>
-                        <button className="btn sm" onClick={() => setStatusTarget(line)}>
-                          Status
-                        </button>
-                        <button className="btn sm" onClick={() => setReflagTarget(line)}>
-                          Re-flag
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                );
-              })}
-              {rows.length === 0 && (
-                <tr>
-                  <td colSpan={10} className="small muted">
-                    Nothing on order{query || supplierFilter || poFilter ? " matching these filters" : ""}.
-                  </td>
-                </tr>
+            {statusMsg && (
+              <div className="callout ok" style={{ margin: "var(--sp-3) var(--sp-4) 0" }}>
+                {statusMsg}
+              </div>
+            )}
+
+            <div className="wo-list">
+              {scoped.length === 0 && (
+                <div className="slab-empty" style={{ paddingTop: "var(--sp-6)" }}>
+                  Nothing on order matching this.
+                </div>
               )}
-            </tbody>
-          </table>
-        </div>
-      </div>
+              {late.length > 0 && (
+                <div className="wo-grp late">
+                  <span className="lab">Past their follow-up flag</span>
+                  <span className="xsmall mono">{late.length}</span>
+                </div>
+              )}
+              {late.map((o) => (
+                <LineRow
+                  key={o.id}
+                  line={o}
+                  selected={selectedId === o.id}
+                  onSelect={() => setSelectedId(selectedId === o.id ? null : o.id)}
+                />
+              ))}
+              {rest.length > 0 && (
+                <div className="wo-grp">
+                  <span className="lab">{late.length ? "Still within the flag" : "On order"}</span>
+                  <span className="xsmall mono">{rest.length}</span>
+                </div>
+              )}
+              {rest.map((o) => (
+                <LineRow
+                  key={o.id}
+                  line={o}
+                  selected={selectedId === o.id}
+                  onSelect={() => setSelectedId(selectedId === o.id ? null : o.id)}
+                />
+              ))}
+            </div>
+          </section>
 
-      {statusTarget && (
-        <SetStatusModal
-          line={statusTarget}
-          onClose={() => setStatusTarget(null)}
-          onDone={(msg) => {
-            setStatusMsg(msg);
-            setStatusTarget(null);
-          }}
-        />
-      )}
-
-      {reflagTarget && (
-        <ReflagModal
-          line={reflagTarget}
-          onClose={() => setReflagTarget(null)}
-          onDone={(msg) => {
-            setReflagTarget(null);
-            setStatusMsg(msg);
-          }}
-        />
+          {selected ? (
+            <OrderLineTrack
+              key={selected.id}
+              line={selected}
+              supplier={app.supplierFor(selected.supplierId)}
+              onStatus={setStatusMsg}
+            />
+          ) : (
+            <OrderScopeTrack
+              scope={scope}
+              po={pos.find((p) => p.poNumber === scope)}
+              rows={scoped}
+              waiting={waiting}
+              onNewBatch={openSheet}
+              onBulkStatus={() =>
+                setStatusMsg(
+                  `Bulk status update on ${scope} is not built yet — set each line's status from the right-hand track (d12).`,
+                )
+              }
+              onVoid={() =>
+                setStatusMsg(
+                  `Voiding ${scope} is not built on this screen — it lives in Order Processing (d11, d24).`,
+                )
+              }
+            />
+          )}
+        </>
       )}
     </div>
   );
 }
 
-// What the line is doing, in one token. A set status wins over a derived one
-// — somebody said it out loud — and the date rides along with Shipped, since
-// "shipped" without a date is barely more than "ordered".
-function OrderStatusCell({ line, invoices }: { line: PendingOrderLine; invoices: Invoice[] }) {
-  const state = orderLineState(line, invoices);
-  const tone =
-    state === "Backordered" ? " warn" : state === "Cancelled" ? " danger" : state === "Shipped" ? " ok" : "";
-  return (
-    <span className="stack" style={{ gap: 1 }}>
-      <span className={"badge" + tone}>{state}</span>
-      {line.expectedDate && state === "Shipped" && (
-        <span className="xsmall muted">due {line.expectedDate}</span>
-      )}
-    </span>
-  );
-}
-
-// M-02 d12 and d22 — the statuses a person SETS. Pending and Ordered are not
-// offered because they are derived from whether the line has a PO number, and
-// Received is not offered because it is counted off the Invoices (E-02 d30):
-// a status that contradicted the count would just be a second, wrong answer.
-function SetStatusModal({
+function LineRow({
   line,
-  onClose,
-  onDone,
+  selected,
+  onSelect,
 }: {
   line: PendingOrderLine;
-  onClose: () => void;
-  onDone: (msg: string) => void;
+  selected: boolean;
+  onSelect: () => void;
 }) {
   const app = useApp();
   const rec = app.recordFor(line.recordId);
-  const title = rec ? `${rec.artist} — ${rec.title}` : line.recordId;
-  const [status, setStatus] = useState<OrderLineStatus | "">(line.status ?? "");
-  const [expected, setExpected] = useState(line.expectedDate ?? "");
-
-  const apply = () => {
-    const next = status === "" ? undefined : status;
-    app.setPendingOrderLineStatus(line.id, next, next === "Shipped" ? expected.trim() || undefined : undefined);
-    onDone(
-      next
-        ? `${title} marked ${next.toLowerCase()}${next === "Shipped" && expected.trim() ? `, due ${expected.trim()}` : ""}.`
-        : `${title} — status cleared.`,
-    );
-  };
+  const sup = app.supplierFor(line.supplierId);
+  const cust = app.customerFor(line.customerId);
+  const state = orderLineState(line, app.invoices);
+  const out = outstandingQty(line, app.invoices);
+  const overdue = isFollowUpOverdue(line);
+  const due = followUpDueAt(line);
 
   return (
-    <Modal
-      title={`Set status — ${title}`}
-      onClose={onClose}
-      foot={
-        <>
-          <button className="btn ghost" onClick={onClose}>
-            Cancel
-          </button>
-          <button className="btn primary" onClick={apply}>
-            Save status
-          </button>
-        </>
-      }
+    <button
+      type="button"
+      className={"wo-row" + (overdue ? " late" : "") + (selected ? " on" : "")}
+      onClick={onSelect}
     >
-      <div className="stack">
-        <p className="small muted">
-          {line.poNumber} · ordered {line.qty} · outstanding {outstandingQty(line, app.invoices)}
-        </p>
-
-        <label className="field">
-          <span>Status</span>
-          <select value={status} onChange={(e) => setStatus(e.target.value as OrderLineStatus | "")}>
-            <option value="">None — ordered, nothing reported</option>
-            {ORDER_LINE_STATUSES.map((st) => (
-              <option key={st} value={st}>
-                {st}
-              </option>
-            ))}
-          </select>
-        </label>
-
-        {status === "Shipped" && (
-          <label className="field">
-            <span>Expected date — the supplier's, as given</span>
-            <input
-              type="text"
-              value={expected}
-              placeholder="DD/MM/YYYY"
-              onChange={(e) => setExpected(e.target.value)}
-            />
-          </label>
+      <span className="age">
+        {daysAgo(line.placedAt ?? line.createdAt)}
+        <em>days</em>
+      </span>
+      <span className="t">{rec ? `${rec.artist} — ${rec.title}` : line.recordId}</span>
+      <span className="m">
+        {sup?.shortName} · <span className="mono">{line.poNumber}</span>
+        {rec?.catalogNo ? ` · ${rec.catalogNo}` : ""}
+        {cust && <span className="who"> · {cust.name} waiting</span>}
+        {line.expectedDate ? ` · due ${line.expectedDate}` : ""}
+      </span>
+      <span className="q">
+        <span className="v">{out}</span>
+        <span className="k">{out !== line.qty ? `of ${line.qty}` : "outst."}</span>
+      </span>
+      <span className="s">
+        <span className={"badge " + tone(state)}>{state}</span>
+        {overdue ? (
+          <span className="badge danger">
+            Overdue {Math.floor((Date.now() - due!) / 86400000)}d
+          </span>
+        ) : due == null ? (
+          <span className="xsmall muted">no flag</span>
+        ) : (
+          <span className="xsmall muted">
+            chase in {Math.ceil((due - Date.now()) / 86400000)}d
+          </span>
         )}
-
-        {status === "Cancelled" && (
-          <div className="callout">
-            This does not cancel anything with the supplier — someone still has to contact them
-            (M-02 d10). The line stays on file with its history; it is never deleted once placed
-            (d21).
-          </div>
-        )}
-
-        {/* d23 — "when did this become backordered" is a question asked a week
-            later, and a bare current status cannot answer it. */}
-        {(line.log?.length ?? 0) > 0 && (
-          <div className="stack">
-            <span className="lab">History</span>
-            <div className="xsmall muted stack">
-              {[...(line.log ?? [])].reverse().map((e, i) => (
-                <div key={i}>
-                  <span className="mono">{e.at}</span> — {e.text}
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-      </div>
-    </Modal>
+      </span>
+      <span className="p mono">{money(line.sellPrice)}</span>
+    </button>
   );
 }
 
-function ReflagModal({
-  line,
-  onClose,
-  onDone,
-}: {
-  line: PendingOrderLine;
-  onClose: () => void;
-  onDone: (msg: string) => void;
-}) {
-  const app = useApp();
-  const rec = app.recordFor(line.recordId);
-  const [days, setDays] = useState(line.followUpDays ?? 7);
-  const title = rec ? `${rec.artist} — ${rec.title}` : line.recordId;
-
-  const commit = () => {
-    app.reflagPendingOrderLine(line.id, Math.max(0, days));
-    onDone(`${title} re-flagged — will chase again in ${days} day${days === 1 ? "" : "s"} from today.`);
-  };
-
-  return (
-    <Modal
-      title={`Re-flag — ${title}`}
-      onClose={onClose}
-      foot={
-        <>
-          <button className="btn ghost" onClick={onClose}>
-            Cancel
-          </button>
-          <button className="btn primary" onClick={commit}>
-            Re-flag
-          </button>
-        </>
-      }
-    >
-      <div className="stack">
-        <p className="small">
-          Pushes the follow-up date out another <em>n</em> days from today — used both to chase the
-          supplier and to warn a waiting customer. <em>(M-02 §"Tracking what's on order".)</em>
-        </p>
-        {line.customerId && (
-          <div className="callout small">{app.customerFor(line.customerId)?.name ?? "A customer"} is waiting on this line.</div>
-        )}
-        <label className="field">
-          <span>Chase again in (days)</span>
-          <input
-            className="inline-num"
-            type="number"
-            min={0}
-            value={days}
-            onChange={(e) => setDays(Math.max(0, Number(e.target.value) || 0))}
-          />
-        </label>
-      </div>
-    </Modal>
-  );
+function tone(state: string): string {
+  if (state === "Backordered" || state === "Part received") return "warn";
+  if (state === "Cancelled") return "danger";
+  if (state === "Shipped") return "ok";
+  return "";
 }

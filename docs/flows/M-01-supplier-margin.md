@@ -54,11 +54,17 @@ A Record's **Preferred Supplier** (set from its titlecard, [E-04](E-04-manage-in
 
 ---
 
-## Inherited from E-02
+## Inherited from other flows
+
+**From [E-02](E-02-receive-inventory.md):**
 
 - Discount drives the suggested retail price at receiving: `suggested_retail = round_up(list_price x (1 + discount / 100))`, applied to the supplier's **pre-discount list price** (decisions 8, 31 — there is no separate Margin field).
 - A Supplier can be flagged **default for second-hand** (decision 27) — this is what Receiving pre-selects when Second-hand intake mode is chosen. There is no dedicated second-hand Supplier; this is a plain field on an ordinary Supplier record.
 - Setting a margin is **manager-only** ([E-02](E-02-receive-inventory.md) d44, [architecture](../architecture.md) A-28a). Creating a Supplier is not — an Employee may add one at the receiving desk and leave it unpriced. E-02 d3's carve-out was struck in error and has been restored.
+
+**From [M-02](M-02-reorder-inventory.md):**
+
+- **An open bulk-order draft joins the in-flight band** as a fourth kind, alongside draft Invoices, open PurchaseOrders and Pending claims ([M-02](M-02-reorder-inventory.md) d30). It is there for the reason the other three are: a batch left half-scanned persists and is resumable, which means it can also be forgotten, and decision 14 put this band above the money precisely because a thing that goes stale in silence is the one thing on this screen nobody is chasing. It changes no figure on the card — a draft order has not been placed and owes the Supplier nothing — so it affects the band and its per-kind counts only.
 
 ---
 
