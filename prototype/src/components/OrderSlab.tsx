@@ -1,6 +1,7 @@
 import { useEffect, useRef } from "react";
 import type { PendingOrderLine, Supplier } from "../data/types";
 import { daysAgo } from "../lib/totals";
+import { ChevronLeft, ChevronRight } from "./Chevrons";
 
 export type OrderChip = "all" | "late" | "shipped" | "backordered" | "part" | "waiting";
 export type OrderSort = "age" | "title" | "artist";
@@ -95,10 +96,10 @@ export function OrderSlab({
             type="button"
             className="rail-ico"
             onClick={() => onOpenChange(true)}
-            aria-label={`Open the order list (${totalLines} lines)`}
-            title="Open the list — the search is still in there"
+            aria-label={`Expand the order list (${totalLines} lines)`}
+            title="Expand — the search is still in there"
           >
-            🔎
+            <ChevronRight />
             {totalLines > 0 && <span className="rail-badge">{totalLines}</span>}
           </button>
           <button
@@ -153,7 +154,7 @@ export function OrderSlab({
           aria-label="Collapse the list"
           title="Collapse — the lines take the width"
         >
-          ⟨
+          <ChevronLeft />
         </button>
       </div>
 

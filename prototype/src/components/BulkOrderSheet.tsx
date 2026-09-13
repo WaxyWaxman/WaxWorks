@@ -4,10 +4,19 @@ import { Modal } from "./Modal";
 import { defaultSellPrice } from "./OrderModal";
 import type { RecordEntry } from "../data/types";
 import { money } from "../lib/money";
-import { existingOpenLine } from "../lib/orderLines";
-import { orderLineState } from "../lib/orderLines";
-import { daysAgo } from "../lib/totals";
+import { stockFacts } from "../lib/stockState";
 import { useApp } from "../store/AppStore";
+
+// One figure and its label. A zero stays visible and grey rather than being
+// hidden, so every row reads the same shape and a non-zero catches the eye on
+// its own — which is the job the amber background used to do badly.
+function Fig({ n, k }: { n: number; k: string }) {
+  return (
+    <span className={n > 0 ? "on" : undefined}>
+      {n} {k}
+    </span>
+  );
+}
 
 // The bulk entry sheet (M-02 d25, d28-d30) — a second MODE of track 2, not a
 // panel bolted into track 3. The right track never stops meaning the same
@@ -305,15 +314,21 @@ export function BulkOrderSheet({
             <tbody>
               {draft.lines.map((row, i) => {
                 const rec = app.recordFor(row.recordId);
-                // d29 — mark, never block.
-                const dupe = existingOpenLine(
-                  row.recordId,
-                  draft.supplierId,
-                  app.pendingOrders,
-                  app.invoices,
-                );
+                // d33 — state what is already coming; draw no conclusion. These
+                // are the three figures the titlecard gives away for free, and
+                // the sheet's whole problem (d28) is that it has no titlecard.
+                // Per RECORD, not per Record + Supplier: a copy on its way is
+                // one fewer needed whoever it is coming from.
+                const facts = rec
+                  ? stockFacts(rec, {
+                      inventory: app.inventory,
+                      pendingOrders: app.pendingOrders,
+                      invoices: app.invoices,
+                      sales: app.sales,
+                    })
+                  : undefined;
                 return (
-                  <tr key={row.recordId} className={dupe ? "has-dupe" : undefined}>
+                  <tr key={row.recordId}>
                     <td>
                       <input
                         className="inline-num"
@@ -329,11 +344,13 @@ export function BulkOrderSheet({
                     </td>
                     <td>
                       <strong>{rec ? `${rec.artist} — ${rec.title}` : row.recordId}</strong>
-                      {dupe && (
-                        <span className="wo-dupe">
-                          Already on order — <span className="mono">{dupe.poNumber}</span>,{" "}
-                          {orderLineState(dupe, app.invoices).toLowerCase()},{" "}
-                          {daysAgo(dupe.placedAt ?? dupe.createdAt)}d
+                      {facts && (
+                        <span className="wo-stockline">
+                          <Fig n={facts.onHand} k="on hand" />
+                          {" · "}
+                          <Fig n={facts.raised} k="pending" />
+                          {" · "}
+                          <Fig n={facts.onOrder} k="on order" />
                         </span>
                       )}
                     </td>
@@ -419,9 +436,20 @@ export function BulkOrderBatch({
   const ref = draft.poNumber.trim();
   const ok = draft.lines.length > 0 && !(placed && poError);
 
-  const dupes = draft.lines.filter((l) =>
-    existingOpenLine(l.recordId, draft.supplierId, app.pendingOrders, app.invoices),
-  );
+  // d33 — a count of what the row figures already say, so the floor of the
+  // track agrees with the middle of it. Not a warning: some of these are
+  // deliberate, and the sheet is in no position to tell which.
+  const alreadyKnown = draft.lines.filter((l) => {
+    const rec = app.recordFor(l.recordId);
+    if (!rec) return false;
+    const f = stockFacts(rec, {
+      inventory: app.inventory,
+      pendingOrders: app.pendingOrders,
+      invoices: app.invoices,
+      sales: app.sales,
+    });
+    return f.onHand > 0 || f.raised > 0 || f.onOrder > 0;
+  });
 
   // Informational only — M-02 step 4 shows readiness on the PROCESSING screen,
   // and for a placed order it gates nothing at all: the order already went out.
@@ -475,13 +503,14 @@ export function BulkOrderBatch({
       <div className="wo-rule" />
 
       <div className="wo-track-mid">
-        {dupes.length > 0 && (
+        {alreadyKnown.length > 0 && (
           <div className="wo-sec">
-            <span className="lab">Already on order</span>
-            <div className="wo-caveat warn">
-              {dupes.length} of these {dupes.length === 1 ? "is" : "are"} already outstanding with{" "}
-              {supplier?.name}. Marked, not blocked — reordering something late or short is
-              ordinary, and only you know which this is (d29).
+            <span className="lab">Already here or coming</span>
+            <div className="wo-caveat">
+              {alreadyKnown.length} of these {alreadyKnown.length === 1 ? "has" : "have"} copies on
+              hand or on the way — the figures are on each row. Nothing is blocked and nothing is
+              flagged: ordering more of something late, short or backordered is ordinary, and only
+              you know which this is (d33).
             </div>
           </div>
         )}

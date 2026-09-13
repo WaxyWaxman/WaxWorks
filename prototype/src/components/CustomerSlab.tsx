@@ -1,6 +1,7 @@
 import { useEffect, useRef } from "react";
 import type { Customer } from "../data/types";
 import { money } from "../lib/money";
+import { ChevronLeft, ChevronRight } from "./Chevrons";
 
 export type CustomerFilter = "all" | "waiting" | Customer["accountType"];
 export type CustomerSort = "az" | "recent" | "spend";
@@ -74,10 +75,10 @@ export function CustomerSlab({
             type="button"
             className="rail-ico"
             onClick={() => onOpenChange(true)}
-            aria-label={`Open the customer list (${rows.length} shown)`}
-            title="Open the list — the search is still in there"
+            aria-label={`Expand the customer list (${rows.length} shown)`}
+            title="Expand — the search is still in there"
           >
-            🔎
+            <ChevronRight />
             {rows.length > 0 && <span className="rail-badge">{rows.length}</span>}
           </button>
           <button
@@ -125,7 +126,7 @@ export function CustomerSlab({
           aria-label="Collapse the list"
           title="Collapse — the card takes the width"
         >
-          ⟨
+          <ChevronLeft />
         </button>
       </div>
 

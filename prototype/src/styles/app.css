@@ -1869,10 +1869,20 @@ tr.recv-flagged > td:first-child { box-shadow: inset 3px 0 0 var(--c-warn); }
 .wo-dest-opt .dt { font-size: var(--fs-sm); font-weight: 700; }
 .wo-dest-opt .dm { font-size: var(--fs-xs); color: var(--c-ink-soft); line-height: 1.35; }
 
-/* d29 — a mark, never a block. It names the line it found, because "you have
-   one of these on order" is only actionable if you can see which. */
-.wo-dupe { display: block; font-size: var(--fs-xs); color: var(--c-warn); font-weight: 600; margin-top: 1px; }
-table.data tr.has-dupe td { background: var(--c-warn-soft); }
+/* d33 — what is already here or coming, stated and not judged. These are the
+   figures the titlecard shows for free; the sheet has no titlecard, which is
+   the whole of d28's accepted consequence. Zeroes stay visible and grey so
+   every row reads the same shape, and a non-zero carries itself without an
+   alarm colour — d32 made the duplicate the ordinary case, and an amber row
+   that fires on the ordinary case is one people learn to scroll past. */
+.wo-stockline {
+  display: block; margin-top: 1px;
+  font-family: var(--font-mono); font-size: var(--fs-xs); color: var(--c-ink-faint);
+  /* One line, always. Stacked over four rows these figures stop being a
+     glance and become something to read, which defeats the point of them. */
+  white-space: nowrap;
+}
+.wo-stockline .on { color: var(--c-ink); font-weight: 700; }
 
 /* ---- Track 3: the line ---- */
 .wo-track {
@@ -1954,4 +1964,212 @@ table.data tr.has-dupe td { background: var(--c-warn-soft); }
   .wo-dest { grid-template-columns: 1fr; }
   .wo-row { grid-template-columns: 46px minmax(0, 1fr) auto auto; }
   .wo-row .p { display: none; }
+}
+
+
+/* ======================================================================
+   Order Processing — M-02 Phase 2, on the till's three tracks.
+
+   Its own frame, main and track rules, the way find-frame, recv-frame,
+   cust-frame and wo-frame each have theirs: the small atoms are shared
+   (.slab-*, .rail-*, .filter-chip, .po-row, .cust-standing), the frame is
+   not, so a change made for one screen cannot silently re-lay another.
+
+   Track 1 is the streams and the placed POs. Track 2 is step 4's table as
+   rows, or one stream's lines, or a placed PO. Track 3 is what the scope
+   amounts to and the verb that acts on it. What used to be four stacked
+   modals over two tables is faces of these three.
+   ====================================================================== */
+.op-frame {
+  position: relative;
+  flex: 1; min-height: 0; min-width: 0;
+  display: grid; grid-template-columns: 320px minmax(0, 1fr) 344px;
+  background: var(--c-surface);
+}
+.op-frame.slab-shut { grid-template-columns: 52px minmax(0, 1fr) 344px; }
+
+/* ---- Track 1: the stream slab ---- */
+.op-slab {
+  border-right: 1px solid var(--c-border-strong); background: var(--c-surface-2);
+  display: flex; flex-direction: column; min-height: 0; min-width: 0;
+}
+.op-sortbar {
+  flex: none; display: flex; align-items: center; gap: var(--sp-2);
+  padding: 6px var(--sp-3); border-bottom: 1px solid var(--c-border-strong);
+}
+.op-sortbar select { flex: 1; font-size: var(--fs-xs); font-weight: 600; padding: 3px 6px; }
+
+/* Pending and placed are two different KINDS of scope, not two filters of
+   one kind, so the list separates them rather than toggling between them:
+   processing a stream and voiding a PO are the same errand at the same desk,
+   and neither should be somewhere you have to navigate to. */
+.op-band {
+  display: flex; align-items: baseline; justify-content: space-between; gap: var(--sp-2);
+  padding: 5px var(--sp-3); background: var(--c-surface-2);
+  border-top: 1px solid var(--c-border-strong); border-bottom: 1px solid var(--c-border-strong);
+  position: sticky; top: 0; z-index: 1;
+}
+.op-band:first-child { border-top: none; }
+
+/* Readiness as a dot, beside the order-state dots On Order already defines.
+   Green is the one state anybody acts on here: this stream can be sent. */
+.ord-dot.ready { background: var(--c-ok); }
+.ord-dot.short { background: var(--c-border-strong); }
+.ord-dot.placed { background: var(--c-ink-faint); }
+.ord-dot.void { background: var(--c-danger); }
+
+.po-row .n.ready, .po-row .k.ready { color: var(--c-ok); }
+/* A voided PO keeps the lines already received (d24), so it stays listed —
+   but it must not read as live. */
+.po-row.voided .t { text-decoration: line-through; text-decoration-color: var(--c-danger); }
+
+/* Ready is the chip worth colour before it is pressed — it is the only one
+   that says "you could send this now". Green, not the danger red On Order
+   spends on Overdue: nothing here is late, some of it is merely possible. */
+.filter-chip.go { border-color: var(--c-ok); color: var(--c-ok); }
+.filter-chip.go .count { color: var(--c-ok); }
+.filter-chip.go.on { background: var(--c-ok); border-color: var(--c-ok); color: #fff; }
+.filter-chip.go.on .count { color: #cfe4d7; }
+
+/* ---- Track 2: the streams, or one stream's lines ---- */
+.op-main { display: flex; flex-direction: column; min-width: 0; min-height: 0; background: var(--c-surface); }
+.op-main-head {
+  flex: none; display: flex; align-items: flex-start; gap: var(--sp-3); flex-wrap: wrap;
+  padding: var(--sp-3) var(--sp-4); border-bottom: 2px solid var(--c-ink);
+}
+.op-main-head h2 { margin: 0; font-size: var(--fs-xl); letter-spacing: -0.025em; line-height: 1.1; }
+.op-main-head.entry { background: var(--c-accent-soft); }
+.op-head-acts { margin-left: auto; display: flex; gap: var(--sp-2); align-items: center; }
+.op-list { flex: 1; min-height: 0; overflow-y: auto; }
+.op-scroll {
+  flex: 1; min-height: 0; overflow-y: auto; padding: var(--sp-4);
+  display: flex; flex-direction: column; gap: var(--sp-4);
+}
+.op-grp {
+  display: flex; align-items: baseline; justify-content: space-between; gap: var(--sp-2);
+  padding: 5px var(--sp-4); background: var(--c-surface-2);
+  border-top: 1px solid var(--c-border-strong); border-bottom: 1px solid var(--c-border-strong);
+}
+.op-grp:first-child { border-top: none; }
+
+/* Step 4's table as rows. A stream is PICKED, not read across, so the row
+   leads with the decision — ready, or short by how much — and keeps the money
+   hard right where every other list on the system keeps it. */
+.op-row {
+  display: grid; grid-template-columns: 54px minmax(0, 1fr) auto auto 104px;
+  gap: 1px var(--sp-3); align-items: baseline; width: 100%; text-align: left; cursor: pointer;
+  padding: var(--sp-3) var(--sp-4); border: none; border-bottom: 1px solid var(--c-border);
+  border-left: 3px solid transparent; background: var(--c-surface); font: inherit; color: var(--c-ink);
+}
+.op-row:hover { background: var(--c-surface-2); }
+.op-row.on { border-left-color: var(--c-accent); box-shadow: inset 0 0 0 1px var(--c-ink); }
+.op-row:focus-visible { outline: 2px solid var(--c-accent); outline-offset: -2px; }
+.op-row .age {
+  grid-column: 1; grid-row: 1 / -1; align-self: center; text-align: center; line-height: 1;
+  font-family: var(--font-mono); font-size: var(--fs-lg); font-weight: 700; color: var(--c-ink-soft);
+}
+.op-row .age em {
+  display: block; font-family: var(--font-narrow); font-style: normal; font-size: 9px;
+  font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--c-ink-faint);
+}
+.op-row .t {
+  grid-column: 2; grid-row: 1; display: flex; align-items: baseline; gap: 6px;
+  font-size: var(--fs-md); font-weight: 700; min-width: 0;
+}
+.op-row .t span.nm { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.op-row .m {
+  grid-column: 2; grid-row: 2; font-size: var(--fs-sm); color: var(--c-ink-faint);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.op-row .m .who { color: var(--c-accent); font-weight: 600; }
+.op-row .q { grid-column: 3; grid-row: 1 / -1; align-self: center; text-align: right; white-space: nowrap; }
+.op-row .q .v { font-family: var(--font-mono); font-size: var(--fs-base); font-weight: 700; font-variant-numeric: tabular-nums; }
+.op-row .q .k {
+  display: block; font-family: var(--font-narrow); font-size: 9px; font-weight: 700;
+  letter-spacing: 0.05em; text-transform: uppercase; color: var(--c-ink-faint);
+}
+.op-row .s { grid-column: 4; grid-row: 1 / -1; align-self: center; display: flex; flex-direction: column; align-items: flex-end; gap: 3px; }
+.op-row .p {
+  grid-column: 5; grid-row: 1 / -1; align-self: center; text-align: right;
+  font-family: var(--font-mono); font-weight: 700; font-variant-numeric: tabular-nums;
+}
+.op-row .p em {
+  display: block; font-family: var(--font-narrow); font-style: normal; font-size: 9px;
+  font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; color: var(--c-ink-faint);
+}
+
+/* ---- Track 3: the scope, or the highlighted line's titlecard ---- */
+.op-track {
+  border-left: 2px solid var(--c-ink); background: var(--c-surface);
+  display: flex; flex-direction: column; min-height: 0;
+}
+.op-waiting {
+  flex: none; padding: var(--sp-3) var(--sp-4);
+  border-bottom: 1px solid var(--c-border); background: var(--c-surface-2);
+}
+.op-waiting.live { background: var(--c-accent-soft); box-shadow: inset 3px 0 0 var(--c-ink); }
+.op-waiting .lab { display: flex; align-items: baseline; justify-content: space-between; gap: var(--sp-2); }
+.op-w-name { font-size: var(--fs-sm); font-weight: 600; color: var(--c-ink-faint); margin-top: 2px; }
+.op-w-row { font-size: var(--fs-sm); margin-top: 2px; }
+.op-w-sub { font-size: var(--fs-xs); color: var(--c-ink-soft); margin-top: 1px; }
+
+.op-track-head { flex: none; padding: var(--sp-3) var(--sp-4); }
+.op-figure { font-size: 46px; font-weight: 800; line-height: 1; letter-spacing: -0.035em; font-variant-numeric: tabular-nums; }
+.op-figure.ready { color: var(--c-ok); }
+.op-figure.sm { font-size: 30px; }
+.op-figure-say { margin-top: 4px; font-size: var(--fs-sm); font-weight: 600; }
+.op-figure-sub { margin-top: 2px; font-size: var(--fs-xs); color: var(--c-ink-faint); }
+.op-rule { flex: none; height: 2px; background: var(--c-ink); }
+.op-track-mid {
+  flex: 1; min-height: 0; overflow-y: auto; padding: var(--sp-3) var(--sp-4);
+  display: flex; flex-direction: column; gap: var(--sp-4);
+}
+.op-sec { display: flex; flex-direction: column; gap: 6px; }
+.op-sec-empty { font-size: var(--fs-xs); color: var(--c-ink-faint); padding: 4px 0; }
+.op-title { font-size: var(--fs-md); font-weight: 700; line-height: 1.2; }
+.op-caveat {
+  font-size: var(--fs-xs); color: var(--c-ink-faint);
+  border-left: 2px solid var(--c-border-strong); padding-left: 7px;
+}
+.op-caveat.warn { color: var(--c-warn); border-left-color: var(--c-warn); }
+.op-track-foot {
+  flex: none; border-top: 2px solid var(--c-ink); background: var(--c-surface);
+  padding: var(--sp-3) var(--sp-4); display: flex; flex-direction: column; gap: 6px;
+}
+
+/* Step 4 records Ready as a yes or no. The thing a manager actually decides
+   is whether to WAIT, and that needs the distance rather than the verdict —
+   so the bar is the distance and the badge stays the verdict. */
+.op-meter { margin-top: var(--sp-2); }
+.op-meter .bar {
+  height: 8px; background: var(--c-surface-2);
+  border: 1px solid var(--c-border-strong); position: relative; overflow: hidden;
+}
+.op-meter .fill { position: absolute; inset: 0 auto 0 0; background: var(--c-ink); }
+.op-meter .fill.ready { background: var(--c-ok); }
+.op-meter .mk {
+  display: flex; justify-content: space-between; margin-top: 3px;
+  font-family: var(--font-mono); font-size: 10.5px; color: var(--c-ink-faint);
+}
+
+/* Under ~1180 the right track drops to a band underneath, the same move every
+   other screen makes. */
+@media (max-width: 1180px) {
+  .op-frame { grid-template-columns: 320px minmax(0, 1fr); grid-template-rows: minmax(0, 1fr) auto; }
+  .op-frame.slab-shut { grid-template-columns: 52px minmax(0, 1fr); }
+  .op-slab { grid-row: 1 / -1; }
+  .op-main { grid-column: 2; grid-row: 1; }
+  .op-track {
+    grid-column: 2; grid-row: 2;
+    border-left: none; border-top: 2px solid var(--c-ink); max-height: 58dvh;
+  }
+  .op-waiting, .op-track-head { padding: var(--sp-2) var(--sp-4); }
+  .op-figure { font-size: 34px; }
+  .op-figure-sub { display: none; }
+  .op-row { grid-template-columns: 46px minmax(0, 1fr) auto; }
+  .op-row .p { display: none; }
+  /* The figure and the badge say the same thing two ways — "2 of 25 min" and
+     "23 units short". Narrow, the supplier name matters more than saying it
+     twice, so the figure goes and the badge keeps the answer in words. */
+  .op-row .q { display: none; }
 }

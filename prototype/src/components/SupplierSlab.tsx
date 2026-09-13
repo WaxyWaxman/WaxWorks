@@ -2,6 +2,7 @@ import { useEffect, useRef } from "react";
 import type { Supplier, SupplierType } from "../data/types";
 import { apState } from "../lib/supplierFacts";
 import { money } from "../lib/money";
+import { ChevronLeft, ChevronRight } from "./Chevrons";
 
 export type SupplierFilter = "all" | "owing" | "flight" | SupplierType;
 export type SupplierSort = "az" | "code" | "recent" | "owing" | "received";
@@ -76,10 +77,10 @@ export function SupplierSlab({
             type="button"
             className="rail-ico"
             onClick={() => onOpenChange(true)}
-            aria-label={`Open the supplier list (${rows.length} shown)`}
-            title="Open the list — the search is still in there"
+            aria-label={`Expand the supplier list (${rows.length} shown)`}
+            title="Expand — the search is still in there"
           >
-            🔎
+            <ChevronRight />
             {rows.length > 0 && <span className="rail-badge">{rows.length}</span>}
           </button>
           <button
@@ -127,7 +128,7 @@ export function SupplierSlab({
           aria-label="Collapse the list"
           title="Collapse — the card takes the width"
         >
-          ⟨
+          <ChevronLeft />
         </button>
       </div>
 

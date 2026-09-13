@@ -1,6 +1,7 @@
 import { useEffect, useRef } from "react";
 import { BarcodeInput } from "./BarcodeInput";
 import type { RecordEntry } from "../data/types";
+import { ChevronLeft, ChevronRight } from "./Chevrons";
 import {
   STOCK_HEADING,
   STOCK_LABEL,
@@ -71,10 +72,10 @@ export function FindSlab({
             type="button"
             className="rail-ico accent"
             onClick={() => onOpenChange(true)}
-            aria-label={`Open search (${hits.length} results)`}
-            title="Open search — the results are still in there"
+            aria-label={`Expand search (${hits.length} results)`}
+            title="Expand — the search and its results are still in there"
           >
-            🔍
+            <ChevronRight />
             {hits.length > 0 && <span className="rail-badge">{hits.length}</span>}
           </button>
           <div className="rail-sep" />
@@ -114,7 +115,7 @@ export function FindSlab({
           aria-label="Collapse search"
           title="Collapse — the selection takes the width"
         >
-          ⟨
+          <ChevronLeft />
         </button>
       </div>
 
