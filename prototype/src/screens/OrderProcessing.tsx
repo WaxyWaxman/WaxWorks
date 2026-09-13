@@ -47,7 +47,12 @@ const SLAB_KEY = "waxworks.orderproc.slab";
 const streamKey = (supplierId: string, separator: string | undefined) =>
   `${supplierId}::${separator ?? ""}`;
 
-/** Aging threshold for the slab's chip. Not a recorded figure — see d31. */
+/**
+ * Aging threshold for the slab's Aging chip (d34). The chip is recorded; this
+ * NUMBER is not — it is a placeholder, and M-02's "aging threshold" open
+ * question is where it gets settled. Cheap to get wrong on purpose: d31 says a
+ * stream waiting is ordinary, so this is a prompt to glance, never a deadline.
+ */
 const AGING_DAYS = 14;
 
 function streamMath(lines: PendingOrderLine[], supplier: Supplier) {
