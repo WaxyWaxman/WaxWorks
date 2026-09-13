@@ -1,0 +1,1369 @@
+<title>Order Processing, Three Tracks</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700;800&family=Archivo+Narrow:wght@600;700&display=swap">
+<style>
+/*
+ * M-02 Phase 2 — Order Processing, re-laid as the till's three tracks.
+ *
+ * Palette, type and structural class names are lifted from
+ * design/whats-on-order-ui-mock.html and the screens it became
+ * (prototype/src/styles/app.css, the .wo-* block). This mock adds no colour
+ * and no new skeleton of its own beyond one meter, on purpose: Order
+ * Processing should read as the same screen as On Order, Customers, Find,
+ * Receive and Suppliers, doing a different errand.
+ *
+ * PROPOSED — NOT RATIFIED. Everything here that M-02 does not already record
+ * is listed under "What this mock invents", below the screen, with the
+ * decision row it would need.
+ */
+:root {
+  --c-bg: #f1f1ef;
+  --c-surface: #ffffff;
+  --c-surface-2: #f7f7f5;
+  --c-ink: #111111;
+  --c-ink-soft: #55554f;
+  --c-ink-faint: #8a8a84;
+  --c-border: #e4e4e0;
+  --c-border-strong: #ccccc7;
+  --c-accent: #d64500;
+  --c-accent-ink: #ffffff;
+  --c-accent-soft: #fff4ee;
+  --c-accent-dark: #a83700;
+  --c-ok: #1f6b3f;
+  --c-ok-soft: #eaf3ed;
+  --c-warn: #8a6a1a;
+  --c-warn-soft: #fbf4e4;
+  --c-danger: #c0392b;
+  --c-danger-soft: #fdf3f1;
+
+  --font-sans: "Archivo", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Helvetica, sans-serif;
+  --font-narrow: "Archivo Narrow", "Archivo", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: ui-monospace, "SF Mono", "Cascadia Mono", "Roboto Mono", Menlo, Consolas, monospace;
+
+  --sp-1: 4px; --sp-2: 8px; --sp-3: 12px; --sp-4: 16px; --sp-5: 24px; --sp-6: 32px;
+  --radius-sm: 2px;
+}
+
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+body {
+  margin: 0; background: var(--c-bg); color: var(--c-ink);
+  font-family: var(--font-sans); font-size: 14px; line-height: 1.45;
+  -webkit-font-smoothing: antialiased;
+}
+.page { max-width: 1580px; margin: 0 auto; padding: var(--sp-6) var(--sp-5) 96px; }
+
+/* ---- page furniture (not part of the app) ---- */
+.masthead { display: flex; align-items: flex-end; gap: var(--sp-5); flex-wrap: wrap; margin-bottom: var(--sp-4); }
+.masthead h1 { font-size: 30px; letter-spacing: -0.03em; margin: 0 0 2px; line-height: 1.05; }
+.masthead p { margin: 0; color: var(--c-ink-soft); max-width: 72ch; font-size: 14.5px; }
+.stamp {
+  font-family: var(--font-narrow); font-weight: 700; font-size: 11px; letter-spacing: 0.12em;
+  text-transform: uppercase; color: var(--c-ink-faint); border: 1px solid var(--c-border-strong);
+  padding: 3px 8px; white-space: nowrap;
+}
+.stamp.live { color: var(--c-accent); border-color: var(--c-accent); }
+
+.controls {
+  display: flex; align-items: center; gap: var(--sp-2); flex-wrap: wrap;
+  border: 1px solid var(--c-border-strong); background: var(--c-surface);
+  padding: var(--sp-2) var(--sp-3); margin-bottom: var(--sp-3);
+}
+.ctl-sep { width: 1px; align-self: stretch; background: var(--c-border-strong); margin: 0 var(--sp-2); }
+.toggle {
+  font: inherit; font-size: 12.5px; font-weight: 600; cursor: pointer;
+  border: 1px solid var(--c-border-strong); background: var(--c-surface-2);
+  color: var(--c-ink-soft); padding: 5px 10px; border-radius: var(--radius-sm);
+}
+.toggle:hover { border-color: var(--c-ink); color: var(--c-ink); }
+.toggle[aria-pressed="true"] { background: var(--c-ink); border-color: var(--c-ink); color: #fff; }
+.toggle:focus-visible, .rail-ico:focus-visible, .filter-chip:focus-visible,
+.po-row:focus-visible, .po-tile:focus-visible, .op-row:focus-visible, .btn:focus-visible {
+  outline: 2px solid var(--c-accent); outline-offset: 2px;
+}
+
+/* ---- shared atoms, lifted from app.css ---- */
+.lab {
+  font-family: var(--font-narrow); font-weight: 700; font-size: 11px;
+  letter-spacing: 0.08em; text-transform: uppercase; color: var(--c-ink-faint);
+}
+.mono { font-family: var(--font-mono); }
+.small { font-size: 12.5px; }
+.xsmall { font-size: 11px; }
+.muted { color: var(--c-ink-faint); }
+.num { text-align: right; font-variant-numeric: tabular-nums; }
+.row { display: flex; align-items: center; }
+.row.wrap { flex-wrap: wrap; }
+.stack { display: flex; flex-direction: column; gap: var(--sp-3); }
+
+.badge {
+  display: inline-flex; align-items: center; gap: 4px; font-size: 11px; font-weight: 700;
+  padding: 1px 6px; border: 1px solid var(--c-border-strong); border-radius: var(--radius-sm);
+  color: var(--c-ink-soft); background: var(--c-surface-2); white-space: nowrap;
+}
+.badge.ok { color: var(--c-ok); border-color: var(--c-ok); background: var(--c-ok-soft); }
+.badge.warn { color: var(--c-warn); border-color: var(--c-warn); background: var(--c-warn-soft); }
+.badge.danger { color: var(--c-danger); border-color: var(--c-danger); background: var(--c-danger-soft); }
+.badge.accent { color: var(--c-accent); border-color: var(--c-accent); background: var(--c-accent-soft); }
+.badge.ink { color: #fff; background: var(--c-ink); border-color: var(--c-ink); }
+
+.btn {
+  font: inherit; font-size: 13px; font-weight: 600; cursor: pointer;
+  display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+  border: 1px solid var(--c-border-strong); background: var(--c-surface);
+  color: var(--c-ink); padding: 7px 12px; border-radius: var(--radius-sm);
+}
+.btn:hover { border-color: var(--c-ink); }
+.btn.sm { font-size: 12px; padding: 3px 8px; }
+.btn.ghost { background: transparent; color: var(--c-ink-soft); }
+.btn.accent { background: var(--c-accent); border-color: var(--c-accent); color: var(--c-accent-ink); }
+.btn.accent:hover { background: var(--c-accent-dark); border-color: var(--c-accent-dark); }
+.btn.danger { color: var(--c-danger); border-color: var(--c-danger); background: var(--c-surface); }
+.btn.danger:hover { background: var(--c-danger); color: #fff; }
+.btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+.callout {
+  border-left: 3px solid var(--c-border-strong); background: var(--c-surface-2);
+  padding: var(--sp-2) var(--sp-3); font-size: 12.5px; color: var(--c-ink-soft);
+}
+.callout.ok { border-left-color: var(--c-ok); background: var(--c-ok-soft); color: var(--c-ok); }
+.callout.warn { border-left-color: var(--c-warn); background: var(--c-warn-soft); color: var(--c-warn); }
+.callout.danger { border-left-color: var(--c-danger); background: var(--c-danger-soft); color: var(--c-danger); }
+
+input[type="search"], input[type="text"], input[type="number"], input[type="date"], select {
+  font: inherit; font-size: 13px; width: 100%; padding: 6px 8px;
+  border: 1px solid var(--c-border-strong); border-radius: var(--radius-sm);
+  background: var(--c-surface); color: var(--c-ink);
+}
+input:focus, select:focus { outline: 2px solid var(--c-accent); outline-offset: -1px; }
+.field { display: flex; flex-direction: column; gap: 3px; }
+.field > span { font-size: 11px; font-weight: 600; color: var(--c-ink-soft); }
+
+table.data { width: 100%; border-collapse: collapse; font-size: 13px; }
+table.data th {
+  text-align: left; font-family: var(--font-narrow); font-weight: 700; font-size: 10.5px;
+  letter-spacing: 0.06em; text-transform: uppercase; color: var(--c-ink-faint);
+  padding: 6px var(--sp-3); border-bottom: 1px solid var(--c-border-strong); white-space: nowrap;
+  position: sticky; top: 0; background: var(--c-surface); z-index: 1;
+}
+table.data th.num { text-align: right; }
+table.data td { padding: 6px var(--sp-3); border-bottom: 1px solid var(--c-border); vertical-align: middle; }
+table.data tr.row-click { cursor: pointer; }
+table.data tr.row-click:hover td { background: var(--c-surface-2); }
+table.data tr.selected td { background: var(--c-accent-soft); }
+table.data tr.selected td:first-child { box-shadow: inset 3px 0 0 var(--c-accent); }
+.inline-num { width: 58px; padding: 3px 5px; font-family: var(--font-mono); font-size: 12.5px; text-align: right; }
+.sep-sel { width: 62px; padding: 3px 5px; font-size: 12px; }
+
+/* ======================================================================
+   THE FRAME — three tracks, pinned, each scrolling on its own.
+   Same skeleton as .wo-frame; the only change is track 1's default width,
+   because a stream row carries a supplier NAME rather than a PO number.
+   ====================================================================== */
+.op-frame {
+  position: relative; height: 78vh; min-height: 620px;
+  display: grid; grid-template-columns: 320px minmax(0, 1fr) 344px;
+  background: var(--c-surface);
+  border: 1px solid var(--c-border-strong);
+}
+.op-frame.slab-shut { grid-template-columns: 52px minmax(0, 1fr) 344px; }
+
+/* ---- Track 1: the stream slab ---- */
+.op-slab {
+  border-right: 1px solid var(--c-border-strong); background: var(--c-surface-2);
+  display: flex; flex-direction: column; min-height: 0; min-width: 0;
+}
+.slab-head {
+  flex: none; display: flex; align-items: center; justify-content: space-between;
+  gap: var(--sp-2); padding: var(--sp-3); border-bottom: 1px solid var(--c-border-strong);
+}
+.slab-search { flex: none; display: flex; flex-direction: column; gap: 6px; padding: var(--sp-3); }
+.slab-chips {
+  flex: none; display: flex; flex-wrap: wrap; gap: 4px;
+  padding: 0 var(--sp-3) var(--sp-3); align-items: center;
+}
+.chip-sep { width: 1px; height: 16px; background: var(--c-border-strong); margin: 0 2px; }
+.filter-chip {
+  font: inherit; font-size: 11.5px; font-weight: 600; cursor: pointer;
+  border: 1px solid var(--c-border-strong); background: var(--c-surface);
+  color: var(--c-ink-soft); padding: 2px 7px; border-radius: var(--radius-sm);
+}
+.filter-chip:hover { border-color: var(--c-ink); }
+.filter-chip.on { background: var(--c-ink); border-color: var(--c-ink); color: #fff; }
+.filter-chip .count { font-family: var(--font-mono); font-size: 10.5px; color: var(--c-ink-faint); }
+.filter-chip.on .count { color: #c8c8c2; }
+.filter-chip.hot { border-color: var(--c-ok); color: var(--c-ok); }
+.filter-chip.hot .count { color: var(--c-ok); }
+.filter-chip.hot.on { background: var(--c-ok); border-color: var(--c-ok); color: #fff; }
+.filter-chip.hot.on .count { color: #cfe4d7; }
+.filter-chip:disabled { opacity: 0.4; cursor: not-allowed; }
+
+.op-sortbar {
+  flex: none; display: flex; align-items: center; gap: var(--sp-2);
+  padding: 6px var(--sp-3); border-bottom: 1px solid var(--c-border-strong);
+}
+.op-sortbar select { flex: 1; font-size: 11px; font-weight: 600; padding: 3px 6px; }
+
+.slab-list { flex: 1; min-height: 0; overflow-y: auto; }
+.slab-empty { padding: var(--sp-4) var(--sp-3); font-size: 12.5px; color: var(--c-ink-faint); }
+
+/* A band inside the slab list — Pending and Placed are two different KINDS of
+   scope, not two filters of one kind, so they are separated rather than
+   toggled: a manager processing a stream and a manager voiding a PO are
+   looking at the same slab, and neither has to go find the other. */
+.slab-band {
+  display: flex; align-items: baseline; justify-content: space-between; gap: var(--sp-2);
+  padding: 5px var(--sp-3); background: var(--c-surface-2);
+  border-top: 1px solid var(--c-border-strong); border-bottom: 1px solid var(--c-border-strong);
+  position: sticky; top: 0; z-index: 1;
+}
+
+/* One stream or one PO, two rows — the same skeleton as .po-row on On Order. */
+.po-row {
+  display: grid; grid-template-columns: 44px minmax(0, 1fr) auto; gap: 1px var(--sp-3);
+  align-items: baseline; width: 100%; text-align: left; cursor: pointer;
+  padding: var(--sp-2) var(--sp-3); border: none; border-bottom: 1px solid var(--c-border);
+  border-left: 3px solid transparent; background: var(--c-surface); font: inherit; color: var(--c-ink);
+}
+.po-row:hover { background: var(--c-surface-2); }
+.po-row.on { border-left-color: var(--c-accent); box-shadow: inset 0 0 0 1px var(--c-ink); }
+.po-row .code {
+  grid-column: 1; grid-row: 1 / -1; align-self: center;
+  width: 44px; height: 34px; display: grid; place-items: center;
+  border: 1px solid var(--c-border); background: var(--c-surface-2);
+  font-family: var(--font-mono); font-size: 11px; font-weight: 700; color: var(--c-ink-soft);
+}
+.po-row.ext .code { border-style: dashed; border-color: var(--c-ink-faint); }
+.po-row .t {
+  grid-column: 2; grid-row: 1; display: flex; align-items: baseline; gap: 5px;
+  font-size: 12.5px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.po-row .m {
+  grid-column: 2; grid-row: 2; font-size: 11px; color: var(--c-ink-faint);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.po-row .n {
+  grid-column: 3; grid-row: 1; font-family: var(--font-mono); font-size: 12.5px;
+  font-weight: 700; text-align: right; font-variant-numeric: tabular-nums; color: var(--c-ink-soft);
+}
+.po-row .n.ready { color: var(--c-ok); }
+.po-row .k {
+  grid-column: 3; grid-row: 2; text-align: right; white-space: nowrap;
+  font-family: var(--font-narrow); font-size: 9px; font-weight: 700;
+  letter-spacing: 0.05em; text-transform: uppercase; color: var(--c-ink-faint);
+}
+.po-row .k.ready { color: var(--c-ok); }
+.po-row.all { background: var(--c-surface-2); border-bottom: 2px solid var(--c-ink); }
+.po-row.all .code { border-color: var(--c-ink); background: var(--c-ink); color: #fff; }
+.po-row.voided .t { text-decoration: line-through; text-decoration-color: var(--c-danger); }
+
+/* Readiness as a dot — colour means STATE, the way Find's stock dots do.
+   Green is the ONE state anybody acts on here: this stream can be sent. */
+.ord-dot { width: 9px; height: 9px; border-radius: 50%; flex: none; display: inline-block; }
+.ord-dot.ready { background: var(--c-ok); }
+.ord-dot.short { background: var(--c-border-strong); }
+.ord-dot.placed { background: var(--c-ink-faint); }
+.ord-dot.void { background: var(--c-danger); }
+
+/* ---- Track 1, shut: the 52px strip ---- */
+.slab-strip { display: flex; flex-direction: column; align-items: center; gap: var(--sp-2); padding: var(--sp-2) 0; min-height: 0; }
+.rail-ico {
+  position: relative; width: 38px; height: 38px; flex: none; padding: 0; cursor: pointer;
+  display: grid; place-items: center; font-size: 16px;
+  border: 1px solid var(--c-border-strong); border-radius: var(--radius-sm);
+  background: var(--c-surface); color: var(--c-ink-soft);
+}
+.rail-ico:hover { border-color: var(--c-ink); color: var(--c-ink); }
+/* The expand control mirrors the ⟨ that collapsed the slab, in the same spot
+   and pointing the other way. A magnifier says "search"; only an arrow says
+   "this opens back up", which is the one thing the strip has to promise. */
+.rail-ico.expand { border-color: var(--c-ink); color: var(--c-ink); font-size: 15px; font-weight: 700; }
+.rail-ico.expand:hover { background: var(--c-ink); color: #fff; }
+.rail-badge {
+  position: absolute; top: -5px; right: -5px; min-width: 16px; height: 16px; padding: 0 3px;
+  display: grid; place-items: center; border-radius: 8px; background: var(--c-ink); color: #fff;
+  font-family: var(--font-mono); font-size: 9.5px; font-weight: 700;
+}
+.rail-ico.ready .rail-badge { background: var(--c-ok); }
+.rail-sep { width: 24px; height: 1px; background: var(--c-border-strong); flex: none; }
+.slab-recent { display: flex; flex-direction: column; align-items: center; gap: 6px; overflow-y: auto; min-height: 0; padding-bottom: var(--sp-2); }
+.slab-recent-empty { font-size: 9px; color: var(--c-ink-faint); text-align: center; padding: 0 2px; }
+.po-tile {
+  position: relative; width: 38px; height: 38px; flex: none; padding: 0; cursor: pointer;
+  display: grid; place-items: center; border: 1px solid var(--c-border-strong);
+  border-radius: var(--radius-sm); background: var(--c-surface); color: var(--c-ink-soft);
+  font-family: var(--font-mono); font-size: 10.5px; font-weight: 700;
+}
+.po-tile:hover { border-color: var(--c-ink); }
+.po-tile.on { border-color: var(--c-ink); box-shadow: inset 3px 0 0 var(--c-accent); color: var(--c-ink); }
+.po-tile .ord-dot { position: absolute; bottom: -3px; right: -3px; width: 11px; height: 11px; border: 2px solid var(--c-surface-2); }
+
+/* ---- Track 2: the streams, or one stream's lines ---- */
+.op-main { display: flex; flex-direction: column; min-width: 0; min-height: 0; background: var(--c-surface); }
+.op-main-head {
+  flex: none; display: flex; align-items: flex-start; gap: var(--sp-3); flex-wrap: wrap;
+  padding: var(--sp-3) var(--sp-4); border-bottom: 2px solid var(--c-ink);
+}
+.op-main-head h2 { margin: 0; font-size: 27px; letter-spacing: -0.025em; line-height: 1.1; }
+.op-main-head.entry { background: var(--c-accent-soft); }
+.op-head-acts { margin-left: auto; display: flex; gap: var(--sp-2); align-items: center; }
+.op-list { flex: 1; min-height: 0; overflow-y: auto; }
+.op-scroll { flex: 1; min-height: 0; overflow-y: auto; padding: var(--sp-4); display: flex; flex-direction: column; gap: var(--sp-4); }
+
+/* Step 4's table, as rows. A stream is picked, not read across — so the row
+   leads with the decision (ready or short by how much) and keeps the money
+   where the eye already goes on every other list: hard right. */
+.op-row {
+  display: grid; grid-template-columns: 54px minmax(0, 1fr) auto auto 96px;
+  gap: 1px var(--sp-3); align-items: baseline; width: 100%; text-align: left; cursor: pointer;
+  padding: var(--sp-3) var(--sp-4); border: none; border-bottom: 1px solid var(--c-border);
+  border-left: 3px solid transparent; background: var(--c-surface); font: inherit; color: var(--c-ink);
+}
+.op-row:hover { background: var(--c-surface-2); }
+.op-row.on { border-left-color: var(--c-accent); box-shadow: inset 0 0 0 1px var(--c-ink); }
+.op-row .age {
+  grid-column: 1; grid-row: 1 / -1; align-self: center; text-align: center;
+  font-family: var(--font-mono); font-size: 19px; font-weight: 700; color: var(--c-ink-soft);
+  line-height: 1;
+}
+.op-row .age em {
+  display: block; font-family: var(--font-narrow); font-style: normal; font-size: 9px;
+  font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--c-ink-faint);
+}
+.op-row .t { grid-column: 2; grid-row: 1; font-size: 15px; font-weight: 700; display: flex; align-items: baseline; gap: 6px; }
+.op-row .m { grid-column: 2; grid-row: 2; font-size: 11.5px; color: var(--c-ink-faint); }
+.op-row .m .who { color: var(--c-accent); font-weight: 600; }
+.op-row .q { grid-column: 3; grid-row: 1 / -1; align-self: center; text-align: right; white-space: nowrap; }
+.op-row .q .v { font-family: var(--font-mono); font-size: 14px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.op-row .q .k { display: block; font-family: var(--font-narrow); font-size: 9px; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; color: var(--c-ink-faint); }
+.op-row .s { grid-column: 4; grid-row: 1 / -1; align-self: center; display: flex; flex-direction: column; align-items: flex-end; gap: 3px; }
+.op-row .p { grid-column: 5; grid-row: 1 / -1; align-self: center; text-align: right; font-family: var(--font-mono); font-weight: 700; font-variant-numeric: tabular-nums; }
+.op-row .p em { display: block; font-family: var(--font-narrow); font-style: normal; font-size: 9px; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; color: var(--c-ink-faint); }
+
+.op-grp {
+  display: flex; align-items: baseline; justify-content: space-between; gap: var(--sp-2);
+  padding: 5px var(--sp-4); background: var(--c-surface-2);
+  border-top: 1px solid var(--c-border-strong); border-bottom: 1px solid var(--c-border-strong);
+}
+.op-grp:first-child { border-top: none; }
+
+/* ---- Track 3: this stream, or the highlighted line's titlecard ---- */
+.op-track {
+  border-left: 2px solid var(--c-ink); background: var(--c-surface);
+  display: flex; flex-direction: column; min-height: 0;
+}
+/* Who is waiting sits above the figure for the same reason it does on On
+   Order: a stream with names on it is people expecting a phone call, and
+   step 4's customer-attached count is the only column that knows. */
+.op-waiting {
+  flex: none; padding: var(--sp-3) var(--sp-4);
+  border-bottom: 1px solid var(--c-border); background: var(--c-surface-2);
+}
+.op-waiting.live { background: var(--c-accent-soft); box-shadow: inset 3px 0 0 var(--c-ink); }
+.op-waiting .lab { display: flex; align-items: baseline; justify-content: space-between; gap: var(--sp-2); }
+.op-w-name { font-size: 12.5px; font-weight: 600; color: var(--c-ink-faint); margin-top: 2px; }
+.op-w-row { font-size: 12.5px; margin-top: 2px; }
+.op-w-sub { font-size: 11px; color: var(--c-ink-soft); margin-top: 1px; }
+
+.op-track-head { flex: none; padding: var(--sp-3) var(--sp-4); }
+.op-figure { font-size: 46px; font-weight: 800; line-height: 1; letter-spacing: -0.035em; font-variant-numeric: tabular-nums; }
+.op-figure.ready { color: var(--c-ok); }
+.op-figure.small { font-size: 30px; }
+.op-figure-say { margin-top: 4px; font-size: 12.5px; font-weight: 600; }
+.op-figure-sub { margin-top: 2px; font-size: 11px; color: var(--c-ink-faint); }
+.op-rule { flex: none; height: 2px; background: var(--c-ink); }
+
+/* The one new piece of chrome. "Ready" is a yes/no in step 4, but the thing a
+   manager actually decides is whether to wait — which needs the distance, not
+   the verdict. The bar is the distance; the badge is still the verdict. */
+.op-meter { margin-top: var(--sp-2); }
+.op-meter .bar { height: 8px; background: var(--c-surface-2); border: 1px solid var(--c-border-strong); position: relative; }
+.op-meter .fill { position: absolute; inset: 0 auto 0 0; background: var(--c-ink); }
+.op-meter .fill.ready { background: var(--c-ok); }
+.op-meter .mk { display: flex; justify-content: space-between; margin-top: 3px; font-size: 10.5px; color: var(--c-ink-faint); font-family: var(--font-mono); }
+
+.op-track-mid { flex: 1; min-height: 0; overflow-y: auto; padding: var(--sp-3) var(--sp-4); display: flex; flex-direction: column; gap: var(--sp-4); }
+.op-sec { display: flex; flex-direction: column; gap: 6px; }
+.op-sec-empty { font-size: 11px; color: var(--c-ink-faint); padding: 4px 0; }
+.op-title { font-size: 16px; font-weight: 700; line-height: 1.2; }
+.op-caveat { font-size: 11px; color: var(--c-ink-faint); border-left: 2px solid var(--c-border-strong); padding-left: 7px; }
+.op-caveat.warn { color: var(--c-warn); border-left-color: var(--c-warn); }
+
+.standing { display: grid; grid-template-columns: 1fr 1fr; gap: 1px; background: var(--c-border); border: 1px solid var(--c-border); }
+.standing .stat { background: var(--c-surface); padding: var(--sp-2) var(--sp-3); }
+.standing .stat.span { grid-column: 1 / -1; }
+.standing .stat .v { display: block; font-family: var(--font-mono); font-size: 15px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.standing .stat .v.ready { color: var(--c-ok); }
+.standing .stat .k { display: block; font-family: var(--font-narrow); font-size: 9px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--c-ink-faint); margin-top: 1px; }
+
+.op-track-foot {
+  flex: none; border-top: 2px solid var(--c-ink); background: var(--c-surface);
+  padding: var(--sp-3) var(--sp-4); display: flex; flex-direction: column; gap: 6px;
+}
+.op-primary { width: 100%; padding: 11px 12px; font-size: 14px; }
+.op-secondary { width: 100%; }
+.op-foot-sub { font-size: 10.5px; color: var(--c-ink-faint); line-height: 1.35; }
+
+/* The titlecard, track 3's other face — step 5's "highlighting a line opens
+   its titlecard" without a modal on top of a modal. */
+.tc-cover {
+  width: 100%; aspect-ratio: 1; background: var(--c-surface-2);
+  border: 1px solid var(--c-border-strong); display: grid; place-items: center;
+  font-family: var(--font-narrow); font-size: 11px; letter-spacing: 0.1em;
+  text-transform: uppercase; color: var(--c-ink-faint);
+}
+.tc-kv { display: grid; grid-template-columns: auto 1fr; gap: 2px var(--sp-3); font-size: 12.5px; }
+.tc-kv dt { color: var(--c-ink-faint); font-size: 11px; }
+.tc-kv dd { margin: 0; font-weight: 600; text-align: right; }
+
+.totals-row { display: flex; justify-content: space-between; gap: var(--sp-3); padding: 3px 0; font-size: 12.5px; border-bottom: 1px solid var(--c-border); }
+.totals-row:last-child { border-bottom: none; }
+
+/* ---- notes under the screen (not part of the app) ---- */
+.notes { margin-top: var(--sp-6); display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: var(--sp-4); }
+.note { background: var(--c-surface); border: 1px solid var(--c-border-strong); padding: var(--sp-4); }
+.note h3 { margin: 0 0 var(--sp-2); font-size: 15px; letter-spacing: -0.01em; }
+.note h3 .stamp { margin-left: var(--sp-2); }
+.note p, .note li { font-size: 13px; color: var(--c-ink-soft); margin: 0 0 var(--sp-2); }
+.note ul, .note ol { margin: 0 0 var(--sp-2); padding-left: 1.15em; }
+.note li { margin-bottom: 5px; }
+.note code { font-family: var(--font-mono); font-size: 11.5px; background: var(--c-surface-2); padding: 1px 4px; border: 1px solid var(--c-border); }
+.note .k { font-weight: 700; color: var(--c-ink); }
+.note.wide { grid-column: 1 / -1; }
+
+@media (max-width: 1180px) {
+  .op-frame { grid-template-columns: 320px minmax(0, 1fr); grid-template-rows: minmax(0, 1fr) auto; }
+  .op-frame.slab-shut { grid-template-columns: 52px minmax(0, 1fr); }
+  .op-slab { grid-row: 1 / -1; }
+  .op-main { grid-column: 2; grid-row: 1; }
+  .op-track { grid-column: 2; grid-row: 2; border-left: none; border-top: 2px solid var(--c-ink); max-height: 58dvh; }
+  .op-waiting, .op-track-head { padding: var(--sp-2) var(--sp-4); }
+  .op-figure { font-size: 34px; }
+  .op-figure-sub { display: none; }
+  .op-row { grid-template-columns: 46px minmax(0, 1fr) auto auto; }
+  .op-row .p { display: none; }
+}
+</style>
+
+<div class="page">
+
+  <div class="masthead">
+    <div>
+      <h1>Order Processing — the till's three tracks</h1>
+      <p>
+        M-02 Phase 2, re-laid on the frame Sell, Find, Receive, Customers, Suppliers and What's on
+        Order already share. Track 1 retracts to a 52px strip; track 3 is pinned and carries the
+        primary action on its floor. The two stacked tables and the four modals the screen has today
+        become one frame with two faces per track.
+      </p>
+    </div>
+    <span class="stamp">M-02 Phase 2</span>
+    <span class="stamp live">Proposed — not ratified</span>
+  </div>
+
+  <div class="controls">
+    <span class="lab">Slab</span>
+    <button class="toggle" id="t-slab" aria-pressed="true" type="button">Open</button>
+    <span class="ctl-sep"></span>
+    <span class="lab">Showing</span>
+    <button class="toggle" data-view="all" aria-pressed="true" type="button">All pending</button>
+    <button class="toggle" data-view="stream" aria-pressed="false" type="button">One stream</button>
+    <button class="toggle" data-view="line" aria-pressed="false" type="button">Line highlighted</button>
+    <button class="toggle" data-view="placed" aria-pressed="false" type="button">A placed PO</button>
+    <button class="toggle" data-view="process" aria-pressed="false" type="button">Processing</button>
+  </div>
+
+  <!-- ================= THE FRAME ================= -->
+  <div class="op-frame" id="frame">
+
+    <!-- ---------- TRACK 1 ---------- -->
+    <nav class="op-slab" aria-label="Order streams and purchase orders">
+
+      <!-- shut: the strip -->
+      <div class="slab-strip" id="strip" hidden>
+        <button class="rail-ico expand" type="button" id="strip-open" aria-label="Expand the stream list — 4 pending streams, 26 lines" title="Expand — the search, chips and sort are in there">
+          <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 5l7 7-7 7"/></svg><span class="rail-badge">26</span>
+        </button>
+        <button class="rail-ico ready" type="button" aria-label="2 streams ready to place" title="2 streams are over their supplier's minimum">
+          ✓<span class="rail-badge">2</span>
+        </button>
+        <div class="rail-sep"></div>
+        <div class="slab-recent" role="list" aria-label="Pending streams and placed purchase orders">
+          <button class="po-tile" role="listitem" type="button" title="Crate Digger Wholesale, separator A · 8 lines · ready">CRAT<span class="ord-dot ready"></span></button>
+          <button class="po-tile" role="listitem" type="button" title="Crate Digger Wholesale, no separator · 2 lines · short">CRAT<span class="ord-dot short"></span></button>
+          <button class="po-tile" role="listitem" type="button" title="F.A.B. Distribution · 11 lines · short of 25 units">FAB1<span class="ord-dot short"></span></button>
+          <button class="po-tile" role="listitem" type="button" title="Indie Direct Supply · 5 lines · ready">INDI<span class="ord-dot ready"></span></button>
+          <div class="rail-sep"></div>
+          <button class="po-tile" role="listitem" type="button" title="PO 1042 · Crate Digger Wholesale · placed 02/09">1042<span class="ord-dot placed"></span></button>
+          <button class="po-tile" role="listitem" type="button" title="PO 1041 · F.A.B. Distribution · placed 28/08">1041<span class="ord-dot placed"></span></button>
+          <button class="po-tile" role="listitem" type="button" title="INDI-88213 · recorded, placed elsewhere">8213<span class="ord-dot placed"></span></button>
+          <button class="po-tile" role="listitem" type="button" title="PO 1039 · voided">1039<span class="ord-dot void"></span></button>
+        </div>
+      </div>
+
+      <!-- open: search, chips, sort, the two lists -->
+      <div id="slab-open" style="display:flex;flex-direction:column;min-height:0;flex:1;">
+        <div class="slab-head">
+          <span class="lab">Order processing</span>
+          <button class="rail-ico" type="button" id="slab-close" aria-label="Collapse the list" title="Collapse — the lines take the width" style="width:28px;height:28px;font-size:13px;"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg></button>
+        </div>
+
+        <div class="slab-search">
+          <input type="search" value="" placeholder="supplier · short code · artist · title" aria-label="Search streams and purchase orders by supplier, short code, artist or title">
+          <div class="xsmall muted">
+            Matching a title filters to the streams that contain it — how you answer &ldquo;is that
+            one on the next order?&rdquo; without opening four streams.
+          </div>
+        </div>
+
+        <div class="slab-chips">
+          <button class="filter-chip on" type="button">All <span class="count">4</span></button>
+          <button class="filter-chip hot" type="button">Ready <span class="count">2</span></button>
+          <span class="chip-sep"></span>
+          <button class="filter-chip" type="button">Waiting <span class="count">3</span></button>
+          <button class="filter-chip" type="button">Aging <span class="count">1</span></button>
+          <button class="filter-chip" type="button">Email <span class="count">2</span></button>
+        </div>
+
+        <div class="op-sortbar">
+          <span class="lab">Sort</span>
+          <select aria-label="Sort the streams">
+            <option>Readiness — sendable first</option>
+            <option>Age — oldest line first</option>
+            <option>Supplier</option>
+            <option>Estimated cost</option>
+          </select>
+        </div>
+
+        <div class="slab-list">
+          <button class="po-row all on" type="button">
+            <span class="code">ALL</span>
+            <span class="t">Everything pending</span>
+            <span class="m">4 streams · 3 suppliers</span>
+            <span class="n">26</span>
+            <span class="k">lines</span>
+          </button>
+
+          <div class="slab-band">
+            <span class="lab">Pending — not yet placed</span>
+            <span class="xsmall mono muted">4</span>
+          </div>
+
+          <button class="po-row" type="button" id="row-crat-a">
+            <span class="code">CRAT</span>
+            <span class="t">Crate Digger Wholesale <span class="badge">A</span></span>
+            <span class="m"><span class="ord-dot ready"></span> Email · 9d old · 3 waiting</span>
+            <span class="n ready">8</span>
+            <span class="k ready">ready</span>
+          </button>
+
+          <button class="po-row" type="button">
+            <span class="code">CRAT</span>
+            <span class="t">Crate Digger Wholesale</span>
+            <span class="m"><span class="ord-dot short"></span> Email · 3d old</span>
+            <span class="n">2</span>
+            <span class="k">8 units short</span>
+          </button>
+
+          <button class="po-row" type="button">
+            <span class="code">FAB1</span>
+            <span class="t">F.A.B. Distribution</span>
+            <span class="m"><span class="ord-dot short"></span> Rep · 21d old · 2 waiting</span>
+            <span class="n">11</span>
+            <span class="k">7 units short</span>
+          </button>
+
+          <button class="po-row" type="button">
+            <span class="code">INDI</span>
+            <span class="t">Indie Direct Supply</span>
+            <span class="m"><span class="ord-dot ready"></span> Their Website · 5d old · 1 waiting</span>
+            <span class="n ready">5</span>
+            <span class="k ready">ready</span>
+          </button>
+
+          <div class="slab-band">
+            <span class="lab">Previously placed</span>
+            <span class="xsmall mono muted">4</span>
+          </div>
+
+          <button class="po-row" type="button" id="row-po-1042">
+            <span class="code">1042</span>
+            <span class="t">PO 1042</span>
+            <span class="m"><span class="ord-dot placed"></span> Crate Digger · placed 02/09</span>
+            <span class="n">6</span>
+            <span class="k">lines</span>
+          </button>
+
+          <button class="po-row" type="button">
+            <span class="code">1041</span>
+            <span class="t">PO 1041 <span class="badge">B</span></span>
+            <span class="m"><span class="ord-dot placed"></span> F.A.B. · placed 28/08</span>
+            <span class="n">9</span>
+            <span class="k">lines</span>
+          </button>
+
+          <button class="po-row ext" type="button">
+            <span class="code">8213</span>
+            <span class="t">INDI-88213 <span class="badge mono xsmall">their ref</span></span>
+            <span class="m"><span class="ord-dot placed"></span> Indie Direct · placed 25/08</span>
+            <span class="n">4</span>
+            <span class="k">lines</span>
+          </button>
+
+          <button class="po-row voided" type="button">
+            <span class="code">1039</span>
+            <span class="t">PO 1039 <span class="badge danger">voided</span></span>
+            <span class="m"><span class="ord-dot void"></span> F.A.B. · placed 19/08</span>
+            <span class="n">5</span>
+            <span class="k">lines</span>
+          </button>
+        </div>
+      </div>
+    </nav>
+
+    <!-- ---------- TRACK 2 ---------- -->
+    <section class="op-main">
+
+      <!-- face A: every pending stream — step 4's table, as rows -->
+      <div id="m-all" style="display:flex;flex-direction:column;min-height:0;flex:1;">
+        <div class="op-main-head">
+          <div style="min-width:0">
+            <h2>Everything pending</h2>
+            <div class="row wrap" style="gap:var(--sp-2);margin-top:6px;">
+              <span class="badge mono">26 lines</span>
+              <span class="badge">38 units</span>
+              <span class="badge ok">2 streams ready</span>
+              <span class="badge accent">6 waiting on a customer</span>
+            </div>
+          </div>
+        </div>
+        <div class="op-list">
+          <div class="op-grp">
+            <span class="lab">Over the supplier's minimum</span>
+            <span class="xsmall mono">2</span>
+          </div>
+
+          <button class="op-row" type="button" id="mrow-crat-a">
+            <span class="age">9<em>days</em></span>
+            <span class="t">Crate Digger Wholesale <span class="badge">sep A</span></span>
+            <span class="m">Email · 8 lines · 12 units · <span class="who">3 waiting</span></span>
+            <span class="q"><span class="v">12</span><span class="k">of 10 min</span></span>
+            <span class="s"><span class="badge ok">Ready</span></span>
+            <span class="p">$248.33<em>est. cost</em></span>
+          </button>
+
+          <button class="op-row" type="button">
+            <span class="age">5<em>days</em></span>
+            <span class="t">Indie Direct Supply</span>
+            <span class="m">Their Website · 5 lines · 6 units · <span class="who">1 waiting</span></span>
+            <span class="q"><span class="v">$264.94</span><span class="k">of $250 retail</span></span>
+            <span class="s"><span class="badge ok">Ready</span></span>
+            <span class="p">$132.47<em>est. cost</em></span>
+          </button>
+
+          <div class="op-grp">
+            <span class="lab">Still short</span>
+            <span class="xsmall mono">2</span>
+          </div>
+
+          <button class="op-row" type="button">
+            <span class="age">21<em>days</em></span>
+            <span class="t">F.A.B. Distribution</span>
+            <span class="m">Rep · 11 lines · 18 units · <span class="who">2 waiting</span></span>
+            <span class="q"><span class="v">18</span><span class="k">of 25 min</span></span>
+            <span class="s"><span class="badge warn">7 short</span></span>
+            <span class="p">$208.73<em>est. cost</em></span>
+          </button>
+
+          <button class="op-row" type="button">
+            <span class="age">3<em>days</em></span>
+            <span class="t">Crate Digger Wholesale</span>
+            <span class="m">Email · 2 lines · 2 units</span>
+            <span class="q"><span class="v">2</span><span class="k">of 10 min</span></span>
+            <span class="s"><span class="badge warn">8 short</span></span>
+            <span class="p">$41.99<em>est. cost</em></span>
+          </button>
+        </div>
+      </div>
+
+      <!-- face B: one stream's lines — step 5's View, editable -->
+      <div id="m-stream" style="display:none;flex-direction:column;min-height:0;flex:1;">
+        <div class="op-main-head">
+          <div style="min-width:0">
+            <h2>Crate Digger Wholesale</h2>
+            <div class="row wrap" style="gap:var(--sp-2);margin-top:6px;">
+              <span class="badge ink">separator A</span>
+              <span class="badge mono">8 lines · 12 units</span>
+              <span class="badge ok">Ready</span>
+              <span class="badge accent">3 waiting</span>
+            </div>
+          </div>
+          <div class="op-head-acts">
+            <label class="row" style="gap:5px;">
+              <span class="lab">Move stream to</span>
+              <select class="sep-sel" aria-label="Move every line in this stream to another separator">
+                <option selected>A</option><option>B</option><option>—</option><option>new…</option>
+              </select>
+            </label>
+          </div>
+        </div>
+        <div class="op-list">
+          <table class="data">
+            <thead>
+              <tr>
+                <th>Item</th><th class="num">Qty</th><th class="num">Sell</th>
+                <th>Sep</th><th class="num">Age</th><th>Customer</th><th></th>
+              </tr>
+            </thead>
+            <tbody id="stream-lines">
+              <tr class="row-click"><td>Madvillain — Madvillainy <span class="xsmall muted mono">STH2065</span></td><td class="num"><input class="inline-num" type="number" value="2"></td><td class="num"><input class="inline-num" type="number" value="42.99"></td><td><select class="sep-sel"><option selected>A</option><option>B</option><option>—</option></select></td><td class="num">9d</td><td class="small muted">—</td><td class="num"><button class="btn sm danger" type="button">Delete</button></td></tr>
+              <tr class="row-click"><td>Van Morrison — Astral Weeks <span class="xsmall muted mono">WS 1768</span></td><td class="num"><input class="inline-num" type="number" value="2"></td><td class="num"><input class="inline-num" type="number" value="32.99"></td><td><select class="sep-sel"><option selected>A</option><option>B</option><option>—</option></select></td><td class="num">7d</td><td class="small">Renée Aubry</td><td class="num"><button class="btn sm danger" type="button">Delete</button></td></tr>
+              <tr class="row-click"><td>Patti Smith — Horses <span class="xsmall muted mono">AL 4066</span></td><td class="num"><input class="inline-num" type="number" value="1"></td><td class="num"><input class="inline-num" type="number" value="29.99"></td><td><select class="sep-sel"><option selected>A</option><option>B</option><option>—</option></select></td><td class="num">6d</td><td class="small muted">—</td><td class="num"><button class="btn sm danger" type="button">Delete</button></td></tr>
+              <tr class="row-click" id="line-radiohead"><td>Radiohead — OK Computer <span class="xsmall muted mono">NODATA 01</span> <span class="badge warn">1 of 2 lines</span></td><td class="num"><input class="inline-num" type="number" value="1"></td><td class="num"><input class="inline-num" type="number" value="36.99"></td><td><select class="sep-sel"><option selected>A</option><option>B</option><option>—</option></select></td><td class="num">5d</td><td class="small">Tomas Reyes</td><td class="num"><button class="btn sm danger" type="button">Delete</button></td></tr>
+              <tr class="row-click" id="line-radiohead-2"><td>Radiohead — OK Computer <span class="xsmall muted mono">NODATA 01</span> <span class="badge warn">2 of 2 lines</span></td><td class="num"><input class="inline-num" type="number" value="1"></td><td class="num"><input class="inline-num" type="number" value="36.99"></td><td><select class="sep-sel"><option selected>A</option><option>B</option><option>—</option></select></td><td class="num">1d</td><td class="small muted">—</td><td class="num"><button class="btn sm danger" type="button">Delete</button></td></tr>
+              <tr class="row-click"><td>Nas — Illmatic <span class="xsmall muted mono">C 57684</span></td><td class="num"><input class="inline-num" type="number" value="2"></td><td class="num"><input class="inline-num" type="number" value="34.99"></td><td><select class="sep-sel"><option selected>A</option><option>B</option><option>—</option></select></td><td class="num">4d</td><td class="small muted">—</td><td class="num"><button class="btn sm danger" type="button">Delete</button></td></tr>
+              <tr class="row-click"><td>Miles Davis — Kind of Blue <span class="xsmall muted mono">CL 1355</span></td><td class="num"><input class="inline-num" type="number" value="2"></td><td class="num"><input class="inline-num" type="number" value="27.99"></td><td><select class="sep-sel"><option selected>A</option><option>B</option><option>—</option></select></td><td class="num">3d</td><td class="small">Dana Whitfield</td><td class="num"><button class="btn sm danger" type="button">Delete</button></td></tr>
+              <tr class="row-click"><td>Joni Mitchell — Blue <span class="xsmall muted mono">MS 2038</span></td><td class="num"><input class="inline-num" type="number" value="1"></td><td class="num"><input class="inline-num" type="number" value="31.99"></td><td><select class="sep-sel"><option selected>A</option><option>B</option><option>—</option></select></td><td class="num">2d</td><td class="small muted">—</td><td class="num"><button class="btn sm danger" type="button">Delete</button></td></tr>
+            </tbody>
+          </table>
+          <div class="op-caveat" style="margin:var(--sp-3) var(--sp-4);">
+            Highlight a line to open its titlecard in track 3 — step 5's reason for View, so a wrong
+            supplier is caught before the order goes out.
+          </div>
+        </div>
+      </div>
+
+      <!-- face C: a placed PO, read-only -->
+      <div id="m-placed" style="display:none;flex-direction:column;min-height:0;flex:1;">
+        <div class="op-main-head">
+          <div style="min-width:0">
+            <h2 class="mono">PO 1042</h2>
+            <div class="row wrap" style="gap:var(--sp-2);margin-top:6px;">
+              <span class="badge ink">Crate Digger Wholesale</span>
+              <span class="badge">placed 02/09/2026</span>
+              <span class="badge mono">6 lines</span>
+              <span class="badge warn">2 part received</span>
+            </div>
+          </div>
+        </div>
+        <div class="op-list">
+          <table class="data">
+            <thead>
+              <tr><th>Item</th><th class="num">Qty</th><th class="num">Rec'd</th><th class="num">Sell</th><th class="num">Age</th><th>Customer</th><th>Status</th></tr>
+            </thead>
+            <tbody>
+              <tr class="row-click"><td>Fleetwood Mac — Rumours <span class="xsmall muted mono">BSK 3010</span></td><td class="num">4</td><td class="num">4</td><td class="num">$34.99</td><td class="num">10d</td><td class="small muted">—</td><td><span class="badge ok">Received</span></td></tr>
+              <tr class="row-click"><td>Prince — Purple Rain <span class="xsmall muted mono">25110-1</span></td><td class="num">3</td><td class="num">1</td><td class="num">$39.99</td><td class="num">10d</td><td class="small">Ida Okonjo</td><td><span class="badge warn">Part received</span></td></tr>
+              <tr class="row-click"><td>Nas — Illmatic <span class="xsmall muted mono">C 57684</span></td><td class="num">2</td><td class="num">0</td><td class="num">$34.99</td><td class="num">10d</td><td class="small muted">—</td><td><span class="badge warn">Backordered</span></td></tr>
+              <tr class="row-click"><td>Joni Mitchell — Blue <span class="xsmall muted mono">MS 2038</span></td><td class="num">2</td><td class="num">1</td><td class="num">$31.99</td><td class="num">10d</td><td class="small muted">—</td><td><span class="badge warn">Part received</span></td></tr>
+              <tr class="row-click"><td>Van Morrison — Astral Weeks <span class="xsmall muted mono">WS 1768</span></td><td class="num">1</td><td class="num">0</td><td class="num">$32.99</td><td class="num">10d</td><td class="small">Renée Aubry</td><td><span class="badge">Ordered</span></td></tr>
+              <tr class="row-click"><td>Madvillain — Madvillainy <span class="xsmall muted mono">STH2065</span></td><td class="num">2</td><td class="num">0</td><td class="num">$42.99</td><td class="num">10d</td><td class="small muted">—</td><td><span class="badge">Ordered</span></td></tr>
+            </tbody>
+          </table>
+          <div class="op-caveat" style="margin:var(--sp-3) var(--sp-4);">
+            Read-only. A placed line is never deleted — it is Cancelled, or it is received (d21), and
+            what is outstanding is counted across every Invoice (d15, E-02 d30).
+          </div>
+        </div>
+      </div>
+
+      <!-- face D: processing — step 6's confirm, taking the width instead of a modal -->
+      <div id="m-process" style="display:none;flex-direction:column;min-height:0;flex:1;">
+        <div class="op-main-head entry">
+          <div style="min-width:0">
+            <h2>Send to Crate Digger Wholesale</h2>
+            <div class="row wrap" style="gap:var(--sp-2);margin-top:6px;">
+              <span class="badge ink">separator A</span>
+              <span class="badge accent">Email · orders@cratedigger.example</span>
+              <span class="badge mono">8 lines · 12 units</span>
+            </div>
+          </div>
+          <div class="op-head-acts">
+            <button class="btn ghost" type="button" data-view="stream">Back to the stream</button>
+          </div>
+        </div>
+        <div class="op-scroll">
+          <div class="callout">
+            <strong>This is what will be sent.</strong> Email orders are composed and sent by the
+            system; every other method produces a printable document and is marked placed by hand
+            (step 6, d6).
+          </div>
+
+          <div style="border:1px solid var(--c-ink);background:var(--c-surface-2);">
+            <div class="lab" style="padding:var(--sp-2) var(--sp-3);border-bottom:1px solid var(--c-border-strong);">Email preview</div>
+            <div class="stack" style="padding:var(--sp-3);font-size:13px;">
+              <div class="tc-kv" style="grid-template-columns:90px 1fr;">
+                <dt>To</dt><dd class="mono" style="text-align:left">orders@cratedigger.example</dd>
+                <dt>Account</dt><dd class="mono" style="text-align:left">CD-118</dd>
+                <dt>Cancel by</dt><dd style="text-align:left">27/10/2026 <span class="xsmall muted">— 30 days, the supplier's default</span></dd>
+                <dt>Backorders</dt><dd style="text-align:left">Allowed</dd>
+              </div>
+              <table class="data">
+                <thead><tr><th class="num">Qty</th><th>Item</th><th>Catalog no.</th><th class="num">Sell</th></tr></thead>
+                <tbody>
+                  <tr><td class="num mono">2</td><td>Madvillain — Madvillainy</td><td class="mono xsmall">STH2065</td><td class="num">$42.99</td></tr>
+                  <tr><td class="num mono">2</td><td>Van Morrison — Astral Weeks</td><td class="mono xsmall">WS 1768</td><td class="num">$32.99</td></tr>
+                  <tr><td class="num mono">1</td><td>Patti Smith — Horses</td><td class="mono xsmall">AL 4066</td><td class="num">$29.99</td></tr>
+                  <tr><td class="num mono">1</td><td>Radiohead — OK Computer <span class="xsmall muted">for Tomas Reyes</span></td><td class="mono xsmall">NODATA 01</td><td class="num">$36.99</td></tr>
+                  <tr><td class="num mono">1</td><td>Radiohead — OK Computer</td><td class="mono xsmall">NODATA 01</td><td class="num">$36.99</td></tr>
+                  <tr><td class="num mono">2</td><td>Nas — Illmatic</td><td class="mono xsmall">C 57684</td><td class="num">$34.99</td></tr>
+                  <tr><td class="num mono">2</td><td>Miles Davis — Kind of Blue</td><td class="mono xsmall">CL 1355</td><td class="num">$27.99</td></tr>
+                  <tr><td class="num mono">1</td><td>Joni Mitchell — Blue</td><td class="mono xsmall">MS 2038</td><td class="num">$31.99</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <div class="callout warn">
+            3 of these lines are attached to a customer. Receiving one creates a Held Sale for them
+            automatically (d13) — nothing to do now, but it is who gets phoned if this order is short.
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ---------- TRACK 3 ---------- -->
+    <aside class="op-track" aria-label="What this stream amounts to">
+
+      <!-- face A: the whole pending pile -->
+      <div id="k-all" style="display:flex;flex-direction:column;min-height:0;flex:1;">
+        <div class="op-waiting live">
+          <div class="lab"><span>People waiting</span><span class="xsmall mono">6</span></div>
+          <div class="op-w-row"><strong>Renée Aubry</strong> <span class="xsmall muted">— Astral Weeks, CRAT sep A</span></div>
+          <div class="op-w-row"><strong>Tomas Reyes</strong> <span class="xsmall muted">— OK Computer, CRAT sep A</span></div>
+          <div class="op-w-row"><strong>Dana Whitfield</strong> <span class="xsmall muted">— Kind of Blue, CRAT sep A</span></div>
+          <div class="op-w-sub">+3 more</div>
+        </div>
+        <div class="op-track-head">
+          <div class="lab">Streams ready to send</div>
+          <div class="op-figure ready">2</div>
+          <div class="op-figure-say">over their supplier's minimum</div>
+          <div class="op-figure-sub">of 4 pending streams · 26 lines · 38 units</div>
+        </div>
+        <div class="op-rule"></div>
+        <div class="op-track-mid">
+          <div class="op-sec">
+            <span class="lab">The pending pile</span>
+            <div class="standing">
+              <div class="stat"><span class="v">26</span><span class="k">Lines</span></div>
+              <div class="stat"><span class="v">38</span><span class="k">Units</span></div>
+              <div class="stat"><span class="v">$1,270.62</span><span class="k">Sell total</span></div>
+              <div class="stat"><span class="v">$631.52</span><span class="k">Est. cost</span></div>
+              <div class="stat"><span class="v">21d</span><span class="k">Oldest line</span></div>
+              <div class="stat"><span class="v ready">6</span><span class="k">Customer-attached</span></div>
+            </div>
+          </div>
+          <div class="op-sec">
+            <span class="lab">Pick a stream</span>
+            <div class="op-sec-empty">
+              Processing is per stream — supplier plus separator (d3, d4). Choose one on the left,
+              or from the list, and this track becomes that stream's dossier.
+            </div>
+          </div>
+          <div class="op-caveat">
+            The oldest line here is 21 days old and its stream is still 7 units short of F.A.B.'s
+            minimum. Nothing in M-02 says what happens then — see the open question below the screen.
+          </div>
+        </div>
+        <div class="op-track-foot">
+          <div class="op-foot-sub">
+            No primary action across the whole pile: an order goes to one supplier. The button
+            appears when a stream is chosen.
+          </div>
+        </div>
+      </div>
+
+      <!-- face B: one pending stream's dossier -->
+      <div id="k-stream" style="display:none;flex-direction:column;min-height:0;flex:1;">
+        <div class="op-waiting live">
+          <div class="lab"><span>People waiting</span><span class="xsmall mono">3</span></div>
+          <div class="op-w-row"><strong>Renée Aubry</strong> <span class="xsmall muted">— Astral Weeks</span></div>
+          <div class="op-w-row"><strong>Tomas Reyes</strong> <span class="xsmall muted">— OK Computer</span></div>
+          <div class="op-w-row"><strong>Dana Whitfield</strong> <span class="xsmall muted">— Kind of Blue</span></div>
+        </div>
+        <div class="op-track-head">
+          <div class="lab">Units against the minimum</div>
+          <div class="op-figure ready">12</div>
+          <div class="op-figure-say">Crate Digger requires 10 units</div>
+          <div class="op-meter">
+            <div class="bar"><div class="fill ready" style="width:100%"></div></div>
+            <div class="mk"><span>0</span><span>min 10</span></div>
+          </div>
+          <div class="op-figure-sub">Two over. The figure is units because this supplier's minimum is a quantity; a supplier with a minimum amount gets the money instead.</div>
+        </div>
+        <div class="op-rule"></div>
+        <div class="op-track-mid">
+          <div class="op-sec">
+            <span class="lab">Meeting the minimum</span>
+            <div>
+              <div class="totals-row"><span>Supplier requires</span><strong>10 units</strong></div>
+              <div class="totals-row"><span>Qty (units)</span><span class="num mono">12 <span class="muted">/ 10</span></span></div>
+              <div class="totals-row"><span>Retail value</span><span class="num mono">$413.88</span></div>
+              <div class="totals-row"><span>Cost (est., less 40%)</span><span class="num mono">$248.33</span></div>
+            </div>
+            <div class="callout ok">Ready to place.</div>
+          </div>
+
+          <div class="op-sec">
+            <span class="lab">This stream</span>
+            <div class="standing">
+              <div class="stat"><span class="v">8</span><span class="k">Lines</span></div>
+              <div class="stat"><span class="v">12</span><span class="k">Units</span></div>
+              <div class="stat"><span class="v">9d</span><span class="k">Oldest line</span></div>
+              <div class="stat"><span class="v ready">3</span><span class="k">Customer-attached</span></div>
+              <div class="stat span"><span class="v" style="font-size:13px">Email · orders@cratedigger.example</span><span class="k">Order via · account CD-118</span></div>
+            </div>
+          </div>
+
+          <div class="op-sec">
+            <span class="lab">What sending does</span>
+            <div class="op-caveat">
+              Composes and sends the order, stating items, quantities, cancel-by date and backorder
+              policy (step 6). Cancel by 27/10 — 30 days, this supplier's default. Backorders allowed.
+            </div>
+            <div class="op-caveat">
+              On placement the lines become on order and the catalog prefetch is queued for those
+              titles (step 8). They leave this screen for What's on Order.
+            </div>
+          </div>
+        </div>
+        <div class="op-track-foot">
+          <label class="field">
+            <span>PO number — blank takes the next unused ascending number (1043)</span>
+            <input type="text" placeholder="1043" class="mono">
+          </label>
+          <button class="btn accent op-primary" type="button" data-view="process">Process — send order</button>
+          <div class="op-foot-sub">
+            Auto-numbering is ascending from 0 and skips anything already in use, including a number
+            typed by hand (d16). A manual number is free text and need not be numeric.
+          </div>
+        </div>
+      </div>
+
+      <!-- face C: a line is highlighted — the titlecard -->
+      <div id="k-line" style="display:none;flex-direction:column;min-height:0;flex:1;">
+        <div class="op-waiting live">
+          <div class="lab"><span>Waiting on this line</span><span class="xsmall mono">1</span></div>
+          <div class="op-w-row"><strong>Tomas Reyes</strong> <span class="xsmall muted">— asked 5 days ago</span></div>
+          <div class="op-w-sub">Receiving this line creates a Held Sale for them automatically (d13).</div>
+        </div>
+        <div class="op-track-head">
+          <div class="lab">Titlecard <span class="mono">E-04</span></div>
+          <div class="op-title">Radiohead — OK Computer</div>
+          <div class="op-figure-sub">NODATA 01 · 2×LP · reissue</div>
+        </div>
+        <div class="op-rule"></div>
+        <div class="op-track-mid">
+          <div class="tc-cover">cover art</div>
+          <div class="op-sec">
+            <span class="lab">On this line</span>
+            <dl class="tc-kv">
+              <dt>Supplier</dt><dd>Crate Digger Wholesale</dd>
+              <dt>Separator</dt><dd>A</dd>
+              <dt>Qty</dt><dd>1</dd>
+              <dt>Sell price</dt><dd class="mono">$36.99</dd>
+              <dt>Raised</dt><dd>5 days ago, by RD</dd>
+            </dl>
+            <div class="op-caveat warn">
+              The supplier is recorded on the <em>line</em>, not taken from the Record (d2). This is
+              the check step 5 exists for — the Record's default supplier is F.A.B.
+            </div>
+            <div class="op-caveat warn">
+              <strong>A second line for this title sits in the same stream</strong> — qty 1, nobody
+              attached, raised a day later. Two separate commitments, not a mistake: one copy is
+              spoken for and one is a bet on the shelf. Nothing merges them, and nothing should.
+              <br><br>
+              But if Tomas cancels, the only recorded move is deleting <em>this</em> line (d9) —
+              which also kills the copy you would have stocked anyway. See <strong>proposed
+              d32</strong> below the screen.
+            </div>
+          </div>
+          <div class="op-sec">
+            <span class="lab">Stock</span>
+            <div class="standing">
+              <div class="stat"><span class="v">0</span><span class="k">On hand</span></div>
+              <div class="stat"><span class="v">2</span><span class="k">Min on hand</span></div>
+              <div class="stat"><span class="v">3</span><span class="k">On order elsewhere</span></div>
+              <div class="stat"><span class="v">11</span><span class="k">Sold, 12 months</span></div>
+            </div>
+            <div class="op-caveat warn">
+              3 already outstanding on PO 1041. Worth seeing, never a block — the reasons to order
+              more of something already on order are ordinary (d29 says so for the bulk sheet).
+            </div>
+          </div>
+        </div>
+        <div class="op-track-foot">
+          <button class="btn op-secondary" type="button" data-view="stream">Back to the stream</button>
+          <div class="op-foot-sub">
+            Sending is still the stream's action, not this line's — clearing the highlight puts the
+            Process button back.
+          </div>
+        </div>
+      </div>
+
+      <!-- face D: a placed PO's dossier -->
+      <div id="k-placed" style="display:none;flex-direction:column;min-height:0;flex:1;">
+        <div class="op-waiting live">
+          <div class="lab"><span>People waiting</span><span class="xsmall mono">2</span></div>
+          <div class="op-w-row"><strong>Ida Okonjo</strong> <span class="xsmall muted">— Purple Rain, 1 of 3 arrived</span></div>
+          <div class="op-w-row"><strong>Renée Aubry</strong> <span class="xsmall muted">— Astral Weeks, none yet</span></div>
+        </div>
+        <div class="op-track-head">
+          <div class="lab">Still outstanding</div>
+          <div class="op-figure">8</div>
+          <div class="op-figure-say">units of 14 ordered</div>
+          <div class="op-figure-sub">6 lines · placed 02/09 · 10 days ago</div>
+        </div>
+        <div class="op-rule"></div>
+        <div class="op-track-mid">
+          <div class="op-sec">
+            <span class="lab">PO 1042</span>
+            <div class="standing">
+              <div class="stat"><span class="v">6</span><span class="k">Lines</span></div>
+              <div class="stat"><span class="v">14</span><span class="k">Units ordered</span></div>
+              <div class="stat"><span class="v">6</span><span class="k">Units received</span></div>
+              <div class="stat"><span class="v">$486.88</span><span class="k">Sell total</span></div>
+              <div class="stat span"><span class="v" style="font-size:13px">Crate Digger Wholesale · Email</span><span class="k">Placed 02/09/2026 by RD</span></div>
+            </div>
+            <div class="op-caveat">
+              Outstanding is counted, not stored — ordered minus received across every Invoice, and
+              one Invoice may span several POs (d15, E-02 d28, d30).
+            </div>
+          </div>
+          <div class="op-sec">
+            <span class="lab">Chasing it</span>
+            <div class="op-sec-empty">
+              Statuses, follow-up flags and the line log live on What's on Order (Phase 3). This
+              screen's remaining business with a placed PO is voiding it.
+            </div>
+          </div>
+        </div>
+        <div class="op-track-foot">
+          <button class="btn danger op-primary" type="button">Void PO 1042</button>
+          <div class="op-foot-sub">
+            Manager-only. Unreceived lines return to pending; a part-received line keeps what arrived
+            and its remainder returns as a new pending line (d11, d24). <strong>Tells the supplier
+            nothing</strong> (d10) — 2 of these lines have a customer attached who will need telling.
+          </div>
+        </div>
+      </div>
+
+      <!-- face E: processing — the send controls -->
+      <div id="k-process" style="display:none;flex-direction:column;min-height:0;flex:1;">
+        <div class="op-waiting live">
+          <div class="lab"><span>About to send</span><span class="xsmall mono">8</span></div>
+          <div class="op-w-name" style="color:var(--c-ink);font-size:15px;font-weight:700;">Crate Digger Wholesale</div>
+          <div class="op-w-sub">separator A · 12 units · $248.33 estimated cost</div>
+        </div>
+        <div class="op-track-head">
+          <div class="lab">Sending via</div>
+          <div class="op-figure small">Email</div>
+          <div class="op-figure-say">the system sends this one</div>
+          <div class="op-figure-sub">Phone, fax, website and rep produce a printable document instead, and are marked placed by hand (step 6).</div>
+        </div>
+        <div class="op-rule"></div>
+        <div class="op-track-mid">
+          <div class="op-sec">
+            <label class="field">
+              <span>PO number — blank takes the next unused ascending number</span>
+              <input type="text" value="1043" class="mono">
+            </label>
+            <div class="op-caveat">
+              Ascending from 0, skipping anything already in use (d16). Free text — a supplier's own
+              reference is legal here.
+            </div>
+          </div>
+          <div class="op-sec">
+            <span class="lab">Confirm the send</span>
+            <div>
+              <div class="totals-row"><span>Lines</span><span class="num mono">8</span></div>
+              <div class="totals-row"><span>Units</span><span class="num mono">12</span></div>
+              <div class="totals-row"><span>Sell total</span><span class="num mono">$413.88</span></div>
+              <div class="totals-row"><span>Est. cost</span><span class="num mono">$248.33</span></div>
+              <div class="totals-row"><span>Cancel by</span><span class="num">27/10/2026</span></div>
+            </div>
+          </div>
+          <div class="op-caveat">
+            On placement, catalog metadata prefetch is queued for these titles (step 8, d14) so the
+            box arrives scannable.
+          </div>
+        </div>
+        <div class="op-track-foot">
+          <button class="btn accent op-primary" type="button" data-view="placed">Send order to Crate Digger</button>
+          <button class="btn ghost op-secondary" type="button" data-view="stream">Cancel</button>
+          <div class="op-foot-sub">
+            Irreversible in the sense that matters: the email goes out. Voiding afterwards reverses
+            our paperwork only, never the supplier's (d10).
+          </div>
+        </div>
+      </div>
+    </aside>
+  </div>
+
+  <!-- ================= NOTES ================= -->
+  <div class="notes">
+
+    <div class="note wide">
+      <h3>What changed, and why <span class="stamp">layout</span></h3>
+      <p>
+        Today Order Processing is a page with two stacked tables and four modals — Process, View,
+        Void, and the merge/delete confirmations that open <em>on top of</em> View. The frame below
+        keeps every one of those jobs and loses the stacking.
+      </p>
+      <ul>
+        <li>
+          <span class="k">Track 1 retracts</span> to a 52px strip carrying the search, a
+          ready count, and one tile per stream and PO — the same strip Find, Receive, Customers,
+          Suppliers and On Order already collapse to.
+        </li>
+        <li>
+          <span class="k">Track 2 is the work surface</span>, with three faces: every pending
+          stream (step 4's table, as rows), one stream's lines editable in place (step 5's
+          <em>View</em>, no longer a modal), or a placed PO read-only.
+        </li>
+        <li>
+          <span class="k">Track 3 is pinned and carries the verb.</span> Its floor holds the PO
+          number field and <em>Process</em> for a pending stream, <em>Void</em> for a placed PO —
+          in the same spot the primary action sits on every other screen.
+        </li>
+        <li>
+          <span class="k">Highlighting a line swaps track 3 to the titlecard</span>, which is what
+          step 5 asks for and what the modal-in-a-modal was doing badly.
+        </li>
+        <li>
+          <span class="k">Processing takes tracks 2 and 3</span> rather than opening over them —
+          the same move the bulk order sheet makes on What's on Order. The document you are about to
+          send is worth the full width; a confirm dialog is not.
+        </li>
+      </ul>
+      <p>
+        <strong>Two modals survive, and should.</strong> Voiding a PO and merging two separators are
+        both one-way and both need a plan read before they are agreed to (d17, d24). They stay
+        dialogs.
+      </p>
+    </div>
+
+    <div class="note">
+      <h3>Recorded, and shown here <span class="stamp">M-02</span></h3>
+      <ul>
+        <li>One row per supplier + separator, with pending total, age of oldest, order via, customer-attached count, sell total, estimated cost, and readiness — <code>step 4</code>, <code>d4</code>.</li>
+        <li>Placed POs listed most-recent-first — <code>step 4</code>.</li>
+        <li>View shows progress to the minimum against whichever one the supplier names, and is where qty, sell price and separator are edited and a line deleted — <code>step 5</code>, <code>d9</code>.</li>
+        <li>Highlighting a line opens its titlecard — <code>step 5</code>.</li>
+        <li>Email sends; every other method prints and is marked placed — <code>step 6</code>, <code>d6</code>.</li>
+        <li>PO number blank auto-assigns ascending, skipping anything in use; manual is free text — <code>step 7</code>, <code>d5</code>, <code>d16</code>.</li>
+        <li>Placement queues the catalog prefetch — <code>step 8</code>, <code>d14</code>.</li>
+        <li>Separator collision prompts to merge, one-way — <code>d17</code>, both per line and per stream.</li>
+        <li>Void returns unreceived lines, splits part-received ones, tells the supplier nothing — <code>d10</code>, <code>d11</code>, <code>d24</code>.</li>
+        <li>A placed line is never deleted — <code>d21</code>; outstanding is counted across Invoices — <code>d15</code>.</li>
+      </ul>
+    </div>
+
+    <div class="note">
+      <h3>What this mock invents <span class="stamp live">needs a decision row</span></h3>
+      <p>None of these are in M-02. Each would need a row appended before it is built.</p>
+      <ol>
+        <li>
+          <span class="k">The slab searches titles as well as suppliers.</span> Today the filter is
+          supplier name or short code only. Matching an artist or title and filtering to the streams
+          containing it answers &ldquo;is that on the next order?&rdquo; — but it is a new behaviour.
+        </li>
+        <li>
+          <span class="k">Chips: Ready / Waiting / Aging / Email.</span> Nothing records a filter set
+          for this screen. Ready and Waiting come straight off step 4's columns; <em>Aging</em>
+          needs a threshold nobody has set.
+        </li>
+        <li>
+          <span class="k">The readiness meter.</span> Step 4 records Ready as a yes/no. The bar shows
+          the <em>distance</em>, which is what a manager deciding whether to wait actually needs.
+          Presentation of a recorded fact — but new chrome.
+        </li>
+        <li>
+          <span class="k">Sorting streams by readiness, age, supplier or cost.</span> Step 4 gives no
+          order for the pending table at all. Readiness-first is a proposal.
+        </li>
+        <li>
+          <span class="k">&ldquo;Placed elsewhere&rdquo; POs marked <em>their ref</em> here.</span>
+          <code>d25</code> creates them and On Order marks them; this screen's placed table does not
+          yet, and the same reasoning applies.
+        </li>
+        <li>
+          <span class="k">The pile summary in track 3's all-streams face.</span> Totals across every
+          pending stream are not a recorded figure. Cheap to show, and nothing reads it.
+        </li>
+      </ol>
+      <p class="xsmall">
+        Deliberately <em>not</em> invented: no scan box. On Order has one because step 10 asks for
+        it. Phase 2 asks for nothing of the kind, and a barcode is not how you pick a stream.
+      </p>
+    </div>
+
+    <div class="note">
+      <h3>Questions for you <span class="stamp">before code</span></h3>
+      <ol>
+        <li>
+          <span class="k">Pending and placed in one slab list, or a toggle?</span> Shown as one list
+          with two bands, so voiding a PO and processing a stream are the same screen. A toggle would
+          halve the scroll and hide half the screen.
+        </li>
+        <li>
+          <span class="k">Should track 2's all-streams face list streams, or every pending line?</span>
+          Streams, here — step 4 says one row per supplier + separator, and the stream is the unit of
+          action. On Order lists lines because Phase 3's unit is the line.
+        </li>
+        <li>
+          <span class="k">Does Process belong in track 3's floor or track 2's head?</span> Floor,
+          here, to match every other screen. It does mean the send button and the line you are
+          reading are at opposite corners.
+        </li>
+        <li>
+          <span class="k">The expand arrow is shared chrome.</span> The strip now opens on a
+          <code>⟩</code> mirroring the <code>⟨</code> that closed it. The other five slabs — Find,
+          Receive, Customers, Suppliers, On Order — still open on a magnifier. Either this screen
+          diverges, or the arrow propagates to all six. Recommend all six.
+        </li>
+      </ol>
+    </div>
+
+    <div class="note wide">
+      <h3>Answered — and one of them found a gap <span class="stamp live">needs decision rows</span></h3>
+
+      <p>
+        <span class="k">A short stream just waits.</span> Confirmed: a small shop can take months to
+        reach a distributor's minimum, and that is ordinary, not a fault. So nothing ages a pending
+        stream out, nothing nags, nothing auto-sends. Worth a row anyway, because the
+        <em>consequence</em> is not obvious from the screen:
+      </p>
+      <div class="callout">
+        <strong>Proposed d31.</strong> A pending stream below its supplier's minimum waits
+        indefinitely. Nothing expires it, escalates it, or sends it short. <strong>Accepted
+        consequence:</strong> a customer-attached line can sit in a stream that may never reach the
+        minimum, and nothing tells the customer — the age column is the only signal, and nobody is
+        obliged to read it.
+        <em>Status: recommended, not yet ratified.</em>
+      </div>
+
+      <p style="margin-top:var(--sp-3)">
+        <span class="k">The duplicate mark is the wrong tool for the case you described</span> — and
+        the case you described is the better question.
+      </p>
+      <p>
+        <code>d29</code>'s mark is about <em>accidental</em> double entry while scanning a stack into
+        the bulk sheet. What you described is <em>deliberate</em>: one speculative copy and one for a
+        named customer, raised separately, as two lines of qty 1 rather than one line of qty 2. That
+        is what the spec already does — <code>M-02:35</code> says a raised line &ldquo;joins that
+        supplier's pending pile&rdquo; and nothing merges it — and it is right, because the two
+        copies are different commitments. One is spoken for; the other is a bet.
+      </p>
+      <p>
+        The real gap is the next step. <strong>Nothing anywhere records detaching a customer from an
+        order line.</strong> Attaching is recorded (<code>E-04:36</code>, Reserve). Detaching a
+        <em>scanned copy</em> from a PO line at the receiving desk is recorded
+        (<code>M-02 d20</code>, <code>E-02:30</code>). Detaching a <em>person</em> is not recorded
+        anywhere in the set. So when the customer rings and cancels:
+      </p>
+      <ul>
+        <li>
+          <span class="k">Delete the line</span> (<code>d9</code>, <code>M-02:89</code>) — the only
+          recorded route. Kills the order outright. Wrong if you would have stocked one anyway.
+        </li>
+        <li>
+          <span class="k">Do nothing</span> — the line keeps their name, and on receipt
+          <code>d13</code> (<code>M-02:81</code>) <strong>automatically creates a Held Sale for
+          them</strong>. A hold for someone who cancelled. And holds do not expire
+          (<code>E-05 d7</code>, <code>E-05:146</code>), so it sits on the shelf until a person
+          notices.
+        </li>
+        <li><span class="k">There is no third option.</span></li>
+      </ul>
+      <div class="callout danger">
+        <strong>Proposed d32.</strong> A Customer may be <strong>detached</strong> from a pending
+        order line, leaving the line in place, unattached, at the same quantity. Detaching is not
+        deleting: the copy may still be wanted. The line's log records who detached and when
+        (<code>d23</code>). <strong>Why it is needed:</strong> without it the only recorded response
+        to a cancelled request is deleting the line (<code>d9</code>), and the only alternative is
+        leaving an attachment that <code>d13</code> will turn into a non-expiring Held Sale for
+        someone who cancelled. <strong>Open inside it:</strong> whether detaching on a
+        <em>placed</em> line is also allowed — <code>d21</code> says a placed line is never deleted,
+        which is an argument that detach is exactly the right verb there.
+        <em>Status: recommended, not yet ratified.</em>
+      </div>
+      <p class="xsmall" style="margin-top:var(--sp-2)">
+        Both rows belong to M-02 and neither is a layout question — the mock can be built without
+        them. But d32 is a live hole in the flow, not a refinement, so it is worth closing before the
+        code teaches people the delete-it habit.
+      </p>
+    </div>
+  </div>
+</div>
+
+<script>
+// Mock plumbing only — none of this is app behaviour. It switches which face
+// of each track is showing so the states can be compared side by side.
+(function () {
+  var frame = document.getElementById('frame');
+  var faces = {
+    all:     ['m-all', 'k-all'],
+    stream:  ['m-stream', 'k-stream'],
+    line:    ['m-stream', 'k-line'],
+    placed:  ['m-placed', 'k-placed'],
+    process: ['m-process', 'k-process']
+  };
+  var all = ['m-all', 'm-stream', 'm-placed', 'm-process', 'k-all', 'k-stream', 'k-line', 'k-placed', 'k-process'];
+
+  function show(view) {
+    all.forEach(function (id) { document.getElementById(id).style.display = 'none'; });
+    faces[view].forEach(function (id) { document.getElementById(id).style.display = 'flex'; });
+
+    document.querySelectorAll('.controls .toggle[data-view]').forEach(function (b) {
+      b.setAttribute('aria-pressed', String(b.dataset.view === view));
+    });
+
+    // Slab and list selection follow the view, so the mock never shows a
+    // highlighted row that disagrees with what track 2 is showing.
+    document.querySelectorAll('.po-row').forEach(function (r) { r.classList.remove('on'); });
+    var slabRow = view === 'placed' ? document.getElementById('row-po-1042')
+                : view === 'all'    ? document.querySelector('.po-row.all')
+                                    : document.getElementById('row-crat-a');
+    if (slabRow) slabRow.classList.add('on');
+
+    document.querySelectorAll('.op-row').forEach(function (r) { r.classList.remove('on'); });
+    if (view === 'all') { /* nothing scoped yet */ }
+
+    document.querySelectorAll('#stream-lines tr').forEach(function (r) { r.classList.remove('selected'); });
+    if (view === 'line') document.getElementById('line-radiohead').classList.add('selected');
+  }
+
+  document.querySelectorAll('[data-view]').forEach(function (b) {
+    b.addEventListener('click', function () { show(b.dataset.view); });
+  });
+
+  // Clicking inside the mock, where it is obvious what it should do.
+  document.getElementById('mrow-crat-a').addEventListener('click', function () { show('stream'); });
+  document.getElementById('row-crat-a').addEventListener('click', function () { show('stream'); });
+  document.getElementById('row-po-1042').addEventListener('click', function () { show('placed'); });
+  document.querySelector('.po-row.all').addEventListener('click', function () { show('all'); });
+  document.querySelectorAll('#stream-lines tr').forEach(function (tr) {
+    tr.addEventListener('click', function (e) {
+      if (e.target.closest('input, select, button')) return;
+      show(tr.id === 'line-radiohead' ? 'line' : 'stream');
+      document.querySelectorAll('#stream-lines tr').forEach(function (r) { r.classList.remove('selected'); });
+      tr.classList.add('selected');
+    });
+  });
+
+  var slabBtn = document.getElementById('t-slab');
+  function setSlab(open) {
+    frame.classList.toggle('slab-shut', !open);
+    document.getElementById('strip').hidden = open;
+    document.getElementById('slab-open').style.display = open ? 'flex' : 'none';
+    slabBtn.setAttribute('aria-pressed', String(open));
+    slabBtn.textContent = open ? 'Open' : 'Shut';
+  }
+  slabBtn.addEventListener('click', function () { setSlab(frame.classList.contains('slab-shut')); });
+  document.getElementById('slab-close').addEventListener('click', function () { setSlab(false); });
+  document.getElementById('strip-open').addEventListener('click', function () { setSlab(true); });
+
+  setSlab(true);
+  show('all');
+})();
+</script>
