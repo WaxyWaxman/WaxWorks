@@ -685,6 +685,28 @@ interface AppContextValue extends AppState {
   // the next unused ascending number (decision 16); returns null if the
   // stream is empty or the requested number is already taken.
   poNumberTaken: (poNumber: string) => boolean;
+
+  // M-02 d25 — an order placed OUTSIDE the system, recorded afterwards. The
+  // lines are born placed: they never pass through Phase 1, they carry the
+  // supplier's own reference as the PO number (d16 permits free-text), and
+  // they take no separator, because d3's streams are a property of the
+  // pending pile and these were never in one.
+  //
+  // `placedOn` is the date the order ACTUALLY went out, not today (d26): the
+  // follow-up window, the age column and d19's overdue grouping all read from
+  // it, so a nine-day-old order must not render as new. A line recorded this
+  // way can therefore be overdue the moment it exists, which is correct.
+  //
+  // NOT honoured here: d27's catalog metadata prefetch. The prototype models
+  // no prefetch at all, so there is nothing to queue — see docs/prototype.md.
+  recordPlacedOrder: (input: {
+    supplierId: string;
+    poNumber?: string;
+    placedOn: string;
+    followUpDays?: number;
+    lines: { recordId: string; qty: number; sellPrice: number; customerId?: string }[];
+  }) => { poNumber: string; lineCount: number; unitCount: number } | null;
+
   processOrderStream: (
     supplierId: string,
     separator: string | undefined,
@@ -2585,6 +2607,78 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
   const poNumberTaken: AppContextValue["poNumberTaken"] = (poNumber) =>
     s.pendingOrders.some((o) => o.poNumber === poNumber);
 
+  const recordPlacedOrder: AppContextValue["recordPlacedOrder"] = (input) => {
+    const supplier = s.suppliers.find((sup) => sup.id === input.supplierId);
+    if (!supplier || input.lines.length === 0) return null;
+
+    // Same numbering rule as processOrderStream: a typed reference must be
+    // free, and auto-minting skips anything already in use (d16).
+    const used = new Set(s.pendingOrders.map((o) => o.poNumber).filter((n): n is string => !!n));
+    let num = input.poNumber?.trim();
+    if (num) {
+      if (used.has(num)) return null;
+    } else {
+      let n = s.nextPoNumber;
+      while (used.has(String(n))) n++;
+      num = String(n);
+    }
+
+    // The whole point of d26: createdAt, placedAt and the follow-up window all
+    // hang off the day it really went out. `daysAgo` and `followUpDueAt` parse
+    // "YYYY-MM-DD hh:mm:ss", so the date is given a time rather than left bare.
+    const placedStamp = `${input.placedOn} 00:00:00`;
+    const at = now();
+    const unitCount = input.lines.reduce((sum, l) => sum + l.qty, 0);
+    const sellTotal = input.lines.reduce((sum, l) => sum + l.sellPrice * l.qty, 0);
+    const how = input.poNumber?.trim() ? `their reference ${num}` : `our PO ${num}`;
+
+    const lines: PendingOrderLine[] = input.lines.map((l) => ({
+      id: uid("po-line"),
+      supplierId: input.supplierId,
+      poNumber: num,
+      placedAt: placedStamp,
+      recordId: l.recordId,
+      qty: l.qty,
+      sellPrice: l.sellPrice,
+      customerId: l.customerId,
+      followUpDays: input.followUpDays,
+      followUpSetAt: placedStamp,
+      createdBy: CURRENT_USER,
+      createdAt: placedStamp,
+      recordedAt: at,
+      // d23 — the line's own history says where it came from, so "why is this
+      // on a PO nobody here raised" has an answer a week later.
+      log: [
+        {
+          at,
+          text: `Recorded as already placed on ${num} — ordered ${input.placedOn} via ${supplier.orderVia}. Entered by ${CURRENT_USER}; nothing was sent from here.`,
+        },
+      ],
+    }));
+
+    setS((prev) => ({
+      ...prev,
+      nextPoNumber: /^\d+$/.test(num!) ? Math.max(prev.nextPoNumber, Number(num) + 1) : prev.nextPoNumber,
+      pendingOrders: [...prev.pendingOrders, ...lines],
+      suppliers: prev.suppliers.map((sup) =>
+        sup.id === input.supplierId
+          ? {
+              ...sup,
+              log: [
+                ...sup.log,
+                {
+                  at,
+                  text: `Order recorded as already placed under ${how} — ${lines.length} line${lines.length === 1 ? "" : "s"}, ${unitCount} units, sell ${money(sellTotal)}, ordered ${input.placedOn} via ${supplier.orderVia}. Nothing was sent from here (d25).`,
+                },
+              ],
+            }
+          : sup,
+      ),
+    }));
+
+    return { poNumber: num!, lineCount: lines.length, unitCount };
+  };
+
   const processOrderStream: AppContextValue["processOrderStream"] = (supplierId, separator, poNumber) => {
     const supplier = s.suppliers.find((sup) => sup.id === supplierId);
     if (!supplier) return null;
@@ -2707,6 +2801,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
       reflagPendingOrderLine,
       retargetStreamSeparator,
       poNumberTaken,
+      recordPlacedOrder,
       processOrderStream,
     }),
     // eslint-disable-next-line react-hooks/exhaustive-deps

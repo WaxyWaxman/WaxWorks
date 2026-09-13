@@ -68,3 +68,24 @@ export function orderLineState(order: PendingOrderLine, invoices: Invoice[]): Or
 export function isClosedState(state: OrderLineState): boolean {
   return state === "Received" || state === "Cancelled";
 }
+
+/**
+ * The open line a new order line would duplicate, or undefined (M-02 d29).
+ *
+ * Used by the bulk sheet, which — unlike the titlecard route — cannot show
+ * stock, minimum on hand, or what is already outstanding. It MARKS, and never
+ * blocks: the sheet cannot know whether the duplicate is a mistake, because
+ * ordering more of something already on order is ordinary when the first
+ * order is late, short, or Backordered (d12). The caller shows which line it
+ * found — PO, state, age — so the decision is made on the facts.
+ */
+export function existingOpenLine(
+  recordId: string,
+  supplierId: string,
+  orders: PendingOrderLine[],
+  invoices: Invoice[],
+): PendingOrderLine | undefined {
+  return orders.find(
+    (o) => o.recordId === recordId && o.supplierId === supplierId && isOpenOrderLine(o, invoices),
+  );
+}

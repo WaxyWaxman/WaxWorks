@@ -343,6 +343,18 @@ export interface PendingOrderLine {
    * voided PO reads as live in Previously placed.
    */
   poVoidedAt?: string;
+  /**
+   * Stamped on lines created by the record-an-order-placed-elsewhere route
+   * (M-02 d25) — when the order was ENTERED, as against `placedAt`, which is
+   * when it actually went out (d26). The two differ by however long it took
+   * somebody to get round to typing it in.
+   *
+   * Same justification as `poVoidedAt` above: the prototype has no
+   * PurchaseOrder entity to hold the fact, so the lines carry it. Without it a
+   * recorded order is indistinguishable from one this system sent, and the
+   * screen cannot say whose reference the PO number is.
+   */
+  recordedAt?: string;
 }
 
 /** A placed line is never deleted — it is Cancelled, or it is received (d21). */
