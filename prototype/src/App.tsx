@@ -79,17 +79,26 @@ export function App() {
   // stranding you on a screen with no way back to a Sale in flight.
   const atTill = location.pathname.startsWith("/sell") || onReturn;
 
-  // Find was the second screen built this way, Receiving the third (E-02
-  // d38) and Customers the fourth (E-07 d17). Three tracks only work if the frame is fixed: a page that scrolls as
-  // one document cannot keep the scan field and the reconcile check where they
-  // were. Still scoped to these screens rather than made a global rule — the
-  // remaining long tables (Order Processing, Accounts Payable) are read top to
-  // bottom and lose more than they gain from a fixed frame.
+  // Find was the second screen built this way, Receiving the third (E-02 d38),
+  // Customers the fourth (E-07 d17), Suppliers the fifth (M-01 d17), What's on
+  // Order the sixth and Order Processing the seventh (M-02 Phase 2).
+  //
+  // Three tracks only work if the frame is fixed: a page that scrolls as one
+  // document cannot keep the search box and the primary action where they were
+  // last time, which is the entire claim the layout makes. Suppliers and
+  // What's on Order were re-laid onto the frame without being added here, so
+  // both were scrolling as documents and quietly giving that up.
+  //
+  // Still a list rather than a global rule: Accounts Payable is a long table
+  // read top to bottom and loses more than it gains from a fixed frame.
   const ownsWindow =
     atTill ||
     location.pathname.startsWith("/search") ||
     location.pathname.startsWith("/receiving") ||
-    location.pathname.startsWith("/customers");
+    location.pathname.startsWith("/customers") ||
+    location.pathname.startsWith("/suppliers") ||
+    location.pathname.startsWith("/on-order") ||
+    location.pathname.startsWith("/orders");
 
   return (
     <div className={"app" + (ownsWindow ? " app-fixed" : "")}>
