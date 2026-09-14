@@ -78,15 +78,36 @@ export const batchName = (c: SupplierClaim): string =>
   c.separator ? `Batch ${c.separator}` : "Base batch";
 
 /**
- * E-04 d28 — the Invoices a claim line may name: that Supplier's **finalized**
- * ones, which is the set the store actually received stock on. A Draft is not
- * eligible (nothing has arrived yet), and a number the supplier quotes for a
- * shipment that never came is not in the list at all, which is the whole point
- * — the reference is chosen, never typed.
+ * E-04 d28 — the Invoices a claim line may name: the ones this Supplier has
+ * actually shipped THIS RECORD to the store on. Three filters, each earning
+ * its place:
+ *
+ *   supplier    a claim is against one supplier, so another's paperwork is
+ *               never an answer;
+ *   finalized   a Draft has not arrived, so nothing was received on it;
+ *   carries it  the Invoice has a line for this Record.
+ *
+ * The third is the one that makes the reference **checkable** rather than
+ * merely bounded: a claim about a copy of Rumours may point at any Rumours
+ * shipment from them and at nothing else.
+ *
+ * Record-level, not copy-level, and deliberately: a copy is minted from one
+ * Invoice line, so a copy-level list would always hold exactly one entry and
+ * there would be nothing to choose. Where they have never shipped the Record,
+ * this is empty and the only honest answer is `{ kind: "none" }`.
  */
-export const eligibleInvoices = (supplierId: string, invoices: Invoice[]): Invoice[] =>
+export const eligibleInvoices = (
+  recordId: string,
+  supplierId: string,
+  invoices: Invoice[],
+): Invoice[] =>
   invoices
-    .filter((iv) => iv.supplierId === supplierId && iv.status !== "Draft")
+    .filter(
+      (iv) =>
+        iv.supplierId === supplierId &&
+        iv.status !== "Draft" &&
+        iv.lines.some((l) => l.recordId === recordId),
+    )
     .sort((a, b) => (b.invoiceDate ?? "").localeCompare(a.invoiceDate ?? ""));
 
 /** What to print in the Invoice column. `none` is a stated fact, not a blank. */

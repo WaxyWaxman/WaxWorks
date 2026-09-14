@@ -49,7 +49,7 @@ export function ClaimModal({
 
   // The Invoices this line may name (d28): that Supplier's finalized ones —
   // what the store actually received stock on. Never a typed number.
-  const eligible = item?.supplierId ? eligibleInvoices(item.supplierId, app.invoices) : [];
+  const eligible = item?.supplierId ? eligibleInvoices(record.id, item.supplierId, app.invoices) : [];
   // Until someone picks, the line follows the copy: the Invoice it arrived on.
   const arrivedOn = eligible.find((iv) => item?.arrivedOnInvoice?.trim().endsWith(iv.invoiceNumber));
   const chosen = againstId === null ? (arrivedOn?.id ?? "") : againstId;
@@ -117,9 +117,10 @@ export function ClaimModal({
               <option value="">Not about a specific invoice</option>
             </select>
             <span className="hint">
-              Any invoice this supplier has shipped us stock on — not only the one the copy came in on, because a
-              supplier may credit against a different shipment (d28). It is <strong>evidence of what is being
-              argued</strong>, never where the credit lands: that is decided by ticking in Accounts Payable (M-05 d27).
+              Every invoice this supplier has shipped <strong>{record.title}</strong> to us on — not only the one this
+              copy came in on, because they may credit against a different shipment of it (d28). It is{" "}
+              <strong>evidence of what is being argued</strong>, never where the credit lands: that is decided by
+              ticking in Accounts Payable (M-05 d27).
             </span>
           </label>
           <label className="field">

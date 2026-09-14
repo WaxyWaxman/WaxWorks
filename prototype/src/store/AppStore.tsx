@@ -6,6 +6,7 @@ import {
   type ReactNode,
 } from "react";
 import { computeDayBreakdown, type DayBreakdown } from "../lib/dayBreakdown";
+import { eligibleInvoices } from "../lib/claims";
 import { money } from "../lib/money";
 import {
   customerBalanceDelta,
@@ -307,7 +308,7 @@ const seed: AppState = {
       lines: [
         {
           id: "cl-fab-weekly-1",
-          recordId: "r-kind",
+          recordId: "r-illmatic",
           against: { kind: "invoice", invoiceId: "inv-seed-fab" },
           reason: "Billed / not shipped",
           note: "Billed 1, none in the carton",
@@ -352,7 +353,7 @@ const seed: AppState = {
         },
         {
           id: "cl-41-2",
-          recordId: "r-ok",
+          recordId: "r-blue",
           against: { kind: "invoice", invoiceId: "inv-seed-fab" },
           reason: "Received damaged",
           cost: 10,
@@ -440,7 +441,7 @@ const seed: AppState = {
       lines: [
         {
           id: "cl-36-1",
-          recordId: "r-astral",
+          recordId: "r-illmatic",
           against: { kind: "invoice", invoiceId: "inv-seed-crate-paid" },
           reason: "Wrong item",
           cost: 18,
@@ -452,7 +453,7 @@ const seed: AppState = {
       log: [
         { at: "2026-08-19 13:00:00", text: "Claim opened — Wrong item (qty 1)" },
         { at: "2026-08-20 10:00:00", text: "Claim 36 sent to hello@cratedigger.example" },
-        { at: "2026-08-22 09:10:00", text: "Voided — Raised against the wrong copy · The Astral Weeks that came short was on the other invoice." },
+        { at: "2026-08-22 09:10:00", text: "Voided — Raised against the wrong copy · The Illmatic that came short was on the other invoice." },
       ],
     },
   ],
@@ -463,7 +464,7 @@ const seed: AppState = {
       id: "claimvoid-seed-1",
       claimId: "claim-crate-36",
       reason: "Raised against the wrong copy",
-      note: "The Astral Weeks that came short was on the other invoice.",
+      note: "The Illmatic that came short was on the other invoice.",
       at: "2026-08-22 09:10:00",
       by: MANAGER_NAME,
     },
@@ -1621,13 +1622,10 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
   // supplier and number. That string is the same weakness d28 removed from the
   // claim line and it is still here, one layer down; see the open question.
   const defaultAgainst = (item: InventoryItem): ClaimLineAgainst => {
-    const iv = s.invoices.find(
-      (x) =>
-        x.supplierId === item.supplierId &&
-        x.status !== "Draft" &&
-        !!item.arrivedOnInvoice &&
-        item.arrivedOnInvoice.trim().endsWith(x.invoiceNumber),
-    );
+    const eligible = eligibleInvoices(item.recordId, item.supplierId ?? "", s.invoices);
+    const iv =
+      eligible.find((x) => !!item.arrivedOnInvoice && item.arrivedOnInvoice.trim().endsWith(x.invoiceNumber)) ??
+      eligible[0];
     return iv ? { kind: "invoice", invoiceId: iv.id } : { kind: "none" };
   };
 
