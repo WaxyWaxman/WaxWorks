@@ -655,6 +655,13 @@ table.data tr.band-row + tr.group-row td { border-top: none; }
   display: block; font-family: var(--font-sans); font-size: 9.5px; font-weight: 600;
   letter-spacing: 0.04em; text-transform: uppercase; color: var(--c-ink-faint);
 }
+/* E-03 d12 — the recency half of the stamp. Quieter than the caption above
+   it and not uppercased, because it is a sentence fragment ("sold 3 months
+   ago") rather than a label. */
+.hit .n small.ago {
+  text-transform: none; letter-spacing: 0; font-weight: 500;
+  color: var(--c-ink-faint); opacity: 0.85; margin-top: 1px;
+}
 
 /* ---- The shut strip ----
    52px. The magnifier keeps the rail's honesty rule (E-05 d30) by carrying the

@@ -6,7 +6,8 @@ import type {
   RecordEntry,
   Sale,
 } from "../data/types";
-import { availableOnHand, heldCount, onHand } from "./totals";
+import { lineForItem } from "./provenance";
+import { availableOnHand, copiesPresent, heldCount, onHand } from "./totals";
 
 // ---- Stock state (E-03) ----
 //
@@ -51,6 +52,13 @@ export interface StockFacts {
   lastSoldAt?: string;
   /** How many copies we have ever sold. */
   everSold: number;
+  /**
+   * E-03 d16 — days since the oldest copy we still hold was received, read
+   * through A-45's provenance reference to its Invoice. `undefined` when no
+   * present copy has an Invoice behind it: no arrival date is an honest
+   * answer, and better than a guessed one.
+   */
+  heldSinceDays?: number;
 }
 
 interface StockInput {
@@ -71,6 +79,26 @@ export function stockFacts(record: RecordEntry, input: StockInput): StockFacts {
   const held = heldCount(record.id, input.inventory);
   const available = availableOnHand(record.id, input.inventory);
   const total = onHand(record.id, input.inventory);
+  // Banding asks a different question from the figure. "Here now" means there
+  // is a copy to put in someone's hands, so it reads the copies PRESENT — a
+  // Record with one on the shelf and three oversold is still on the shelf,
+  // even though §5.1 puts its on-hand at -2. Reading `total` here would send
+  // a customer away from a record we are holding.
+  const present = copiesPresent(record.id, input.inventory);
+
+  // d16 — how long the oldest copy we still hold has been here. A copy knows
+  // the InvoiceLine it was minted from (A-45), and the Invoice knows when it
+  // was received; nothing on the item itself records an arrival date.
+  let heldSinceDays: number | undefined;
+  const receivedDates = input.inventory
+    .filter((i) => i.recordId === record.id && (i.status === "sellable" || i.status === "held"))
+    .map((i) => lineForItem(i, input.invoices)?.invoice.receivedDate)
+    .filter((d): d is string => !!d)
+    .sort();
+  if (receivedDates.length > 0) {
+    const oldest = new Date(receivedDates[0] + "T00:00:00").getTime();
+    heldSinceDays = Math.max(0, Math.floor((Date.now() - oldest) / 86_400_000));
+  }
   // "On the way" means PLACED, not merely raised. M-02 splits a pending line's
   // life in two: raised into a supplier stream (no poNumber) is still Order
   // Processing's job and nobody has told the supplier anything; placed
@@ -106,13 +134,13 @@ export function stockFacts(record: RecordEntry, input: StockInput): StockFacts {
   // ever had it. A Record that is both on the shelf and on order reads as
   // "here" — the stamp still says how many are coming.
   let state: StockState;
-  if (total > 0) state = "here";
+  if (present > 0) state = "here";
   else if (onOrder > 0) state = "coming";
   else if (record.catalogOnly) state = "never";
   else if (everSold > 0 || input.inventory.some((i) => i.recordId === record.id)) state = "before";
   else state = "never";
 
-  return { state, onHand: total, available, held, onOrder, raised, lastSoldAt, everSold };
+  return { state, onHand: total, available, held, onOrder, raised, lastSoldAt, everSold, heldSinceDays };
 }
 
 // Sort key so results group by state in the order above — E-03 decision 4
@@ -138,25 +166,37 @@ export function agoLabel(iso: string | undefined, now: Date = new Date()): strin
   return then.toLocaleDateString(undefined, { month: "short", year: "numeric" });
 }
 
-/** The bold half of a result row's right-hand stamp. */
-export function stampLead(facts: StockFacts): string {
-  switch (facts.state) {
-    case "here":
-      return `${facts.available} here`;
-    case "coming":
-      return `${facts.onOrder} coming`;
-    case "before":
-      return "had before";
-    case "never":
-      return "never stocked";
-  }
-}
+/**
+ * E-03 d16 — how long a held Record may sit, never having sold, before the
+ * stamp says so. A store setting (M-06); this is its default. Silence before
+ * the threshold is deliberate: new stock has no recency to report, and a flag
+ * that fires on every arrival is noise.
+ */
+export const DEAD_STOCK_DAYS = 180;
 
-/** The quiet half — recency, or why there is none. */
+/**
+ * The recency half of a result row's stamp — E-03 d12, d16. The count half is
+ * `countFor` in FindSlab, which says more than the `stampLead` that used to
+ * live here: available / all held / on order / pending rather than one figure.
+ * That helper is gone rather than left exported and unused.
+ *
+ * TWO CLOCKS feed this one string and they are not comparable — time since the
+ * last sale for a Record that has sold, time since arrival for one that never
+ * has. d16 accepts that knowingly, on condition the words say which: "sold 6mo
+ * ago" against "never sold".
+ */
 export function stampAgo(facts: StockFacts): string | undefined {
   const ago = agoLabel(facts.lastSoldAt);
   if (facts.state === "never") return undefined;
   if (facts.state === "coming") return "on order";
-  if (!ago) return facts.state === "before" ? "no sales recorded" : undefined;
+  if (!ago) {
+    if (facts.state === "before") return "no sales recorded";
+    // d16 — held, never sold. Silent until it has sat past the threshold,
+    // then the loudest reorder signal there is: we bought it, nobody wanted
+    // it. `heldSinceDays` is undefined when no present copy has an Invoice
+    // behind it, and no arrival date means no stamp rather than a guess.
+    if (facts.heldSinceDays !== undefined && facts.heldSinceDays >= DEAD_STOCK_DAYS) return "never sold";
+    return undefined;
+  }
   return `sold ${ago}`;
 }

@@ -55,11 +55,16 @@ export function Search() {
 
   const hits: Hit[] = useMemo(() => {
     const q = term.trim().toLowerCase();
-    const match = (r: RecordEntry) =>
-      !q ||
-      [r.artist, r.title, r.label, r.catalogNo, r.genre, r.section, r.manufacturerUpc]
-        .filter(Boolean)
-        .some((f) => String(f).toLowerCase().includes(q));
+    const match = (r: RecordEntry) => {
+      if (!q) return true;
+      const fields = [r.artist, r.title, r.label, r.catalogNo, r.genre, r.section, r.manufacturerUpc];
+      if (fields.filter(Boolean).some((f) => String(f).toLowerCase().includes(q))) return true;
+      // E-03 d15 — internal barcode is a TYPED dimension too. d9 governs what
+      // a scan does; a number read off a sleeve by hand has to reach the same
+      // Record, and returned "nothing found" until now. It lists the Record
+      // among the results rather than short-circuiting the way a scan does.
+      return app.inventory.some((i) => i.recordId === r.id && i.internalBarcode.toLowerCase().includes(q));
+    };
 
     const input = { inventory: app.inventory, pendingOrders: app.pendingOrders, sales: app.sales, invoices: app.invoices };
     const rows = app.records

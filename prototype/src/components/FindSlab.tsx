@@ -8,6 +8,7 @@ import {
   STOCK_STATES,
   type StockFacts,
   type StockState,
+  stampAgo,
 } from "../lib/stockState";
 
 export interface Hit {
@@ -212,7 +213,14 @@ function SlabList({
                   {r.label} · {r.catalogNo} · {r.year}
                 </span>
               </span>
-              <span className="n">{countFor(facts)}</span>
+              <span className="n">
+                {countFor(facts)}
+                {/* E-03 d12 — the recency stamp, per row. It answers the
+                    reorder question d7 left open: a title stocked three times
+                    and sold out of reads differently from one that sat, and
+                    that comparison happens in the LIST, not after selecting. */}
+                {stampAgo(facts) && <small className="ago">{stampAgo(facts)}</small>}
+              </span>
             </button>
           </div>
         );
@@ -227,7 +235,7 @@ function SlabList({
 // raised into a supplier stream with no PO number yet (M-02 d1).
 function countFor(facts: StockFacts) {
   if (facts.available > 0) return <>{facts.available}<small>available</small></>;
-  if (facts.onHand > 0) return <>{facts.onHand}<small>all held</small></>;
+  if (facts.held > 0) return <>{facts.held}<small>all held</small></>;
   if (facts.onOrder > 0) return <>{facts.onOrder}<small>on order</small></>;
   if (facts.raised > 0) return <>{facts.raised}<small>pending</small></>;
   return <>—<small>none</small></>;

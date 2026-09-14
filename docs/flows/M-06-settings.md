@@ -57,6 +57,14 @@ Store name and the details that appear on receipts and outbound documents.
 
 ---
 
+## Inherited from other flows
+
+**From [E-03](E-03-search-inventory.md):**
+
+- **A dead-stock threshold, defaulting to 180 days** ([E-03](E-03-search-inventory.md) d16). A held Record whose oldest copy has been on hand longer than this, with no copy ever sold, reads *never sold* on the Find screen. It is configuration rather than code because what counts as dead differs by shop — and plausibly by Section, which this flow has not decided.
+
+---
+
 ## Requirements
 
 - Every setting here is **manager-only**.
