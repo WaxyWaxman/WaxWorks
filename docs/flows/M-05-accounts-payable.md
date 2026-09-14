@@ -124,7 +124,7 @@ Loading and redeeming happen at the till ([E-05](E-05-sell-a-record.md)); this i
 **From [E-04](E-04-manage-inventory.md):**
 
 - Claims arrive here already raised, batched, sent, and carrying a **Pending** or **Credited** status.
-- **A claim a supplier declined or never answered is Abandoned in E-04 and never appears here** ([E-04](E-04-manage-inventory.md) d24). It is neither Pending nor Credited, so it surfaces under neither step 6 nor decision 12, and it never contributed to a balance in the first place (decision 26). Abandoning is a disposal, not a correction — there is nothing on this side to reverse.
+- **A claim a supplier declined or never answered is Abandoned in E-04 and never appears here** ([E-04](E-04-manage-inventory.md) d24). It is neither Pending nor Credited, so it surfaces under neither step 6 nor decision 12, and it never contributed to a balance in the first place (decision 26). Abandoning is a disposal, not a correction — there is nothing on this side to reverse. **A voided claim is likewise invisible here** ([E-04](E-04-manage-inventory.md) d27), and means something different: abandoned is *no money is coming*, voided is *this claim was wrong*.
 - **A Credited claim counts at the amount its credit memo grants, not at the amount claimed** ([E-04](E-04-manage-inventory.md) d20). The two commonly differ — a supplier deducts the cost of the return — and the memo governs. This is the figure decision 26 puts into the balance, decision 27 attaches to debits, and decision 28 consumes whole. The claim total stays visible as what was asked for; the shortfall is never posted as a cost here.
 
 ---
