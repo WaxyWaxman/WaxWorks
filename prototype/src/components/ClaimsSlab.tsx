@@ -1,4 +1,4 @@
-import type { ClaimVoid, Supplier, SupplierClaim } from "../data/types";
+import type { Supplier, SupplierClaim } from "../data/types";
 import { claimPhase, claimTotal, daysWaiting, isSent } from "../lib/claims";
 import { money } from "../lib/money";
 import { ChevronLeft, ChevronRight } from "./Chevrons";
@@ -29,7 +29,6 @@ export function ClaimsSlab({
   onOpenChange,
   suppliers,
   claims,
-  voids,
   today,
   query,
   onQueryChange,
@@ -44,7 +43,6 @@ export function ClaimsSlab({
   onOpenChange: (v: boolean) => void;
   suppliers: Supplier[];
   claims: SupplierClaim[];
-  voids: ClaimVoid[];
   today: Date;
   query: string;
   onQueryChange: (q: string) => void;
@@ -70,8 +68,8 @@ export function ClaimsSlab({
     .filter((s) => of(s.id).length > 0)
     .map((s) => {
       const mine = of(s.id);
-      const phases = mine.map((c) => claimPhase(c, voids));
-      const waitingClaims = mine.filter((c) => claimPhase(c, voids) === "waiting");
+      const phases = mine.map((c) => claimPhase(c));
+      const waitingClaims = mine.filter((c) => claimPhase(c) === "waiting");
       const days = waitingClaims
         .map((c) => daysWaiting(c, today))
         .filter((d): d is number => d !== undefined);
@@ -79,11 +77,11 @@ export function ClaimsSlab({
         supplier: s,
         unsent: phases.filter((p) => p === "unsent").length,
         waiting: phases.filter((p) => p === "waiting").length,
-        closed: phases.filter((p) => p === "credited" || p === "abandoned" || p === "voided").length,
+        closed: phases.filter((p) => p === "credited" || p === "abandoned").length,
         oldest: days.length ? Math.max(...days) : undefined,
         // What is still in play — a closed claim is nobody's money.
         value: mine
-          .filter((c) => ["unsent", "waiting"].includes(claimPhase(c, voids)))
+          .filter((c) => ["unsent", "waiting"].includes(claimPhase(c)))
           .reduce((n, c) => n + claimTotal(c), 0),
       };
     });
@@ -252,7 +250,7 @@ export function ClaimsSlab({
 }
 
 /** Exported for the work track's header, which counts the same things. */
-export const liveClaims = (claims: SupplierClaim[], voids: ClaimVoid[]) =>
-  claims.filter((c) => ["unsent", "waiting"].includes(claimPhase(c, voids)));
+export const liveClaims = (claims: SupplierClaim[]) =>
+  claims.filter((c) => ["unsent", "waiting"].includes(claimPhase(c)));
 
 export const unsentBatches = (claims: SupplierClaim[]) => claims.filter((c) => !isSent(c));

@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { ClaimsSlab, STALE_DAYS, type ClaimChip, type ClaimSort } from "../components/ClaimsSlab";
 import { ABANDON_REASONS, VOID_REASONS } from "../data/types";
-import type { AbandonReason, ClaimVoid, SupplierClaim, VoidReason } from "../data/types";
+import type { AbandonReason, SupplierClaim, VoidReason } from "../data/types";
 import {
   batchName,
   lineAgainstLabel,
@@ -9,6 +9,7 @@ import {
   claimCredited,
   claimPhase,
   claimTotal,
+  retiredNumbers,
   daysWaiting,
   isSent,
 } from "../lib/claims";
@@ -48,9 +49,9 @@ export function Claims() {
   }, [selId, withClaims]);
 
   const mine = claims.filter((c) => c.supplierId === supplier?.id);
-  const unsent = mine.filter((c) => claimPhase(c, voids) === "unsent");
-  const waiting = mine.filter((c) => claimPhase(c, voids) === "waiting");
-  const closed = mine.filter((c) => ["credited", "abandoned", "voided"].includes(claimPhase(c, voids)));
+  const unsent = mine.filter((c) => claimPhase(c) === "unsent");
+  const waiting = mine.filter((c) => claimPhase(c) === "waiting");
+  const closed = mine.filter((c) => ["credited", "abandoned"].includes(claimPhase(c)));
 
   const picked = mine.find((c) => c.id === pick);
   // The act track follows the selection; a selection that goes away takes its
@@ -74,7 +75,6 @@ export function Claims() {
         onOpenChange={setSlabOpen}
         suppliers={app.suppliers}
         claims={claims}
-        voids={voids}
         today={today}
         query={query}
         onQueryChange={setQuery}
@@ -129,6 +129,7 @@ export function Claims() {
                     <BatchCard
                       key={c.id}
                       claim={c}
+                      retired={retiredNumbers(c, voids)}
                       on={pick === c.id}
                       onPick={() => {
                         setPick(c.id);
@@ -174,7 +175,7 @@ export function Claims() {
                   label="Closed"
                   say="Credited claims are A/P's business now; abandoned and voided ones are nobody's."
                   total={closed
-                    .filter((c) => claimPhase(c, voids) === "credited")
+                    .filter((c) => claimPhase(c) === "credited")
                     .reduce((n, c) => n + claimCredited(c), 0)}
                 >
                   {!showClosed ? (
@@ -190,7 +191,7 @@ export function Claims() {
                   ) : (
                     <>
                       {closed.map((c) => (
-                        <ClosedCard key={c.id} claim={c} voids={voids} />
+                        <ClosedCard key={c.id} claim={c} />
                       ))}
                       <div className="claims-quiet">
                         <button className="btn sm ghost" onClick={() => setShowClosed(false)}>
@@ -256,7 +257,10 @@ export function Claims() {
             claim={picked}
             onVoid={(reason, note) => {
               app.voidClaim(picked.id, reason, note);
-              setMsg(`Claim ${picked.claimNumber} voided. Its number is retired — re-raising means a new one (d26).`);
+              setMsg(
+                `Claim ${picked.claimNumber} voided — back in its ${batchName(picked).toLowerCase()} with its lines and separator, ` +
+                  `ready to correct and send again. That number is retired (d26, d29).`,
+              );
               setPick("");
             }}
           />
@@ -333,13 +337,31 @@ function Lines({ claim }: { claim: SupplierClaim }) {
   );
 }
 
-function BatchCard({ claim, on, onPick }: { claim: SupplierClaim; on: boolean; onPick: () => void }) {
+function BatchCard({
+  claim,
+  retired,
+  on,
+  onPick,
+}: {
+  claim: SupplierClaim;
+  retired: number[];
+  on: boolean;
+  onPick: () => void;
+}) {
   return (
     <div className={"claims-bucket" + (on ? " on" : "")} onClick={onPick}>
       <div className="claims-bucket-top">
         <span className="nm">
           {batchName(claim)}{" "}
           <span className="sep">{claim.separator ? `separator ${claim.separator}` : "no separator"}</span>
+          {/* d29 — a batch that has been out and come back says so, and names
+              the numbers it burned. Otherwise a returned claim is
+              indistinguishable from one never sent. */}
+          {retired.length > 0 && (
+            <span className="claims-retired">
+              back from {retired.length === 1 ? "claim" : "claims"} {retired.join(", ")} — voided
+            </span>
+          )}
         </span>
         {on && <span className="badge accent">selected</span>}
         <span className="fig mono">{money(claimTotal(claim))}</span>
@@ -409,9 +431,8 @@ function SentCard({
   );
 }
 
-function ClosedCard({ claim, voids }: { claim: SupplierClaim; voids: ClaimVoid[] }) {
-  const phase = claimPhase(claim, voids);
-  const v = voids.find((x) => x.claimId === claim.id);
+function ClosedCard({ claim }: { claim: SupplierClaim }) {
+  const phase = claimPhase(claim);
   const absorbed = claimAbsorbed(claim);
   return (
     <div className="claims-card closed">
@@ -420,13 +441,12 @@ function ClosedCard({ claim, voids }: { claim: SupplierClaim; voids: ClaimVoid[]
           <span className="id">
             Claim <span className="mono">{claim.claimNumber ?? "—"}</span>
             <span className={"badge" + (phase === "credited" ? " ok" : "")}>
-              {phase === "credited" ? "Credited" : phase === "abandoned" ? "Abandoned" : "Voided"}
+              {phase === "credited" ? "Credited" : "Abandoned"}
             </span>
           </span>
           <span className="meta">
             {phase === "credited" && `Memo ${claim.creditMemo} · counting in A/P`}
             {phase === "abandoned" && `${claim.abandonment?.reason}${claim.abandonment?.note ? ` · ${claim.abandonment.note}` : ""}`}
-            {phase === "voided" && `${v?.reason}${v?.note ? ` · ${v.note}` : ""}`}
           </span>
         </span>
         <span className="fig">
@@ -699,10 +719,9 @@ function VoidAct({ claim, onVoid }: { claim: SupplierClaim; onVoid: (r: VoidReas
       </label>
 
       <div className="wo-caveat">
-        <strong>Voiding is not abandoning.</strong> Abandon says <em>this claim was right and no money is coming</em>.
-        Void says <em>this claim was wrong and should never have been sent</em>. Both keep the row; reading one for the
-        other loses the difference between a loss and a mistake, which is the only thing the closed list is worth
-        consulting for later (d27).
+        <strong>Voiding is not abandoning.</strong> Abandon says <em>this claim was right and no money is coming</em>,
+        and ends it. Void says <em>this claim was wrong and should never have been sent</em>, and hands it back to you
+        to fix. Only abandoning is terminal (d27, d29).
       </div>
 
       <div className="claims-dead">
@@ -711,9 +730,10 @@ function VoidAct({ claim, onVoid }: { claim: SupplierClaim; onVoid: (r: VoidReas
           <span>retired</span>
         </div>
         <p>
-          Re-raising means a <strong>new claim with a new number</strong>. {claim.claimNumber} is never reused, so the
-          sequence has gaps and is not a count of anything (d26). The void is appended as its own record rather than a
-          field on the claim — the shape A-36 sets for payment batches, for its reason (A-44).
+          The claim <strong>returns to its unsent batch</strong> with its lines, notes and separator intact, ready to be
+          corrected and sent again under a new number (d29). {claim.claimNumber} is never reused, so the sequence has
+          gaps and is not a count of anything (d26). Nothing is lost — a void restores the prior state, the way
+          M-05 d22 returns money to a balance rather than deleting what was owed.
         </p>
       </div>
     </ActShell>

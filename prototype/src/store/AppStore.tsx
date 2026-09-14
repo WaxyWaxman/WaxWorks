@@ -433,11 +433,11 @@ const seed: AppState = {
 
     // d27 — the claim itself was wrong. Number 36 is retired with it (d26).
     {
+      // d29 — sent as 36, voided, and back in its unsent batch ready to be
+      // corrected. The number is spent; sending again will take a new one.
       id: "claim-crate-36",
-      claimNumber: 36,
       supplierId: "sup-crate",
       status: "Pending",
-      sentAt: "2026-08-20 10:00:00",
       lines: [
         {
           id: "cl-36-1",
@@ -453,7 +453,10 @@ const seed: AppState = {
       log: [
         { at: "2026-08-19 13:00:00", text: "Claim opened — Wrong item (qty 1)" },
         { at: "2026-08-20 10:00:00", text: "Claim 36 sent to hello@cratedigger.example" },
-        { at: "2026-08-22 09:10:00", text: "Voided — Raised against the wrong copy · The Illmatic that came short was on the other invoice." },
+        {
+          at: "2026-08-22 09:10:00",
+          text: "Voided — Raised against the wrong copy · The Illmatic that came short was on the other invoice. Number 36 retired; returned to its unsent batch.",
+        },
       ],
     },
   ],
@@ -463,6 +466,7 @@ const seed: AppState = {
     {
       id: "claimvoid-seed-1",
       claimId: "claim-crate-36",
+      claimNumber: 36,
       reason: "Raised against the wrong copy",
       note: "The Illmatic that came short was on the other invoice.",
       at: "2026-08-22 09:10:00",
@@ -1775,23 +1779,55 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
   // A different act from abandoning, and built differently: architecture A-44
   // makes the void a ROW, so nothing on the claim is updated. Its number is
   // retired with it (d26) — re-raising means a new claim with a new number.
+  // E-04 d27, d29 — the claim was wrong, not unpaid. Voiding RETURNS it to
+  // unsent rather than closing it: the number is retired (d26 — never reused)
+  // and the claim keeps its lines, its notes and its separator, so it drops
+  // back into the standing batch it came from (d22) ready to be corrected and
+  // sent again. The shape M-05 d22 uses for a payment, and its reason — a void
+  // restores the prior state, it disposes of nothing.
+  //
+  // Only a SENT claim can be voided; there is nothing to retire otherwise, and
+  // an unsent batch is edited rather than voided.
   const voidClaim: AppContextValue["voidClaim"] = (claimId, reason, note) =>
-    setS((prev) =>
-      prev.claimVoids.some((v) => v.claimId === claimId)
-        ? prev // one void per claim, the shape A-36 makes structural
-        : {
-            ...prev,
-            claimVoids: [
-              { id: uid("claimvoid"), claimId, reason, note, at: now(), by: MANAGER_NAME },
-              ...prev.claimVoids,
-            ],
-            claims: prev.claims.map((c) =>
-              c.id === claimId
-                ? { ...c, log: [...c.log, { at: now(), text: `Voided — ${reason}${note ? ` · ${note}` : ""}` }] }
-                : c,
-            ),
+    setS((prev) => {
+      const claim = prev.claims.find((c) => c.id === claimId);
+      if (!claim || !claim.sentAt || claim.claimNumber == null) return prev;
+      return {
+        ...prev,
+        claimVoids: [
+          {
+            id: uid("claimvoid"),
+            claimId,
+            claimNumber: claim.claimNumber,
+            reason,
+            note,
+            at: now(),
+            by: MANAGER_NAME,
           },
-    );
+          ...prev.claimVoids,
+        ],
+        claims: prev.claims.map((c) =>
+          c.id === claimId
+            ? {
+                ...c,
+                // Back to unsent (d25 — sent-ness IS the sent date), and the
+                // number goes with it. Separator and lines are untouched.
+                sentAt: undefined,
+                claimNumber: undefined,
+                log: [
+                  ...c.log,
+                  {
+                    at: now(),
+                    text:
+                      `Voided — ${reason}${note ? ` · ${note}` : ""}. ` +
+                      `Number ${claim.claimNumber} retired; returned to its unsent batch.`,
+                  },
+                ],
+              }
+            : c,
+        ),
+      };
+    });
 
 
   const reserve: AppContextValue["reserve"] = (recordId, itemId, customerId, qty, po) => {
