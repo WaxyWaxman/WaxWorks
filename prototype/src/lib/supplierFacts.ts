@@ -1,3 +1,4 @@
+import { supplierIdForItem } from "./provenance";
 import type {
   ClaimVoid,
   Invoice,
@@ -234,9 +235,12 @@ export function supplierFacts(supplier: Supplier, input: FactsInput): SupplierFa
   const copiesIn = inWindow.reduce((n, iv) => n + iv.lines.reduce((m, l) => m + l.qty, 0), 0);
 
   // Sold is summed over the SaleLines whose copy traces to this Supplier.
-  // `supplierId` is only set when the item arrived on an Invoice that traces
-  // to one, which is precisely the attribution gap counted below.
-  const itemSupplier = new Map(input.inventory.map((i) => [i.id, i.supplierId]));
+  // A-45 — the copy names its InvoiceLine and the Supplier is two lookups
+  // away; a copy with no line was never received on paperwork, which is
+  // precisely the attribution gap counted below.
+  const itemSupplier = new Map(
+    input.inventory.map((i) => [i.id, supplierIdForItem(i, input.invoices)] as const),
+  );
   let sold = 0;
   let copiesSold = 0;
   let unattributed = 0;

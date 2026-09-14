@@ -6,7 +6,7 @@ import {
   type ReactNode,
 } from "react";
 import { computeDayBreakdown, type DayBreakdown } from "../lib/dayBreakdown";
-import { eligibleInvoices } from "../lib/claims";
+import { invoiceForItem, supplierIdForItem } from "../lib/provenance";
 import { money } from "../lib/money";
 import {
   customerBalanceDelta,
@@ -1621,18 +1621,20 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
   // "FAB1 55021", not a reference — so this resolves it back to the Invoice by
   // supplier and number. That string is the same weakness d28 removed from the
   // claim line and it is still here, one layer down; see the open question.
+  // E-04 d28 — where a claim line points when nobody chooses: the Invoice the
+  // copy actually arrived on, which A-45 makes a lookup rather than the string
+  // match this used to be.
   const defaultAgainst = (item: InventoryItem): ClaimLineAgainst => {
-    const eligible = eligibleInvoices(item.recordId, item.supplierId ?? "", s.invoices);
-    const iv =
-      eligible.find((x) => !!item.arrivedOnInvoice && item.arrivedOnInvoice.trim().endsWith(x.invoiceNumber)) ??
-      eligible[0];
+    const iv = invoiceForItem(item, s.invoices);
     return iv ? { kind: "invoice", invoiceId: iv.id } : { kind: "none" };
   };
 
   const raiseClaim: AppContextValue["raiseClaim"] = (itemId, reason, qty, separator, note, against) => {
     const item = s.inventory.find((i) => i.id === itemId);
-    if (!item?.supplierId) return null;
-    const supplier = s.suppliers.find((sup) => sup.id === item.supplierId)!;
+    if (!item) return null;
+    const supplierId = supplierIdForItem(item, s.invoices);
+    const supplier = s.suppliers.find((sup) => sup.id === supplierId);
+    if (!supplier) return null;
     const sepKey = (separator ?? "").trim();
     const line = {
       id: uid("claimline"),
@@ -2070,7 +2072,6 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
               }
             : x,
         ),
-      inventory: prev.inventory.map((i) => (i.supplierId === mergeId ? { ...i, supplierId: keepId } : i)),
       pendingOrders: prev.pendingOrders.map((p) => (p.supplierId === mergeId ? { ...p, supplierId: keepId } : p)),
       claims: prev.claims.map((c) => (c.supplierId === mergeId ? { ...c, supplierId: keepId } : c)),
       invoices: prev.invoices.map((iv) => (iv.supplierId === mergeId ? { ...iv, supplierId: keepId } : iv)),
@@ -2107,10 +2108,11 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
   // the Invoice is already Finalized — the "becomes sellable" moment already
   // happened for this Invoice, so a line added afterward mints immediately
   // rather than waiting for a Finalize that has already occurred).
+  // A-45 removed two parameters from this function: it took a Supplier and an
+  // invoice number purely to render `arrivedOnInvoice`. Minting now records
+  // the line the copy came from and nothing else, which is the whole fact.
   const mintItemsForLine = (
-    line: { recordId: string; grade: Grade; acceptedPrice: number; cost: number; qty: number },
-    supplier: Supplier,
-    invoiceNumber: string,
+    line: { id: string; recordId: string; grade: Grade; acceptedPrice: number; cost: number; qty: number },
     startSeq: number,
     // Oversold items claimed by an earlier line in the same batch (finalize
     // can carry several lines for the same Record) — skip them so two lines
@@ -2143,8 +2145,9 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
         cost: line.cost,
         internalBarcode: code,
         status: "sellable",
-        arrivedOnInvoice: `${supplier.shortName} ${invoiceNumber}`,
-        supplierId: supplier.id,
+        // A-45 — a reference, not a rendered caption. The supplier's short
+        // name and the invoice number are read from the rows that own them.
+        invoiceLineId: line.id,
       });
     }
     return { items, itemIds, nextSeq: seq, reconciledIds };
@@ -2157,8 +2160,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
     inventory: InventoryItem[],
     reconciledIds: string[],
     cost: number,
-    arrivedOnInvoice: string,
-    supplierId: string,
+    invoiceLineId: string,
   ): InventoryItem[] =>
     reconciledIds.length === 0
       ? inventory
@@ -2167,8 +2169,9 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
             ? {
                 ...i,
                 cost,
-                arrivedOnInvoice,
-                supplierId,
+                // A-45 — reconciling gives the copy the paperwork it was sold
+                // without. Before this it had none, and said so.
+                invoiceLineId,
                 oversoldReconciledAt: now(),
                 oversoldReconciledBy: CURRENT_USER,
                 oversoldReconciledVia: "received" as const,
@@ -2197,7 +2200,6 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
   const addInvoiceLine: AppContextValue["addInvoiceLine"] = (invoiceId, line) => {
     const invoice = s.invoices.find((iv) => iv.id === invoiceId);
     if (!invoice || invoiceIsPaid(invoice, s.paymentBatches, s.batchVoids)) return;
-    const supplier = s.suppliers.find((sup) => sup.id === invoice.supplierId)!;
     const cost = round2(line.listPrice * (1 - line.discountPct / 100));
     let newLine: InvoiceLine = { id: uid("invline"), ...line, cost };
 
@@ -2205,7 +2207,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
     let nextBarcodeSeq = s.nextInternalBarcode;
     let reconciledIds: string[] = [];
     if (invoice.status === "Finalized") {
-      const minted = mintItemsForLine(newLine, supplier, invoice.invoiceNumber, nextBarcodeSeq);
+      const minted = mintItemsForLine(newLine, nextBarcodeSeq);
       mintedItems = minted.items;
       nextBarcodeSeq = minted.nextSeq;
       reconciledIds = minted.reconciledIds;
@@ -2229,8 +2231,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
         mintedItems.length ? [...prev.inventory, ...mintedItems] : prev.inventory,
         reconciledIds,
         newLine.cost,
-        `${supplier.shortName} ${invoice.invoiceNumber}`,
-        supplier.id,
+        newLine.id,
       ),
       nextInternalBarcode: nextBarcodeSeq,
       invoices: prev.invoices.map((iv) =>
@@ -2380,8 +2381,6 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
     const updatedLines = invoice.lines.map((line) => {
       const { items, itemIds, nextSeq, reconciledIds } = mintItemsForLine(
         line,
-        supplier,
-        invoice.invoiceNumber,
         barcodeSeq,
         new Set(allReconciledIds),
       );
@@ -2394,8 +2393,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
         reconciledInventory ?? s.inventory,
         reconciledIds,
         line.cost,
-        `${supplier.shortName} ${invoice.invoiceNumber}`,
-        supplier.id,
+        line.id,
       );
       return { ...line, itemIds };
     });

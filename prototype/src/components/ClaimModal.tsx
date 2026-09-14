@@ -3,6 +3,7 @@ import { CLAIM_REASONS, type InventoryItem, type RecordEntry } from "../data/typ
 import { money } from "../lib/money";
 import type { ClaimLineAgainst } from "../data/types";
 import { eligibleInvoices } from "../lib/claims";
+import { invoiceForItem, provenanceLabel, supplierIdForItem } from "../lib/provenance";
 import { useApp } from "../store/AppStore";
 import { Modal } from "./Modal";
 
@@ -26,7 +27,9 @@ export function ClaimModal({
   onDone: (confirmation: string) => void;
 }) {
   const app = useApp();
-  const claimable = items.filter((i) => i.supplierId);
+  // A-45 — claimable means the copy has paperwork behind it. An oversold
+  // copy has none until it is reconciled, and there is nobody to claim from.
+  const claimable = items.filter((i) => supplierIdForItem(i, app.invoices));
   const [itemId, setItemId] = useState(claimable[0]?.id ?? "");
   const [reasonChoice, setReasonChoice] = useState<string>("Received damaged");
   const [customReason, setCustomReason] = useState("");
@@ -39,19 +42,19 @@ export function ClaimModal({
   const [againstId, setAgainstId] = useState<string | null>(null);
 
   const item = claimable.find((i) => i.id === itemId);
-  const supplier = app.supplierFor(item?.supplierId);
+  const supplier = app.supplierFor(item ? supplierIdForItem(item, app.invoices) : undefined);
   const sepKey = separator.trim();
   const reason = reasonChoice === CUSTOM_REASON ? customReason.trim() : reasonChoice;
 
   const existingDraft = app.claims.find(
-    (c) => !c.sentAt && c.supplierId === item?.supplierId && (c.separator ?? "").trim() === sepKey,
+    (c) => !c.sentAt && c.supplierId === supplier?.id && (c.separator ?? "").trim() === sepKey,
   );
 
   // The Invoices this line may name (d28): that Supplier's finalized ones —
   // what the store actually received stock on. Never a typed number.
-  const eligible = item?.supplierId ? eligibleInvoices(record.id, item.supplierId, app.invoices) : [];
+  const eligible = supplier ? eligibleInvoices(record.id, supplier.id, app.invoices) : [];
   // Until someone picks, the line follows the copy: the Invoice it arrived on.
-  const arrivedOn = eligible.find((iv) => item?.arrivedOnInvoice?.trim().endsWith(iv.invoiceNumber));
+  const arrivedOn = item ? invoiceForItem(item, app.invoices) : undefined;
   const chosen = againstId === null ? (arrivedOn?.id ?? "") : againstId;
 
   const commit = () => {
@@ -99,7 +102,7 @@ export function ClaimModal({
             <select value={itemId} onChange={(e) => setItemId(e.target.value)}>
               {claimable.map((i) => (
                 <option key={i.id} value={i.id}>
-                  {i.grade} · {money(i.cost)} cost · {i.arrivedOnInvoice ?? "no invoice #"}
+                  {i.grade} · {money(i.cost)} cost · {provenanceLabel(i, app.invoices, app.suppliers) ?? "no invoice"}
                 </option>
               ))}
             </select>

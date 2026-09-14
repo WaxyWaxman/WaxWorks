@@ -42,8 +42,12 @@ export interface InventoryItem {
   conditionNote?: string;
   status: ItemStatus;
   heldByCustomerId?: string;
-  arrivedOnInvoice?: string;
-  supplierId?: string; // set when arrivedOnInvoice traces to a Supplier — claimable
+  // architecture A-45, E-02 d48 — the InvoiceLine this copy was minted from,
+  // and the ONLY link back to its paperwork. The Invoice is one lookup away
+  // and the Supplier two; neither is stored here. Absent = not received on
+  // any Invoice, which is an oversold copy until E-04 d19 reconciles it.
+  // Resolve it through lib/provenance.ts, never by parsing a label.
+  invoiceLineId?: string;
   // "Oversold" (lexicon) — minted straight from a Sale, before any Invoice
   // line ever backed it (E-05 decision 21 allows selling into negative
   // inventory). It's real from the moment it's sold — status is "sold" from
