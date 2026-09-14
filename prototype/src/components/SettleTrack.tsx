@@ -344,15 +344,9 @@ function Selection({
 
   const problems: string[] = [];
   if (!plan.isClearing) {
-    if (Math.abs(creditPlaced - plan.attach) > 0.005) {
-      problems.push(
-        `Place exactly ${money(plan.attach)} of credit — ${
-          creditPlaced < plan.attach
-            ? `${money(round2(plan.attach - creditPlaced))} still to place`
-            : `${money(round2(creditPlaced - plan.attach))} over`
-        }. The total is not yours to choose (d23).`,
-      );
-    }
+    // d33 — there is no "place the credit exactly" check any more, because
+    // there is nothing to place: the fill is computed and is exact by
+    // construction. What remains is the money, which IS the Manager's.
     for (const d of plan.debits) {
       const sum = round2(creditOn(form, d.key, auto) + moneyOn(form, d.key, d.balance, auto));
       if (sum > d.balance + 0.005) {
@@ -502,13 +496,12 @@ function Selection({
         </div>
 
         <div className="wo-sec">
-          <span className="lab">
-            {plan.placementIsAmbiguous ? "Place the credit, then the money" : "What this settles"}
-          </span>
-          {!plan.placementIsAmbiguous && plan.attach > 0.005 && (
+          <span className="lab">What this settles</span>
+          {plan.attach > 0.005 && (
             <div className="wo-caveat">
-              There is only one way to place {money(plan.attach)} of credit across what you ticked, so it is placed.
-              d18 asks the Manager to choose <em>where</em> a credit lands; here there is nothing to choose between.
+              {money(plan.attach)} of credit lands across what you ticked, in order. <strong>Ticking is the
+              choosing</strong> (d18, d33) — to put a credit against one Invoice, tick one Invoice. The money is
+              yours to set: leave it and it settles what the credit did not (d4).
             </div>
           )}
           {plan.debits.map((d) => (
@@ -522,30 +515,12 @@ function Selection({
                   {d.overdueBy != null && d.overdueBy > 0 ? ` · ${d.overdueBy}d over` : ""}
                 </div>
               </div>
+              {/* d33 — the credit is shown where it landed, not asked for. */}
               <div className="inp">
                 <span className="tag cr">credit</span>
-                <input
-                  type="number"
-                  step="0.01"
-                  min={0}
-                  className="cr"
-                  disabled={plan.attach <= 0.005 || !plan.placementIsAmbiguous}
-                  value={creditOn(form, d.key, auto).toFixed(2)}
-                  onChange={(e) => {
-                    const credit = { ...form.credit, [d.key]: e.target.value };
-                    // Credit placed on a row pushes that row's money down so the
-                    // two never add past its balance. Arithmetic, not a suggested
-                    // split — d18's objection was to the system choosing WHICH
-                    // Invoices a credit lands on, and it still does not choose.
-                    const cap = round2(Math.max(0, d.balance - (Number(e.target.value) || 0)));
-                    const cur = moneyOn(form, d.key, d.balance, auto);
-                    const money2 =
-                      form.money[d.key] !== undefined && cur > cap + 0.005
-                        ? { ...form.money, [d.key]: cap.toFixed(2) }
-                        : form.money;
-                    onForm({ credit, money: money2 });
-                  }}
-                />
+                <span className={"placed" + (creditOn(form, d.key, auto) > 0.005 ? " cr" : " nil")}>
+                  {money(creditOn(form, d.key, auto))}
+                </span>
               </div>
               <div className="inp">
                 <span className="tag">money</span>
@@ -559,19 +534,21 @@ function Selection({
               </div>
             </div>
           ))}
-          {plan.attach > 0.005 && plan.placementIsAmbiguous ? (
-            <div className={"ap-credit-bar" + (Math.abs(creditPlaced - plan.attach) > 0.005 ? " spent" : "")}>
+          {plan.attach > 0.005 ? (
+            <div className="ap-credit-bar">
               <div className="ln">
-                <span>Credit to place</span>
+                <span>Credit going out</span>
                 <span className="mono">{money(plan.attach)}</span>
               </div>
-              <div className="ln">
-                <span>Still to place</span>
-                <span className="mono">{money(round2(plan.attach - creditPlaced))}</span>
-              </div>
+              {plan.remainder > 0.005 && (
+                <div className="ln">
+                  <span>Coming back as a remainder</span>
+                  <span className="mono">{money(plan.remainder)}</span>
+                </div>
+              )}
               <div className="who">
-                You choose <strong>where</strong> it lands (d18), never <strong>how much</strong> (d23). Nothing is
-                pre-filled.
+                A credit goes out in full, or to the limit of what you ticked, whichever is smaller — the total is not
+                yours to choose (d23), and it is consumed whole (d24, d28).
               </div>
             </div>
           ) : plan.attach <= 0.005 ? (

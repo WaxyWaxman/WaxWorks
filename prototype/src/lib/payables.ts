@@ -233,11 +233,12 @@ export function ledgerRows(
 }
 
 /** What is placed on one debit. An untouched money box means "the rest". */
+/** d33 — credit placement is never typed, so this reads only the computed fill. */
 export const creditOn = (
-  form: { credit: Record<string, string> },
+  _form: unknown,
   key: string,
   auto?: Record<string, number>,
-): number => (form.credit[key] !== undefined ? Number(form.credit[key]) || 0 : (auto?.[key] ?? 0));
+): number => auto?.[key] ?? 0;
 export const moneyOn = (
   form: { credit: Record<string, string>; money: Record<string, string> },
   key: string,
@@ -263,8 +264,6 @@ export interface SettlementPlan {
   money: number;
   /** d25/d28 — what cannot attach comes back as its own artifact. */
   remainder: number;
-  /** True only when the Manager genuinely has a choice of where credit lands. */
-  placementIsAmbiguous: boolean;
   /** d27 — no debit means nothing to attach to: this is d15's clearing. */
   isClearing: boolean;
 }
@@ -277,12 +276,6 @@ export function settlementPlan(rows: LedgerRow[]): SettlementPlan {
   const debitTotal = round2(debits.reduce((n, r) => n + r.balance, 0));
   const creditTotal = round2(credits.reduce((n, r) => n - r.balance, 0));
   const attach = round2(Math.min(creditTotal, debitTotal));
-  // The distribution is only the Manager's to make when there is more than one
-  // way to make it: two or more debits AND less credit than they come to. With
-  // one debit, or with credit covering every debit in full, exactly one
-  // distribution exists — filling that in is arithmetic, not the pre-filled
-  // suggestion d18 refuses (which was a suggestion about a real choice).
-  const placementIsAmbiguous = credits.length > 0 && debits.length > 1 && attach < debitTotal - 0.005;
   return {
     rows,
     debits,
@@ -294,17 +287,20 @@ export function settlementPlan(rows: LedgerRow[]): SettlementPlan {
     attach,
     money: round2(debitTotal - attach),
     remainder: round2(creditTotal - attach),
-    placementIsAmbiguous,
     isClearing: debits.length === 0 && rows.length > 0,
   };
 }
 
 /**
- * The one distribution that exists when there is only one. Undefined when the
- * Manager genuinely has to choose (d18).
+ * Where the credit lands across the debits the Manager ticked.
+ *
+ * d33 — the choice d18 gives the Manager is WHICH Invoices, made by selecting
+ * them. Inside that set the credit simply fills, in the order the rows are
+ * listed. That is not d11 returning: d11 chose the Invoices itself, with no
+ * Manager input at all, and that stays retired. Filling a set someone chose is
+ * arithmetic. If they want the credit on one Invoice, they tick one Invoice.
  */
-export function autoPlacement(plan: SettlementPlan): Record<string, number> | undefined {
-  if (plan.placementIsAmbiguous) return undefined;
+export function autoPlacement(plan: SettlementPlan): Record<string, number> {
   const out: Record<string, number> = {};
   let left = plan.attach;
   for (const d of plan.debits) {
