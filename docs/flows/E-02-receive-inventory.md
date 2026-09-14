@@ -125,6 +125,7 @@ Consequence to accept knowingly: per-item margin reporting reflects only supplie
 - Accounts payable **consumes** the Invoice records finalized here — number, date, linked PurchaseOrder, and amount — and never creates one. An amendment against a finalized Invoice ([E-04](E-04-manage-inventory.md)) changes what is owed.
 - **Paid is reversible, so immutability is too.** A Manager may void a PaymentBatch ([M-05](M-05-accounts-payable.md) d22), and an Invoice that stops being paid returns to **Finalized** — correctable here again, scan slab and all. Decision 40 and [architecture](../architecture.md) A-33 should be read as *immutable while paid*, not *immutable forever*: anything here that treats Paid as a terminal state is wrong.
 - Accounts payable also consumes the **due date** derived here (decision 45) and never edits it. It is what lets a balance be called *overdue* rather than merely outstanding, so an Invoice carrying `COD` or `Prepaid` terms — which produce no due date — ages nowhere.
+- **Finalizing an Invoice never settles it** — not even on `Prepaid` terms, where the money left at ordering and the document arrives already paid for ([M-05](M-05-accounts-payable.md) d35). The settlement is a Manager confirming it in accounts payable. Auto-settling at finalize would make **paid** coincide with **finalize** and freeze the Invoice at birth, which is the precise failure decision 40 and [architecture](../architecture.md) A-33 exist to prevent.
 
 ---
 
