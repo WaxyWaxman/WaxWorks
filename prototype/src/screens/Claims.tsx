@@ -4,6 +4,7 @@ import { ABANDON_REASONS, VOID_REASONS } from "../data/types";
 import type { AbandonReason, ClaimVoid, SupplierClaim, VoidReason } from "../data/types";
 import {
   batchName,
+  lineAgainstLabel,
   claimAbsorbed,
   claimCredited,
   claimPhase,
@@ -308,7 +309,9 @@ function Lines({ claim }: { claim: SupplierClaim }) {
           const rec = app.records.find((r) => r.id === l.recordId);
           return (
             <tr key={l.id}>
-              <td className="mono">{l.invoiceNumber ?? "—"}</td>
+              <td className={"mono" + (l.against.kind === "none" ? " claims-noinv" : "")}>
+                {lineAgainstLabel(l, app.invoices)}
+              </td>
               <td>
                 <span className="claims-reason">{l.reason}</span>
               </td>
@@ -523,7 +526,7 @@ function SendAct({
         {claim.lines
           .map((l) => {
             const r = app.records.find((x) => x.id === l.recordId);
-            return `Inv ${l.invoiceNumber ?? "—"}  ${l.reason}  ${r?.artist ?? ""} / ${r?.title ?? ""}  ${l.qty} × ${money(l.cost)} = ${money(l.cost * l.qty)}`;
+            return `${l.against.kind === "none" ? "(no invoice)" : `Inv ${lineAgainstLabel(l, app.invoices)}`}  ${l.reason}  ${r?.artist ?? ""} / ${r?.title ?? ""}  ${l.qty} × ${money(l.cost)} = ${money(l.cost * l.qty)}`;
           })
           .join("\n")}
         {`\n\nTotal ${money(total)}`}

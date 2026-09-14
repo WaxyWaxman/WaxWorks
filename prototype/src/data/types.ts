@@ -282,11 +282,31 @@ export interface ClaimVoid {
   by: string;
 }
 
+/**
+ * E-04 d28 — what a claim line is arguing about.
+ *
+ * A union rather than an optional id, because "names Invoice X" and "is
+ * deliberately about no Invoice" are different facts and a nullable field
+ * cannot tell either of them from "somebody forgot". The `none` case is an
+ * explicit choice a person makes, per line.
+ *
+ * NOT to be confused with an Invoice that has no supplier reference: E-02 d1
+ * auto-generates `REF####` for those, so every Invoice in the system has a
+ * number. `none` means *not about a particular shipment*.
+ *
+ * And it is EVIDENCE, never routing. A claim credit settles the supplier
+ * balance (M-05 d6, d26); what it attaches to is decided by ticking at
+ * settlement (M-05 d27, d33). A line naming 55021 may settle against 54880.
+ */
+export type ClaimLineAgainst =
+  | { kind: "invoice"; invoiceId: string }
+  | { kind: "none" };
+
 export interface ClaimLine {
   id: string;
   recordId: string;
   itemId?: string;
-  invoiceNumber?: string;
+  against: ClaimLineAgainst;
   reason: string; // one of CLAIM_REASONS, or free text (E-04 §"Supplier claims")
   note?: string;
   cost: number;

@@ -29,6 +29,7 @@ import {
   TAX_LINES,
 } from "../data/seed";
 import type {
+  ClaimLineAgainst,
   CloseBatch,
   Customer,
   GiftCard,
@@ -287,7 +288,7 @@ const seed: AppState = {
         {
           id: "cl-fab-base-1",
           recordId: "r-purple",
-          invoiceNumber: "55021",
+          against: { kind: "invoice", invoiceId: "inv-seed-fab" },
           reason: "Received damaged",
           note: "Seam split on both copies",
           cost: 11,
@@ -307,11 +308,24 @@ const seed: AppState = {
         {
           id: "cl-fab-weekly-1",
           recordId: "r-kind",
-          invoiceNumber: "55021",
+          against: { kind: "invoice", invoiceId: "inv-seed-fab" },
           reason: "Billed / not shipped",
           note: "Billed 1, none in the carton",
           cost: 12,
           qty: 1,
+        },
+        {
+          // E-04 d28's other shape: deliberately not about a shipment. Not a
+          // blank someone forgot, and not E-02 d1's REF#### case either —
+          // that is an Invoice whose supplier gave no number, which is a
+          // different thing entirely.
+          id: "cl-fab-weekly-2",
+          recordId: "r-tote",
+          against: { kind: "none" },
+          reason: "Short shipped",
+          note: "Promo tote bundle they invoice separately and never sent paperwork for",
+          cost: 4.5,
+          qty: 2,
         },
       ],
       createdBy: MANAGER_NAME,
@@ -328,8 +342,22 @@ const seed: AppState = {
       status: "Pending",
       sentAt: "2026-07-28 09:40:00",
       lines: [
-        { id: "cl-41-1", recordId: "r-rumours", invoiceNumber: "54880", reason: "Short shipped", cost: 14.4, qty: 1 },
-        { id: "cl-41-2", recordId: "r-ok", invoiceNumber: "54880", reason: "Received damaged", cost: 10, qty: 1 },
+        {
+          id: "cl-41-1",
+          recordId: "r-rumours",
+          against: { kind: "invoice", invoiceId: "inv-seed-fab" },
+          reason: "Short shipped",
+          cost: 14.4,
+          qty: 1,
+        },
+        {
+          id: "cl-41-2",
+          recordId: "r-ok",
+          against: { kind: "invoice", invoiceId: "inv-seed-fab" },
+          reason: "Received damaged",
+          cost: 10,
+          qty: 1,
+        },
       ],
       createdBy: MANAGER_NAME,
       createdAt: "2026-07-27 16:00:00",
@@ -354,7 +382,7 @@ const seed: AppState = {
           id: "cl-seed-1",
           recordId: "r-blue",
           itemId: "i-blue-1",
-          invoiceNumber: "55021",
+          against: { kind: "invoice", invoiceId: "inv-seed-fab" },
           reason: "Received damaged",
           note: "Corner ding on jacket, sleeve only",
           cost: 12.4,
@@ -384,7 +412,14 @@ const seed: AppState = {
         by: MANAGER_NAME,
       },
       lines: [
-        { id: "cl-40-1", recordId: "r-illmatic", invoiceNumber: "3390", reason: "Short shipped", cost: 21, qty: 1 },
+        {
+          id: "cl-40-1",
+          recordId: "r-illmatic",
+          against: { kind: "invoice", invoiceId: "inv-seed-indie" },
+          reason: "Short shipped",
+          cost: 21,
+          qty: 1,
+        },
       ],
       createdBy: CURRENT_USER,
       createdAt: "2026-06-14 09:00:00",
@@ -403,7 +438,14 @@ const seed: AppState = {
       status: "Pending",
       sentAt: "2026-08-20 10:00:00",
       lines: [
-        { id: "cl-36-1", recordId: "r-astral", invoiceNumber: "CD-777", reason: "Wrong item", cost: 18, qty: 1 },
+        {
+          id: "cl-36-1",
+          recordId: "r-astral",
+          against: { kind: "invoice", invoiceId: "inv-seed-crate-paid" },
+          reason: "Wrong item",
+          cost: 18,
+          qty: 1,
+        },
       ],
       createdBy: CURRENT_USER,
       createdAt: "2026-08-19 13:00:00",
@@ -645,6 +687,9 @@ interface AppContextValue extends AppState {
     qty: number,
     separator?: string,
     note?: string,
+    // E-04 d28 — chosen from that Supplier's received Invoices, or explicitly
+    // none. Defaults to the Invoice the copy arrived on.
+    against?: ClaimLineAgainst,
   ) => { claimId: string; supplierName: string } | null;
   sendClaim: (claimId: string, claimNumber?: number) => { claimNumber: number } | null;
   markClaimCredited: (claimId: string, creditMemo: string, creditedAmount?: number) => void;
@@ -1570,16 +1615,36 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
   // claim as extra lines — the same batching key pending orders use (M-02) —
   // rather than becoming N separate claims that all have to be sent one by
   // one. E-04 §"Supplier claims".
-  const raiseClaim: AppContextValue["raiseClaim"] = (itemId, reason, qty, separator, note) => {
+  // Where a claim line points when nobody chooses (E-04 d28). A copy records
+  // the Invoice it arrived on as a DISPLAY STRING — `arrivedOnInvoice` is
+  // "FAB1 55021", not a reference — so this resolves it back to the Invoice by
+  // supplier and number. That string is the same weakness d28 removed from the
+  // claim line and it is still here, one layer down; see the open question.
+  const defaultAgainst = (item: InventoryItem): ClaimLineAgainst => {
+    const iv = s.invoices.find(
+      (x) =>
+        x.supplierId === item.supplierId &&
+        x.status !== "Draft" &&
+        !!item.arrivedOnInvoice &&
+        item.arrivedOnInvoice.trim().endsWith(x.invoiceNumber),
+    );
+    return iv ? { kind: "invoice", invoiceId: iv.id } : { kind: "none" };
+  };
+
+  const raiseClaim: AppContextValue["raiseClaim"] = (itemId, reason, qty, separator, note, against) => {
     const item = s.inventory.find((i) => i.id === itemId);
     if (!item?.supplierId) return null;
     const supplier = s.suppliers.find((sup) => sup.id === item.supplierId)!;
     const sepKey = (separator ?? "").trim();
     const line = {
       id: uid("claimline"),
+      // d28 — the reference is EVIDENCE of what is being argued, not where
+      // the credit lands (M-05 d27 decides that by ticking). Defaults to
+      // where the copy came from; the caller may point it elsewhere among
+      // that Supplier's received Invoices, or at nothing.
+      against: against ?? defaultAgainst(item),
       recordId: item.recordId,
       itemId: item.id,
-      invoiceNumber: item.arrivedOnInvoice,
       reason,
       note,
       cost: item.cost,

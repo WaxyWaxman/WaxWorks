@@ -2667,3 +2667,8 @@ table.claims-ln td { padding: 5px 8px 5px 0; border-bottom: 1px solid var(--c-bo
     border-left: none; border-top: 2px solid var(--c-ink); max-height: 58dvh;
   }
 }
+
+/* E-04 d28 — a line deliberately not about a shipment. Italic and faint so it
+   reads as a stated fact rather than a missing value; a blank and a choice
+   must not look the same. */
+.claims-noinv { font-style: italic; color: var(--c-ink-faint); font-family: var(--font-sans); font-size: var(--fs-xs); }

@@ -1,4 +1,4 @@
-import type { ClaimVoid, SupplierClaim } from "../data/types";
+import type { ClaimLine, ClaimVoid, Invoice, SupplierClaim } from "../data/types";
 
 /**
  * The derived facts about a claim. E-04 d21 refuses a stored status for
@@ -76,3 +76,22 @@ export function daysWaiting(c: SupplierClaim, today: Date): number | undefined {
  */
 export const batchName = (c: SupplierClaim): string =>
   c.separator ? `Batch ${c.separator}` : "Base batch";
+
+/**
+ * E-04 d28 — the Invoices a claim line may name: that Supplier's **finalized**
+ * ones, which is the set the store actually received stock on. A Draft is not
+ * eligible (nothing has arrived yet), and a number the supplier quotes for a
+ * shipment that never came is not in the list at all, which is the whole point
+ * — the reference is chosen, never typed.
+ */
+export const eligibleInvoices = (supplierId: string, invoices: Invoice[]): Invoice[] =>
+  invoices
+    .filter((iv) => iv.supplierId === supplierId && iv.status !== "Draft")
+    .sort((a, b) => (b.invoiceDate ?? "").localeCompare(a.invoiceDate ?? ""));
+
+/** What to print in the Invoice column. `none` is a stated fact, not a blank. */
+export function lineAgainstLabel(line: ClaimLine, invoices: Invoice[]): string {
+  if (line.against.kind === "none") return "no invoice";
+  const id = line.against.invoiceId;
+  return invoices.find((iv) => iv.id === id)?.invoiceNumber ?? "—";
+}
