@@ -6,7 +6,7 @@ import type {
   RecordEntry,
   Sale,
 } from "../data/types";
-import { availableOnHand, heldCount, onHand } from "./totals";
+import { availableOnHand, copiesPresent, heldCount, onHand } from "./totals";
 
 // ---- Stock state (E-03) ----
 //
@@ -71,6 +71,12 @@ export function stockFacts(record: RecordEntry, input: StockInput): StockFacts {
   const held = heldCount(record.id, input.inventory);
   const available = availableOnHand(record.id, input.inventory);
   const total = onHand(record.id, input.inventory);
+  // Banding asks a different question from the figure. "Here now" means there
+  // is a copy to put in someone's hands, so it reads the copies PRESENT — a
+  // Record with one on the shelf and three oversold is still on the shelf,
+  // even though §5.1 puts its on-hand at -2. Reading `total` here would send
+  // a customer away from a record we are holding.
+  const present = copiesPresent(record.id, input.inventory);
   // "On the way" means PLACED, not merely raised. M-02 splits a pending line's
   // life in two: raised into a supplier stream (no poNumber) is still Order
   // Processing's job and nobody has told the supplier anything; placed
@@ -106,7 +112,7 @@ export function stockFacts(record: RecordEntry, input: StockInput): StockFacts {
   // ever had it. A Record that is both on the shelf and on order reads as
   // "here" — the stamp still says how many are coming.
   let state: StockState;
-  if (total > 0) state = "here";
+  if (present > 0) state = "here";
   else if (onOrder > 0) state = "coming";
   else if (record.catalogOnly) state = "never";
   else if (everSold > 0 || input.inventory.some((i) => i.recordId === record.id)) state = "before";
@@ -138,21 +144,12 @@ export function agoLabel(iso: string | undefined, now: Date = new Date()): strin
   return then.toLocaleDateString(undefined, { month: "short", year: "numeric" });
 }
 
-/** The bold half of a result row's right-hand stamp. */
-export function stampLead(facts: StockFacts): string {
-  switch (facts.state) {
-    case "here":
-      return `${facts.available} here`;
-    case "coming":
-      return `${facts.onOrder} coming`;
-    case "before":
-      return "had before";
-    case "never":
-      return "never stocked";
-  }
-}
-
-/** The quiet half — recency, or why there is none. */
+/**
+ * The recency half of a result row's stamp — E-03 d12. The count half is
+ * `countFor` in FindSlab, which says more than the `stampLead` that used to
+ * live here: available / all held / on order / pending rather than one figure.
+ * That helper is gone rather than left exported and unused.
+ */
 export function stampAgo(facts: StockFacts): string | undefined {
   const ago = agoLabel(facts.lastSoldAt);
   if (facts.state === "never") return undefined;

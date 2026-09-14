@@ -73,9 +73,40 @@ export function customerBalanceDelta(tender: Pick<Tender, "type" | "amount" | "a
   return tender.accountDirection === "add" ? Math.abs(tender.amount) : -tender.amount;
 }
 
-// ---- Stock math (E-04): on hand is derived from sellable copies ----
-export const onHand = (recordId: string, inv: InventoryItem[]): number =>
+// ---- Stock math (E-04 d2, architecture §5.1) ----
+
+/**
+ * §5.1's FIRST TERM on its own: the copies the store physically holds.
+ *
+ * Not the on-hand figure, and the difference matters. "Is there one on the
+ * shelf I can sell you" is this question; "what do we own, net of what we have
+ * already sold and not received" is `onHand` below. A Record can hold a copy
+ * and still be net negative.
+ */
+export const copiesPresent = (recordId: string, inv: InventoryItem[]): number =>
   inv.filter((i) => i.recordId === recordId && (i.status === "sellable" || i.status === "held")).length;
+
+/**
+ * Oversold copies still owed — minted straight from a Sale before any Invoice
+ * line backed them (E-02 d21) and not yet reconciled (E-04 d19).
+ */
+export const oversoldOutstanding = (recordId: string, inv: InventoryItem[]): number =>
+  inv.filter((i) => i.recordId === recordId && i.oversold && !i.oversoldReconciledAt).length;
+
+/**
+ * On hand, **derived and able to go negative** — architecture §5.1, verbatim:
+ *
+ *     on_hand = count(items where status in ('sellable','held'))
+ *             - count(items where origin = 'oversold' and reconciled_at is null)
+ *
+ * The second term was missing, so this returned a figure that could never go
+ * below zero while being printed under the label "On hand (derived)". §5.1 and
+ * A-20a exist precisely so it can: a genuinely negative count is the whole
+ * point of E-02 d21's negative inventory, and clamping it at the first term
+ * hid the debt on every screen that asked.
+ */
+export const onHand = (recordId: string, inv: InventoryItem[]): number =>
+  copiesPresent(recordId, inv) - oversoldOutstanding(recordId, inv);
 
 export const availableOnHand = (recordId: string, inv: InventoryItem[]): number =>
   inv.filter((i) => i.recordId === recordId && i.status === "sellable").length;
