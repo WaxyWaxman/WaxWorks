@@ -77,7 +77,8 @@ export interface Supplier {
   discountPct: number; // % off retail this supplier offers — also drives suggested retail at receiving (E-02 decision 8)
   cancelByDays?: number; // default days from order-placed to auto-cancel if unfulfilled; unset = not supported by this supplier, overridable per order
   currency: string;
-  paymentTerms?: PaymentTerms; // M-01 d19 — the DEFAULT for Invoices received from them
+  paymentTerms?: PaymentTerms; // M-01 d19, d20 — the DEFAULT for Invoices received from them
+  defaultPaymentMethod?: PaymentMethod; // M-01 d20 — how they are normally paid; a default, never a rule
   type: SupplierType;
   notes?: string;
   email: string;
@@ -375,17 +376,49 @@ export const ORDER_LINE_STATUSES: OrderLineStatus[] = ["Shipped", "Backordered",
 // figure — days from order-placed to auto-cancel. Before these, nothing in
 // the system recorded when money was owed, which is why M-05's aging question
 // could not be answered: the field was missing, not the report.
-export type PaymentTerms = "Net 15" | "Net 30" | "Net 45" | "Net 60" | "On receipt" | "COD" | "Prepaid";
-export const PAYMENT_TERMS: PaymentTerms[] = ["Net 15", "Net 30", "Net 45", "Net 60", "On receipt", "COD", "Prepaid"];
-/** Days from the INVOICE date (E-02 d45). null = produces no due date at all. */
-export const TERM_DAYS: Record<PaymentTerms, number | null> = {
-  "Net 15": 15, "Net 30": 30, "Net 45": 45, "Net 60": 60,
-  "On receipt": 0, COD: null, Prepaid: null,
+export type PaymentTerms =
+  | "Net 15"
+  | "Net 30"
+  | "Net 45"
+  | "Net 60"
+  | "Net 90"
+  | "End of Month"
+  | "On receipt"
+  | "COD"
+  | "Prepaid";
+export const PAYMENT_TERMS: PaymentTerms[] = [
+  "Net 15", "Net 30", "Net 45", "Net 60", "Net 90", "End of Month", "On receipt", "COD", "Prepaid",
+];
+
+/**
+ * How a term turns into a due date (E-02 d45 — always from the INVOICE date).
+ * Three shapes, not one, because "End of Month" is not a number of days:
+ *   days  — invoice date + n.
+ *   eom   — the last day of the month the invoice is dated in (M-01 d20), so
+ *           3 Sep and 28 Sep are both due 30 Sep. A late-month invoice on
+ *           these terms is due almost at once; that is the term, not a bug.
+ *   none  — COD and Prepaid produce no due date and so age nowhere.
+ */
+export type TermRule = { kind: "days"; days: number } | { kind: "eom" } | { kind: "none" };
+export const TERM_RULE: Record<PaymentTerms, TermRule> = {
+  "Net 15": { kind: "days", days: 15 },
+  "Net 30": { kind: "days", days: 30 },
+  "Net 45": { kind: "days", days: 45 },
+  "Net 60": { kind: "days", days: 60 },
+  "Net 90": { kind: "days", days: 90 },
+  "End of Month": { kind: "eom" },
+  "On receipt": { kind: "days", days: 0 },
+  COD: { kind: "none" },
+  Prepaid: { kind: "none" },
 };
 
 // ---- Accounts payable (M-05) ----
-export type PaymentMethod = "Cheque" | "Credit Card" | "EFT" | "Cash";
-export const PAYMENT_METHODS: PaymentMethod[] = ["Cheque", "Credit Card", "EFT", "Cash"];
+// M-01 d20. EFT and e-Transfer are deliberately separate: different rails that
+// appear differently on a bank statement, and M-05 d5 makes that statement the
+// reconciliation surface. "Other" reconciles against nothing and exists only so
+// an unusual method has somewhere to go.
+export type PaymentMethod = "Cheque" | "Credit Card" | "EFT" | "e-Transfer" | "Cash" | "Other";
+export const PAYMENT_METHODS: PaymentMethod[] = ["Cheque", "Credit Card", "EFT", "e-Transfer", "Cash", "Other"];
 
 // One thing a settlement went against — a real Invoice (E-02) or a
 // manually-entered PayableEntry. "kind" plus "id" together address it, since
@@ -442,6 +475,10 @@ export interface Invoice {
   // E-02 d45 — defaulted from the Supplier, overridable here, because the
   // paperwork in hand is the agreement. Net-N runs from the INVOICE date.
   paymentTerms?: PaymentTerms;
+  // E-02 d47 — same shape, and an EXPECTATION rather than a record: what
+  // actually happened is on the PaymentBatch (M-05 d34). Reading one for the
+  // other is the mistake this comment exists to prevent.
+  paymentMethod?: PaymentMethod;
   statedSubtotal: number; // from the invoice photo/manual entry — decision 15
   tax: number;
   freight: number;

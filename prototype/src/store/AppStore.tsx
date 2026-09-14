@@ -587,9 +587,11 @@ interface AppContextValue extends AppState {
     patch: Partial<Pick<InvoiceLine, "listPrice" | "discountPct" | "acceptedPrice" | "grade" | "qty">>,
   ) => void;
   removeInvoiceLine: (invoiceId: string, lineId: string) => { blocked: boolean };
+  // E-02 d45/d47 — terms and method ride with the paperwork figures: all of
+  // them are things read off the supplier's invoice and corrected until paid.
   updateInvoiceTotals: (
     invoiceId: string,
-    patch: Partial<Pick<Invoice, "statedSubtotal" | "tax" | "freight" | "misc">>,
+    patch: Partial<Pick<Invoice, "statedSubtotal" | "tax" | "freight" | "misc" | "paymentTerms" | "paymentMethod">>,
   ) => void;
   setInvoiceTotalOverride: (invoiceId: string, value?: number) => void;
   finalizeInvoice: (invoiceId: string) => { itemCount: number } | null;

@@ -1,6 +1,9 @@
 import { useEffect, useRef, useState } from "react";
 import { ManagerOverride } from "./ManagerOverride";
+import { PAYMENT_METHODS, PAYMENT_TERMS } from "../data/types";
 import type {
+  PaymentMethod,
+  PaymentTerms,
   PostalAddress,
   Supplier,
   SupplierMinBasis,
@@ -164,6 +167,54 @@ export function SupplierCard({ supplier }: { supplier: Supplier }) {
               <option>Yes</option>
               <option>No</option>
             </select>
+          </label>
+        </Group>
+
+        {/* M-01 d19, d20 — the only place in the system that records when money
+            is owed and how it is normally sent. Cancel-by above is an ORDERING
+            figure and is deliberately in a different group, because the two
+            have been confused before. Both of these are DEFAULTS: E-02 d45/d47
+            copy them onto each Invoice at receiving, where they can be
+            overridden, and M-05 d34 pre-fills a settlement from the Invoice. */}
+        <Group label="Paying them" aside="Defaults — an Invoice may override either (E-02 d45, d47)">
+          <label className="field">
+            <span>Payment terms</span>
+            <select
+              value={supplier.paymentTerms ?? ""}
+              onChange={(e) => commit({ paymentTerms: (e.target.value || undefined) as PaymentTerms | undefined })}
+            >
+              <option value="">— not set —</option>
+              {PAYMENT_TERMS.map((v) => (
+                <option key={v} value={v}>
+                  {v}
+                </option>
+              ))}
+            </select>
+            <span className="hint">
+              When a bill from them falls due, counted from the <strong>invoice</strong> date (E-02 d45).{" "}
+              <strong>End of Month</strong> is the last day of the invoice's own month. COD and Prepaid produce no due
+              date, so nothing on those terms ages.
+            </span>
+          </label>
+          <label className="field">
+            <span>Default payment method</span>
+            <select
+              value={supplier.defaultPaymentMethod ?? ""}
+              onChange={(e) =>
+                commit({ defaultPaymentMethod: (e.target.value || undefined) as PaymentMethod | undefined })
+              }
+            >
+              <option value="">— not set —</option>
+              {PAYMENT_METHODS.map((v) => (
+                <option key={v} value={v}>
+                  {v}
+                </option>
+              ))}
+            </select>
+            <span className="hint">
+              How they are normally paid. <strong>EFT</strong> and <strong>e-Transfer</strong> are separate on purpose —
+              they read differently on a bank statement, which is what a payment reference reconciles against (M-05 d5).
+            </span>
           </label>
         </Group>
 

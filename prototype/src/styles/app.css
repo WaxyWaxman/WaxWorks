@@ -2454,3 +2454,12 @@ tr.ap-row.settled:hover td { background: var(--c-surface-2); }
   .ap-figure-sub { display: none; }
   .ap-track-foot .primary { height: 48px; font-size: var(--fs-md); }
 }
+
+/* E-02 d45/d47 — a field showing the Supplier's default rather than its own
+   value. Dashed, because "inherited" and "set here" are different facts and a
+   Manager overriding one should be able to see which they are looking at. */
+.field.recv-inherited select { border-style: dashed; color: var(--c-ink-soft); }
+.recv-from {
+  margin-left: 6px; font-family: var(--font-narrow); font-size: 9px; font-weight: 700;
+  letter-spacing: 0.06em; text-transform: uppercase; color: var(--c-ink-faint);
+}

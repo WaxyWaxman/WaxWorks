@@ -1,9 +1,17 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { PayableSlab, type PayableChip, type PayableSort } from "../components/PayableSlab";
 import { SettleTrack } from "../components/SettleTrack";
 import { CURRENT_USER } from "../data/seed";
 import type { PayableEntryType, PaymentMethod } from "../data/types";
-import { autoPlacement, creditOn, ledgerRows, moneyOn, settlementPlan, type LedgerRow } from "../lib/payables";
+import {
+  autoPlacement,
+  creditOn,
+  ledgerRows,
+  moneyOn,
+  settlementPlan,
+  suggestedMethod,
+  type LedgerRow,
+} from "../lib/payables";
 import { money } from "../lib/money";
 import { readStored, writeStored } from "../lib/tillMemory";
 import { round2, supplierBalance } from "../lib/totals";
@@ -91,6 +99,18 @@ export function AccountsPayable() {
 
   const selectedRows = rows.filter((r) => sel[r.key]);
   const plan = settlementPlan(selectedRows);
+  // d34 — what the Invoices expected, which the Manager may override. What the
+  // batch RECORDS is what actually happened, never this.
+  const expectedMethod = suggestedMethod(plan);
+
+  // A settlement starts fresh each time the selection changes: d34 pre-fills
+  // the method from what was ticked, and any typed money override belongs to
+  // the selection it was typed against, not to the screen.
+  const selKey = Object.keys(sel).sort().join(",");
+  useEffect(() => {
+    setForm((f) => ({ ...f, method: expectedMethod ?? "Cheque", credit: {}, money: {} }));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selKey, expectedMethod]);
 
   const pick = (row: LedgerRow) => {
     if (row.band === "settled") return;
@@ -330,6 +350,7 @@ export function AccountsPayable() {
         plan={plan}
         creating={creating}
         form={form}
+        expectedMethod={expectedMethod}
         onForm={(patch) => setForm((f) => ({ ...f, ...patch }))}
         onCancelCreate={() => setCreating(false)}
         onCreate={(input) => {
