@@ -222,25 +222,25 @@ export function ClaimsSlab({
                   className={"claims-srow" + (selectedId === r.supplier.id ? " on" : "")}
                   onClick={() => onSelect(r.supplier.id)}
                 >
+                  {/* Flat, not nested: every cell is its own grid item, so the
+                      name and the figure sit in different columns with a real
+                      gutter. Wrapping them in spans made the gutter 8px of
+                      nothing between two blocks of text. */}
                   <span className="code">{r.supplier.shortName}</span>
-                  <span style={{ minWidth: 0 }}>
-                    <span className="nm">{r.supplier.name}</span>
-                    <span className="sub">
-                      {[
-                        r.unsent ? `${r.unsent} unsent` : null,
-                        r.waiting ? `${r.waiting} waiting` : null,
-                        r.closed && !r.unsent && !r.waiting ? `${r.closed} closed` : null,
-                      ]
-                        .filter(Boolean)
-                        .join(" · ")}
-                    </span>
+                  <span className="nm">{r.supplier.name}</span>
+                  <span className="sub">
+                    {[
+                      r.unsent ? `${r.unsent} unsent` : null,
+                      r.waiting ? `${r.waiting} waiting` : null,
+                      r.closed && !r.unsent && !r.waiting ? `${r.closed} closed` : null,
+                    ]
+                      .filter(Boolean)
+                      .join(" · ")}
                   </span>
-                  <span style={{ textAlign: "right" }}>
-                    <span className="amt">{money(r.value)}</span>
-                    {r.oldest !== undefined && r.oldest >= STALE_DAYS && (
-                      <span className="wait">{r.oldest}d waiting</span>
-                    )}
-                  </span>
+                  <span className="amt">{money(r.value)}</span>
+                  {r.oldest !== undefined && r.oldest >= STALE_DAYS && (
+                    <span className="wait">{r.oldest}d waiting</span>
+                  )}
                 </button>
               ))}
             </div>
