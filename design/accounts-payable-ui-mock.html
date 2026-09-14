@@ -1082,15 +1082,23 @@ function isPayable(it) {
 function isBill(it) {
   return it.kind === 'invoice' || (it.kind === 'entry' && (it.type === 'Invoice' || it.type === 'Consignment'));
 }
+/* d30 - a reversal is an Adjustment the SYSTEM posted, not one a Manager typed.
+   Same carve-out d25 gives the remainder: sourced from a void by construction,
+   so it is not a d12 manual entry even though it shares the type. */
+function isReversal(it) { return it.kind === 'reversal'; }
 function isRemainder(it) { return it.kind === 'remainder'; }
 /* What the row is worth for CLEARING — its signed face value (d15). */
 function signedOf(it) {
   if (it.kind === 'claim') return -it.amount;
   if (it.kind === 'remainder') return -it.amount;
-  if (it.type === 'Credit') return -it.amount;
-  if (it.type === 'Adjustment') return it.dir === 'decrease' ? -it.amount : it.amount;
+  /* Anything PAYABLE nets off what has been settled against it, and that has
+     to be tested before the type branches below - a reversal (d30) and an
+     increasing Adjustment are both payable, and returning their face amount
+     regardless of what was paid leaves them contributing forever. */
   if (isPayable(it)) return r2(it.amount - (it.paid || 0) - (it.credited || 0));
-  return it.amount; // a Claim placeholder: face value, but see bandOf
+  if (it.type === 'Credit') return -it.amount;
+  if (it.type === 'Adjustment') return -it.amount;   // only decreasing ones reach here
+  return it.amount;                                  // a Claim placeholder: face value (d29)
 }
 function balanceOf(it) {
   /* d26 - a Credited claim counts from the moment it is Credited, exactly
@@ -1106,6 +1114,7 @@ function paidOf(it) {
 function bandOf(it) {
   if (it.kind === 'claim') return 'counted';       // d26 - a credit memo is a credit
   if (it.kind === 'remainder') return 'counted';   // d25 — it has already netted
+  if (it.kind === 'reversal') return 'counted';    // d30 — and so has its reversal
   if (it.kind === 'entry' && it.type === 'Claim') return 'uncounted';
   if (isPayable(it) && balanceOf(it) <= 0.005 && ((it.paid || 0) + (it.credited || 0)) > 0.005) return 'settled';
   return 'counted';
@@ -1152,7 +1161,7 @@ function owedTotal(sid) {
 /* d27 - a row is a DEBIT if it is something owed, a CREDIT if it is in the
    store's favour, and a Claim placeholder is neither: it contributes nothing
    to the money, ever, which is what makes it safe to tick. */
-function isDebit(it) { return isPayable(it) && balanceOf(it) > 0.005; }
+function isDebit(it) { return (isPayable(it) || isReversal(it)) && balanceOf(it) > 0.005; }
 function isCredit(it) { return balanceOf(it) < -0.005; }
 function isPlaceholder(it) { return it.kind === 'entry' && it.type === 'Claim'; }
 function uncountedOf(sid) {
@@ -1401,11 +1410,12 @@ function ledgerRow(it, cur) {
   /* d27 - any unsettled row may be ticked. The old rule allowed only payable
      rows and manual entries, which is why a Credited claim could not be
      selected at all and an Invoice + Credit was refused. */
-  var selectable = band !== 'settled' && (isDebit(it) || isCredit(it) || isPlaceholder(it));
+  var selectable = band !== 'settled' && (isDebit(it) || isCredit(it) || isPlaceholder(it) || isReversal(it));
   var cls = 'lr' + (S.sel[it.key] ? ' on' : '') + (selectable ? '' : ' locked') +
     (isOverdue(it) ? ' over' : '') + (band === 'settled' ? ' settled' : '') +
     (it.kind === 'remainder' ? ' remainder' : '');
-  var status = it.kind === 'remainder' ? 'Credit in our favour' :
+  var status = it.kind === 'reversal' ? 'Reverses a remainder' :
+    it.kind === 'remainder' ? 'Credit in our favour' :
     it.kind === 'claim' ? 'Credited' :
     (it.kind === 'entry' && it.type === 'Claim') ? 'Awaiting credit' :
       band === 'settled' ? 'Paid' :
@@ -1421,7 +1431,8 @@ function ledgerRow(it, cur) {
   return '<tr class="' + cls + '" data-row="' + it.key + '"' + (selectable ? ' tabindex="0"' : '') + '>' +
     '<td>' + (selectable ? '<input type="checkbox"' + (S.sel[it.key] ? ' checked' : '') + ' data-cb="' + it.key + '" aria-label="Select ' + esc(it.type + ' ' + it.ref) + '">' : '') + '</td>' +
     '<td>' + esc(it.type) +
-    (it.kind === 'remainder' ? '<span class="sub">remainder &mdash; not a manual entry (d25)</span>'
+    (it.kind === 'reversal' ? '<span class="sub">reversal of a remainder &mdash; posted by a void (d30)</span>'
+      : it.kind === 'remainder' ? '<span class="sub">remainder &mdash; not a manual entry (d25)</span>'
       : it.kind === 'entry' ? '<span class="sub">entered by hand</span>'
       : (it.po ? '<span class="sub">' + esc(it.po) + '</span>' : '')) + '</td>' +
     '<td><span class="ref">' + esc(it.ref) + '</span>' + (it.reason ? '<span class="sub">' + esc(it.reason) + '</span>' : '') + '</td>' +
@@ -1563,8 +1574,8 @@ function batchHtml(sid) {
             ? '<div class="void-ask"><div class="t">Void this payment?</div>' +
               '<div class="m">' + (voidBlocker(b)
                 ? '<strong>Refused:</strong> ' + esc(voidBlocker(b)) + ' <span class="cite">(d25)</span>. Reverse that first.'
-                : 'Hands back ' + esc(money(r2(tot - cr))) + ' to the balances it settled and returns the claim to un-applied, <strong>whole</strong> <span class="cite">(d24)</span>.' +
-                  (b.remainder ? ' The remainder Credit it emitted is withdrawn with it <span class="cite">(d25)</span>.' : '') +
+                : 'Hands back ' + esc(money(r2(tot - cr))) + ' to the balances it settled and returns the credit to un-consumed, <strong>whole</strong> <span class="cite">(d24)</span>.' +
+                  (b.remainder ? ' The remainder it emitted is <strong>not deleted</strong> — a reversing Adjustment is appended against it, so this void cannot refuse whatever became of it since <span class="cite">(d30)</span>.' : '') +
                   ' All of it or none of it &mdash; a batch is the unit <span class="cite">(d16, d22)</span>.') +
               (unfreeze.length ? '<br><br><strong>' + unfreeze.map(function (i) { return esc('Invoice ' + i.ref); }).join(', ') + '</strong> ' +
                 (unfreeze.length === 1 ? 'returns' : 'return') + ' to <strong>Finalized</strong> and ' + (unfreeze.length === 1 ? 'becomes' : 'become') +
@@ -1977,7 +1988,7 @@ document.addEventListener('click', function (ev) {
     var item = ITEMS.filter(function (i) { return i.key === k; })[0];
     if (!item) return;
     if (bandOf(item) === 'settled') return;
-    if (!(isDebit(item) || isCredit(item) || isPlaceholder(item))) return;
+    if (!(isDebit(item) || isCredit(item) || isPlaceholder(item) || isReversal(item))) return;
     if (S.sel[k]) delete S.sel[k]; else S.sel[k] = true;
     S.mode = null; bump(); render();
   }
@@ -2138,16 +2149,11 @@ function doPay() {
 /* d22 — void the batch WHOLE. Every target is reversed: money back to the
    balance owing, credit back to the claim that funded it. The batch itself is
    never deleted and never edited; the void is appended against it. */
-/* d24/d25 - a void that emitted a remainder has to take the remainder back
-   too, and must REFUSE where it has already been cleared. Same shape as
-   E-06 d10: a reversal refuses once its downstream effect cannot be undone. */
-function voidBlocker(b) {
-  if (!b.remainder) return null;
-  var rem = ITEMS.filter(function (i) { return i.key === b.remainder; })[0];
-  if (!rem) return 'the remainder Credit it emitted no longer exists';
-  if (rem.cleared) return 'the remainder Credit it emitted has since been cleared (d15)';
-  return null;
-}
+/* d30 - a void never refuses and never deletes. Where the batch emitted a
+   remainder, the void APPENDS a reversing Adjustment of equal and opposite
+   amount, which restores the Supplier's balance whether or not the remainder
+   still exists. So there is no chain to walk and no blocker to compute. */
+function voidBlocker() { return null; }
 function doVoid(id) {
   var b = BATCHES.filter(function (x) { return x.id === id; })[0];
   if (!b || b.voided) return;
@@ -2176,14 +2182,23 @@ function doVoid(id) {
     var hd = ITEMS.filter(function (i) { return i.key === k; })[0];
     if (hd) hd.cleared = false;
   });
-  if (b.remainder) ITEMS = ITEMS.filter(function (i) { return i.key !== b.remainder; });
+  if (b.remainder) {
+    var rem = ITEMS.filter(function (i) { return i.key === b.remainder; })[0];
+    if (rem) {
+      ITEMS.push({
+        key: 'rev-' + Date.now(), sup: sid, kind: 'reversal', type: 'Adjustment',
+        ref: 'Reversal of ' + rem.ref, date: '2026-09-13', amount: rem.amount,
+        dir: 'increase', reversalOf: rem.key, fromVoid: b.id
+      });
+    }
+  }
 
   b.voided = { at: '2026-09-13', by: 'R. Duval' };
   S.confirmVoid = null; S.sel = {}; S.pay = null;
   bump(); render();
   toast('Payment voided. Balance ' + money(before, supBy(sid).cur) + ' \u2192 ' + money(netOf(sid), supBy(sid).cur) +
     ((b.credits || b.claims || []).length ? '. Credit back in hand, whole (d24, d28)' : '') +
-    (b.remainder ? ' and its remainder Credit withdrawn' : '') +
+    (b.remainder ? '. A reversing Adjustment was appended against its remainder \u2014 nothing was deleted, and the two net to zero for clearing (d30)' : '') +
     (unfroze.length ? '. Invoice ' + unfroze.join(', ') + ' back to Finalized and correctable again (E-02 d40, A-33)' : '') + '.');
 }
 
