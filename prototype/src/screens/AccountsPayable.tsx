@@ -3,7 +3,7 @@ import { PayableSlab, type PayableChip, type PayableSort } from "../components/P
 import { SettleTrack } from "../components/SettleTrack";
 import { CURRENT_USER } from "../data/seed";
 import type { PayableEntryType, PaymentMethod } from "../data/types";
-import { creditOn, ledgerRows, moneyOn, settlementPlan, type LedgerRow } from "../lib/payables";
+import { autoPlacement, creditOn, ledgerRows, moneyOn, settlementPlan, type LedgerRow } from "../lib/payables";
 import { money } from "../lib/money";
 import { readStored, writeStored } from "../lib/tillMemory";
 import { round2, supplierBalance } from "../lib/totals";
@@ -120,6 +120,7 @@ export function AccountsPayable() {
 
   const doSettle = () => {
     if (!supplier) return;
+    const auto = autoPlacement(plan);
     app.settlePayables(
       {
         supplierId: supplier.id,
@@ -129,15 +130,15 @@ export function AccountsPayable() {
         debits: plan.debits.map((d) => ({
           kind: d.kind === "invoice" ? ("invoice" as const) : ("entry" as const),
           id: d.id,
-          credit: creditOn(form, d.key),
-          money: moneyOn(form, d.key, d.balance),
+          credit: creditOn(form, d.key, auto),
+          money: moneyOn(form, d.key, d.balance, auto),
         })),
         credits: plan.credits.map((c) => ({ id: c.creditId!, amount: -c.balance, label: c.reference })),
         placeholderIds: plan.holds.map((h) => h.id),
       },
       CURRENT_USER,
     );
-    const closed = plan.debits.filter((d) => d.balance <= round2(creditOn(form, d.key) + moneyOn(form, d.key, d.balance)) + 0.005).length;
+    const closed = plan.debits.filter((d) => d.balance <= round2(creditOn(form, d.key, auto) + moneyOn(form, d.key, d.balance, auto)) + 0.005).length;
     setMsg(
       `${money(plan.debitTotal)} settled as one batch — ${money(plan.attach)} credit, ${money(plan.money)} money` +
         (closed ? `, ${closed} now paid in full` : "") +

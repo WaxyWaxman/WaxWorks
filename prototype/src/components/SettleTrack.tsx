@@ -8,7 +8,7 @@ import {
   type PaymentMethod,
   type Supplier,
 } from "../data/types";
-import { creditOn, moneyOn, type LedgerRow, type SettlementPlan } from "../lib/payables";
+import { autoPlacement, clearsToZero, creditOn, moneyOn, type LedgerRow, type SettlementPlan } from "../lib/payables";
 import { money } from "../lib/money";
 import { round2 } from "../lib/totals";
 
@@ -338,8 +338,9 @@ function Selection({
   onClear: () => void;
   onCancel: () => void;
 }) {
-  const creditPlaced = round2(plan.debits.reduce((n, d) => n + creditOn(form, d.key), 0));
-  const moneyPlaced = round2(plan.debits.reduce((n, d) => n + moneyOn(form, d.key, d.balance), 0));
+  const auto = autoPlacement(plan);
+  const creditPlaced = round2(plan.debits.reduce((n, d) => n + creditOn(form, d.key, auto), 0));
+  const moneyPlaced = round2(plan.debits.reduce((n, d) => n + moneyOn(form, d.key, d.balance, auto), 0));
 
   const problems: string[] = [];
   if (!plan.isClearing) {
@@ -353,7 +354,7 @@ function Selection({
       );
     }
     for (const d of plan.debits) {
-      const sum = round2(creditOn(form, d.key) + moneyOn(form, d.key, d.balance));
+      const sum = round2(creditOn(form, d.key, auto) + moneyOn(form, d.key, d.balance, auto));
       if (sum > d.balance + 0.005) {
         problems.push(`${d.type} ${d.reference}: ${money(sum)} against a balance of ${money(d.balance)}.`);
       }
@@ -367,6 +368,11 @@ function Selection({
   // so they stay counted and only the placeholders retire. That is d15's
   // clearing, arrived at by the general rule rather than a separate button.
   if (plan.isClearing) {
+    // d15 — a clearing needs the set's SIGNED amounts to sum to zero, and d29's
+    // two figures are why a Claim placeholder can be in one. Without this test
+    // a Manager could retire a live credit on its own, which would hide money
+    // the store is owed while leaving it in the balance.
+    const netsToZero = clearsToZero(plan.rows);
     return (
       <aside className="ap-track" aria-label="Clearing">
         <div className="ap-waiting">
@@ -406,12 +412,25 @@ function Selection({
               </div>
             ))}
           </div>
+          {!netsToZero && (
+            <div className="ap-blocked">
+              <div className="t">These do not sum to zero</div>
+              <div className="m">
+                <div>
+                  They net to{" "}
+                  <strong>{money(round2(plan.rows.reduce((n, r) => n + r.face, 0)))}</strong>, and d15 requires exactly
+                  zero — a credit may only be retired alongside something that cancels it, which is what stops a
+                  clearing being used to hide money the store is owed.
+                </div>
+              </div>
+            </div>
+          )}
           <div className="wo-caveat warn">
             M-05 does not say whether a clearing can be reversed, so this does not offer it and does not promise it.
           </div>
         </div>
         <div className="ap-track-foot">
-          <button className="btn ink primary" onClick={onClear}>
+          <button className="btn ink primary" disabled={!netsToZero} onClick={onClear}>
             Clear these {plan.rows.length}
           </button>
           <button className="btn ghost secondary" onClick={onCancel}>
@@ -483,7 +502,15 @@ function Selection({
         </div>
 
         <div className="wo-sec">
-          <span className="lab">Place the credit, then the money</span>
+          <span className="lab">
+            {plan.placementIsAmbiguous ? "Place the credit, then the money" : "What this settles"}
+          </span>
+          {!plan.placementIsAmbiguous && plan.attach > 0.005 && (
+            <div className="wo-caveat">
+              There is only one way to place {money(plan.attach)} of credit across what you ticked, so it is placed.
+              d18 asks the Manager to choose <em>where</em> a credit lands; here there is nothing to choose between.
+            </div>
+          )}
           {plan.debits.map((d) => (
             <div className="ap-tgt dual" key={d.key}>
               <div className="l">
@@ -502,8 +529,8 @@ function Selection({
                   step="0.01"
                   min={0}
                   className="cr"
-                  disabled={plan.attach <= 0.005}
-                  value={form.credit[d.key] ?? "0.00"}
+                  disabled={plan.attach <= 0.005 || !plan.placementIsAmbiguous}
+                  value={creditOn(form, d.key, auto).toFixed(2)}
                   onChange={(e) => {
                     const credit = { ...form.credit, [d.key]: e.target.value };
                     // Credit placed on a row pushes that row's money down so the
@@ -511,7 +538,7 @@ function Selection({
                     // split — d18's objection was to the system choosing WHICH
                     // Invoices a credit lands on, and it still does not choose.
                     const cap = round2(Math.max(0, d.balance - (Number(e.target.value) || 0)));
-                    const cur = moneyOn(form, d.key, d.balance);
+                    const cur = moneyOn(form, d.key, d.balance, auto);
                     const money2 =
                       form.money[d.key] !== undefined && cur > cap + 0.005
                         ? { ...form.money, [d.key]: cap.toFixed(2) }
@@ -526,13 +553,13 @@ function Selection({
                   type="number"
                   step="0.01"
                   min={0}
-                  value={moneyOn(form, d.key, d.balance).toFixed(2)}
+                  value={moneyOn(form, d.key, d.balance, auto).toFixed(2)}
                   onChange={(e) => onForm({ money: { ...form.money, [d.key]: e.target.value } })}
                 />
               </div>
             </div>
           ))}
-          {plan.attach > 0.005 ? (
+          {plan.attach > 0.005 && plan.placementIsAmbiguous ? (
             <div className={"ap-credit-bar" + (Math.abs(creditPlaced - plan.attach) > 0.005 ? " spent" : "")}>
               <div className="ln">
                 <span>Credit to place</span>
@@ -547,11 +574,11 @@ function Selection({
                 pre-filled.
               </div>
             </div>
-          ) : (
+          ) : plan.attach <= 0.005 ? (
             <div className="wo-caveat">
               No credit ticked, so this is money only. Tick a Credit or a Credited claim to net it off.
             </div>
-          )}
+          ) : null}
           <div className="wo-caveat">
             Partial <em>payment</em> is supported (d4); partial <em>credit</em> is not (d24, d28).
           </div>

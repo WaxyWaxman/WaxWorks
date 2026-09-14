@@ -42,7 +42,7 @@ export type RowKind = "invoice" | "entry" | "claim";
  * placeholder is neither: it contributes NOTHING to the money, ever, which is
  * what makes it safe to tick into a settlement.
  */
-export type RowRole = "debit" | "credit" | "placeholder";
+export type RowRole = "debit" | "credit" | "placeholder" | "counter";
 
 /** The bands. d14 draws the only real line: counted, or not counted yet. */
 export type RowBand = "counted" | "uncounted" | "settled";
@@ -218,7 +218,11 @@ export function ledgerRows(
                 : "Open"
               : "Applied",
       band: isPlaceholder ? "uncounted" : "counted",
-      role: isPlaceholder ? "placeholder" : isCredit ? "credit" : "debit",
+      // d30 — a REVERSAL is a counterweight, not a bill. It exists only to
+      // cancel the remainder a void could not delete, and d30 says the pair is
+      // "marked Cleared against each other under d15". Calling it a debit would
+      // offer to write a cheque against it, which nobody would ever do.
+      role: isPlaceholder ? "placeholder" : isCredit ? "credit" : e.source === "reversal" ? "counter" : "debit",
       source: e.source,
       creditId: isCredit ? e.id : undefined,
       ...dueFor(terms, e.date, today),
@@ -229,22 +233,28 @@ export function ledgerRows(
 }
 
 /** What is placed on one debit. An untouched money box means "the rest". */
-export const creditOn = (form: { credit: Record<string, string> }, key: string): number =>
-  Number(form.credit[key] ?? 0) || 0;
+export const creditOn = (
+  form: { credit: Record<string, string> },
+  key: string,
+  auto?: Record<string, number>,
+): number => (form.credit[key] !== undefined ? Number(form.credit[key]) || 0 : (auto?.[key] ?? 0));
 export const moneyOn = (
   form: { credit: Record<string, string>; money: Record<string, string> },
   key: string,
   balance: number,
+  auto?: Record<string, number>,
 ): number =>
   form.money[key] !== undefined
     ? Number(form.money[key]) || 0
-    : Math.max(0, Math.round((balance - creditOn(form, key)) * 100) / 100);
+    : Math.max(0, Math.round((balance - creditOn(form, key, auto)) * 100) / 100);
 
 export interface SettlementPlan {
   rows: LedgerRow[];
   debits: LedgerRow[];
   credits: LedgerRow[];
   holds: LedgerRow[];
+  /** d30 — reversals: counterweights that can only be cleared, never settled. */
+  counters: LedgerRow[];
   debitTotal: number;
   creditTotal: number;
   /** d27 — credits attach to the debits in the SAME selection; no further. */
@@ -253,6 +263,8 @@ export interface SettlementPlan {
   money: number;
   /** d25/d28 — what cannot attach comes back as its own artifact. */
   remainder: number;
+  /** True only when the Manager genuinely has a choice of where credit lands. */
+  placementIsAmbiguous: boolean;
   /** d27 — no debit means nothing to attach to: this is d15's clearing. */
   isClearing: boolean;
 }
@@ -261,21 +273,46 @@ export function settlementPlan(rows: LedgerRow[]): SettlementPlan {
   const debits = rows.filter((r) => r.role === "debit" && r.balance > 0.005);
   const credits = rows.filter((r) => r.role === "credit");
   const holds = rows.filter((r) => r.role === "placeholder");
+  const counters = rows.filter((r) => r.role === "counter");
   const debitTotal = round2(debits.reduce((n, r) => n + r.balance, 0));
   const creditTotal = round2(credits.reduce((n, r) => n - r.balance, 0));
   const attach = round2(Math.min(creditTotal, debitTotal));
+  // The distribution is only the Manager's to make when there is more than one
+  // way to make it: two or more debits AND less credit than they come to. With
+  // one debit, or with credit covering every debit in full, exactly one
+  // distribution exists — filling that in is arithmetic, not the pre-filled
+  // suggestion d18 refuses (which was a suggestion about a real choice).
+  const placementIsAmbiguous = credits.length > 0 && debits.length > 1 && attach < debitTotal - 0.005;
   return {
     rows,
     debits,
     credits,
     holds,
+    counters,
     debitTotal,
     creditTotal,
     attach,
     money: round2(debitTotal - attach),
     remainder: round2(creditTotal - attach),
+    placementIsAmbiguous,
     isClearing: debits.length === 0 && rows.length > 0,
   };
+}
+
+/**
+ * The one distribution that exists when there is only one. Undefined when the
+ * Manager genuinely has to choose (d18).
+ */
+export function autoPlacement(plan: SettlementPlan): Record<string, number> | undefined {
+  if (plan.placementIsAmbiguous) return undefined;
+  const out: Record<string, number> = {};
+  let left = plan.attach;
+  for (const d of plan.debits) {
+    const take = Math.round(Math.min(left, d.balance) * 100) / 100;
+    out[d.key] = take;
+    left = Math.round((left - take) * 100) / 100;
+  }
+  return out;
 }
 
 /** d15's test sums FACE values (d29), which is why a placeholder has two figures. */
