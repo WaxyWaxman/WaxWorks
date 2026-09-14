@@ -15,24 +15,28 @@ import type { ClaimLine, ClaimVoid, Invoice, SupplierClaim } from "../data/types
 export const isSent = (c: SupplierClaim): boolean => c.sentAt != null;
 
 /**
- * E-04 d24, d27 and architecture A-44's accepted consequence, in one place.
- *
- * A claim has two terminal dispositions reached by DIFFERENT mechanisms —
- * abandoned is a status the row carries, voided is the presence of a row in
- * another table — so "is this claim finished" is a status read OR a lookup,
- * and A-44 warns that code remembering only the first counts voided claims as
- * live. This function is the single place that remembers both.
+ * E-04 d24 and d29. Only `Credited` and `Abandoned` end a claim, and both are
+ * statuses — a void is a REVERSAL that returns the claim to unsent, not a
+ * third ending (architecture A-46, amending A-44). So this is a plain status
+ * read, and nothing has to remember a second mechanism.
  */
-export const claimIsVoided = (c: SupplierClaim, voids: ClaimVoid[]): boolean =>
-  voids.some((v) => v.claimId === c.id);
+export const claimIsLive = (c: SupplierClaim): boolean => c.status !== "Abandoned";
 
-export const claimIsLive = (c: SupplierClaim, voids: ClaimVoid[]): boolean =>
-  c.status !== "Abandoned" && !claimIsVoided(c, voids);
+/**
+ * The numbers this claim has burned through, newest first. A claim sent,
+ * voided and sent again retires one number per send (d26, d29), and the void
+ * rows are the only record of them — the claim itself carries just the number
+ * it holds now, if any.
+ */
+export const retiredNumbers = (c: SupplierClaim, voids: ClaimVoid[]): number[] =>
+  voids
+    .filter((v) => v.claimId === c.id)
+    .map((v) => v.claimNumber)
+    .sort((a, b) => b - a);
 
-export type ClaimPhase = "unsent" | "waiting" | "credited" | "abandoned" | "voided";
+export type ClaimPhase = "unsent" | "waiting" | "credited" | "abandoned";
 
-export function claimPhase(c: SupplierClaim, voids: ClaimVoid[]): ClaimPhase {
-  if (claimIsVoided(c, voids)) return "voided";
+export function claimPhase(c: SupplierClaim): ClaimPhase {
   if (c.status === "Abandoned") return "abandoned";
   if (c.status === "Credited") return "credited";
   return isSent(c) ? "waiting" : "unsent";

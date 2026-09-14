@@ -142,7 +142,7 @@ export function ledgerRows(
   suppliers: Supplier[],
   today = new Date(),
 ): LedgerRow[] {
-  const { invoices, payableEntries, claims, paymentBatches: b, batchVoids: v, claimVoids: cv } = data;
+  const { invoices, payableEntries, claims, paymentBatches: b, batchVoids: v } = data;
   const supplier = suppliers.find((s) => s.id === supplierId);
   const rows: LedgerRow[] = [];
 
@@ -173,7 +173,7 @@ export function ledgerRows(
 
   // d26 — a Credited claim counts; a Pending one does not. The line is
   // agreed-vs-not-agreed, not claim-vs-entry.
-  for (const c of claims.filter((x) => x.supplierId === supplierId && claimIsAgreed(x, cv))) {
+  for (const c of claims.filter((x) => x.supplierId === supplierId && claimIsAgreed(x))) {
     if (creditIsConsumed(c.id, b, v)) continue;
     const amount = claimCreditAmount(c);
     const asked = claimTotal(c);

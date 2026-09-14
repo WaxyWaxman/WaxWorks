@@ -2672,3 +2672,14 @@ table.claims-ln td { padding: 5px 8px 5px 0; border-bottom: 1px solid var(--c-bo
    reads as a stated fact rather than a missing value; a blank and a choice
    must not look the same. */
 .claims-noinv { font-style: italic; color: var(--c-ink-faint); font-family: var(--font-sans); font-size: var(--fs-xs); }
+
+/* E-04 d29 — a batch that went out, was voided and came back. Without this a
+   returned claim is indistinguishable from one never sent, which is the one
+   thing the person correcting it needs to know. */
+.claims-retired {
+  display: inline-block; margin-left: 8px;
+  font-family: var(--font-narrow); font-size: 9.5px; font-weight: 800;
+  letter-spacing: 0.06em; text-transform: uppercase;
+  color: var(--c-danger); border: 1px solid var(--c-danger);
+  background: var(--c-danger-soft); padding: 1px 5px;
+}

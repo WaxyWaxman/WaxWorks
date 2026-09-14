@@ -269,17 +269,24 @@ export const VOID_REASONS = [
 export type VoidReason = (typeof VOID_REASONS)[number];
 
 /**
- * E-04 d27, architecture A-44 — a claim void is a ROW, never a column.
- * A `voidedAt` on the claim would be an update to the row the void exists to
- * leave alone, and one-row-per-claim makes a double void unrepresentable
- * rather than a check someone remembers (the rule A-36 sets for payment
- * batches). Consequence, recorded in A-44: "is this claim finished" is a
- * status read OR a lookup here, and code that forgets the second counts
- * voided claims as live. `claimIsLive()` in lib/claims.ts is the one seam.
+ * E-04 d27 and d29, architecture A-44 as amended by A-46 — a claim void is a
+ * ROW, never a column. A `voidedAt` on the claim would be an update to the row
+ * the void exists to leave alone (the rule A-36 sets for payment batches).
+ *
+ * A void is a REVERSAL, not a terminal state (d29): it retires the number and
+ * returns the claim to unsent, keeping its lines and separator, so it can be
+ * corrected and sent again. Only `Credited` and `Abandoned` end a claim, and
+ * both are statuses — which is why nothing here needs consulting to ask
+ * whether a claim is finished.
+ *
+ * Keyed by `claimNumber`, not by claim: a claim may be sent, voided and sent
+ * again without limit, so one claim can retire several numbers (A-46). The
+ * number is unique and never reused (d26), so it is the natural key.
  */
 export interface ClaimVoid {
   id: string;
   claimId: string;
+  claimNumber: number; // the number this void retired
   reason: VoidReason;
   note?: string;
   at: string;
