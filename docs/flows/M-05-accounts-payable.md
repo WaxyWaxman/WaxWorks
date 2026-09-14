@@ -108,7 +108,7 @@ Loading and redeeming happen at the till ([E-05](E-05-sell-a-record.md)); this i
 
 - Invoice records — number, date, linked PurchaseOrder, and amount — originate at receiving. Accounts payable consumes them and never creates one.
 - Invoices are keyed by `(supplier, invoice_number)`, not globally (decision 1).
-- A finalized Invoice is **not yet locked**: costs can still be corrected and lines added directly back in E-02 until a Manager marks it **paid** here, which is what makes it immutable. Voiding a paid Invoice is a manager-only amendment handled in [E-04](E-04-manage-inventory.md), appended as a separate artifact against the original record.
+- A finalized Invoice is **not yet locked**: costs can still be corrected and lines added directly back in E-02 until it **is paid** here, which is what makes it immutable. **Nothing in this flow marks an Invoice paid** — there is no such action, and never was. It becomes paid because settlement brought its balance to zero, and stops being paid if that settlement is voided ([architecture](../architecture.md) A-33b, A-33a; decision 22). Voiding a paid Invoice is a manager-only amendment handled in [E-04](E-04-manage-inventory.md), appended as a separate artifact against the original record.
 - An Invoice carries its own **payment terms** and a **due date derived as invoice date + terms** ([E-02](E-02-receive-inventory.md) d45). Accounts payable consumes both and edits neither: the due date is what makes a balance *overdue* rather than merely outstanding, and it is the only basis on which this flow may age anything.
 
 **From [M-01](M-01-supplier-margin.md):**

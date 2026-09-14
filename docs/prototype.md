@@ -184,3 +184,10 @@ that is a separate question nobody has answered yet._
   ([M-01](flows/M-01-supplier-margin.md) d19, [E-02](flows/E-02-receive-inventory.md) d45).
   The layout these are drawn against is `design/accounts-payable-ui-mock.html`. **Read this
   screen as a record of what was built, not as a statement of what is decided.**
+
+- **The prototype stores an Invoice status; the schema will not.** `InvoiceStatus` is a
+  stored `Draft | Finalized | Paid` with `paidAt`/`paidBy` beside it. [A-33b](architecture.md)
+  makes `paid` **derived** — finalized, balance at or below zero, and at least one settlement
+  landed on it. The prototype's *behaviour* already matches (a target whose balance reaches
+  zero is treated as settled); only its representation differs, which is fine for an
+  in-memory mock and must not be carried into the schema.
