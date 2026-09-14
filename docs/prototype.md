@@ -173,17 +173,28 @@ that is a separate question nobody has answered yet._
   The GiftCard record doesn't carry an issue date or a last-used date, so the liability registry
   omits those two columns from the spec's field list rather than fabricating them.
 
-- **Accounts Payable is now behind its spec, deliberately and knowably.** The built screen
-  implements [M-05](flows/M-05-accounts-payable.md) decision 11: a claim's credit is applied
-  once, in full, auto-distributed across outstanding Invoices oldest-received-first, with no
-  invoice picker. **Decision 11 has since been superseded by decision 18**, which puts the
-  choice of Invoices and the split in the Manager's hands, and **decision 20** now models
-  partial credit that the prototype calls out of scope. Decisions 17, 19, 21 and 22 (remit-to
-  address, one-action credit-and-money settlement, settled Invoices staying readable, voiding a
-  PaymentBatch) are likewise unbuilt, as are payment terms and the derived due date
-  ([M-01](flows/M-01-supplier-margin.md) d19, [E-02](flows/E-02-receive-inventory.md) d45).
-  The layout these are drawn against is `design/accounts-payable-ui-mock.html`. **Read this
-  screen as a record of what was built, not as a statement of what is decided.**
+- **Accounts Payable is built to d17–d30.** One selection settles anything — Invoices,
+  manual entries, Credits, Credited claims and Claim placeholders in any mix (d27); credits
+  attach to the debits beside them and money covers the shortfall; a selection holding no debit
+  is a **clearing** (d15), arrived at by the same rule rather than a separate button. A credit
+  goes out **whole** (d24, d28) in a split the Manager places but whose total they do not choose
+  (d23), and whatever cannot attach comes back as a **remainder Credit** (d25). A settlement is
+  **voided**, never edited, and where it emitted a remainder the void appends a **reversing
+  Adjustment** rather than deleting it, so it never refuses (d22, d30). Paid Invoices stay
+  readable and name what settled them (d21); every Invoice row opens in Receiving, the verb
+  changing at Paid (E-02 d40, A-41); and the **Due** column exists because Suppliers and
+  Invoices now carry payment terms (M-01 d19, E-02 d45). A Supplier balance may read **negative**
+  (d25) and the store-wide figure is one line per currency, never a sum.
+
+- **`invoiceIsPaid()` is A-41's seam, and it is real here.** `InvoiceStatus` no longer carries
+  `Paid`: it is derived (A-33b), and Receiving's lock, the reconcile track and the ledger's bands
+  all ask the same function. Voiding a settlement releases the Invoice with nothing to flip.
+
+- **What is still divergent.** Money is floats throughout (`lib/money.ts`), against A-15's
+  integer minor units — fine for an in-memory mock, and **not to be carried into the schema**.
+  `supplierBalance()` in `lib/totals.ts` is A-36's four-term derivation and is the single copy
+  the Supplier card and Accounts Payable both read; two copies would drift, and the figure they
+  disagreed about would be money.
 
 - **The prototype stores an Invoice status; the schema will not.** `InvoiceStatus` is a
   stored `Draft | Finalized | Paid` with `paidAt`/`paidBy` beside it. [A-33b](architecture.md)

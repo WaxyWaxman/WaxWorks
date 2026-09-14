@@ -7,7 +7,14 @@ import {
 } from "react";
 import { computeDayBreakdown, type DayBreakdown } from "../lib/dayBreakdown";
 import { money } from "../lib/money";
-import { claimTotal, customerBalanceDelta, invoiceBalance, payableEntrySignedAmount, round2, tenderedTotal } from "../lib/totals";
+import {
+  customerBalanceDelta,
+  invoiceIsPaid,
+  payableEntrySignedAmount,
+  payableEntryTotal,
+  round2,
+  tenderedTotal,
+} from "../lib/totals";
 import {
   CURRENT_USER,
   CUSTOMERS,
@@ -35,6 +42,7 @@ import type {
   PayableEntryType,
   PayableTargetKind,
   PaymentBatch,
+  PaymentBatchVoid,
   PaymentMethod,
   PaymentTarget,
   OrderLineStatus,
@@ -127,7 +135,8 @@ interface AppState {
   claims: SupplierClaim[];
   invoices: Invoice[];
   payableEntries: PayableEntry[]; // M-05 — manual ledger entries: Invoice/Claim/Credit/Adjustment/Consignment, not sourced from Receiving or Supplier Claims
-  paymentBatches: PaymentBatch[]; // M-05 — one row per Record-Payment action, across both Invoices and PayableEntries
+  paymentBatches: PaymentBatch[]; // M-05 d16 — one row per settlement, across Invoices, entries and credits
+  batchVoids: PaymentBatchVoid[]; // M-05 d22 / A-33a — a void is an appended artifact, never a column on the batch
   pendingOrders: PendingOrderLine[];
   reviewFlags: ReviewFlag[];
   activeSaleId: string | null;
@@ -325,7 +334,6 @@ const seed: AppState = {
           itemIds: ["i-rum-1", "i-rum-2", "i-rum-3"],
         },
       ],
-      creditsApplied: [],
       createdBy: CURRENT_USER,
       createdAt: "2026-08-28 09:00:00",
       finalizedAt: "2026-08-28 10:00:00",
@@ -359,7 +367,6 @@ const seed: AppState = {
           itemIds: ["i-pr-1"],
         },
       ],
-      creditsApplied: [],
       createdBy: CURRENT_USER,
       createdAt: "2026-08-31 09:00:00",
       finalizedAt: "2026-08-31 09:30:00",
@@ -380,7 +387,7 @@ const seed: AppState = {
       tax: 0,
       freight: 0,
       misc: 0,
-      status: "Paid",
+      status: "Finalized",
       lines: [
         {
           id: "invline-seed-4",
@@ -394,7 +401,6 @@ const seed: AppState = {
           itemIds: [],
         },
       ],
-      creditsApplied: [],
       createdBy: CURRENT_USER,
       createdAt: "2026-08-19 09:00:00",
       finalizedAt: "2026-08-19 09:30:00",
@@ -437,9 +443,10 @@ const seed: AppState = {
       date: "2026-08-20",
       recordedBy: MANAGER_NAME,
       createdAt: "2026-08-20 14:00:00",
-      targets: [{ kind: "invoice", id: "inv-seed-crate-paid", amount: 20.0 }],
+      targets: [{ kind: "invoice", id: "inv-seed-crate-paid", amount: 20.0, settleKind: "money" }],
     },
   ],
+  batchVoids: [],
   pendingOrders: PENDING_ORDERS,
   reviewFlags: [],
   activeSaleId: null,
@@ -594,16 +601,22 @@ interface AppContextValue extends AppState {
   // multi-select). An Invoice whose balance reaches zero is marked Paid the
   // same way markInvoicePaid does — that's the "manager settles the
   // balance" moment that locks it (E-02 §Inherited).
-  recordPayment: (
-    targets: { kind: PayableTargetKind; id: string }[],
-    input: { supplierId: string; method: PaymentMethod; reference: string; date: string; amounts: Record<string, number> },
+  // M-05 d27 — one selection, one act. Credits attach to the debits beside
+  // them; placeholders retire contributing nothing; money covers the rest.
+  settlePayables: (
+    input: {
+      supplierId: string;
+      method: PaymentMethod;
+      reference: string;
+      date: string;
+      debits: { kind: PayableTargetKind; id: string; credit?: number; money?: number; creditId?: string }[];
+      credits: { id: string; amount: number; label: string }[];
+      placeholderIds: string[];
+    },
     by: string,
   ) => void;
-  // Applies a Credited, not-yet-applied claim's full amount against its
-  // Supplier's whole outstanding balance (decision 11) — not one Invoice the
-  // Manager picks. Returns null if the claim isn't eligible or the Supplier
-  // has nothing outstanding to apply it against.
-  applyClaimCredit: (claimId: string, by: string) => { applied: boolean } | null;
+  // M-05 d22/d30 — appended, never edited; never refuses.
+  voidPaymentBatch: (batchId: string, by: string) => void;
 
   payableEntryFor: (id?: string) => PayableEntry | undefined;
   // M-05 "Create new" — a manual ledger line unlinked to any InventoryItem.
@@ -1683,7 +1696,6 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
       misc: 0,
       status: "Draft",
       lines: [],
-      creditsApplied: [],
       createdBy: CURRENT_USER,
       createdAt: now(),
       log: [
@@ -1922,7 +1934,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
 
   const addInvoiceLine: AppContextValue["addInvoiceLine"] = (invoiceId, line) => {
     const invoice = s.invoices.find((iv) => iv.id === invoiceId);
-    if (!invoice || invoice.status === "Paid") return;
+    if (!invoice || invoiceIsPaid(invoice, s.paymentBatches, s.batchVoids)) return;
     const supplier = s.suppliers.find((sup) => sup.id === invoice.supplierId)!;
     const cost = round2(line.listPrice * (1 - line.discountPct / 100));
     let newLine: InvoiceLine = { id: uid("invline"), ...line, cost };
@@ -1993,7 +2005,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
   const updateInvoiceLine: AppContextValue["updateInvoiceLine"] = (invoiceId, lineId, patch) => {
     const invoice = s.invoices.find((iv) => iv.id === invoiceId);
     const existing = invoice?.lines.find((l) => l.id === lineId);
-    if (!invoice || invoice.status === "Paid" || !existing) return;
+    if (!invoice || invoiceIsPaid(invoice, s.paymentBatches, s.batchVoids) || !existing) return;
     const merged = { ...existing, ...patch };
     const newCost = round2(merged.listPrice * (1 - merged.discountPct / 100));
     const updatedLine: InvoiceLine = { ...merged, cost: newCost };
@@ -2031,7 +2043,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
   const removeInvoiceLine: AppContextValue["removeInvoiceLine"] = (invoiceId, lineId) => {
     const invoice = s.invoices.find((iv) => iv.id === invoiceId);
     const line = invoice?.lines.find((l) => l.id === lineId);
-    if (!invoice || invoice.status === "Paid" || !line) return { blocked: true };
+    if (!invoice || invoiceIsPaid(invoice, s.paymentBatches, s.batchVoids) || !line) return { blocked: true };
     const itemIds = line.itemIds ?? [];
     const anySold = itemIds.some((id) => s.inventory.find((i) => i.id === id)?.status === "sold");
     if (anySold) return { blocked: true };
@@ -2064,13 +2076,13 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
     setS((prev) => ({
       ...prev,
       invoices: prev.invoices.map((iv) =>
-        iv.id === invoiceId && iv.status !== "Paid" ? { ...iv, ...patch } : iv,
+        iv.id === invoiceId && !invoiceIsPaid(iv, prev.paymentBatches, prev.batchVoids) ? { ...iv, ...patch } : iv,
       ),
     }));
 
   const setInvoiceTotalOverride: AppContextValue["setInvoiceTotalOverride"] = (invoiceId, value) => {
     const invoice = s.invoices.find((iv) => iv.id === invoiceId);
-    if (!invoice || invoice.status === "Paid") return;
+    if (!invoice || invoiceIsPaid(invoice, s.paymentBatches, s.batchVoids)) return;
     setS((prev) => ({
       ...prev,
       invoices: prev.invoices.map((iv) => (iv.id === invoiceId ? { ...iv, totalOverride: value } : iv)),
@@ -2176,7 +2188,6 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
         iv.id === invoiceId
           ? {
               ...iv,
-              status: "Paid",
               paidAt: now(),
               paidBy: by,
               log: [...iv.log, { at: now(), text: `Marked paid by ${by} — now immutable` }],
@@ -2185,22 +2196,47 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
       ),
     }));
 
-  // M-05 — one PaymentBatch per Record-Payment action, whatever mix of
-  // Invoices and PayableEntries it covers, sharing one method/reference/date
-  // (the open question on payment batches, resolved this way rather than
-  // scattering separate records that merely share a reference). Browsed as
-  // one row per batch (AccountsPayable's Payment history), opened to see its
-  // targets. An Invoice whose balance is settled (by this payment, together
-  // with any credit already applied) flips to Paid, the same transition
-  // markInvoicePaid makes — settling the balance is what locks it.
-  const recordPayment: AppContextValue["recordPayment"] = (targets, input, by) =>
+  // M-05 d27 — THE settlement. One selection, one act, one PaymentBatch.
+  //
+  // Credits in the selection attach to the debits in the selection; whatever
+  // cannot attach comes back as a remainder (d25, d28); Claim placeholders
+  // retire contributing nothing; money covers the shortfall. A selection with
+  // no debit is a clearing and goes to clearPayableEntries instead.
+  //
+  // Attaching a credit does NOT move the Supplier's balance (d26) — the credit
+  // already counted, and attaching only changes what it is attached to. The
+  // balance moves by exactly the money that left.
+  const settlePayables: AppContextValue["settlePayables"] = (input, by) =>
     setS((prev) => {
-      const batchTargets: PaymentTarget[] = targets
-        .map((t) => ({ kind: t.kind, id: t.id, amount: round2(input.amounts[t.id] ?? 0) }))
-        .filter((t) => t.amount > 0);
-      if (batchTargets.length === 0) return prev;
-
       const at = now();
+      const targets: PaymentTarget[] = [];
+
+      // WHICH credit funds a given target is not something d18 governs — d18 is
+      // about which INVOICES a credit lands on, and that stays the Manager's.
+      // The drawdown here is deterministic, in the order they were ticked, and
+      // one target is written per (debit, credit) pair so provenance is exact:
+      // d22's void has to put each credit back, and a pool with no provenance
+      // cannot be reversed. (M-05 records the open question of whether the
+      // Manager should get to choose this too.)
+      const pool = input.credits.map((c) => ({ ...c, left: round2(c.amount) }));
+
+      for (const d of input.debits) {
+        let credit = round2(d.credit ?? 0);
+        while (credit > 0.005) {
+          const src = pool.find((p) => p.left > 0.005);
+          if (!src) break;
+          const take = round2(Math.min(credit, src.left));
+          src.left = round2(src.left - take);
+          credit = round2(credit - take);
+          targets.push({ kind: d.kind, id: d.id, amount: take, settleKind: "credit", creditId: src.id });
+        }
+        const moneyPart = round2(d.money ?? 0);
+        if (moneyPart > 0.005) {
+          targets.push({ kind: d.kind, id: d.id, amount: moneyPart, settleKind: "money" });
+        }
+      }
+      if (targets.length === 0 && input.placeholderIds.length === 0) return prev;
+
       const batch: PaymentBatch = {
         id: uid("batch"),
         supplierId: input.supplierId,
@@ -2209,150 +2245,127 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
         date: input.date,
         recordedBy: by,
         createdAt: at,
-        targets: batchTargets,
+        targets,
       };
+
+      // d28 — every credit ticked is consumed WHOLE, claim or entry alike, so
+      // nothing carries a partial state. d25 — what could not attach comes back
+      // as its own artifact, ONE PER SOURCE CREDIT (A-36), carrying provenance.
+      const remainders: PayableEntry[] = [];
+      for (const c of pool) {
+        const left = c.left;
+        if (left > 0.005) {
+          remainders.push({
+            id: uid("rem"),
+            supplierId: input.supplierId,
+            type: "Credit",
+            source: "remainder",
+            fromCreditId: c.id,
+            reference: `Remainder of ${c.label}`,
+            date: input.date,
+            subtotal: left,
+            tax: 0,
+            freight: 0,
+            misc: 0,
+            createdBy: by,
+            createdAt: at,
+            log: [{ at, text: `Remainder of ${money(left)} from ${c.label} — nothing left to attach it to (d25)` }],
+          });
+        }
+      }
+
       const paymentBatches = [batch, ...prev.paymentBatches];
       const amountFor = (kind: PayableTargetKind, id: string) =>
-        batchTargets.find((t) => t.kind === kind && t.id === id)?.amount ?? 0;
+        round2(targets.filter((tg) => tg.kind === kind && tg.id === id).reduce((s, tg) => s + tg.amount, 0));
 
       const invoices = prev.invoices.map((iv) => {
         const amount = amountFor("invoice", iv.id);
-        if (amount <= 0) return iv;
-        const updated: Invoice = {
+        if (amount <= 0.005) return iv;
+        return {
           ...iv,
-          log: [
-            ...iv.log,
-            { at, text: `Payment recorded — ${input.method} ${input.reference} ${money(amount)} by ${by}` },
-          ],
+          log: [...iv.log, { at, text: `Settled ${money(amount)} — ${input.reference || "credit only"} by ${by}` }],
         };
-        if (invoiceBalance(updated, paymentBatches) <= 0.005 && updated.status !== "Paid") {
-          return { ...updated, status: "Paid" as const, paidAt: at, paidBy: by, log: [...updated.log, { at, text: `Balance settled — marked paid by ${by}` }] };
-        }
-        return updated;
       });
 
-      const payableEntries = prev.payableEntries.map((e) => {
-        const amount = amountFor("entry", e.id);
-        if (amount <= 0) return e;
-        return {
-          ...e,
-          log: [
-            ...e.log,
-            { at, text: `Payment recorded — ${input.method} ${input.reference} ${money(amount)} by ${by}` },
-          ],
-        };
-      });
+      const payableEntries = prev.payableEntries
+        .map((e) => {
+          const amount = amountFor("entry", e.id);
+          if (amount > 0.005) {
+            return { ...e, log: [...e.log, { at, text: `Settled ${money(amount)} by ${by}` }] };
+          }
+          // d27 — a ticked placeholder retires, contributing nothing to the money.
+          if (input.placeholderIds.includes(e.id)) {
+            return {
+              ...e,
+              clearedAt: at,
+              clearedBy: by,
+              log: [...e.log, { at, text: `Retired in a settlement by ${by} — contributed nothing (d27)` }],
+            };
+          }
+          return e;
+        })
+        .concat(remainders);
 
       return { ...prev, paymentBatches, invoices, payableEntries };
     });
 
-  // M-05 decision 11 — a Credited claim's amount isn't earmarked to one
-  // Invoice the Manager picks. It nets against the Supplier's whole balance:
-  // distributed across their outstanding Invoices oldest-received-first,
-  // each one absorbing as much as its own balance can take, with any
-  // remainder (credit bigger than everything currently owed) dumped on the
-  // last one touched — the same forgiving handling an overpaying credit note
-  // gets in Record payment. Returns null if there's nothing outstanding for
-  // this Supplier to apply it against at all.
-  const applyClaimCredit: AppContextValue["applyClaimCredit"] = (claimId, by) => {
-    const claim = s.claims.find((c) => c.id === claimId);
-    if (!claim || claim.status !== "Credited" || claim.applied) return null;
-    const hasOutstanding = s.invoices.some((iv) => iv.supplierId === claim.supplierId && iv.status === "Finalized");
-    if (!hasOutstanding) return null;
-    const amount = claimTotal(claim);
-
-    // Everything below is computed fresh from `prev` on every call — no
-    // variable captured from outside this updater is mutated by it — so a
-    // React 18 StrictMode double-invoke (or any re-run with the same `prev`)
-    // recomputes the identical result instead of silently double-applying.
+  // M-05 d22 / d30 — void a PaymentBatch. Whole or not at all, appended never
+  // edited, and it NEVER REFUSES: where the settlement emitted a remainder, the
+  // void appends a reversing Adjustment of equal and opposite amount rather
+  // than reclaiming it. So it does not matter what became of that remainder
+  // since, and void legality is not order-dependent along a chain (d30).
+  //
+  // Nothing un-consumes a credit by writing to it — a credit is consumed by the
+  // PRESENCE of a live target (A-37), so voiding the batch releases it with
+  // nothing to flip. The same is true of the Invoice's immutability (A-33a).
+  const voidPaymentBatch: AppContextValue["voidPaymentBatch"] = (batchId, by) =>
     setS((prev) => {
-      const outstanding = prev.invoices
-        .filter((iv) => iv.supplierId === claim.supplierId && iv.status === "Finalized")
-        .sort((a, b) => (a.receivedDate || a.invoiceDate).localeCompare(b.receivedDate || b.invoiceDate));
-      if (outstanding.length === 0) return prev;
+      const batch = prev.paymentBatches.find((b) => b.id === batchId);
+      if (!batch || prev.batchVoids.some((v) => v.batchId === batchId)) return prev;
 
       const at = now();
-      let remaining = amount;
-      const touchedIds = new Set<string>();
-      const byId = new Map(prev.invoices.map((iv) => [iv.id, iv]));
+      const voidRow: PaymentBatchVoid = { id: uid("void"), batchId, voidedAt: at, voidedBy: by };
 
-      for (const iv of outstanding) {
-        if (remaining <= 0.005) break;
-        const current = byId.get(iv.id)!;
-        const balance = invoiceBalance(current, prev.paymentBatches);
-        if (balance <= 0.005) continue;
-        const portion = round2(Math.min(remaining, balance));
-        remaining = round2(remaining - portion);
-        touchedIds.add(iv.id);
-        byId.set(iv.id, {
-          ...current,
-          creditsApplied: [...current.creditsApplied, { id: uid("credit"), claimId, amount: portion, appliedAt: at, appliedBy: by }],
-          log: [...current.log, { at, text: `Claim ${claim.claimNumber ?? "—"} credit ${money(portion)} applied by ${by}` }],
-        });
-      }
-      // Credit bigger than everything currently outstanding — the last
-      // Invoice touched (or the last one in line, if none had any balance
-      // left) absorbs the rest and goes negative, rather than losing it.
-      if (remaining > 0.005) {
-        const last = outstanding[outstanding.length - 1];
-        const current = byId.get(last.id)!;
-        touchedIds.add(last.id);
-        byId.set(last.id, {
-          ...current,
-          creditsApplied: [...current.creditsApplied, { id: uid("credit"), claimId, amount: remaining, appliedAt: at, appliedBy: by }],
-          log: [
-            ...current.log,
-            { at, text: `Claim ${claim.claimNumber ?? "—"} credit ${money(remaining)} applied by ${by} (exceeds what's currently owed)` },
-          ],
-        });
-      }
+      // d30 — one reversing Adjustment per remainder this batch emitted.
+      const reversals: PayableEntry[] = prev.payableEntries
+        .filter((e) => e.source === "remainder" && e.createdAt === batch.createdAt && e.supplierId === batch.supplierId)
+        .map((rem) => ({
+          id: uid("rev"),
+          supplierId: rem.supplierId,
+          type: "Adjustment" as const,
+          source: "reversal" as const,
+          adjustmentDirection: "increase" as const,
+          fromVoidId: voidRow.id,
+          reversalOfId: rem.id,
+          reference: `Reversal of ${rem.reference}`,
+          date: at.slice(0, 10),
+          subtotal: payableEntryTotal(rem),
+          tax: 0,
+          freight: 0,
+          misc: 0,
+          createdBy: by,
+          createdAt: at,
+          log: [{ at, text: `Posted by a void of ${batch.reference || "a credit-only settlement"} — the remainder is not deleted (d30)` }],
+        }));
 
-      const invoices = prev.invoices.map((iv) => {
-        if (!touchedIds.has(iv.id)) return iv;
-        const updated = byId.get(iv.id)!;
-        if (invoiceBalance(updated, prev.paymentBatches) <= 0.005 && updated.status !== "Paid") {
-          return {
-            ...updated,
-            status: "Paid" as const,
-            paidAt: at,
-            paidBy: by,
-            log: [...updated.log, { at, text: `Balance settled — marked paid by ${by}` }],
-          };
-        }
-        return updated;
-      });
+      const touched = new Set(batch.targets.filter((tg) => tg.kind === "invoice").map((tg) => tg.id));
+      const invoices = prev.invoices.map((iv) =>
+        touched.has(iv.id)
+          ? { ...iv, log: [...iv.log, { at, text: `Settlement voided by ${by} — balance restored` }] }
+          : iv,
+      );
 
       return {
         ...prev,
+        batchVoids: [voidRow, ...prev.batchVoids],
+        payableEntries: [...prev.payableEntries, ...reversals],
         invoices,
-        claims: prev.claims.map((c) =>
-          c.id === claimId
-            ? {
-                ...c,
-                applied: true,
-                appliedAt: at,
-                appliedBy: by,
-                log: [
-                  ...c.log,
-                  {
-                    at,
-                    text: `${money(amount)} credit applied against ${touchedIds.size} Invoice${touchedIds.size === 1 ? "" : "s"} by ${by}`,
-                  },
-                ],
-              }
-            : c,
-        ),
       };
     });
-    return { applied: true };
-  };
 
-  const payableEntryFor = (id?: string) => s.payableEntries.find((e) => e.id === id);
+  const payableEntryFor: AppContextValue["payableEntryFor"] = (id) =>
+    id ? s.payableEntries.find((e) => e.id === id) : undefined;
 
-  // M-05 "Create new" — a manual ledger line, not sourced from Receiving or
-  // Supplier Claims and not tied to any InventoryItem. Defaults to
-  // Consignment instead of Invoice when the Supplier carries that flag, the
-  // same default Receiving's own intake would apply.
   const addPayableEntry: AppContextValue["addPayableEntry"] = (input) => {
     const supplier = s.suppliers.find((sup) => sup.id === input.supplierId);
     const type: PayableEntryType = input.type === "Invoice" && supplier?.consignment ? "Consignment" : input.type;
@@ -2786,8 +2799,8 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
       setInvoiceTotalOverride,
       finalizeInvoice,
       markInvoicePaid,
-      recordPayment,
-      applyClaimCredit,
+      settlePayables,
+      voidPaymentBatch,
       payableEntryFor,
       addPayableEntry,
       clearPayableEntries,

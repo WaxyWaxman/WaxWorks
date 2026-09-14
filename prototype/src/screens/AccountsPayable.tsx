@@ -1,855 +1,556 @@
 import { useMemo, useState } from "react";
-import { Modal } from "../components/Modal";
+import { PayableSlab, type PayableChip, type PayableSort } from "../components/PayableSlab";
+import { SettleTrack } from "../components/SettleTrack";
 import { CURRENT_USER } from "../data/seed";
-import {
-  PAYABLE_ENTRY_TYPES,
-  PAYMENT_METHODS,
-  type PayableEntryType,
-  type PayableTargetKind,
-  type PaymentMethod,
-} from "../data/types";
+import type { PayableEntryType, PaymentMethod } from "../data/types";
+import { creditOn, ledgerRows, moneyOn, settlementPlan, type LedgerRow } from "../lib/payables";
 import { money } from "../lib/money";
-import {
-  claimTotal,
-  invoiceBalance,
-  invoicePaidToDate,
-  invoiceTotal,
-  payableEntryBalance,
-  payableEntryContribution,
-  payableEntryIsPayable,
-  payableEntryPaidToDate,
-  payableEntrySignedAmount,
-  payableEntryTotal,
-  round2,
-} from "../lib/totals";
+import { readStored, writeStored } from "../lib/tillMemory";
+import { round2, supplierBalance } from "../lib/totals";
 import { useApp } from "../store/AppStore";
 
-const today = () => new Date().toLocaleDateString("en-CA");
+// Accounts payable (M-05), laid out as the till's three tracks — the same
+// frame as Sell, Find, Receive, Customers, Suppliers and On Order (E-05 d29
+// by way of E-02 d38, E-07 d17, M-01 d17, M-02 d31). Manager-only in its
+// entirety (d2), labelled by convention like every other manager surface;
+// nothing here is gated behind real auth, because E-01 is not built.
+//
+// The middle track is a real TABLE rather than On Order's row grid: six money
+// columns that have to line up is what this screen is for, and forcing .lrow
+// onto it would be symmetry bought at the cost of the job.
+//
+// d27 is the rule the whole screen turns on. There are no modes: the Manager
+// ticks whatever they are settling, credits attach to the debits beside them,
+// placeholders retire contributing nothing, and money covers the shortfall.
+// A selection holding no debit is a clearing (d15) — the same act, arriving at
+// the case where there is nothing for the credit to attach to.
 
-interface CombinedRow {
-  key: string;
-  kind: "invoice" | "claim" | "entry";
-  id: string;
-  type: string;
+interface SettleForm {
+  method: PaymentMethod;
   reference: string;
   date: string;
-  amount: number; // face value, unsigned
-  netted: number | null; // "Paid/netted" column — null renders as "—" (a Pending claim: nothing to net yet)
-  balance: number; // signed — negative means a credit in the store's favor
-  status: string;
-  payable: boolean; // eligible for the Record payment checkbox
-  clearable: boolean; // eligible for the Clear checkbox (manual entries only)
+  credit: Record<string, string>;
+  money: Record<string, string>;
 }
 
-// M-05 — Manager-only in its entirety (decision 2), labeled by convention
-// like every other "(Admin)"/"(Manager)" surface in this prototype; nothing
-// here is actually gated behind real auth (E-01 isn't built).
+const SLAB_KEY = "waxworks.payable.slab";
+
 export function AccountsPayable() {
   const app = useApp();
-  const [selectedSupplierId, setSelectedSupplierId] = useState<string | null>(null);
-  const [supplierQuery, setSupplierQuery] = useState("");
-  const [selectedKeys, setSelectedKeys] = useState<Set<string>>(new Set());
-  const [paying, setPaying] = useState(false);
-  const [clearing, setClearing] = useState(false);
+  const [slabOpen, setSlabOpen] = useState(() => readStored(SLAB_KEY, true));
+  const [scope, setScope] = useState<string>("");
+  const [query, setQuery] = useState("");
+  const [chip, setChip] = useState<PayableChip>("all");
+  const [sort, setSort] = useState<PayableSort>("name");
+  const [sel, setSel] = useState<Record<string, boolean>>({});
   const [creating, setCreating] = useState(false);
-  const [expandedBatchId, setExpandedBatchId] = useState<string | null>(null);
+  const [showSettled, setShowSettled] = useState(false);
+  const [openBatch, setOpenBatch] = useState<string | null>(null);
+  const [msg, setMsg] = useState<string | null>(null);
 
-  const balanceForSupplier = (supplierId: string) => {
-    const invoiceSum = app.invoices
-      .filter((iv) => iv.supplierId === supplierId && iv.status === "Finalized")
-      .reduce((sum, iv) => sum + invoiceBalance(iv, app.paymentBatches), 0);
-    const entrySum = app.payableEntries
-      .filter((e) => e.supplierId === supplierId)
-      .reduce((sum, e) => sum + payableEntryContribution(e, app.paymentBatches), 0);
-    return round2(invoiceSum + entrySum);
+  const saveSlab = (open: boolean) => {
+    setSlabOpen(open);
+    writeStored(SLAB_KEY, open);
   };
 
-  // Sorted by supplier (decision 1). Only a Supplier with any AP activity at
-  // all belongs in this shortlist; the lookup box below reaches any Supplier
-  // regardless, so one can always be found to start a Create new against.
-  const supplierActivity = useMemo(() => {
-    return app.suppliers
-      .filter(
-        (sup) =>
-          app.invoices.some((iv) => iv.supplierId === sup.id) ||
-          app.claims.some((c) => c.supplierId === sup.id) ||
-          app.payableEntries.some((e) => e.supplierId === sup.id),
-      )
-      .map((sup) => ({ supplier: sup, balance: balanceForSupplier(sup.id) }))
-      .sort((a, b) => a.supplier.name.localeCompare(b.supplier.name));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [app.suppliers, app.invoices, app.payableEntries, app.paymentBatches]);
+  const data = {
+    invoices: app.invoices,
+    payableEntries: app.payableEntries,
+    claims: app.claims,
+    paymentBatches: app.paymentBatches,
+    batchVoids: app.batchVoids,
+  };
 
-  const suppliersOwed = supplierActivity.filter((x) => x.balance > 0.005);
-  const suppliersSettled = supplierActivity.filter((x) => x.balance <= 0.005);
+  const balanceOf = (id: string) => supplierBalance(id, data);
 
-  const lookupQuery = supplierQuery.trim().toLowerCase();
-  const lookupResults = lookupQuery
-    ? app.suppliers.filter(
+  // Only a Supplier with any payables activity belongs in the shortlist; the
+  // lookup reaches any Supplier regardless, which is step 1's requirement and
+  // the only way to start a Create new against one you have never owed.
+  const active = useMemo(
+    () =>
+      app.suppliers.filter(
         (s) =>
-          s.name.toLowerCase().includes(lookupQuery) ||
-          s.shortName.toLowerCase().includes(lookupQuery) ||
-          (s.accountNumber ?? "").toLowerCase().includes(lookupQuery),
-      )
-    : [];
+          app.invoices.some((iv) => iv.supplierId === s.id && iv.status !== "Draft") ||
+          app.claims.some((c) => c.supplierId === s.id) ||
+          app.payableEntries.some((e) => e.supplierId === s.id) ||
+          app.paymentBatches.some((b) => b.supplierId === s.id),
+      ),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [app.suppliers, app.invoices, app.claims, app.payableEntries, app.paymentBatches],
+  );
 
-  const selId = selectedSupplierId ?? suppliersOwed[0]?.supplier.id ?? suppliersSettled[0]?.supplier.id ?? null;
-  const sel = app.suppliers.find((s) => s.id === selId) ?? null;
+  const selId = scope || active[0]?.id || app.suppliers[0]?.id || "";
+  const supplier = app.suppliers.find((s) => s.id === selId);
+  const isCards = scope === "cards";
 
-  const selectSupplier = (id: string) => {
-    setSelectedSupplierId(id);
-    setSelectedKeys(new Set());
-    setSupplierQuery("");
-  };
+  const rows = useMemo(
+    () => (supplier && !isCards ? ledgerRows(supplier.id, data, app.suppliers) : []),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [supplier?.id, isCards, app.invoices, app.payableEntries, app.claims, app.paymentBatches, app.batchVoids],
+  );
 
-  const combinedRows: CombinedRow[] = useMemo(() => {
-    if (!sel) return [];
-    const rows: CombinedRow[] = [];
+  const selectedRows = rows.filter((r) => sel[r.key]);
+  const plan = settlementPlan(selectedRows);
 
-    for (const iv of app.invoices.filter((iv) => iv.supplierId === sel.id && iv.status === "Finalized")) {
-      const balance = invoiceBalance(iv, app.paymentBatches);
-      rows.push({
-        key: `invoice:${iv.id}`,
-        kind: "invoice",
-        id: iv.id,
-        type: sel.consignment ? "Consignment" : "Invoice",
-        reference: iv.invoiceNumber,
-        date: iv.receivedDate,
-        amount: invoiceTotal(iv),
-        netted: invoicePaidToDate(iv, app.paymentBatches),
-        balance,
-        status: iv.status,
-        payable: balance > 0.005,
-        clearable: false,
-      });
-    }
-
-    for (const c of app.claims.filter(
-      (c) => c.supplierId === sel.id && (c.status === "Pending" || (c.status === "Credited" && !c.applied)),
-    )) {
-      const amount = claimTotal(c);
-      rows.push({
-        key: `claim:${c.id}`,
-        kind: "claim",
-        id: c.id,
-        type: c.status === "Credited" ? "Credit" : "Claim",
-        reference: c.claimNumber !== undefined ? `#${c.claimNumber}` : "Unsent",
-        date: c.createdAt.slice(0, 10),
-        amount,
-        netted: null,
-        balance: c.status === "Credited" ? -amount : 0,
-        status: c.status,
-        payable: false,
-        clearable: false,
-      });
-    }
-
-    for (const e of app.payableEntries.filter((e) => e.supplierId === sel.id && !e.clearedAt)) {
-      const payable = payableEntryIsPayable(e);
-      const balance = payable ? payableEntryBalance(e, app.paymentBatches) : payableEntrySignedAmount(e);
-      if (payable && balance <= 0.005) continue; // fully paid off — its PaymentBatch still shows it in history
-      rows.push({
-        key: `entry:${e.id}`,
-        kind: "entry",
-        id: e.id,
-        type: e.type,
-        reference: e.reference || "—",
-        date: e.date,
-        amount: payableEntryTotal(e),
-        netted: payable ? payableEntryPaidToDate(e, app.paymentBatches) : null,
-        balance,
-        status: payable ? "Open" : e.type === "Claim" ? "Open" : "Applied",
-        payable: payable && balance > 0.005,
-        clearable: true,
-      });
-    }
-
-    return rows.sort((a, b) => a.date.localeCompare(b.date));
-  }, [sel, app.invoices, app.claims, app.payableEntries, app.paymentBatches]);
-
-  const netBalance = sel ? balanceForSupplier(sel.id) : 0;
-
-  const toggleKey = (key: string) =>
-    setSelectedKeys((prev) => {
-      const next = new Set(prev);
-      if (next.has(key)) next.delete(key);
-      else next.add(key);
+  const pick = (row: LedgerRow) => {
+    if (row.band === "settled") return;
+    setCreating(false);
+    setSel((prev) => {
+      const next = { ...prev };
+      if (next[row.key]) delete next[row.key];
+      else next[row.key] = true;
       return next;
     });
-
-  const selectedRows = combinedRows.filter((r) => selectedKeys.has(r.key));
-  const payableSelected = selectedRows.filter((r) => r.payable);
-  const clearCandidate =
-    selectedRows.length >= 2 &&
-    selectedRows.every((r) => r.kind === "entry") &&
-    Math.abs(round2(selectedRows.reduce((sum, r) => sum + r.balance, 0))) <= 0.005;
-
-  const paymentBatchesForSupplier = sel
-    ? [...app.paymentBatches.filter((b) => b.supplierId === sel.id)].sort((a, b) =>
-        (b.createdAt || b.date).localeCompare(a.createdAt || a.date),
-      )
-    : [];
-
-  const giftCardTotal = round2(app.giftCards.reduce((sum, g) => sum + g.balance, 0));
-
-  const targetLabel = (t: { kind: PayableTargetKind; id: string }): string => {
-    if (t.kind === "invoice") {
-      const iv = app.invoiceFor(t.id);
-      return iv ? `Invoice ${iv.invoiceNumber}` : "Invoice (removed)";
-    }
-    const e = app.payableEntryFor(t.id);
-    return e ? `${e.type} — ${e.reference || "no reference"}` : "Entry (removed)";
   };
 
+  const goSupplier = (id: string) => {
+    setScope(id);
+    setSel({});
+    setCreating(false);
+    setOpenBatch(null);
+  };
+
+  const net = supplier && !isCards ? balanceOf(supplier.id) : 0;
+  const counted = rows.filter((r) => r.band === "counted");
+  const uncounted = rows.filter((r) => r.band === "uncounted");
+  const settled = rows.filter((r) => r.band === "settled");
+  const overdue = counted.filter((r) => r.overdueBy != null && r.overdueBy > 0 && r.balance > 0.005);
+
+  const giftTotal = round2(app.giftCards.reduce((n, g) => n + g.balance, 0));
+
+  const doSettle = () => {
+    if (!supplier) return;
+    app.settlePayables(
+      {
+        supplierId: supplier.id,
+        method: form.method,
+        reference: form.reference.trim(),
+        date: form.date,
+        debits: plan.debits.map((d) => ({
+          kind: d.kind === "invoice" ? ("invoice" as const) : ("entry" as const),
+          id: d.id,
+          credit: creditOn(form, d.key),
+          money: moneyOn(form, d.key, d.balance),
+        })),
+        credits: plan.credits.map((c) => ({ id: c.creditId!, amount: -c.balance, label: c.reference })),
+        placeholderIds: plan.holds.map((h) => h.id),
+      },
+      CURRENT_USER,
+    );
+    const closed = plan.debits.filter((d) => d.balance <= round2(creditOn(form, d.key) + moneyOn(form, d.key, d.balance)) + 0.005).length;
+    setMsg(
+      `${money(plan.debitTotal)} settled as one batch — ${money(plan.attach)} credit, ${money(plan.money)} money` +
+        (closed ? `, ${closed} now paid in full` : "") +
+        (plan.remainder > 0.005
+          ? `. ${money(plan.remainder)} of credit had nowhere to attach and came back as a remainder Credit (d25).`
+          : "."),
+    );
+    setSel({});
+  };
+
+  const doClear = () => {
+    const before = supplier ? balanceOf(supplier.id) : 0;
+    app.clearPayableEntries(
+      selectedRows.filter((r) => r.kind === "entry").map((r) => r.id),
+      CURRENT_USER,
+    );
+    const after = supplier ? balanceOf(supplier.id) : 0;
+    setMsg(
+      `${selectedRows.length} retired against each other. Balance unchanged at ${money(before)} — a credit already counted and stays counted (d15, d27)${
+        Math.abs(before - after) > 0.005 ? " — BUG" : ""
+      }.`,
+    );
+    setSel({});
+  };
+
+  const doVoid = (batchId: string) => {
+    if (!supplier) return;
+    const before = balanceOf(supplier.id);
+    app.voidPaymentBatch(batchId, CURRENT_USER);
+    setMsg(
+      `Settlement voided. Balance was ${money(before)} — nothing was deleted; where it emitted a remainder, a reversing Adjustment was appended beside it (d30).`,
+    );
+    setOpenBatch(null);
+  };
+
+  const [form, setForm] = useState<SettleForm>({
+    method: "Cheque",
+    reference: "",
+    date: new Date().toLocaleDateString("en-CA"),
+    credit: {} as Record<string, string>,
+    money: {} as Record<string, string>,
+  });
+
   return (
-    <div>
-      <div className="page-head">
-        <span className="flow-id">M-05</span>
-        <div>
-          <h1>Accounts payable</h1>
-          <p className="sub">
-            What the store owes, and settling it — outstanding Invoices, Pending/Credited Supplier
-            Claims, and manual ledger entries shown together per supplier, since what's owed is
-            the net of all of it (decision 3). A Credited claim's credit nets against the
-            supplier's whole balance, not one Invoice picked by hand (decision 11). Manager-only,
-            in its entirety (decision 2).
-          </p>
-        </div>
-      </div>
+    <div className={"ap-frame" + (slabOpen ? "" : " slab-shut")}>
+      <PayableSlab
+        open={slabOpen}
+        onOpenChange={saveSlab}
+        suppliers={app.suppliers}
+        active={active}
+        balanceOf={balanceOf}
+        data={data}
+        query={query}
+        onQueryChange={setQuery}
+        chip={chip}
+        onChipChange={setChip}
+        sort={sort}
+        onSortChange={setSort}
+        scope={isCards ? "cards" : selId}
+        onScope={goSupplier}
+        onCards={() => {
+          setScope("cards");
+          setSel({});
+          setCreating(false);
+        }}
+        giftTotal={giftTotal}
+        giftLive={app.giftCards.filter((g) => g.balance > 0).length}
+        onCreateNew={() => {
+          setSel({});
+          setCreating(true);
+        }}
+      />
 
-      <div className="grid cols-2">
-        <div className="card">
-          <div className="card-head">Suppliers</div>
-          <div className="card-body" style={{ paddingBottom: 0 }}>
-            <input
-              type="text"
-              value={supplierQuery}
-              onChange={(e) => setSupplierQuery(e.target.value)}
-              placeholder="Look up any supplier — name, short code, or account #…"
-            />
+      <section className="ap-main">
+        <div className="ap-main-head">
+          <div style={{ minWidth: 0 }}>
+            <h2>{isCards ? "Gift card liability" : supplier?.name ?? "—"}</h2>
+            <div className="row wrap" style={{ gap: "var(--sp-2)", marginTop: 6 }}>
+              {isCards ? (
+                <>
+                  <span className="badge ink">{money(giftTotal)} outstanding</span>
+                  <span className="badge">owed to customers</span>
+                </>
+              ) : (
+                <>
+                  <span className={"badge " + (net > 0.005 ? "ink" : net < -0.005 ? "ok" : "")}>
+                    {money(net)} {net > 0.005 ? "owed" : net < -0.005 ? "in our favour" : "— settled"}
+                  </span>
+                  <span className="badge mono">{supplier?.shortName}</span>
+                  {supplier?.paymentTerms && <span className="badge">{supplier.paymentTerms}</span>}
+                  {overdue.length > 0 && <span className="badge danger">{overdue.length} past due</span>}
+                  {supplier && supplier.currency !== "CAD" && <span className="badge warn">{supplier.currency}</span>}
+                  {selectedRows.length > 0 && <span className="badge accent">{selectedRows.length} selected</span>}
+                </>
+              )}
+            </div>
           </div>
+          <div className="ap-head-acts">
+            {selectedRows.length > 0 ? (
+              <button className="btn sm" onClick={() => setSel({})}>
+                Clear selection
+              </button>
+            ) : (
+              !isCards && (
+                <button className="btn sm" onClick={() => setCreating(true)}>
+                  ＋ Create new
+                </button>
+              )
+            )}
+          </div>
+        </div>
 
-          {lookupQuery ? (
-            <div className="card-body" style={{ padding: 0 }}>
-              <table className="data">
-                <tbody>
-                  {lookupResults.map((s) => (
-                    <tr
-                      key={s.id}
-                      style={{ cursor: "pointer" }}
-                      className={s.id === selId ? "selected" : ""}
-                      onClick={() => selectSupplier(s.id)}
-                    >
-                      <td>
-                        <strong>{s.name}</strong>
-                        <div className="xsmall muted">{s.shortName}</div>
-                      </td>
-                      <td className="num">{money(balanceForSupplier(s.id))}</td>
-                    </tr>
-                  ))}
-                  {lookupResults.length === 0 && (
-                    <tr>
-                      <td className="small muted">No supplier matches "{supplierQuery}".</td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
+        {msg && (
+          <div className="callout ok" style={{ margin: "var(--sp-3) var(--sp-4) 0" }}>
+            {msg}
+          </div>
+        )}
+
+        <div className="ap-list">
+          {isCards ? (
+            <GiftRegistry />
+          ) : rows.length === 0 ? (
+            <div className="slab-empty" style={{ paddingTop: "var(--sp-6)" }}>
+              Nothing outstanding for {supplier?.name}. Use <strong>Create new</strong> to log an Invoice, Claim,
+              Credit, Adjustment or Consignment by hand (d12).
             </div>
           ) : (
             <>
-              <div className="card-body" style={{ padding: 0 }}>
-                <table className="data">
-                  <tbody>
-                    {suppliersOwed.map(({ supplier, balance }) => (
-                      <tr
-                        key={supplier.id}
-                        style={{ cursor: "pointer" }}
-                        className={supplier.id === selId ? "selected" : ""}
-                        onClick={() => selectSupplier(supplier.id)}
-                      >
-                        <td>
-                          <strong>{supplier.name}</strong>
-                          <div className="xsmall muted">
-                            {supplier.shortName}
-                            {supplier.currency !== "CAD" && ` · ${supplier.currency}`}
-                          </div>
-                        </td>
-                        <td className="num">{money(balance)}</td>
-                      </tr>
-                    ))}
-                    {suppliersOwed.length === 0 && (
-                      <tr>
-                        <td className="small muted">
-                          Nothing outstanding. Look up a supplier above, or finalize an Invoice in
-                          Receiving.
-                        </td>
-                      </tr>
-                    )}
-                  </tbody>
-                </table>
-              </div>
-
-              {suppliersSettled.length > 0 && (
+              <Band
+                label="Counted — this is the balance"
+                say="These rows sum to the figure on the right."
+                total={round2(counted.reduce((n, r) => n + r.balance, 0))}
+                rows={counted}
+                sel={sel}
+                onPick={pick}
+                onOpenReceiving={(r) => setMsg(receivingMsg(r))}
+              />
+              {uncounted.length > 0 && (
+                <Band
+                  label="Not counted until cleared"
+                  say="A Claim placeholder moves nothing until it is cleared against a matching Credit (d14)."
+                  total={round2(uncounted.reduce((n, r) => n + r.face, 0))}
+                  rows={uncounted}
+                  sel={sel}
+                  onPick={pick}
+                  onOpenReceiving={(r) => setMsg(receivingMsg(r))}
+                  tone="uncounted"
+                />
+              )}
+              {settled.length > 0 && (
                 <>
-                  <div className="card-head">Settled — no balance owing</div>
-                  <div className="card-body" style={{ padding: 0 }}>
-                    <table className="data">
-                      <tbody>
-                        {suppliersSettled.map(({ supplier }) => (
-                          <tr
-                            key={supplier.id}
-                            style={{ cursor: "pointer" }}
-                            className={supplier.id === selId ? "selected" : ""}
-                            onClick={() => selectSupplier(supplier.id)}
-                          >
-                            <td className="muted">
-                              {supplier.name}
-                              <div className="xsmall muted">{supplier.shortName}</div>
-                            </td>
-                            <td className="num muted">$0.00</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
+                  <div className="ap-grp settled">
+                    <span className="lab">Settled — paid in full</span>
+                    <span className="say">
+                      Off the outstanding list (step 5), still readable, and naming what settled it (d21).
+                    </span>
+                    <button className="btn sm" onClick={() => setShowSettled((v) => !v)}>
+                      {showSettled ? "Hide" : "Show"} {settled.length}
+                    </button>
                   </div>
+                  {showSettled && (
+                    <LedgerTable
+                      rows={settled}
+                      sel={sel}
+                      onPick={pick}
+                      onOpenReceiving={(r) => setMsg(receivingMsg(r))}
+                      batchesFor={(r) =>
+                        app.paymentBatches.filter(
+                          (b) =>
+                            !app.batchVoids.some((v) => v.batchId === b.id) &&
+                            b.targets.some((t) => t.kind === r.kind && t.id === r.id),
+                        )
+                      }
+                    />
+                  )}
                 </>
               )}
             </>
           )}
         </div>
+      </section>
 
-        {sel && (
-          <div className="card">
-            <div className="card-head">
-              {sel.name}
-              <div className="btn-row">
-                <span className="badge">{money(netBalance)} owed</span>
-                <button className="btn sm" onClick={() => setCreating(true)}>
-                  + Create new
-                </button>
-              </div>
-            </div>
-            <div className="card-body stack">
-              {sel.currency !== "CAD" && (
-                <p className="xsmall muted">
-                  Invoiced in {sel.currency} — no store-currency equivalent shown; the configured
-                  exchange rate this depends on isn't modeled (M-06 isn't built).
-                </p>
-              )}
-              <table className="data">
-                <thead>
-                  <tr>
-                    <th />
-                    <th>Type</th>
-                    <th>Reference</th>
-                    <th>Date</th>
-                    <th className="num">Amount</th>
-                    <th className="num">Paid/netted</th>
-                    <th className="num">Balance</th>
-                    <th>Status</th>
-                    <th />
-                  </tr>
-                </thead>
-                <tbody>
-                  {combinedRows.map((r) => (
-                    <tr key={r.key}>
-                      <td>
-                        {(r.payable || r.clearable) && (
-                          <input type="checkbox" checked={selectedKeys.has(r.key)} onChange={() => toggleKey(r.key)} />
-                        )}
-                      </td>
-                      <td className="small">{r.type}</td>
-                      <td className="mono small">{r.reference}</td>
-                      <td className="small">{r.date}</td>
-                      <td className="num">{money(r.amount)}</td>
-                      <td className="num">{r.netted != null ? money(r.netted) : "—"}</td>
-                      <td className="num">
-                        <strong>{money(r.balance)}</strong>
-                      </td>
-                      <td className="small">{r.status}</td>
-                      <td>
-                        {r.kind === "claim" && r.type === "Credit" && (
-                          <button
-                            className="btn sm"
-                            disabled={!combinedRows.some((x) => x.kind === "invoice")}
-                            title={
-                              combinedRows.some((x) => x.kind === "invoice")
-                                ? `Nets against ${sel.name}'s whole balance — oldest Invoice first`
-                                : `No outstanding Invoice for ${sel.name} to apply it against yet`
-                            }
-                            onClick={() => app.applyClaimCredit(r.id, CURRENT_USER)}
-                          >
-                            Apply credit
-                          </button>
-                        )}
-                      </td>
-                    </tr>
-                  ))}
-                  {combinedRows.length === 0 && (
-                    <tr>
-                      <td colSpan={9} className="small muted">
-                        Nothing outstanding for {sel.name}. Use Create new to log an Invoice,
-                        Claim, Credit, Adjustment, or Consignment by hand.
-                      </td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
-
-              <div className="row" style={{ gap: "var(--sp-2)" }}>
-                <button className="btn primary" disabled={payableSelected.length === 0} onClick={() => setPaying(true)}>
-                  Record payment{payableSelected.length > 0 ? ` (${payableSelected.length})` : ""}
-                </button>
-                <button
-                  className="btn"
-                  disabled={!clearCandidate}
-                  onClick={() => setClearing(true)}
-                  title="Select 2+ ledger entries whose amounts sum to zero"
-                >
-                  Clear selected{selectedRows.length > 0 ? ` (${selectedRows.length})` : ""}
-                </button>
-              </div>
-
-              <div className="card">
-                <div className="card-head">Payment history</div>
-                <div className="card-body stack">
-                  {paymentBatchesForSupplier.length === 0 && (
-                    <p className="small muted">No payments recorded yet for {sel.name}.</p>
-                  )}
-                  {paymentBatchesForSupplier.map((b) => {
-                    const total = round2(b.targets.reduce((sum, t) => sum + t.amount, 0));
-                    const open = expandedBatchId === b.id;
-                    return (
-                      <div key={b.id} className="card">
-                        <div
-                          className="card-head"
-                          style={{ cursor: "pointer" }}
-                          onClick={() => setExpandedBatchId(open ? null : b.id)}
-                        >
-                          <span>
-                            {b.date} — {b.method} {b.reference}
-                          </span>
-                          <span className="badge ok">{money(total)}</span>
-                        </div>
-                        {open && (
-                          <div className="card-body xsmall muted stack">
-                            <div>Recorded by {b.recordedBy}</div>
-                            {b.targets.map((t, i) => (
-                              <div key={i}>
-                                {targetLabel(t)} — {money(t.amount)}
-                              </div>
-                            ))}
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
-      </div>
-
-      <div className="card" style={{ marginTop: "var(--sp-4)" }}>
-        <div className="card-head">
-          Gift card liability
-          <span className="badge">{money(giftCardTotal)} outstanding</span>
-        </div>
-        <div className="card-body" style={{ padding: 0 }}>
-          <p className="small muted" style={{ padding: "var(--sp-3)" }}>
-            Money owed to customers, registered here rather than buried in settings. Loading and
-            redeeming happen at the till (E-05) — this is the register, not the mechanism. Issue
-            date and last-used date aren't modeled by this prototype's GiftCard record yet.
-          </p>
-          <table className="data">
-            <thead>
-              <tr>
-                <th>Code</th>
-                <th>Customer</th>
-                <th className="num">Balance</th>
-              </tr>
-            </thead>
-            <tbody>
-              {app.giftCards.map((g) => (
-                <tr key={g.code}>
-                  <td className="mono small">{g.code}</td>
-                  <td className="small">{app.customerFor(g.customerId)?.name ?? "—"}</td>
-                  <td className="num">{money(g.balance)}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </div>
-
-      {paying && sel && (
-        <RecordPaymentModal
-          supplierId={sel.id}
-          supplierName={sel.name}
-          targets={payableSelected.map((r) => ({
-            kind: r.kind as PayableTargetKind,
-            id: r.id,
-            label: `${r.type} ${r.reference}`,
-            balance: r.balance,
-          }))}
-          onClose={() => setPaying(false)}
-          onDone={() => {
-            setPaying(false);
-            setSelectedKeys(new Set());
-          }}
-        />
-      )}
-      {clearing && sel && (
-        <ClearEntriesModal
-          supplierName={sel.name}
-          rows={selectedRows}
-          onClose={() => setClearing(false)}
-          onDone={() => {
-            setClearing(false);
-            setSelectedKeys(new Set());
-          }}
-        />
-      )}
-      {creating && sel && (
-        <CreatePayableEntryModal
-          supplierId={sel.id}
-          supplierName={sel.name}
-          supplierConsignment={!!sel.consignment}
-          onClose={() => setCreating(false)}
-          onDone={() => setCreating(false)}
-        />
-      )}
+      <SettleTrack
+        supplier={supplier}
+        isCards={isCards}
+        giftTotal={giftTotal}
+        net={net}
+        rows={rows}
+        plan={plan}
+        creating={creating}
+        form={form}
+        onForm={(patch) => setForm((f) => ({ ...f, ...patch }))}
+        onCancelCreate={() => setCreating(false)}
+        onCreate={(input) => {
+          if (!supplier) return;
+          app.addPayableEntry({ ...input, supplierId: supplier.id });
+          setCreating(false);
+          setMsg(
+            `${input.type} of ${money(round2(input.subtotal + input.tax + input.freight + input.misc))} added` +
+              (input.type === "Claim" ? " — not counted until cleared (d14)." : "."),
+          );
+        }}
+        onSettle={doSettle}
+        onClear={doClear}
+        onCancelSelection={() => setSel({})}
+        onCreateNew={() => {
+          setSel({});
+          setCreating(true);
+        }}
+        batches={app.paymentBatches.filter((b) => b.supplierId === selId)}
+        voids={app.batchVoids}
+        openBatch={openBatch}
+        onOpenBatch={(id) => setOpenBatch((cur) => (cur === id ? null : id))}
+        onVoid={doVoid}
+      />
     </div>
   );
 }
 
-function RecordPaymentModal({
-  supplierId,
-  supplierName,
-  targets,
-  onClose,
-  onDone,
-}: {
-  supplierId: string;
-  supplierName: string;
-  targets: { kind: PayableTargetKind; id: string; label: string; balance: number }[];
-  onClose: () => void;
-  onDone: () => void;
-}) {
-  const app = useApp();
-  const [method, setMethod] = useState<PaymentMethod>("Cheque");
-  const [reference, setReference] = useState("");
-  const [date, setDate] = useState(today());
-  const [amounts, setAmounts] = useState<Record<string, string>>(() =>
-    Object.fromEntries(targets.map((t) => [t.id, t.balance.toFixed(2)])),
-  );
+const receivingMsg = (r: LedgerRow) =>
+  r.isPaidInvoice
+    ? `Would open /receiving/${r.id} read-only — a paid Invoice is immutable (E-02 d40, A-33). Amendments are E-04.`
+    : `Would open /receiving/${r.id} — correctable until it is paid here (E-02 d4, d40, A-41).`;
 
-  const setAmount = (id: string, v: string) => setAmounts((prev) => ({ ...prev, [id]: v }));
-  const total = targets.reduce((sum, t) => sum + (Number(amounts[t.id]) || 0), 0);
-  const ready = reference.trim().length > 0 && total > 0;
-
-  return (
-    <Modal
-      title={`Record payment — ${supplierName}`}
-      onClose={onClose}
-      foot={
-        <>
-          <button className="btn ghost" onClick={onClose}>
-            Cancel
-          </button>
-          <button
-            className="btn primary"
-            disabled={!ready}
-            onClick={() => {
-              app.recordPayment(
-                targets.map((t) => ({ kind: t.kind, id: t.id })),
-                {
-                  supplierId,
-                  method,
-                  reference: reference.trim(),
-                  date,
-                  amounts: Object.fromEntries(targets.map((t) => [t.id, Number(amounts[t.id]) || 0])),
-                },
-                CURRENT_USER,
-              );
-              onDone();
-            }}
-          >
-            Record {money(round2(total))}
-          </button>
-        </>
-      }
-    >
-      <div className="stack">
-        <p className="small">
-          One payment, whatever mix of Invoices and ledger entries it covers — recorded as a
-          single batch you can reopen later to see exactly what it paid (decision 5).
-        </p>
-        <div className="grid cols-2">
-          <label className="field">
-            <span>Method</span>
-            <select value={method} onChange={(e) => setMethod(e.target.value as PaymentMethod)}>
-              {PAYMENT_METHODS.map((m) => (
-                <option key={m} value={m}>
-                  {m}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className="field">
-            <span>Reference</span>
-            <input
-              type="text"
-              value={reference}
-              onChange={(e) => setReference(e.target.value)}
-              placeholder="e.g. Cheque 101"
-              autoFocus
-            />
-          </label>
-          <label className="field">
-            <span>Date</span>
-            <input type="date" value={date} onChange={(e) => setDate(e.target.value)} />
-          </label>
-        </div>
-        <table className="data">
-          <thead>
-            <tr>
-              <th>Target</th>
-              <th className="num">Balance</th>
-              <th className="num">Amount</th>
-            </tr>
-          </thead>
-          <tbody>
-            {targets.map((t) => (
-              <tr key={t.id}>
-                <td className="small">{t.label}</td>
-                <td className="num small">{money(t.balance)}</td>
-                <td className="num">
-                  <input
-                    type="number"
-                    min={0}
-                    max={t.balance}
-                    step="0.01"
-                    style={{ width: "6rem" }}
-                    value={amounts[t.id] ?? ""}
-                    onChange={(e) => setAmount(t.id, e.target.value)}
-                  />
-                </td>
-              </tr>
-            ))}
-          </tbody>
-          <tfoot>
-            <tr>
-              <td colSpan={2} className="small muted">
-                Total
-              </td>
-              <td className="num">
-                <strong>{money(round2(total))}</strong>
-              </td>
-            </tr>
-          </tfoot>
-        </table>
-      </div>
-    </Modal>
-  );
-}
-
-function ClearEntriesModal({
-  supplierName,
+function Band({
+  label,
+  say,
+  total,
   rows,
-  onClose,
-  onDone,
+  sel,
+  onPick,
+  onOpenReceiving,
+  tone,
 }: {
-  supplierName: string;
-  rows: CombinedRow[];
-  onClose: () => void;
-  onDone: () => void;
+  label: string;
+  say: string;
+  total: number;
+  rows: LedgerRow[];
+  sel: Record<string, boolean>;
+  onPick: (r: LedgerRow) => void;
+  onOpenReceiving: (r: LedgerRow) => void;
+  tone?: "uncounted";
 }) {
-  const app = useApp();
-  const net = round2(rows.reduce((sum, r) => sum + r.balance, 0));
-
+  if (rows.length === 0) return null;
   return (
-    <Modal
-      title={`Clear entries — ${supplierName}`}
-      onClose={onClose}
-      foot={
-        <>
-          <button className="btn ghost" onClick={onClose}>
-            Cancel
-          </button>
-          <button
-            className="btn primary"
-            onClick={() => {
-              app.clearPayableEntries(
-                rows.map((r) => r.id),
-                CURRENT_USER,
-              );
-              onDone();
-            }}
-          >
-            Clear these {rows.length} entries
-          </button>
-        </>
-      }
-    >
-      <div className="stack">
-        <p className="small">
-          These net to {money(net)} — marking them Cleared against each other settles them
-          administratively, without any money moving or any Invoice balance changing. Both stay in
-          the ledger as history.
-        </p>
-        <table className="data">
-          <thead>
-            <tr>
-              <th>Type</th>
-              <th>Reference</th>
-              <th className="num">Amount</th>
+    <>
+      <div className={"ap-grp" + (tone ? " " + tone : "")}>
+        <span className="lab">{label}</span>
+        <span className="say">
+          {say} <span className="mono" style={{ fontWeight: 700 }}>{money(total)}</span>
+        </span>
+      </div>
+      <LedgerTable rows={rows} sel={sel} onPick={onPick} onOpenReceiving={onOpenReceiving} />
+    </>
+  );
+}
+
+function LedgerTable({
+  rows,
+  sel,
+  onPick,
+  onOpenReceiving,
+  batchesFor,
+}: {
+  rows: LedgerRow[];
+  sel: Record<string, boolean>;
+  onPick: (r: LedgerRow) => void;
+  onOpenReceiving: (r: LedgerRow) => void;
+  batchesFor?: (r: LedgerRow) => { id: string; date: string; method: string; reference: string }[];
+}) {
+  return (
+    <table className="ap-ledger">
+      <thead>
+        <tr>
+          <th />
+          <th>Type</th>
+          <th>Reference</th>
+          <th>Invoiced</th>
+          <th>Due</th>
+          <th className="num">Amount</th>
+          <th className="num">Paid / netted</th>
+          <th className="num">Balance</th>
+          <th>Status</th>
+        </tr>
+      </thead>
+      <tbody>
+        {rows.map((r) => {
+          const shown = r.band === "uncounted" ? r.face : r.balance;
+          const over = r.overdueBy != null && r.overdueBy > 0 && r.balance > 0.005;
+          const settled = r.band === "settled";
+          const batches = batchesFor?.(r) ?? [];
+          return (
+            <tr
+              key={r.key}
+              className={
+                "ap-row" +
+                (sel[r.key] ? " on" : "") +
+                (settled ? " settled" : "") +
+                (over ? " over" : "") +
+                (r.source === "remainder" ? " remainder" : "")
+              }
+              onClick={() => onPick(r)}
+            >
+              <td>
+                {!settled && (
+                  <input type="checkbox" checked={!!sel[r.key]} readOnly aria-label={`Select ${r.type} ${r.reference}`} />
+                )}
+              </td>
+              <td>
+                {r.type}
+                {r.sub && <span className="sub">{r.sub}</span>}
+              </td>
+              <td>
+                <span className="ref">{r.reference}</span>
+                {r.claimed != null && (
+                  <span className="sub warn">
+                    claimed {money(r.claimed)}, credited {money(r.amount)} — the memo governs (E-04 d20)
+                  </span>
+                )}
+              </td>
+              <td>
+                <span className="num">{r.termsFrom}</span>
+              </td>
+              <td>
+                {r.terms ? (
+                  r.dueDate ? (
+                    <>
+                      <span className={"due" + (over ? " over" : r.overdueBy != null && r.overdueBy > -7 ? " soon" : "")}>
+                        {r.dueDate}
+                      </span>
+                      <span className="terms">
+                        {r.terms} ·{" "}
+                        {r.overdueBy! > 0 ? `${r.overdueBy}d over` : r.overdueBy === 0 ? "due today" : `in ${-r.overdueBy!}d`}
+                      </span>
+                    </>
+                  ) : (
+                    <>
+                      <span className={"due" + (over ? " over" : " none")}>{r.terms}</span>
+                      {r.overdueBy != null && r.overdueBy > 0 && <span className="terms">{r.overdueBy}d unpaid</span>}
+                    </>
+                  )
+                ) : (
+                  <span className="due none">—</span>
+                )}
+              </td>
+              <td className="num">{money(r.amount)}</td>
+              <td className="num">{r.netted == null ? "—" : money(r.netted)}</td>
+              <td className="num">
+                <strong className={shown < -0.005 ? "cr" : Math.abs(shown) <= 0.005 ? "nil" : ""}>{money(shown)}</strong>
+              </td>
+              <td>
+                <span className="st">{r.status}</span>
+                {batches.map((b) => (
+                  <span className="paid-by" key={b.id}>
+                    {b.date} · {b.method} <span className="mono">{b.reference}</span>
+                  </span>
+                ))}
+                {r.canOpenInReceiving && (
+                  <button
+                    className={"rec-link" + (r.isPaidInvoice ? " locked" : "")}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onOpenReceiving(r);
+                    }}
+                  >
+                    {r.isPaidInvoice ? "View in Receiving" : "Open in Receiving"}
+                  </button>
+                )}
+              </td>
             </tr>
-          </thead>
-          <tbody>
-            {rows.map((r) => (
-              <tr key={r.key}>
-                <td className="small">{r.type}</td>
-                <td className="mono small">{r.reference}</td>
-                <td className="num">{money(r.balance)}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-    </Modal>
+          );
+        })}
+      </tbody>
+    </table>
   );
 }
 
-function CreatePayableEntryModal({
-  supplierId,
-  supplierName,
-  supplierConsignment,
-  onClose,
-  onDone,
-}: {
-  supplierId: string;
-  supplierName: string;
-  supplierConsignment: boolean;
-  onClose: () => void;
-  onDone: () => void;
-}) {
+function GiftRegistry() {
   const app = useApp();
-  const [type, setType] = useState<PayableEntryType>(supplierConsignment ? "Consignment" : "Invoice");
-  const [reference, setReference] = useState("");
-  const [date, setDate] = useState(today());
-  const [subtotal, setSubtotal] = useState("");
-  const [tax, setTax] = useState("0");
-  const [freight, setFreight] = useState("0");
-  const [misc, setMisc] = useState("0");
-  const [direction, setDirection] = useState<"increase" | "decrease">("increase");
-
-  const nums = {
-    subtotal: Number(subtotal) || 0,
-    tax: Number(tax) || 0,
-    freight: Number(freight) || 0,
-    misc: Number(misc) || 0,
-  };
-  const total = round2(nums.subtotal + nums.tax + nums.freight + nums.misc);
-  const ready = total > 0;
-
-  const signPreview =
-    type === "Credit" ? -total : type === "Claim" ? 0 : type === "Adjustment" ? (direction === "decrease" ? -total : total) : total;
-
   return (
-    <Modal
-      title={`Create new — ${supplierName}`}
-      onClose={onClose}
-      foot={
-        <>
-          <button className="btn ghost" onClick={onClose}>
-            Cancel
-          </button>
-          <button
-            className="btn primary"
-            disabled={!ready}
-            onClick={() => {
-              app.addPayableEntry({
-                supplierId,
-                type,
-                reference: reference.trim(),
-                date,
-                subtotal: nums.subtotal,
-                tax: nums.tax,
-                freight: nums.freight,
-                misc: nums.misc,
-                adjustmentDirection: type === "Adjustment" ? direction : undefined,
-              });
-              onDone();
-            }}
-          >
-            Add {type}
-          </button>
-        </>
-      }
-    >
-      <div className="stack">
-        <p className="small">
-          Not sourced from Receiving or Supplier Claims, and not tied to any InventoryItem — the
-          total is just recorded as owed; the stock (or claim, or credit) behind it is treated as
-          inventory unlinked to items for now.
-        </p>
-        <div className="grid cols-2">
-          <label className="field">
-            <span>Type</span>
-            <select value={type} onChange={(e) => setType(e.target.value as PayableEntryType)}>
-              {PAYABLE_ENTRY_TYPES.map((t) => (
-                <option key={t} value={t}>
-                  {t}
-                </option>
-              ))}
-            </select>
-          </label>
-          {type === "Adjustment" && (
-            <label className="field">
-              <span>Direction</span>
-              <select value={direction} onChange={(e) => setDirection(e.target.value as "increase" | "decrease")}>
-                <option value="increase">Increases what's owed</option>
-                <option value="decrease">Decreases what's owed</option>
-              </select>
-            </label>
-          )}
-          <label className="field" style={{ gridColumn: type === "Adjustment" ? undefined : "1 / -1" }}>
-            <span>Reference — a bill #, memo #, or note</span>
-            <input type="text" value={reference} onChange={(e) => setReference(e.target.value)} autoFocus />
-          </label>
-          <label className="field">
-            <span>Date</span>
-            <input type="date" value={date} onChange={(e) => setDate(e.target.value)} />
-          </label>
-        </div>
-        <div className="grid cols-2">
-          <label className="field">
-            <span>Subtotal</span>
-            <input type="number" min={0} step="0.01" value={subtotal} onChange={(e) => setSubtotal(e.target.value)} />
-          </label>
-          <label className="field">
-            <span>Tax</span>
-            <input type="number" min={0} step="0.01" value={tax} onChange={(e) => setTax(e.target.value)} />
-          </label>
-          <label className="field">
-            <span>Freight</span>
-            <input type="number" min={0} step="0.01" value={freight} onChange={(e) => setFreight(e.target.value)} />
-          </label>
-          <label className="field">
-            <span>Misc</span>
-            <input type="number" min={0} step="0.01" value={misc} onChange={(e) => setMisc(e.target.value)} />
-          </label>
-        </div>
-        <div className="callout">
-          Total {money(total)} —{" "}
-          {type === "Claim"
-            ? "informational only, doesn't affect the balance until Cleared against a matching Credit"
-            : `${signPreview < 0 ? "reduces" : "increases"} what's owed by ${money(Math.abs(signPreview))}`}
-          .
-        </div>
+    <>
+      <div className="ap-grp">
+        <span className="lab">The registry</span>
+        <span className="say">
+          Loading and redeeming happen at the till (E-05) — this is the register, not the mechanism.
+        </span>
       </div>
-    </Modal>
+      <table className="ap-ledger">
+        <thead>
+          <tr>
+            <th />
+            <th>Code</th>
+            <th>Customer</th>
+            <th className="num">Balance</th>
+            <th />
+          </tr>
+        </thead>
+        <tbody>
+          {app.giftCards.map((g) => (
+            <tr key={g.code} className="ap-row settled">
+              <td />
+              <td>
+                <span className="ref">{g.code}</span>
+              </td>
+              <td>{app.customerFor(g.customerId)?.name ?? <span className="muted">— not associated</span>}</td>
+              <td className="num">{money(g.balance)}</td>
+              <td>{g.balance > 0 ? "" : <span className="muted xsmall">not yet loaded</span>}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </>
   );
 }
+
+export type { PayableEntryType };

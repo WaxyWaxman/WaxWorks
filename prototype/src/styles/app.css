@@ -2173,3 +2173,284 @@ tr.recv-flagged > td:first-child { box-shadow: inset 3px 0 0 var(--c-warn); }
      twice, so the figure goes and the badge keeps the answer in words. */
   .op-row .q { display: none; }
 }
+
+
+/* ======================================================================
+   Accounts Payable — M-05, on the till's three tracks.
+
+   Shares .slab-head / .slab-search / .slab-chips / .slab-list / .slab-band /
+   .slab-strip / .filter-chip / .cust-standing / .wo-sec / .wo-caveat /
+   .wo-rule with Find, Receiving, Customers, Suppliers and On Order rather
+   than restating them — one slab, six errands.
+
+   The one structure NOT carried over is the row. On Order's .wo-row is a
+   record plus its metadata; a payables ledger is six money columns that have
+   to line up, so track 2 is a real table (.ap-ledger).
+   ====================================================================== */
+.ap-frame {
+  position: relative;
+  flex: 1; min-height: 0; min-width: 0;
+  display: grid; grid-template-columns: 320px minmax(0, 1fr) 344px;
+  background: var(--c-surface);
+}
+.ap-frame.slab-shut { grid-template-columns: 52px minmax(0, 1fr) 344px; }
+
+/* ---- Track 1: the payables slab ---- */
+.ap-slab {
+  border-right: 1px solid var(--c-border-strong); background: var(--c-surface-2);
+  display: flex; flex-direction: column; min-height: 0; min-width: 0;
+}
+.ap-slab-acts { flex: none; display: flex; gap: var(--sp-2); padding: var(--sp-3) var(--sp-3) 0; }
+.ap-slab-acts .btn { flex: 1; justify-content: center; }
+.ap-sortbar {
+  flex: none; display: flex; align-items: center; gap: var(--sp-2);
+  padding: 6px var(--sp-3); border-bottom: 1px solid var(--c-border-strong);
+}
+.ap-sortbar select {
+  font: inherit; font-size: var(--fs-sm); font-weight: 600; flex: 1; padding: 3px 6px;
+  border: 1px solid var(--c-border-strong); background: var(--c-surface); color: var(--c-ink);
+  border-radius: var(--radius-sm);
+}
+
+/* Deliberately NOT one number: M-05 requires a supplier's currency to carry
+   through, and the rate that would let these be added lives in M-06. */
+.ap-total {
+  flex: none; padding: var(--sp-3); border-bottom: 1px solid var(--c-border-strong);
+  background: var(--c-surface);
+}
+.ap-total .tot { display: flex; align-items: baseline; justify-content: space-between; gap: var(--sp-2); }
+.ap-total .v { font-family: var(--font-mono); font-size: var(--fs-lg); font-weight: 800; font-variant-numeric: tabular-nums; letter-spacing: -0.02em; }
+.ap-total .v.sub { font-size: var(--fs-base); font-weight: 700; color: var(--c-ink-soft); }
+.ap-total .hint { display: block; font-size: var(--fs-xs); color: var(--c-ink-faint); margin-top: 5px; }
+
+/* One Supplier — the same skeleton as On Order's .po-row and Suppliers' rows. */
+.sup-row {
+  display: grid; grid-template-columns: 44px minmax(0, 1fr) auto; gap: 1px var(--sp-3);
+  align-items: baseline; width: 100%; text-align: left; cursor: pointer;
+  padding: var(--sp-2) var(--sp-3); border: none; border-bottom: 1px solid var(--c-border);
+  border-left: 3px solid transparent; background: var(--c-surface); font: inherit; color: var(--c-ink);
+}
+.sup-row:hover { background: var(--c-surface-2); }
+.sup-row.on { border-left-color: var(--c-accent); box-shadow: inset 0 0 0 1px var(--c-ink); }
+.sup-row.dim { opacity: 0.5; }
+.sup-row .code {
+  grid-column: 1; grid-row: 1 / -1; align-self: center;
+  width: 44px; height: 34px; display: grid; place-items: center;
+  border: 1px solid var(--c-border); background: var(--c-surface-2);
+  font-family: var(--font-mono); font-size: var(--fs-xs); font-weight: 700; color: var(--c-ink-soft);
+}
+.sup-row.cons .code { border-style: dashed; border-color: var(--c-ink-faint); }
+.sup-row .t { grid-column: 2; grid-row: 1; font-size: var(--fs-sm); font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sup-row .m { grid-column: 2; grid-row: 2; font-size: var(--fs-xs); color: var(--c-ink-faint); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sup-row .n { grid-column: 3; grid-row: 1; font-family: var(--font-mono); font-size: var(--fs-sm); font-weight: 700; text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.sup-row .n.nil { color: var(--c-ink-faint); font-weight: 600; }
+.sup-row .n.late { color: var(--c-danger); }
+.sup-row .k {
+  grid-column: 3; grid-row: 2; text-align: right; white-space: nowrap;
+  font-family: var(--font-narrow); font-size: 9px; font-weight: 700;
+  letter-spacing: 0.05em; text-transform: uppercase; color: var(--c-ink-faint);
+}
+.sup-row .k.late { color: var(--c-danger); }
+.sup-row .k.good { color: var(--c-ok); }
+/* Gift cards are not a Supplier, and the row says so (d10). */
+.sup-row.gc { background: var(--c-surface-2); border-top: 2px solid var(--c-ink); }
+.sup-row.gc .code { border: 1px solid var(--c-ink); background: var(--c-ink); color: #fff; font-size: var(--fs-md); }
+
+.ap-dot { width: 9px; height: 9px; border-radius: 50%; flex: none; display: inline-block; vertical-align: middle; }
+.ap-dot.late { background: var(--c-danger); }
+.ap-dot.credit { background: var(--c-ok); }
+.ap-dot.claim { background: var(--c-warn); }
+.ap-dot.owed { background: var(--c-ink-soft); }
+.ap-dot.settled { background: var(--c-border-strong); }
+.po-tile.gc { border-color: var(--c-ink); background: var(--c-ink); color: #fff; font-size: var(--fs-md); }
+.filter-chip.good { border-color: var(--c-ok); color: var(--c-ok); }
+.filter-chip.good .count { color: var(--c-ok); }
+.filter-chip.good.on { background: var(--c-ok); border-color: var(--c-ok); color: #fff; }
+
+/* ---- Track 2: the combined ledger ---- */
+.ap-main { display: flex; flex-direction: column; min-width: 0; min-height: 0; background: var(--c-surface); }
+.ap-main-head {
+  flex: none; display: flex; align-items: flex-start; gap: var(--sp-3); flex-wrap: wrap;
+  padding: var(--sp-3) var(--sp-4); border-bottom: 2px solid var(--c-ink);
+}
+.ap-main-head h2 { margin: 0; font-size: 27px; letter-spacing: -0.025em; line-height: 1.1; }
+.ap-head-acts { margin-left: auto; display: flex; gap: var(--sp-2); align-items: center; }
+.ap-list { flex: 1; min-height: 0; overflow-y: auto; }
+
+/* d14 draws the only real line through this ledger: counted, or not counted
+   yet. There are NO aging bands — M-05 words that question as one about where
+   the report lives, and drawing the buckets would answer it by drawing it. */
+.ap-grp {
+  position: sticky; top: 0; z-index: 2;
+  display: flex; align-items: baseline; gap: var(--sp-2);
+  padding: var(--sp-2) var(--sp-4); background: var(--c-surface-2);
+  border-bottom: 1px solid var(--c-border-strong); border-top: 1px solid var(--c-border-strong);
+}
+.ap-grp:first-child { border-top: none; }
+.ap-grp.uncounted { background: var(--c-warn-soft); border-color: var(--c-warn); }
+.ap-grp.uncounted .lab { color: var(--c-warn); }
+.ap-grp.settled { background: var(--c-surface); }
+.ap-grp .say { font-size: var(--fs-xs); color: var(--c-ink-faint); font-weight: 600; }
+.ap-grp .btn.sm { margin-left: auto; }
+
+table.ap-ledger { width: 100%; border-collapse: collapse; }
+table.ap-ledger thead th {
+  position: sticky; top: 0; z-index: 1; background: var(--c-surface);
+  font-family: var(--font-narrow); font-weight: 700; font-size: 10px; letter-spacing: 0.08em;
+  text-transform: uppercase; color: var(--c-ink-faint); text-align: left;
+  padding: 6px var(--sp-2); border-bottom: 1px solid var(--c-ink); white-space: nowrap;
+}
+table.ap-ledger th.num, table.ap-ledger td.num { text-align: right; font-family: var(--font-mono); font-variant-numeric: tabular-nums; white-space: nowrap; }
+table.ap-ledger th:first-child, table.ap-ledger td:first-child { padding-left: var(--sp-4); width: 30px; }
+table.ap-ledger th:last-child, table.ap-ledger td:last-child { padding-right: var(--sp-4); }
+table.ap-ledger td {
+  padding: 7px var(--sp-2); border-bottom: 1px solid var(--c-border);
+  font-size: var(--fs-sm); vertical-align: middle; background: var(--c-surface);
+}
+tr.ap-row { cursor: pointer; }
+tr.ap-row:hover td { background: var(--c-surface-2); }
+tr.ap-row.on td { background: var(--c-accent-soft); }
+tr.ap-row.on td:first-child { box-shadow: inset 3px 0 0 var(--c-accent); }
+tr.ap-row.over td { background: var(--c-danger-soft); }
+tr.ap-row.remainder td { background: var(--c-ok-soft); }
+tr.ap-row.settled { cursor: default; }
+tr.ap-row.settled td { color: var(--c-ink-faint); background: var(--c-surface-2); }
+tr.ap-row.settled:hover td { background: var(--c-surface-2); }
+.ap-ledger .ref { font-family: var(--font-mono); font-size: var(--fs-sm); font-weight: 600; }
+.ap-ledger .sub { display: block; font-size: var(--fs-xs); color: var(--c-ink-faint); }
+.ap-ledger .sub.warn { color: var(--c-warn); }
+.ap-ledger .st { display: block; }
+.ap-ledger strong.cr { color: var(--c-ok); }
+.ap-ledger strong.nil { color: var(--c-ink-faint); }
+.ap-ledger .due { font-family: var(--font-mono); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.ap-ledger .due.over { color: var(--c-danger); font-weight: 700; }
+.ap-ledger .due.soon { color: var(--c-warn); }
+.ap-ledger .due.none { color: var(--c-ink-faint); }
+.ap-ledger .terms {
+  display: block; font-family: var(--font-narrow); font-size: 9px; font-weight: 700;
+  letter-spacing: 0.06em; text-transform: uppercase; color: var(--c-ink-faint);
+}
+.ap-ledger .paid-by { display: block; font-size: var(--fs-xs); color: var(--c-ink-faint); }
+/* E-02 d40 / A-33a / A-41 — correctable until paid, immutable after. The verb
+   changes rather than the link disappearing, because a paid Invoice is still
+   the document you want to look at. */
+.rec-link {
+  display: inline-block; font: inherit; font-size: var(--fs-xs); font-weight: 600; cursor: pointer; margin-top: 3px;
+  border: 1px solid var(--c-border-strong); background: var(--c-surface); color: var(--c-ink-soft);
+  padding: 1px 5px; border-radius: var(--radius-sm); white-space: nowrap;
+}
+.rec-link:hover { border-color: var(--c-ink); color: var(--c-ink); }
+.rec-link.locked { border-style: dashed; }
+
+/* ---- Track 3: the supplier, the selection, or the new entry ---- */
+.ap-track {
+  border-left: 1px solid var(--c-border-strong); background: var(--c-surface);
+  display: flex; flex-direction: column; min-height: 0;
+}
+.ap-waiting {
+  flex: none; padding: var(--sp-3) var(--sp-4);
+  border-bottom: 1px solid var(--c-border); background: var(--c-surface-2);
+}
+.ap-waiting.live { background: var(--c-ok-soft); box-shadow: inset 3px 0 0 var(--c-ok); }
+.ap-waiting .lab { display: flex; align-items: baseline; justify-content: space-between; gap: var(--sp-2); }
+.ap-w-name { font-size: var(--fs-md); font-weight: 700; margin-top: 2px; }
+.ap-w-name.none { font-size: var(--fs-sm); font-weight: 600; color: var(--c-ink-faint); }
+.ap-w-sub { font-size: var(--fs-xs); color: var(--c-ink-soft); margin-top: 1px; }
+.ap-track-head { flex: none; padding: var(--sp-3) var(--sp-4); }
+.ap-figure { font-family: var(--font-mono); font-size: 46px; font-weight: 800; line-height: 1; letter-spacing: -0.035em; font-variant-numeric: tabular-nums; }
+.ap-figure.cr { color: var(--c-ok); }
+.ap-figure.nil { color: var(--c-ink-faint); font-size: 26px; font-weight: 700; }
+.ap-figure-say { margin-top: 4px; font-size: var(--fs-sm); font-weight: 600; }
+.ap-figure-sub { margin-top: 2px; font-size: var(--fs-xs); color: var(--c-ink-faint); }
+.ap-track-mid {
+  flex: 1; min-height: 0; overflow-y: auto; padding: var(--sp-3) var(--sp-4);
+  display: flex; flex-direction: column; gap: var(--sp-4);
+}
+.ap-track-foot {
+  flex: none; border-top: 2px solid var(--c-ink); background: var(--c-surface);
+  padding: var(--sp-3) var(--sp-4); display: flex; flex-direction: column; gap: 6px;
+}
+.ap-track-foot .primary { justify-content: center; height: 56px; font-size: 18px; font-weight: 800; }
+.ap-track-foot .secondary { justify-content: center; height: 36px; }
+
+/* One row of the settlement being composed. Two inputs, because d18 lets the
+   Manager say where the credit lands and d19 makes it one act with the money. */
+.ap-tgt {
+  display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: var(--sp-2);
+  align-items: center; padding: 6px 0; border-bottom: 1px solid var(--c-border);
+}
+.ap-tgt.dual { grid-template-columns: minmax(0, 1fr) 78px; row-gap: 3px; align-items: start; }
+.ap-tgt.dual .l { grid-row: 1 / span 2; align-self: center; }
+.ap-tgt .l { min-width: 0; }
+.ap-tgt .l .t { font-size: var(--fs-sm); font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ap-tgt .l .m { font-size: var(--fs-xs); color: var(--c-ink-faint); }
+.ap-tgt .inp { display: flex; align-items: center; gap: 4px; justify-content: flex-end; }
+.ap-tgt .inp .tag {
+  font-family: var(--font-narrow); font-size: 8.5px; font-weight: 700; letter-spacing: 0.06em;
+  text-transform: uppercase; color: var(--c-ink-faint); width: 34px; text-align: right;
+}
+.ap-tgt .inp .tag.cr { color: var(--c-ok); }
+.ap-tgt input {
+  font-family: var(--font-mono); font-size: var(--fs-sm); font-weight: 700; width: 78px; text-align: right;
+  padding: 4px 6px; border: 1px solid var(--c-border-strong); border-radius: var(--radius-sm);
+  background: var(--c-surface); color: var(--c-ink);
+}
+.ap-tgt input.cr { border-color: var(--c-ok); background: var(--c-ok-soft); }
+.ap-tgt input.cr:disabled { border-color: var(--c-border); background: var(--c-surface-2); opacity: 0.5; }
+.ap-tgt .num.mono { font-family: var(--font-mono); font-weight: 700; font-variant-numeric: tabular-nums; }
+
+/* d23 — the credit total is fixed, so the bar tracks placement against a
+   target rather than a running balance in hand. */
+.ap-credit-bar {
+  border: 1px solid var(--c-ok); background: var(--c-ok-soft); padding: var(--sp-2) var(--sp-3);
+  border-radius: var(--radius-sm); display: flex; flex-direction: column; gap: 2px;
+}
+.ap-credit-bar.spent { border-color: var(--c-danger); background: var(--c-danger-soft); }
+.ap-credit-bar .ln { display: flex; justify-content: space-between; gap: var(--sp-2); font-size: var(--fs-sm); }
+.ap-credit-bar .ln .mono { font-family: var(--font-mono); font-weight: 700; }
+.ap-credit-bar .who { font-size: var(--fs-xs); color: var(--c-ink-soft); }
+
+.ap-split { display: flex; justify-content: space-between; gap: var(--sp-2); font-size: var(--fs-sm); padding: 3px 0; border-bottom: 1px solid var(--c-border); }
+.ap-split .mono { font-family: var(--font-mono); font-weight: 700; font-variant-numeric: tabular-nums; }
+.ap-split.tot { border-bottom: none; border-top: 1px solid var(--c-ink); padding-top: 5px; font-weight: 700; }
+
+.ap-blocked { border-left: 3px solid var(--c-danger); background: var(--c-danger-soft); padding: var(--sp-3); }
+.ap-blocked .t { font-size: var(--fs-sm); font-weight: 700; color: var(--c-danger); }
+.ap-blocked .m { font-size: var(--fs-xs); color: var(--c-ink-soft); margin-top: 3px; display: flex; flex-direction: column; gap: 4px; }
+.ap-zero-ok { border-left: 3px solid var(--c-ok); background: var(--c-ok-soft); padding: var(--sp-3); }
+.ap-zero-ok .t { font-size: var(--fs-sm); font-weight: 700; color: var(--c-ok); }
+.ap-zero-ok .m { font-size: var(--fs-xs); color: var(--c-ink-soft); margin-top: 3px; }
+
+/* d16 — one row per batch, opened to see its targets. d22/d30 — a voided one
+   is kept, struck, never removed. */
+.ap-batch { border: 1px solid var(--c-border); background: var(--c-surface-2); border-radius: var(--radius-sm); }
+.ap-batch + .ap-batch { margin-top: 5px; }
+.ap-batch.voided { border-style: dashed; opacity: 0.75; }
+.ap-batch.voided .ap-batch-head .l { text-decoration: line-through; }
+.ap-batch-head {
+  display: flex; align-items: baseline; justify-content: space-between; gap: var(--sp-2);
+  width: 100%; text-align: left; font: inherit; cursor: pointer; padding: 6px var(--sp-2);
+  background: none; border: none; color: var(--c-ink);
+}
+.ap-batch-head:hover { background: var(--c-surface); }
+.ap-batch-head .l { font-size: var(--fs-sm); font-weight: 600; }
+.ap-batch-body { padding: 0 var(--sp-2) var(--sp-2); border-top: 1px solid var(--c-border); }
+.ap-batch-body .tgt { display: flex; justify-content: space-between; gap: var(--sp-2); font-size: var(--fs-xs); padding: 3px 0; }
+.ap-batch-body .by { font-size: var(--fs-xs); color: var(--c-ink-faint); padding-top: 4px; }
+
+/* Under ~1180 the right track drops to a band underneath, as every other
+   screen does. 58dvh, and for the same reason: two fixed bands above a scroll. */
+@media (max-width: 1180px) {
+  .ap-frame { grid-template-columns: 320px minmax(0, 1fr); grid-template-rows: minmax(0, 1fr) auto; }
+  .ap-frame.slab-shut { grid-template-columns: 52px minmax(0, 1fr); }
+  .ap-slab { grid-row: 1 / -1; }
+  .ap-main { grid-column: 2; grid-row: 1; }
+  .ap-track {
+    grid-column: 2; grid-row: 2;
+    border-left: none; border-top: 2px solid var(--c-ink); max-height: 58dvh;
+  }
+  .ap-waiting, .ap-track-head { padding: var(--sp-2) var(--sp-4); }
+  .ap-figure { font-size: 34px; }
+  .ap-figure-sub { display: none; }
+  .ap-track-foot .primary { height: 48px; font-size: var(--fs-md); }
+}

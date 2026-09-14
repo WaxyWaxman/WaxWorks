@@ -4,6 +4,8 @@ import type {
   Invoice,
   PayableEntry,
   PaymentBatch,
+  PaymentBatchVoid,
+  PayableTargetKind,
   PendingOrderLine,
   Sale,
   SaleLine,
@@ -130,36 +132,66 @@ export const invoiceTotal = (iv: Invoice): number => {
 export const claimTotal = (c: SupplierClaim): number =>
   round2(c.lines.reduce((sum, l) => sum + l.cost * l.qty, 0));
 
-// Every PaymentBatch that put money toward one target ("invoice" + its id,
-// or "entry" + its id) — batches live at the top level (one row per
-// Record-Payment action, M-05 decision), not nested under what they paid.
-const targetPaidToDate = (kind: "invoice" | "entry", id: string, batches: PaymentBatch[]): number =>
+// ---- Accounts payable (M-05), as decided in d16-d30 and architecture A-36/A-37 ----
+//
+// The whole of this section exists so that ONE derivation answers "what is
+// owed", and both the Accounts Payable screen and the Supplier card read it.
+// Two copies of this arithmetic would drift, and the figure they disagreed
+// about would be money.
+
+/** A void is its own artifact (d22, A-33a), so a batch is live until one names it. */
+export const batchIsVoided = (b: PaymentBatch, voids: PaymentBatchVoid[]): boolean =>
+  voids.some((v) => v.batchId === b.id);
+
+export const liveBatches = (batches: PaymentBatch[], voids: PaymentBatchVoid[]): PaymentBatch[] =>
+  batches.filter((b) => !batchIsVoided(b, voids));
+
+/**
+ * Everything a target has received from live batches — BOTH kinds. d19 put
+ * money and claim credit in one batch, and d26 means an attached credit
+ * settles an Invoice exactly as money does.
+ */
+const settledAgainst = (
+  kind: PayableTargetKind,
+  id: string,
+  batches: PaymentBatch[],
+  voids: PaymentBatchVoid[],
+): number =>
   round2(
-    batches
+    liveBatches(batches, voids)
       .flatMap((b) => b.targets)
       .filter((t) => t.kind === kind && t.id === id)
       .reduce((sum, t) => sum + t.amount, 0),
   );
 
-// A claim's credit isn't earmarked to one Invoice (decision 11) — it's
-// distributed across several by AppStore's applyClaimCredit, which is why
-// creditsApplied lives on the Invoice rather than being looked up by claim.
-export const invoicePaidToDate = (iv: Invoice, batches: PaymentBatch[]): number =>
-  round2(targetPaidToDate("invoice", iv.id, batches) + iv.creditsApplied.reduce((sum, c) => sum + c.amount, 0));
+export const invoicePaidToDate = (iv: Invoice, batches: PaymentBatch[], voids: PaymentBatchVoid[]): number =>
+  settledAgainst("invoice", iv.id, batches, voids);
 
-export const invoiceBalance = (iv: Invoice, batches: PaymentBatch[]): number =>
-  round2(invoiceTotal(iv) - invoicePaidToDate(iv, batches));
+export const invoiceBalance = (iv: Invoice, batches: PaymentBatch[], voids: PaymentBatchVoid[]): number =>
+  round2(invoiceTotal(iv) - invoicePaidToDate(iv, batches, voids));
 
-// ---- Accounts payable — manual ledger entries (M-05 "Create new") ----
-// The unsigned face value: what the Manager typed in, always a plain
-// positive dollar figure regardless of which way the entry moves the balance.
+/**
+ * A-33b: `paid` is DERIVED, never stored. Finalized, balance at or below
+ * zero, and at least one settlement actually landed on it. The third clause
+ * is load-bearing — without it a zero-total Invoice would be born immutable
+ * and could never be corrected, which is the failure A-33 exists to prevent.
+ */
+export const invoiceIsPaid = (iv: Invoice, batches: PaymentBatch[], voids: PaymentBatchVoid[]): boolean =>
+  !!iv.finalizedAt &&
+  invoiceBalance(iv, batches, voids) <= 0.005 &&
+  invoicePaidToDate(iv, batches, voids) > 0.005;
+
+// ---- manual ledger entries (d12) and the artifacts that look like them ----
+
+/** The unsigned face value: what was typed, always positive. */
 export const payableEntryTotal = (e: PayableEntry): number => round2(e.subtotal + e.tax + e.freight + e.misc);
 
-// The signed amount an entry contributes: positive increases what's owed,
-// negative decreases it. Claim is deliberately excluded from balance sums
-// entirely (see sumOutstandingForSupplier) even though it carries a sign
-// here — a positive Claim is what lets it net to zero against the negative
-// Credit that eventually replaces it, for the manual "Clear" tool.
+/**
+ * d29 — a Claim placeholder carries TWO figures. This is the face one, which
+ * is what d15's sum-to-zero test reads. Its contribution to the balance is
+ * zero, and that is `payableEntryContribution` below. On one figure d14, d15
+ * and d27 cannot all hold.
+ */
 export function payableEntrySignedAmount(e: PayableEntry): number {
   const total = payableEntryTotal(e);
   switch (e.type) {
@@ -172,28 +204,94 @@ export function payableEntrySignedAmount(e: PayableEntry): number {
   }
 }
 
-// Only Invoice/Consignment/Adjustment-that-increases are ever "paid down" —
-// a Credit already fully lands the moment it's created, and a Claim doesn't
-// count toward anything until Cleared, so neither has a balance of its own.
+/** Only these are ever paid down. A Credit lands whole; a placeholder never lands. */
 export const payableEntryIsPayable = (e: PayableEntry): boolean =>
   e.type === "Invoice" || e.type === "Consignment" || (e.type === "Adjustment" && e.adjustmentDirection !== "decrease");
 
-export const payableEntryPaidToDate = (e: PayableEntry, batches: PaymentBatch[]): number =>
-  targetPaidToDate("entry", e.id, batches);
+export const payableEntryPaidToDate = (e: PayableEntry, batches: PaymentBatch[], voids: PaymentBatchVoid[]): number =>
+  settledAgainst("entry", e.id, batches, voids);
 
-export const payableEntryBalance = (e: PayableEntry, batches: PaymentBatch[]): number =>
-  round2(payableEntryTotal(e) - payableEntryPaidToDate(e, batches));
+export const payableEntryBalance = (e: PayableEntry, batches: PaymentBatch[], voids: PaymentBatchVoid[]): number =>
+  round2(payableEntryTotal(e) - payableEntryPaidToDate(e, batches, voids));
 
-// What the entry currently contributes to the Supplier's total balance —
-// 0 for a Claim (never counts, Cleared or not); the full signed amount for
-// a Credit or a decrease Adjustment (already fully in effect the moment
-// it's created, nothing to pay down); the remaining balance for a payable
-// type as it gets paid off. Being Cleared doesn't change this — clearing is
-// bookkeeping tidiness (see PayableEntry.clearedWith), not a reversal.
-export function payableEntryContribution(e: PayableEntry, batches: PaymentBatch[]): number {
+// ---- credits: what counts, and whether it has been spent ----
+
+/** E-04 d20 — the memo is the point of truth, not the claim. */
+export const claimCreditAmount = (c: SupplierClaim): number =>
+  round2(c.creditedAmount ?? claimTotal(c));
+
+/**
+ * d26 — the line is AGREED vs not yet agreed, not claim vs manual entry.
+ * A Credited claim counts; a Pending one and a Claim placeholder do not.
+ */
+export const claimIsAgreed = (c: SupplierClaim): boolean => c.status === "Credited";
+
+/**
+ * A-37 — consumed is DERIVED from the existence of a credit target naming
+ * this credit in a live batch. No `applied`, no `consumed_at`: d22's void
+ * un-consumes it by the absence of that row, with nothing to flip.
+ */
+export const creditIsConsumed = (
+  creditId: string,
+  batches: PaymentBatch[],
+  voids: PaymentBatchVoid[],
+): boolean =>
+  liveBatches(batches, voids).some((b) =>
+    b.targets.some((t) => t.settleKind === "credit" && t.creditId === creditId),
+  );
+
+/**
+ * What an entry contributes to the Supplier's balance right now.
+ * A Claim placeholder: nothing, ever (d14, d27).
+ * A Credit: its full negative value until it is CONSUMED — being *cleared*
+ * does not change this, because d15 says a cleared Credit stays counted.
+ */
+export function payableEntryContribution(
+  e: PayableEntry,
+  batches: PaymentBatch[],
+  voids: PaymentBatchVoid[],
+): number {
   if (e.type === "Claim") return 0;
-  if (payableEntryIsPayable(e)) return payableEntryBalance(e, batches);
-  return payableEntrySignedAmount(e);
+  if (payableEntryIsPayable(e)) return payableEntryBalance(e, batches, voids);
+  if (e.type === "Credit") return creditIsConsumed(e.id, batches, voids) ? 0 : payableEntrySignedAmount(e);
+  return payableEntrySignedAmount(e); // a decreasing Adjustment: lands whole, never attachable
+}
+
+export interface PayablesInput {
+  invoices: Invoice[];
+  payableEntries: PayableEntry[];
+  claims: SupplierClaim[];
+  paymentBatches: PaymentBatch[];
+  batchVoids: PaymentBatchVoid[];
+}
+
+/**
+ * A-36's four terms, and the ONE place they live. Every one earns its place:
+ * drop any and one of M-05's worked examples breaks.
+ *
+ * At the SUPPLIER level a credit reduces the balance whether it is attached
+ * or not, and attaching is a re-labelling — which is why d26 can say
+ * "applying a credit never moves the balance" and be arithmetically true.
+ * At the INVOICE level only an attached credit reduces that Invoice.
+ *
+ * May be negative (d25): the supplier owes the store. Nothing clamps it.
+ */
+export function supplierBalance(supplierId: string, input: PayablesInput): number {
+  const { invoices, payableEntries, claims, paymentBatches: b, batchVoids: v } = input;
+
+  const fromInvoices = invoices
+    .filter((iv) => iv.supplierId === supplierId && iv.status !== "Draft")
+    .reduce((sum, iv) => sum + invoiceBalance(iv, b, v), 0);
+
+  const fromEntries = payableEntries
+    .filter((e) => e.supplierId === supplierId)
+    .reduce((sum, e) => sum + payableEntryContribution(e, b, v), 0);
+
+  const fromClaims = claims
+    .filter((c) => c.supplierId === supplierId && claimIsAgreed(c) && !creditIsConsumed(c.id, b, v))
+    .reduce((sum, c) => sum - claimCreditAmount(c), 0);
+
+  return round2(fromInvoices + fromEntries + fromClaims);
 }
 
 // Every separator currently in use across a Supplier's still-pending lines

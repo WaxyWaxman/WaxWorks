@@ -77,6 +77,7 @@ export interface Supplier {
   discountPct: number; // % off retail this supplier offers — also drives suggested retail at receiving (E-02 decision 8)
   cancelByDays?: number; // default days from order-placed to auto-cancel if unfulfilled; unset = not supported by this supplier, overridable per order
   currency: string;
+  paymentTerms?: PaymentTerms; // M-01 d19 — the DEFAULT for Invoices received from them
   type: SupplierType;
   notes?: string;
   email: string;
@@ -254,12 +255,16 @@ export interface SupplierClaim {
   status: ClaimStatus;
   creditMemo?: string; // the supplier's own reference, captured on Credited
   lines: ClaimLine[];
-  // M-05 — once Credited, applying the credit settles that much of the
-  // Supplier's overall balance without money moving; it isn't earmarked to
-  // one Invoice (decision 11) and is only ever applied once, in full.
-  applied?: boolean;
-  appliedAt?: string;
-  appliedBy?: string;
+  // E-04 d20 — the supplier's credit memo is the point of truth. What they
+  // GRANT may differ from what was claimed: a few dollars deducted for the
+  // cost of the return is routine. `creditedAmount` is the memo's figure and
+  // is what M-05 d26 counts, d27 attaches and d28 consumes; the claim's own
+  // total stays readable as what was asked for. Absent = they granted it all.
+  creditedAmount?: number;
+  // NOT stored: whether the credit has been consumed. Architecture A-37
+  // derives it from the presence of a live credit target naming this claim,
+  // for the reason A-33b refuses a stored `paid` — a flag has a release path
+  // (d22's void) that someone has to remember, and a derivation has none.
   createdBy: string;
   createdAt: string;
   log: { at: string; text: string }[];
@@ -279,7 +284,11 @@ export interface SupplierClaim {
 // already minted, and a newly added line mints its own immediately, the
 // same as finalizing always has.
 export type IntakeMode = "New" | "Second-hand";
-export type InvoiceStatus = "Draft" | "Finalized" | "Paid";
+// A-33b: **paid is DERIVED, never stored.** The stored states are the two a
+// person sets. Ask `invoiceIsPaid()` (lib/totals) whether it is paid — that
+// function is A-41's single seam, and every write path against a finalized
+// Invoice calls it and refuses while it is true.
+export type InvoiceStatus = "Draft" | "Finalized";
 
 export interface InvoiceLine {
   id: string;
@@ -361,18 +370,50 @@ export interface PendingOrderLine {
 export type OrderLineStatus = "Shipped" | "Backordered" | "Cancelled";
 export const ORDER_LINE_STATUSES: OrderLineStatus[] = ["Shipped", "Backordered", "Cancelled"];
 
+// ---- Payment terms (M-01 d19, E-02 d45) ----
+// When a bill falls due. NOT Supplier.cancelByDays, which is an ORDERING
+// figure — days from order-placed to auto-cancel. Before these, nothing in
+// the system recorded when money was owed, which is why M-05's aging question
+// could not be answered: the field was missing, not the report.
+export type PaymentTerms = "Net 15" | "Net 30" | "Net 45" | "Net 60" | "On receipt" | "COD" | "Prepaid";
+export const PAYMENT_TERMS: PaymentTerms[] = ["Net 15", "Net 30", "Net 45", "Net 60", "On receipt", "COD", "Prepaid"];
+/** Days from the INVOICE date (E-02 d45). null = produces no due date at all. */
+export const TERM_DAYS: Record<PaymentTerms, number | null> = {
+  "Net 15": 15, "Net 30": 30, "Net 45": 45, "Net 60": 60,
+  "On receipt": 0, COD: null, Prepaid: null,
+};
+
 // ---- Accounts payable (M-05) ----
 export type PaymentMethod = "Cheque" | "Credit Card" | "EFT" | "Cash";
 export const PAYMENT_METHODS: PaymentMethod[] = ["Cheque", "Credit Card", "EFT", "Cash"];
 
-// One thing a PaymentBatch's money went against — a real Invoice (E-02) or a
+// One thing a settlement went against — a real Invoice (E-02) or a
 // manually-entered PayableEntry. "kind" plus "id" together address it, since
 // the two live in different arrays.
+//
+// `settleKind` is M-05 d19: one batch carries both money and claim credit,
+// and a target records which it was. A credit target also names the credit
+// that funded it, because d22's void has to put it back exactly and a pool
+// with no provenance cannot be reversed.
 export type PayableTargetKind = "invoice" | "entry";
+export type SettleKind = "money" | "credit";
 export interface PaymentTarget {
   kind: PayableTargetKind;
   id: string;
   amount: number;
+  settleKind: SettleKind;
+  creditId?: string; // set iff settleKind === "credit" — the claim or entry it came from
+}
+
+// M-05 d22 / architecture A-33a: a void is a NEW ARTIFACT appended against
+// the batch, never a column on it and never a deletion. Modelled as its own
+// array so "never edited" is structural rather than a convention someone
+// remembers. One per batch — a second is impossible by construction.
+export interface PaymentBatchVoid {
+  id: string;
+  batchId: string;
+  voidedAt: string;
+  voidedBy: string;
 }
 
 // One Record-Payment action — paying several Invoices/Entries with one
@@ -391,19 +432,6 @@ export interface PaymentBatch {
   targets: PaymentTarget[];
 }
 
-// One slice of a Credited claim's amount landing on this Invoice. A claim's
-// credit isn't earmarked to one Invoice the Manager picks — applying it nets
-// against the whole Supplier balance, auto-distributed across their
-// outstanding Invoices (oldest received first), which is why one claim can
-// produce several of these, one per Invoice it touched (M-05 decision 11).
-export interface AppliedCredit {
-  id: string;
-  claimId: string;
-  amount: number;
-  appliedAt: string;
-  appliedBy: string;
-}
-
 export interface Invoice {
   id: string;
   supplierId: string;
@@ -411,6 +439,9 @@ export interface Invoice {
   intakeMode: IntakeMode;
   invoiceDate: string;
   receivedDate: string;
+  // E-02 d45 — defaulted from the Supplier, overridable here, because the
+  // paperwork in hand is the agreement. Net-N runs from the INVOICE date.
+  paymentTerms?: PaymentTerms;
   statedSubtotal: number; // from the invoice photo/manual entry — decision 15
   tax: number;
   freight: number;
@@ -418,7 +449,6 @@ export interface Invoice {
   totalOverride?: number; // reconciling to the paper total — beyond ±2% raises a ReviewFlag
   status: InvoiceStatus;
   lines: InvoiceLine[];
-  creditsApplied: AppliedCredit[]; // balance is derived from this plus matching PaymentBatch targets, never edited directly
   createdBy: string;
   createdAt: string;
   finalizedAt?: string;
@@ -445,10 +475,23 @@ export interface Invoice {
 export type PayableEntryType = "Invoice" | "Claim" | "Credit" | "Adjustment" | "Consignment";
 export const PAYABLE_ENTRY_TYPES: PayableEntryType[] = ["Invoice", "Claim", "Credit", "Adjustment", "Consignment"];
 
+// Where an entry came from. `manual` is decision 12's Create-new. The other
+// two are NOT manual ledger entries — d12's defining characteristic is that a
+// manual entry is not sourced from Receiving or Supplier Claims, and these are
+// sourced from a settlement and a void respectively:
+//   remainder — d25: the part of a credit that could not attach to anything.
+//   reversal  — d30: what a void appends against a remainder, instead of
+//               deleting it. Equal and opposite, so the pair nets to zero.
+export type PayableEntrySource = "manual" | "remainder" | "reversal";
+
 export interface PayableEntry {
   id: string;
   supplierId: string;
   type: PayableEntryType;
+  source?: PayableEntrySource;   // absent = "manual"
+  fromCreditId?: string;         // remainder: the credit it is left over from
+  fromVoidId?: string;           // reversal: the void that posted it
+  reversalOfId?: string;         // reversal: the remainder it cancels
   reference: string; // free text — a bill #, a memo #, a note on what the adjustment is for
   date: string;
   subtotal: number;

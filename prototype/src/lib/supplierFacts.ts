@@ -3,13 +3,14 @@ import type {
   InventoryItem,
   PayableEntry,
   PaymentBatch,
+  PaymentBatchVoid,
   PendingOrderLine,
   RecordEntry,
   Sale,
   Supplier,
   SupplierClaim,
 } from "../data/types";
-import { daysAgo, invoiceBalance, payableEntryContribution, round2 } from "./totals";
+import { daysAgo, round2, supplierBalance } from "./totals";
 
 // M-01 d14 — everything the ledger track shows, derived in one place so the
 // slab row, the figure and the caveat line can never disagree about what a
@@ -86,6 +87,7 @@ export interface FactsInput {
   invoices: Invoice[];
   payableEntries: PayableEntry[];
   paymentBatches: PaymentBatch[];
+  batchVoids: PaymentBatchVoid[];
   claims: SupplierClaim[];
   pendingOrders: PendingOrderLine[];
   inventory: InventoryItem[];
@@ -107,16 +109,20 @@ export function invoiceCogs(iv: Invoice): number {
 }
 
 export function supplierApBalance(
-  supplierId: string,
-  input: Pick<FactsInput, "invoices" | "payableEntries" | "paymentBatches">,
+  id: string,
+  input: Pick<FactsInput, "invoices" | "payableEntries" | "claims" | "paymentBatches" | "batchVoids">,
 ): number {
-  const invoices = input.invoices
-    .filter((iv) => iv.supplierId === supplierId && iv.status === "Finalized")
-    .reduce((sum, iv) => sum + invoiceBalance(iv, input.paymentBatches), 0);
-  const entries = input.payableEntries
-    .filter((e) => e.supplierId === supplierId)
-    .reduce((sum, e) => sum + payableEntryContribution(e, input.paymentBatches), 0);
-  return round2(invoices + entries);
+  // ONE derivation, shared with Accounts Payable (architecture A-36). Two
+  // copies of this arithmetic would drift, and the figure they disagreed
+  // about would be money. Includes agreed-but-unconsumed credits (d26), so
+  // the Supplier card can read negative when they owe the store (d25).
+  return supplierBalance(id, {
+    invoices: input.invoices,
+    payableEntries: input.payableEntries,
+    claims: input.claims,
+    paymentBatches: input.paymentBatches,
+    batchVoids: input.batchVoids,
+  });
 }
 
 export function supplierFacts(supplier: Supplier, input: FactsInput): SupplierFacts {

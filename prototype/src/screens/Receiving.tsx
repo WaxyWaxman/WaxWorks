@@ -20,7 +20,7 @@ import { readStored, writeStored } from "../lib/tillMemory";
 import { money, roundUpShelf } from "../lib/money";
 import { countField, figureField, integerOnly, numericOnly } from "../lib/fields";
 import { outstandingQty } from "../lib/orderLines";
-import { round2 } from "../lib/totals";
+import { invoiceIsPaid, round2 } from "../lib/totals";
 import { useApp } from "../store/AppStore";
 
 // E-02 Receiving, on the till's three-track frame (d38): the worklist slab you
@@ -431,7 +431,8 @@ function InvoiceEditor({
   // Finalize is about stock, not paperwork — it mints sellable InventoryItems
   // but leaves the Invoice open for correction. Only Paid actually locks it
   // (d40), which is why the scan slab survives Finalized and goes at Paid.
-  const locked = invoice.status === "Paid";
+  // A-41 — ask invoiceIsPaid(), never a stored status (A-33b).
+  const locked = invoiceIsPaid(invoice, app.paymentBatches, app.batchVoids);
 
   const derivedSubtotal = round2(invoice.lines.reduce((sum, l) => sum + l.cost * l.qty, 0));
   const mismatch = Math.abs(derivedSubtotal - invoice.statedSubtotal) > 0.01;

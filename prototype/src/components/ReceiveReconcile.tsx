@@ -1,7 +1,8 @@
 import type { Invoice, Supplier } from "../data/types";
 import { figureField, numericOnly } from "../lib/fields";
 import { money } from "../lib/money";
-import { round2 } from "../lib/totals";
+import { invoiceIsPaid, round2 } from "../lib/totals";
+import { useApp } from "../store/AppStore";
 
 // Track 3 (E-02 d38) — the till's money track doing the receiving job.
 //
@@ -57,7 +58,10 @@ export function ReceiveReconcile({
 }) {
   // Paid is the only state that locks (d40). Finalize makes stock sellable;
   // it does not close the paperwork.
-  const locked = invoice.status === "Paid";
+  // A-41 — the write path asks the seam, not a stored flag. A-33b makes paid
+  // derived, so this releases on its own if the settlement is ever voided.
+  const ap = useApp();
+  const locked = invoiceIsPaid(invoice, ap.paymentBatches, ap.batchVoids);
   const copies = invoice.lines.reduce((n, l) => n + l.qty, 0);
   const statedDelta = round2(derivedSubtotal - invoice.statedSubtotal);
 
