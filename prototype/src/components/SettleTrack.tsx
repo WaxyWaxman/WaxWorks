@@ -30,6 +30,7 @@ export function SettleTrack({
   plan,
   creating,
   form,
+  expectedMethod,
   onForm,
   onCancelCreate,
   onCreate,
@@ -50,6 +51,8 @@ export function SettleTrack({
   rows: LedgerRow[];
   plan: SettlementPlan;
   creating: boolean;
+  /** M-05 d34 — what the ticked Invoices expected, or undefined if they disagree. */
+  expectedMethod?: PaymentMethod;
   form: { method: PaymentMethod; reference: string; date: string; credit: Record<string, string>; money: Record<string, string> };
   onForm: (patch: Partial<{ method: PaymentMethod; reference: string; date: string; credit: Record<string, string>; money: Record<string, string> }>) => void;
   onCancelCreate: () => void;
@@ -82,6 +85,7 @@ export function SettleTrack({
         supplier={supplier}
         plan={plan}
         form={form}
+        expectedMethod={expectedMethod}
         onForm={onForm}
         onSettle={onSettle}
         onClear={onClear}
@@ -325,6 +329,7 @@ function Selection({
   supplier,
   plan,
   form,
+  expectedMethod,
   onForm,
   onSettle,
   onClear,
@@ -333,6 +338,7 @@ function Selection({
   supplier: Supplier;
   plan: SettlementPlan;
   form: { method: PaymentMethod; reference: string; date: string; credit: Record<string, string>; money: Record<string, string> };
+  expectedMethod?: PaymentMethod;
   onForm: (patch: Partial<typeof form>) => void;
   onSettle: () => void;
   onClear: () => void;
@@ -566,7 +572,10 @@ function Selection({
           <div className="grid cols-2">
             <label className="field">
               <span>Method</span>
-              <select value={form.method} onChange={(e) => onForm({ method: e.target.value as PaymentMethod })}>
+              <select
+                value={form.method}
+                onChange={(e) => onForm({ method: e.target.value as PaymentMethod })}
+              >
                 {PAYMENT_METHODS.map((m) => (
                   <option key={m}>{m}</option>
                 ))}
@@ -586,6 +595,26 @@ function Selection({
               onChange={(e) => onForm({ reference: e.target.value })}
             />
           </label>
+          {expectedMethod ? (
+            <div className="wo-caveat">
+              {expectedMethod === form.method ? (
+                <>
+                  What was ticked expected <strong>{expectedMethod}</strong> (E-02 d47), and that is what this records.
+                </>
+              ) : (
+                <>
+                  What was ticked expected <strong>{expectedMethod}</strong> (E-02 d47) — this records{" "}
+                  <strong>{form.method}</strong>, which is right if that is what you actually did. The batch records
+                  the event, never the expectation (d34).
+                </>
+              )}
+            </div>
+          ) : plan.debits.length > 1 ? (
+            <div className="wo-caveat">
+              What you ticked does not agree on a method, so nothing is offered — guessing whose habit governs a mixed
+              run is the kind of quiet inference d18 retired (d34).
+            </div>
+          ) : null}
           <div className="wo-caveat">
             Free text, on purpose (d5). Required only where money actually moves (d19). Recorded by R. Duval.
           </div>

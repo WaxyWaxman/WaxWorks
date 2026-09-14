@@ -4,11 +4,12 @@ import type {
   PayableEntrySource,
   PaymentBatch,
   PaymentBatchVoid,
+  PaymentMethod,
   PaymentTerms,
   Supplier,
   SupplierClaim,
 } from "../data/types";
-import { TERM_DAYS } from "../data/types";
+import { TERM_RULE } from "../data/types";
 import {
   claimCreditAmount,
   claimIsAgreed,
@@ -75,6 +76,8 @@ export interface LedgerRow {
   overdueBy?: number;
   /** E-04 d20 — what was claimed, when the memo granted less. */
   claimed?: number;
+  /** E-02 d47 — how this one was EXPECTED to be paid. M-05 d34 pre-fills from it. */
+  method?: PaymentMethod;
   canOpenInReceiving?: boolean;
   isPaidInvoice?: boolean;
 }
@@ -94,6 +97,13 @@ const addDays = (iso: string, n: number): string => {
   return `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, "0")}-${String(dt.getDate()).padStart(2, "0")}`;
 };
 
+/** M-01 d20 — the last day of the month the invoice is dated in. */
+const endOfMonth = (iso: string): string => {
+  const [y, m] = iso.split("-").map(Number);
+  const last = new Date(y, m, 0).getDate(); // day 0 of the next month
+  return `${y}-${String(m).padStart(2, "0")}-${String(last).padStart(2, "0")}`;
+};
+
 const daysBetween = (iso: string, today: Date): number => {
   const [y, m, d] = iso.split("-").map(Number);
   return Math.round((today.getTime() - new Date(y, m - 1, d).getTime()) / 86400000);
@@ -110,12 +120,12 @@ export function dueFor(
   today: Date,
 ): { terms?: PaymentTerms; dueDate?: string; overdueBy?: number } {
   if (!terms) return {};
-  const days = TERM_DAYS[terms];
-  if (days == null) {
+  const rule = TERM_RULE[terms];
+  if (rule.kind === "none") {
     // COD / Prepaid: no due date. Still worth knowing how long it has sat.
     return { terms, overdueBy: daysBetween(termsFrom, today) };
   }
-  const dueDate = addDays(termsFrom, days);
+  const dueDate = rule.kind === "eom" ? endOfMonth(termsFrom) : addDays(termsFrom, rule.days);
   return { terms, dueDate, overdueBy: daysBetween(dueDate, today) };
 }
 
@@ -150,6 +160,7 @@ export function ledgerRows(
       role: "debit",
       canOpenInReceiving: true,
       isPaidInvoice: paid,
+      method: iv.paymentMethod ?? supplier?.defaultPaymentMethod,
       ...dueFor(terms, iv.invoiceDate, today),
     });
   }
@@ -309,6 +320,18 @@ export function autoPlacement(plan: SettlementPlan): Record<string, number> {
     left = Math.round((left - take) * 100) / 100;
   }
   return out;
+}
+
+/**
+ * M-05 d34 — the method a settlement starts on. Offered only where every ticked
+ * debit expects the same one; where they disagree, or nothing carries one, this
+ * returns undefined and the field opens empty rather than picking a winner.
+ * Guessing whose habit should govern a mixed cheque run is the quiet inference
+ * d18 retired elsewhere in this flow.
+ */
+export function suggestedMethod(plan: SettlementPlan): PaymentMethod | undefined {
+  const seen = new Set(plan.debits.map((d) => d.method).filter(Boolean) as PaymentMethod[]);
+  return seen.size === 1 ? [...seen][0] : undefined;
 }
 
 /** d15's test sums FACE values (d29), which is why a placeholder has two figures. */

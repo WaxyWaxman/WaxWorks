@@ -1,6 +1,8 @@
-import type { Invoice, Supplier } from "../data/types";
+import { PAYMENT_METHODS, PAYMENT_TERMS } from "../data/types";
+import type { Invoice, PaymentMethod, PaymentTerms, Supplier } from "../data/types";
 import { figureField, numericOnly } from "../lib/fields";
 import { money } from "../lib/money";
+import { dueFor } from "../lib/payables";
 import { invoiceIsPaid, round2 } from "../lib/totals";
 import { useApp } from "../store/AppStore";
 
@@ -39,7 +41,9 @@ export function ReceiveReconcile({
 }: {
   invoice: Invoice;
   supplier: Supplier;
-  onPatchTotals: (patch: Partial<Pick<Invoice, "statedSubtotal" | "tax" | "freight" | "misc">>) => void;
+  onPatchTotals: (
+    patch: Partial<Pick<Invoice, "statedSubtotal" | "tax" | "freight" | "misc" | "paymentTerms" | "paymentMethod">>,
+  ) => void;
   derivedSubtotal: number;
   mismatch: boolean;
   totalRaw: string;
@@ -120,6 +124,17 @@ export function ReceiveReconcile({
             <span className="xsmall">Difference</span>
             <strong className="num">{money(statedDelta)}</strong>
           </div>
+        </div>
+
+        {/* E-02 d45, d47 — read off their paperwork like the figures above, and
+            defaulted from the Supplier (M-01 d19, d20) so the common case is
+            already right. Overridable because the paperwork in hand is the
+            agreement: an extra 30 days on one shipment is a property of that
+            shipment, not of the relationship. The due date is DERIVED and is
+            the only basis on which M-05 can call anything overdue. */}
+        <div className="recv-sec">
+          <span className="lab">Terms — how this one gets paid</span>
+          <InvoiceTerms invoice={invoice} supplier={supplier} locked={locked} onPatch={onPatchTotals} />
         </div>
 
         <div className="recv-sec">
@@ -299,6 +314,91 @@ function Verdict({
         <strong>Matches their paperwork.</strong> Our lines and their stated subtotal agree.
       </span>
     </div>
+  );
+}
+
+function InvoiceTerms({
+  invoice,
+  supplier,
+  locked,
+  onPatch,
+}: {
+  invoice: Invoice;
+  supplier: Supplier;
+  locked: boolean;
+  onPatch: (patch: Partial<Pick<Invoice, "paymentTerms" | "paymentMethod">>) => void;
+}) {
+  const terms = invoice.paymentTerms ?? supplier.paymentTerms;
+  const method = invoice.paymentMethod ?? supplier.defaultPaymentMethod;
+  const due = dueFor(terms, invoice.invoiceDate, new Date());
+  const inherited = (own: unknown) => (own == null ? " recv-inherited" : "");
+
+  return (
+    <>
+      <label className={"field" + inherited(invoice.paymentTerms)}>
+        <span>
+          Payment terms
+          {invoice.paymentTerms == null && supplier.paymentTerms && (
+            <span className="recv-from">from {supplier.shortName}</span>
+          )}
+        </span>
+        <select
+          value={terms ?? ""}
+          disabled={locked}
+          onChange={(e) => onPatch({ paymentTerms: (e.target.value || undefined) as PaymentTerms | undefined })}
+        >
+          <option value="">— not set —</option>
+          {PAYMENT_TERMS.map((v) => (
+            <option key={v} value={v}>
+              {v}
+            </option>
+          ))}
+        </select>
+      </label>
+
+      <label className={"field" + inherited(invoice.paymentMethod)}>
+        <span>
+          Payment method
+          {invoice.paymentMethod == null && supplier.defaultPaymentMethod && (
+            <span className="recv-from">from {supplier.shortName}</span>
+          )}
+        </span>
+        <select
+          value={method ?? ""}
+          disabled={locked}
+          onChange={(e) => onPatch({ paymentMethod: (e.target.value || undefined) as PaymentMethod | undefined })}
+        >
+          <option value="">— not set —</option>
+          {PAYMENT_METHODS.map((v) => (
+            <option key={v} value={v}>
+              {v}
+            </option>
+          ))}
+        </select>
+      </label>
+
+      <div className="totals-row">
+        <span className="xsmall">Due</span>
+        <strong className="num">
+          {due.dueDate ?? (terms ? terms : "—")}
+        </strong>
+      </div>
+      <span className="hint">
+        {due.dueDate ? (
+          <>
+            Derived from the <strong>invoice date</strong> ({invoice.invoiceDate}) plus the terms — never the received
+            date (d45). This is the only thing that lets Accounts Payable call a balance overdue.
+          </>
+        ) : terms ? (
+          <>
+            <strong>{terms}</strong> produces no due date, so nothing on these terms ages in Accounts Payable.
+          </>
+        ) : (
+          <>No terms, so no due date and nothing to age against. Set a default on the Supplier card to stop having to
+          pick one each time.</>
+        )}
+      </span>
+    </>
   );
 }
 
