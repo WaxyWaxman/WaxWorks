@@ -6,19 +6,27 @@ import { OrderModal } from "../components/OrderModal";
 import { ReserveModal } from "../components/ReserveModal";
 import type { InventoryItem } from "../data/types";
 import { money } from "../lib/money";
-import {
-  availableOnHand,
-  backroomCount,
-  heldCount,
-  onHand,
-} from "../lib/totals";
-import { isOpenOrderLine, outstandingQty } from "../lib/orderLines";
+import { OversoldList } from "./OversoldList";
+import { stockFacts } from "../lib/stockState";
+import { availableOnHand, backroomCount, heldCount, oversoldCopies } from "../lib/totals";
 import { useApp } from "../store/AppStore";
 
-// The titlecard is a view, not a route of its own (E-04 decision 1) — it's
-// embedded in the Search screen (E-03), which owns the outer page chrome.
-// Given a Record, this renders everything E-04 specifies: catalog, copies,
+// The titlecard is a view, not a route of its own (E-04 decision 1). Given a
+// Record, this renders everything E-04 specifies: catalog, copies,
 // stock/orders/history, Reserve, and the below-cost guardrail.
+//
+// WHERE IT IS USED, since the comment here was wrong for a long time: this
+// panel is embedded by **Receiving** and **Order Processing**, not by Find.
+// Find renders the same E-04 view split across two of its three tracks —
+// `FindSelection` holds the copies, `FindAnswer` holds the stock answer —
+// because E-03 d14 gives that screen a sticky right-hand track and this one
+// has no such place to put it.
+//
+// The layouts differ on purpose; the DERIVATIONS must not. Stock and order
+// figures come from `stockFacts` here exactly as they do in Find, and the
+// oversold copies from `oversoldCopies` + `OversoldList`. This panel used to
+// recompute both inline, which is how one view came to answer the same
+// question two ways.
 export function TitlecardPanel({
   recordId,
   onStatus,
@@ -41,24 +49,21 @@ export function TitlecardPanel({
 
   if (!record) return <p className="muted">Unknown Record.</p>;
   const copies = app.inventory.filter((i) => i.recordId === record.id && i.status !== "sold");
-  const oh = onHand(record.id, app.inventory);
+  // One derivation, shared with Find. `stockFacts` already applies M-02 d21's
+  // rule that a received line stays on file, so what it reports is the
+  // OUTSTANDING quantity rather than what was ordered — counting the latter
+  // would show stock as still coming after it had landed and sold.
+  const facts = stockFacts(record, {
+    inventory: app.inventory,
+    pendingOrders: app.pendingOrders,
+    invoices: app.invoices,
+    sales: app.sales,
+  });
+  const oh = facts.onHand;
   const belowMin = oh < record.minOnHand;
-  const outstandingOversold = app.inventory.filter(
-    (i) => i.recordId === record.id && i.oversold && !i.oversoldReconciledAt,
-  );
-  // Outstanding, not ordered: a received line stays on file now (M-02 d21),
-  // and counting its full quantity would show stock as still coming after it
-  // arrived.
-  const recordOrders = app.pendingOrders.filter(
-    (o) => o.recordId === record.id && isOpenOrderLine(o, app.invoices),
-  );
-  const pendingOrderQty = recordOrders
-    .filter((o) => !o.poNumber)
-    .reduce((n, o) => n + outstandingQty(o, app.invoices), 0);
-  const onOrderQty = recordOrders
-    .filter((o) => o.poNumber)
-    .reduce((n, o) => n + outstandingQty(o, app.invoices), 0);
-  const saleFor = (itemId: string) => app.sales.find((sale) => sale.lines.some((l) => l.inventoryItemId === itemId));
+  const outstandingOversold = oversoldCopies(record.id, app.inventory);
+  const pendingOrderQty = facts.raised;
+  const onOrderQty = facts.onOrder;
 
   const doRemoveHold = (c: InventoryItem) => {
     const res = app.releaseHoldLine(c.id);
@@ -285,22 +290,7 @@ export function TitlecardPanel({
                   Sold before ever being received — a promise the copy exists <em>(E-05 decision
                   21)</em>. Clears automatically, oldest first, when matching stock is received —
                   or Adjust on hand (Mgr) above forces it to zero.
-                  <table className="data" style={{ marginTop: "var(--sp-2)" }}>
-                    <tbody>
-                      {outstandingOversold.map((i) => {
-                        const sale = saleFor(i.id);
-                        return (
-                          <tr key={i.id}>
-                            <td className="small">
-                              {sale?.saleNumber ? `Sale #${sale.saleNumber}` : "Sale in progress"}
-                            </td>
-                            <td className="small muted">{i.oversoldAt}</td>
-                            <td className="num small">{money(i.price)}</td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
+                  <OversoldList copies={outstandingOversold} />
                 </div>
               )}
             </div>

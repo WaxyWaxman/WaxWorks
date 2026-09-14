@@ -90,8 +90,11 @@ export const copiesPresent = (recordId: string, inv: InventoryItem[]): number =>
  * Oversold copies still owed — minted straight from a Sale before any Invoice
  * line backed them (E-02 d21) and not yet reconciled (E-04 d19).
  */
+export const oversoldCopies = (recordId: string, inv: InventoryItem[]): InventoryItem[] =>
+  inv.filter((i) => i.recordId === recordId && i.oversold && !i.oversoldReconciledAt);
+
 export const oversoldOutstanding = (recordId: string, inv: InventoryItem[]): number =>
-  inv.filter((i) => i.recordId === recordId && i.oversold && !i.oversoldReconciledAt).length;
+  oversoldCopies(recordId, inv).length;
 
 /**
  * On hand, **derived and able to go negative** — architecture §5.1, verbatim:
