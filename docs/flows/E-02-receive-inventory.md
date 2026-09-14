@@ -2,7 +2,7 @@
 
 **Actor:** Employee
 **Status:** Specified
-**Related:** [M-01 Supplier margin](M-01-supplier-margin.md) · [M-02 Re-order](M-02-reorder-inventory.md) · [E-04 Manage inventory](E-04-manage-inventory.md) · [Supplier invoice reference](../reference/supplier-invoice-fab.md)
+**Related:** [M-01 Supplier margin](M-01-supplier-margin.md) · [M-02 Re-order](M-02-reorder-inventory.md) · [E-04 Manage inventory](E-04-manage-inventory.md) · [M-05 Accounts payable](M-05-accounts-payable.md) · [Supplier invoice reference](../reference/supplier-invoice-fab.md)
 
 **Job:** As an employee, I need to intake a physical shipment from a supplier, identify each record, price it, and reconcile the batch against the supplier's invoice.
 
@@ -51,6 +51,8 @@
 | Tax | Yes | Manual (decision 27) |
 | Freight | Yes | Manual (decision 27) |
 | Miscellaneous | Yes | Manual |
+| Payment terms | Yes | Defaulted from the Supplier ([M-01](M-01-supplier-margin.md) d19); overridable here, because the paperwork in hand is the agreement (decision 45) |
+| Due date | No | Derived — **invoice date + terms** (decision 45). Blank for `COD` and `Prepaid`, which produce no due date |
 | **Total** | Yes | Derived; an adjustment beyond ±2% raises a review flag (decision 35) |
 
 18. System compares the **derived subtotal** against the supplier's stated subtotal (entered at step 6). A mismatch raises a **discrepancy warning**. The employee may accept it and proceed, which raises a review flag (decision 35).
@@ -109,6 +111,10 @@ Consequence to accept knowingly: per-item margin reporting reflects only supplie
 - **A scan attaches to a matching PurchaseOrder line automatically** (M-02 d20), carrying that line's expected cost and quantity into pricing; the employee may detach it. Anything that cannot be matched by barcode — an unbarcoded copy above all — is picked from the worklist instead (d42), which is what keeps a derived backorder (d30) able to close.
 - **Receiving a PurchaseOrder line does not consume it** (M-02 d21). The line survives with its status and its log, which is what makes d30's outstanding quantity — ordered minus received across every Invoice — computable at all, and what lets a part-shipped line be received twice.
 
+**From [M-01](M-01-supplier-margin.md):**
+
+- A Supplier carries **payment terms** ([M-01](M-01-supplier-margin.md) d19). They default onto every Invoice received from that Supplier and are overridable on the Invoice (decision 45). Changing a Supplier's terms does not move the terms on an Invoice already received, on the same principle as d2 there: a change applies to future receiving, not retroactively.
+
 **From [E-05](E-05-sell-a-record.md):**
 
 - **Second-hand stock bought over the counter enters here.** The money side is a `Used Credit` tender at the till; the stock side is an ordinary second-hand intake. An optional cross-reference field links the Invoice to the Sale that paid for it, so a payout can be traced to the copies it bought.
@@ -116,6 +122,8 @@ Consequence to accept knowingly: per-item margin reporting reflects only supplie
 **From [M-05](M-05-accounts-payable.md):**
 
 - Accounts payable **consumes** the Invoice records finalized here — number, date, linked PurchaseOrder, and amount — and never creates one. An amendment against a finalized Invoice ([E-04](E-04-manage-inventory.md)) changes what is owed.
+- **Paid is reversible, so immutability is too.** A Manager may void a PaymentBatch ([M-05](M-05-accounts-payable.md) d22), and an Invoice that stops being paid returns to **Finalized** — correctable here again, scan slab and all. Decision 40 and [architecture](../architecture.md) A-33 should be read as *immutable while paid*, not *immutable forever*: anything here that treats Paid as a terminal state is wrong.
+- Accounts payable also consumes the **due date** derived here (decision 45) and never edits it. It is what lets a balance be called *overdue* rather than merely outstanding, so an Invoice carrying `COD` or `Prepaid` terms — which produce no due date — ages nowhere.
 
 ---
 
@@ -167,6 +175,7 @@ Consequence to accept knowingly: per-item margin reporting reflects only supplie
 | 42 | **The outstanding-orders worklist lives in the Invoice track, scoped to the open Invoice's Supplier, and stays browsable.** **Amends decisions 29 and 38**, which put it in the left slab and had Receiving open on it. The slab mixed two kinds of thing — Invoices you resume and PurchaseOrder lines you receive against — behind one search box, so neither could be searched properly. Supplier scoping is not a narrowing: d29's "across all open POs" exists because suppliers ship several POs in one box (d28), and one Supplier's open POs is exactly that set; [M-02](M-02-reorder-inventory.md) already reads d29 this way. **Browsable, not only scan-triggered**, because two cases have no barcode to match on: seeing what has *not* turned up out of a part-shipped box, which a scan cannot answer because it is a negative; and an unbarcoded copy (step 8), whose only route to its PO line is being picked from a list — without which its line carries no `fromOrderId` and d30's derived backorder never closes. A Second-hand intake shows the panel empty rather than hiding it, so the screen has one shape |
 | 43 | **Invoice search gains PO number.** **Extends decision 36**, whose fields — supplier, number, date, title, barcode — all stand and keep their meaning: a title or barcode lists the Invoices that took that copy in. PO number joins them because d28 lets one Invoice span several POs, and "which invoice did PO-1142 arrive on" is a question only the Invoice side can answer |
 | 44 | **Setting a supplier margin stays manager-only; creating a Supplier does not. Restores decision 3**, which was struck against a "decision 30" that exists in no flow's decision table. [M-04](M-04-manage-users.md) d8 retired the *manager override* and amends M-04 d3 and d4 **for override-gated actions only**; [architecture](../architecture.md) A-28a names setting a supplier margin in the **manager-only** set it expressly leaves unchanged, and the [lexicon](../lexicon.md) draws the same line between the two terms. Step 2 of the Flow above already says this and was never wrong — it was the decision table that drifted away from it |
+| 45 | **An Invoice carries its own payment terms, defaulted from the Supplier and overridable at receiving, and a due date derived as `invoice date + terms`.** **Extends decision 2**, which captures both the invoice date and the received date but never said which governs payment timing. **Net-N runs from the invoice date**: the supplier's clock starts when they bill, and the due date has to agree with the statement it will be reconciled against ([M-05](M-05-accounts-payable.md) d5). The Invoice's terms win over the Supplier's default ([M-01](M-01-supplier-margin.md) d19) because the paperwork in hand is the agreement — the Supplier field is a default, not a rule. `COD` and `Prepaid` produce no due date at all. The due date is **derived, never stored as an editable field**, on the same principle as decision 30's backorders and decision 8's balances. *Accepted consequence:* stock that sat in transit arrives with part of its window already spent, and a slow enough shipment can be received **already overdue** — correct, and it should be shown that way rather than granted a grace period measured from the received date |
 
 ---
 

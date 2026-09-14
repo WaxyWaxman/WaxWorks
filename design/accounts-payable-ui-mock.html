@@ -15,9 +15,10 @@
  * up, so track 2 is a real table. Forcing .lrow onto it would be symmetry
  * bought at the cost of the thing the screen is for.
  *
- * PROPOSED — NOT RATIFIED. One decision row needs appending to M-05 before
- * this is built (the remit-to address); the notes under the screen say which
- * and why. Everything else here is layout over decisions already recorded.
+ * RECORDED. The seven rows this needed were ratified and written in:
+ * M-05 d17–d21 (d18 supersedes d11), M-01 d19 and E-02 d45. The notes under
+ * the screen carry their wording. Everything else is layout over decisions
+ * that were already on record.
  */
 :root {
   --c-bg: #f1f1ef;
@@ -479,6 +480,16 @@ input[type="checkbox"]:disabled { cursor: not-allowed; opacity: 0.3; }
 .batch-body .tgt { display: flex; justify-content: space-between; gap: var(--sp-2); font-size: 11.5px; padding: 3px 0; }
 .batch-body .by { font-size: 10.5px; color: var(--c-ink-faint); padding-top: 4px; }
 
+/* d22 — the void. Destructive-ish and irreversible in the other direction, so
+   it asks first and names what it hands back, the way the discard confirm on
+   On Order does. A voided batch is kept, struck, never removed. */
+.batch.voided { border-style: dashed; opacity: 0.75; }
+.batch.voided .batch-head .l { text-decoration: line-through; }
+.void-ask { border-left: 3px solid var(--c-danger); background: var(--c-danger-soft); padding: var(--sp-2); margin-top: 6px; }
+.void-ask .t { font-size: 12.5px; font-weight: 700; color: var(--c-danger); }
+.void-ask .m { font-size: 11px; color: var(--c-ink-soft); margin-top: 3px; }
+.void-acts { display: flex; gap: 6px; justify-content: flex-end; margin-top: var(--sp-2); }
+
 .sec-empty { font-size: 11.5px; color: var(--c-ink-faint); padding: 4px 0; }
 .caveat { font-size: 10.5px; color: var(--c-ink-faint); border-left: 2px solid var(--c-border-strong); padding-left: 7px; margin-top: 2px; }
 .caveat.warn { color: var(--c-warn); border-left-color: var(--c-warn); }
@@ -616,10 +627,10 @@ table.props td:first-child { white-space: nowrap; font-weight: 700; color: var(-
   <header class="masthead">
     <div>
       <h1>Accounts Payable, in three tracks</h1>
-      <p>M-05 laid out the way Sell, Find, Receive, Customers, Suppliers and On&nbsp;Order already are — a retractable slab on the left, the work in the middle, the thing you are acting on pinned to the right. Layout mock, not working code. All three modals go away: <strong>Record payment</strong> and <strong>Clear selected</strong> become the right track's reading of <em>the selection</em>, and <strong>Create new</strong> becomes its third state. Since the first pass: paid Invoices <strong>stay readable</strong> and name what settled them, every Invoice row <strong>opens in Receiving</strong>, a credit and a cheque <strong>settle in one act with a split you choose</strong>, and there is a <strong>Due column</strong> — which needed payment terms that exist nowhere on record yet.</p>
+      <p>M-05 laid out the way Sell, Find, Receive, Customers, Suppliers and On&nbsp;Order already are — a retractable slab on the left, the work in the middle, the thing you are acting on pinned to the right. Layout mock, not working code. All three modals go away: <strong>Record payment</strong> and <strong>Clear selected</strong> become the right track's reading of <em>the selection</em>, and <strong>Create new</strong> becomes its third state. Since the first pass: paid Invoices <strong>stay readable</strong> and name what settled them, every Invoice row <strong>opens in Receiving</strong>, a credit and a cheque <strong>settle in one act with a split you choose</strong>, there is a <strong>Due column</strong> — which needed payment terms that existed nowhere on record — and a recorded payment can be <strong>voided</strong>, which turns out to mean an Invoice can stop being immutable.</p>
     </div>
     <span class="stamp">branch AccountsPayable-UI</span>
-    <span class="stamp live">proposed — 7 rows, one superseding M-05 d11</span>
+    <span class="stamp live">recorded — M-05 d17–d22, M-01 d19, E-02 d45</span>
   </header>
 
   <div class="controls">
@@ -722,17 +733,17 @@ table.props td:first-child { white-space: nowrap; font-weight: 700; color: var(-
   <div class="notes">
 
     <section class="note wide">
-      <h2>What M-05 would have to say</h2>
+      <h2>What M-05 now says</h2>
       <div class="warnbox">
         <p><strong>The layout needs no decisions.</strong> Three tracks, a retractable slab and a sticky right column are how this app already works — E-05 d29 by way of E-02 d38, E-07 d17, M-01 d17, and most recently M-02 d31 for Order Processing. Folding the three modals into track 3 changes no behaviour: <em>Record payment</em>, <em>Clear selected</em> and <em>Create new</em> do exactly what <span class="cite">d4, d5, d12&ndash;d16</span> already say, in a place that does not cover the ledger they are about.</p>
-        <p><strong>Seven rows do need appending, and one of them reverses a considered decision.</strong> <span class="cite">d18</span> supersedes <span class="cite">d11</span>, which says in as many words that a claim credit &ldquo;isn't earmarked to one Invoice the Manager picks&rdquo; — that was not a misreading or a slip, it was deliberate, and <span class="cite">types.ts:257</span> encodes it. The rest extend rather than reverse: the remit-to address, the one-action settlement, partial credit (which d18 forces), settled Invoices staying readable, and payment terms in two other flows.</p>
+        <p><strong>Seven rows were appended, and one of them reverses a considered decision.</strong> <span class="cite">d18</span> supersedes <span class="cite">d11</span>, which says in as many words that a claim credit &ldquo;isn't earmarked to one Invoice the Manager picks&rdquo; — that was not a misreading or a slip, it was deliberate, and <span class="cite">types.ts:257</span> encodes it. The rest extend rather than reverse: the remit-to address, the one-action settlement, partial credit (which d18 forces), settled Invoices staying readable, and payment terms in two other flows. All seven are written in — M-05 d17&ndash;d21, M-01 d19, E-02 d45 — with d11 struck through in place and the prose it contradicted corrected rather than left to drift.</p>
         <p><strong>What this is worth.</strong> Not tidiness. Today the Manager ticks rows and then guesses which of two buttons will light up, with the reason hidden in a <code>title</code> attribute. Here <strong>the right track reads the selection back</strong> — what it sums to, which action it is legal for, and why the other one is not. The failure this prevents is the one M-05 d15 is most exposed to: <em>Clear</em> is manual reconciliation with no undo described anywhere in the flow, and a selection that does not sum to zero should be refused out loud rather than silently.</p>
       </div>
 
       <table class="props">
-        <tr><th style="width:104px">Proposed row</th><th>Wording</th></tr>
+        <tr><th style="width:104px">Recorded row</th><th>Wording</th></tr>
         <tr>
-          <td>M-05 d17 <span class="badge accent">not ratified</span></td>
+          <td>M-05 d17 <span class="badge ok">recorded</span></td>
           <td><strong>The Supplier's billing address is displayed on the accounts payable screen as the remit-to address, alongside the payment being recorded.</strong> <strong>Extends</strong> the M-01 d13 line inherited into this flow, which captures a billing address and notes that nothing here consumes it. Recording a payment is the moment the store asks &ldquo;where does the cheque go&rdquo;, and the answer is already on file one screen away. It is <em>display only</em>: nothing is printed, addressed, or sent, and M-01 remains the only place the address is edited. <em>Accepted consequence:</em> a stale billing address now looks authoritative at the moment it is most likely to be acted on, and nothing on this screen can tell that it is stale — the Supplier card is still the only place it is maintained.</td>
         </tr>
         <tr>
@@ -740,7 +751,7 @@ table.props td:first-child { white-space: nowrap; font-weight: 700; color: var(-
           <td><strong>The Manager chooses which outstanding Invoices a Credited claim's amount is applied to, and how much lands on each.</strong> <strong>Supersedes decision 11</strong> in full: the automatic oldest-received-first distribution is retired, not kept as a default. d11 was itself a clarification of d6&ndash;d7, and reversing it restores d7's plain reading — a claim is applied <em>against Invoices</em> from the same supplier, now with the Manager saying which. <em>Why the reversal is cheap:</em> the model already stores credits per Invoice — <span class="cite">architecture.md:184</span> derives an Invoice's balance from <code>ap_payments</code> plus credited SupplierClaims, and <code>Invoice.creditsApplied</code> exists. d11 constrained <strong>who decides the split</strong>, never whether a split could be recorded; this is a policy and UI change, not a schema change. <em>Accepted consequence:</em> every credit application is now a decision, including the trivial one where there is a single outstanding Invoice and no judgement to exercise. The screen does not pre-fill a suggested split, because a pre-filled split is d11 wearing a disguise — and one nobody would check.</td>
         </tr>
         <tr>
-          <td>M-05 d19 <span class="badge accent">not ratified</span></td>
+          <td>M-05 d19 <span class="badge ok">recorded</span></td>
           <td><strong>A claim credit and a payment may settle the same Invoices in one action, producing one PaymentBatch whose targets carry which kind each was.</strong> <strong>Extends decisions 6 and 16</strong>, and contradicts neither: d6 already says a credit &ldquo;settles a balance the same way a payment does&rdquo;, and d16 already says one Record Payment produces one batch covering &ldquo;whatever mix of Invoices and manual entries it paid&rdquo;. That a credit could be one of the things in the mix was never addressed either way — the two being separate acts was an omission, not a position. The Manager settles $68.65 as $12.40 of credit and $56.25 by cheque, once, and the batch says so. <em>Accepted consequence:</em> a batch can now have a zero money half — a credit-only settlement — for which no payment reference exists, so the reference stops being unconditionally required and becomes required only when money actually moves.</td>
         </tr>
         <tr>
@@ -748,15 +759,19 @@ table.props td:first-child { white-space: nowrap; font-weight: 700; color: var(-
           <td><strong>A Credited claim's amount may be spent in parts, across several settlements, until it is exhausted.</strong> <strong>Resolves the &ldquo;Partial claim credit&rdquo; open question</strong>, which this flow already carried. It is not optional: once d18 lets the Manager say how much lands on each Invoice, &ldquo;applied once, in full&rdquo; cannot survive — a credit larger than the Invoices picked has a remainder, and d11's rule for absorbing it on the last one went with d11. The claim therefore carries an <strong>amount spent</strong> and a <strong>remaining</strong>, and leaves the list only when remaining reaches zero. <em>Accepted consequence:</em> a claim credit can now sit part-spent indefinitely, which is a new way for money in the store's favour to be quietly forgotten — the reason the right track's top slot reports the remaining figure rather than the original.</td>
         </tr>
         <tr>
-          <td>M-05 d21 <span class="badge accent">not ratified</span></td>
+          <td>M-05 d21 <span class="badge ok">recorded</span></td>
           <td><strong>A settled Invoice remains readable on this screen, in a band separate from the outstanding list, and names the PaymentBatch or batches that settled it.</strong> <strong>Extends step 5 and decision 16.</strong> Step 5 says a fully-paid Invoice &ldquo;leaves the outstanding list <em>for payment history</em>&rdquo; — it names where the Invoice goes, not that it stops being visible, and this honours it by putting it somewhere that is explicitly not the outstanding list. d16 made history browsable in one direction only (a batch, opened to see its targets); the reverse — an Invoice, saying what paid it — was unaddressed. <em>Accepted consequence:</em> the ledger grows without bound, so the band is collapsed by default and carries a count rather than rows.</td>
         </tr>
         <tr>
-          <td>M-01 d19 <span class="badge accent">not ratified</span></td>
-          <td><strong>A Supplier carries payment terms — Net 15 / 30 / 45 / 60, On receipt, COD, or Prepaid — as the default terms for Invoices received from them.</strong> <strong>New field, constraining nothing existing.</strong> It is not <em>Cancel-by</em>, which this card already carries and which is an <em>ordering</em> figure: days from order-placed to auto-cancel an unfulfilled order. Nothing on this card, or anywhere else, currently records when a bill is due. <em>Accepted consequence:</em> <strong>Prepaid and COD are not aging terms</strong> and the field quietly admits two different kinds of thing. A Prepaid Supplier that nevertheless carries an outstanding balance is either a data-entry error or a real exception, and this decision must say which — the mock surfaces it as an anomaly rather than choosing.</td>
+          <td>M-05 d22 <span class="badge ok">recorded</span></td>
+          <td><strong>A PaymentBatch can be voided, whole, by a Manager &mdash; never edited and never deleted.</strong> The void is appended against the original, which stays in the ledger as the record of what was recorded at the time (<span class="cite">E-02 d23</span>'s pattern; the lexicon reserves <em>delete</em> for drafts and <em>void</em> for finalized artifacts). It reverses every target: money returns to the balance owing, claim credit returns to that claim's <strong>remaining</strong> &mdash; <span class="cite">d20</span> is what makes that expressible, since without a partial model a credit could only be returned in full. <strong>Whole or not at all</strong>, because <span class="cite">d16</span> made the batch the unit of the act. <em>Accepted consequence, and the significant one:</em> an Invoice taken back out of <strong>Paid</strong> returns to <strong>Finalized</strong> and becomes correctable again, so immutability <span class="cite">(E-02 d40, A-33)</span> means <em>immutable while paid</em>, not <em>immutable forever</em>. <strong>A-33 needs the amendment appended.</strong></td>
         </tr>
         <tr>
-          <td>E-02 d45 <span class="badge accent">not ratified</span></td>
+          <td>M-01 d19 <span class="badge ok">recorded</span></td>
+          <td><strong>A Supplier carries payment terms — Net 15 / 30 / 45 / 60, On receipt, COD, or Prepaid — as the default terms for Invoices received from them.</strong> <strong>New field, constraining nothing existing.</strong> It is not <em>Cancel-by</em>, which this card already carries and which is an <em>ordering</em> figure: days from order-placed to auto-cancel an unfulfilled order. Nothing on this card, or anywhere else, recorded when a bill is due before this. <em>Accepted consequence:</em> <strong>Prepaid and COD are not aging terms</strong> and the field quietly admits two different kinds of thing. A Prepaid Supplier that nevertheless carries an outstanding balance is either a data-entry error or a real exception, and that is left open in M-05 rather than answered here — the mock surfaces it as an anomaly rather than choosing.</td>
+        </tr>
+        <tr>
+          <td>E-02 d45 <span class="badge ok">recorded</span></td>
           <td><strong>An Invoice carries its own payment terms, defaulted from the Supplier and overridable at receiving, and a due date derived as invoice date + terms.</strong> <strong>Extends decision 2</strong>, which captures both the invoice date and the received date but says nothing about which governs payment timing. <strong>Net-N runs from the invoice date</strong>: the supplier's clock starts when they bill, and the due date has to agree with the statement it will be reconciled against. The Invoice's own terms win over the Supplier's, because the paperwork in hand is the agreement. <em>Accepted consequence:</em> stock that sat in transit arrives with part of its window already spent, and a slow enough shipment can be received <strong>already overdue</strong> — correct, and the screen should show it that way rather than granting a grace period from the received date.</td>
         </tr>
       </table>
@@ -800,6 +815,14 @@ table.props td:first-child { white-space: nowrap; font-weight: 700; color: var(-
       <p>One thing that <em>is</em> constrained, and stays so: a manual <strong>Credit</strong> entry is not allocatable in a settlement. <span class="cite">d14</span> says it reduces the balance the moment it is entered, so it has already netted at the supplier level; letting it also be spent against a picked Invoice would count it twice. Only claim credit &mdash; which d11 held back precisely because it had <em>not</em> yet landed &mdash; is allocatable.</p>
     </section>
 
+<section class="note">
+      <h2>Voiding, and what it costs</h2>
+      <p>A payment recorded in error is <strong>voided</strong> <span class="cite">(d22)</span>, never edited and never deleted &mdash; the house pattern for reversing anything finalized <span class="cite">(E-02 d23)</span>. The batch stays in history, struck through, as the record of what was recorded at the time.</p>
+      <p><strong>Whole or not at all.</strong> <span class="cite">d16</span> made the PaymentBatch the unit of the act &mdash; one cheque covering four Invoices is one thing that happened. Voiding one target out of it would leave a batch describing a settlement that never took place in that shape, which is the thing d16 exists to prevent. A partly-wrong payment is voided and re-recorded.</p>
+      <p><strong>The expensive part is not the money.</strong> Reversing balances is arithmetic; <span class="cite">d20</span>'s partial model already lets the claim credit go back where it came from, which is why the mock records <em>which</em> claim funded each credit target rather than drawing from an anonymous pool. What is expensive is that an Invoice can now stop being <strong>Paid</strong> &mdash; and immutability attaches at paid <span class="cite">(E-02 d40, A-33)</span>. So a frozen document can be unfrozen, and <em>immutable</em> has quietly come to mean <em>immutable while paid</em>. The confirmation names the invoices this will unfreeze before you press it, rather than reporting it afterwards.</p>
+      <p>The alternative was worse: an Invoice left locked while carrying a balance it owes, with nothing able to correct the error the void exists to correct. <strong>A-33 needs an amendment appended</strong> &mdash; that is an architecture decision, not this branch's to write.</p>
+    </section>
+
     <section class="note">
       <h2>The round trip back to Receiving</h2>
       <p>Every Invoice row carries a link to its receiving document, and <strong>the verb changes rather than the link disappearing</strong>: <em>Open in Receiving</em> while it is correctable, <em>View in Receiving</em> once it is paid.</p>
@@ -827,9 +850,9 @@ table.props td:first-child { white-space: nowrap; font-weight: 700; color: var(-
     </section>
 
     <section class="note">
-      <h2>The credit lands before you press it</h2>
-      <p>The top slot of track 3 &mdash; where On&nbsp;Order puts <em>who is waiting</em> &mdash; here holds <strong>a credit nobody has applied</strong>. Same reasoning: of everything true about this supplier, that is the one thing that is money on the table and the only one a person has to go and do.</p>
-      <p><span class="cite">d11</span> already specifies exactly where it will land: distributed across outstanding Invoices, <strong>oldest received first</strong>, absorbing any remainder on the last one. Since the algorithm is settled, the band can show the landing &mdash; which invoices, how much on each &mdash; <em>before</em> the button is pressed. Today that distribution is described in a <code>title</code> tooltip and only observable afterwards.</p>
+      <h2>The credit in hand</h2>
+      <p>The top slot of track 3 &mdash; where On&nbsp;Order puts <em>who is waiting</em> &mdash; here holds <strong>claim credit nobody has applied</strong>. Same reasoning: of everything true about this supplier, that is the one thing that is money on the table and the only one a person has to go and do. It reports the <strong>remaining</strong> figure, not the original, because <span class="cite">d20</span> lets a credit sit part-applied indefinitely &mdash; a new way for money in the store's favour to be quietly forgotten.</p>
+      <p><em>An earlier version of this mock previewed where the credit would land</em> &mdash; which Invoices, how much on each &mdash; because <span class="cite">d11</span> made that computable. <span class="cite">d18</span> retired the algorithm, so there is nothing to preview: the Manager types the split. The band's job narrowed to saying how much is in hand and taking you to the settlement, and <strong>no suggested split is pre-filled</strong>, because a pre-filled split is d11 wearing a disguise and one nobody would check.</p>
     </section>
 
     <section class="note">
@@ -866,7 +889,7 @@ table.props td:first-child { white-space: nowrap; font-weight: 700; color: var(-
  *   - a Credit lands the moment it is entered; an Adjustment goes either way
  *     at the Manager's choice (d14)
  *
- * Three behaviours here are PROPOSED and not ratified. They are marked
+ * Three behaviours here were newly decided this session. They are marked
  * `d18`, `d19`, `d20` in the code and spelled out in the notes:
  *   d18 supersedes d11 — the Manager picks which Invoices a claim credit
  *       lands on, and how much lands on each. d11's automatic oldest-first
@@ -876,8 +899,8 @@ table.props td:first-child { white-space: nowrap; font-weight: 700; color: var(-
  *   d20 forced by d18 — a claim credit may be spent in parts across several
  *       settlements until exhausted, answering M-05's "Partial claim credit".
  *
- * Payment terms (M-01 d19 proposed) and the Invoice's own terms and derived
- * due date (E-02 d45 proposed) are what make the Due column possible at all.
+ * Payment terms (M-01 d19) and the Invoice's own terms and derived due date
+ * (E-02 d45) are what make the Due column possible at all.
  * Net-N runs from the INVOICE date, not the received date.
  * ====================================================================== */
 
@@ -900,7 +923,7 @@ var addDays = function (iso, n) {
   return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
 };
 
-/* ---- Payment terms. PROPOSED: M-01 d19 puts this on the Supplier, E-02 d45
+/* ---- Payment terms. M-01 d19 puts this on the Supplier, E-02 d45
        carries it onto the Invoice. Nothing on record today has any of it —
        Supplier.cancelByDays is an ORDERING field and says so. ---- */
 var TERMS = {
@@ -915,7 +938,7 @@ var TERMS = {
 var TERM_KEYS = ['net15', 'net30', 'net45', 'net60', 'receipt', 'cod', 'prepaid'];
 
 /* ---- Suppliers. The first three and WALK are the prototype's seed; `terms`
-       is the proposed field and exists nowhere yet. ---- */
+       is the field M-01 d19 adds, and did not exist before this branch. ---- */
 var SUPPLIERS = [
   { id: 'fab', code: 'FAB1', name: 'F.A.B. Distribution', acct: 'WW-4471', cur: 'CAD', cons: false, terms: 'net30',
     billing: ['PO Box 4471, Station A', 'Toronto, ON', 'Canada'] },
@@ -989,7 +1012,7 @@ function isPayable(it) {
   return it.type === 'Invoice' || it.type === 'Consignment' || (it.type === 'Adjustment' && it.dir !== 'decrease');
 }
 /* Invoice-shaped: the things a bill is due on, and the only things that can
-   carry payment terms (E-02 d45 proposed). */
+   carry payment terms (E-02 d45). */
 function isBill(it) {
   return it.kind === 'invoice' || (it.kind === 'entry' && (it.type === 'Invoice' || it.type === 'Consignment'));
 }
@@ -1017,7 +1040,7 @@ function bandOf(it) {
   return 'counted';
 }
 
-/* ---- terms and the due date. PROPOSED (M-01 d19, E-02 d45). Net-N runs
+/* ---- terms and the due date (M-01 d19, E-02 d45). Net-N runs
        from the INVOICE date: the supplier's clock starts when they bill you.
        Accepted consequence, and visible on CD-801 below — stock that sat in
        transit arrives with part of its window already gone. ---- */
@@ -1069,8 +1092,12 @@ function clearedContribOf(sid) {
     .reduce(function (s, i) { return s + balanceOf(i); }, 0));
 }
 function settledOf(sid) { return itemsFor(sid).filter(function (i) { return bandOf(i) === 'settled'; }); }
+/* A voided batch settled nothing, so it never names itself on a paid row. It
+   stays in history under its own heading instead (d22). */
 function batchesFor(key) {
-  return BATCHES.filter(function (b) { return b.targets.some(function (t) { return t.key === key; }); });
+  return BATCHES.filter(function (b) {
+    return !b.voided && b.targets.some(function (t) { return t.key === key; });
+  });
 }
 function activity() {
   return SUPPLIERS.filter(function (s) {
@@ -1087,7 +1114,7 @@ function dotOf(sid) {
 /* ---- state ---- */
 var S = {
   slab: true, scope: 'fab', q: '', chip: 'all', sort: 'name',
-  sel: {}, mode: null, openBatch: null, showSettled: false,
+  sel: {}, mode: null, openBatch: null, showSettled: false, confirmVoid: null,
   pay: null, entry: null,
 };
 var selKeys = function () { return Object.keys(S.sel).filter(function (k) { return S.sel[k]; }); };
@@ -1405,7 +1432,7 @@ function renderCards() {
 
 /* ====================== TRACK 3 ====================== */
 function rightKey() {
-  return S.scope + '|' + (S.mode || '-') + '|' + selKeys().sort().join(',') + '|' + S.openBatch + '|' + renderRight.gen;
+  return S.scope + '|' + (S.mode || '-') + '|' + selKeys().sort().join(',') + '|' + S.openBatch + '|' + S.confirmVoid + '|' + renderRight.gen;
 }
 renderRight.gen = 0;
 
@@ -1426,15 +1453,34 @@ function batchHtml(sid) {
     var tot = r2(b.targets.reduce(function (n, t) { return n + t.amount; }, 0));
     var cr = r2(b.targets.filter(function (t) { return t.kind === 'credit'; }).reduce(function (n, t) { return n + t.amount; }, 0));
     var open = S.openBatch === b.id;
-    return '<div class="batch"><button class="batch-head" data-batch="' + b.id + '" aria-expanded="' + open + '">' +
+    /* d22 — what the void will hand back, computed before it is pressed. An
+       Invoice that stops being paid is the consequence worth naming, so the
+       confirmation names it rather than reporting it afterwards. */
+    var unfreeze = !b.voided ? b.targets.filter(function (t) { return t.kind === 'payment' || t.kind === 'credit'; })
+      .map(function (t) { return ITEMS.filter(function (i) { return i.key === t.key; })[0]; })
+      .filter(function (i, n, arr) { return i && i.kind === 'invoice' && bandOf(i) === 'settled' && arr.indexOf(i) === n; }) : [];
+    return '<div class="batch' + (b.voided ? ' voided' : '') + '"><button class="batch-head" data-batch="' + b.id + '" aria-expanded="' + open + '">' +
       '<span class="l">' + esc(b.date) + ' &mdash; ' + (cr > 0.005 && tot - cr <= 0.005 ? 'credit only' : esc(b.method) + ' <span class="mono">' + esc(b.ref) + '</span>') + '</span>' +
-      '<span class="badge ok">' + esc(money(tot)) + '</span></button>' +
+      '<span class="badge ' + (b.voided ? 'danger' : 'ok') + '">' + (b.voided ? 'voided' : esc(money(tot))) + '</span></button>' +
       (open ? '<div class="batch-body">' +
         b.targets.map(function (t) {
           return '<div class="tgt"><span>' + (t.kind === 'credit' ? '↳ credit — ' : '') + esc(t.label) + '</span><span class="mono">' + esc(money(t.amount)) + '</span></div>';
         }).join('') +
         (cr > 0.005 ? '<div class="by">' + money(cr) + ' of this was claim credit, ' + money(tot - cr) + ' was money <span class="cite">(d19)</span>.</div>' : '') +
-        '<div class="by">Recorded by ' + esc(b.by) + ' · one batch, however many targets it settled <span class="cite">(d16)</span></div></div>' : '') +
+        '<div class="by">Recorded by ' + esc(b.by) + ' · one batch, however many targets it settled <span class="cite">(d16)</span></div>' +
+        (b.voided
+          ? '<div class="by" style="color:var(--c-danger)"><strong>Voided</strong> ' + esc(b.voided.at) + ' by ' + esc(b.voided.by) +
+            '. The batch is kept as the record of what was recorded at the time &mdash; never deleted, never edited <span class="cite">(d22)</span>.</div>'
+          : (S.confirmVoid === b.id
+            ? '<div class="void-ask"><div class="t">Void this payment?</div>' +
+              '<div class="m">Hands back ' + esc(money(r2(tot - cr))) + ' to the balances it settled and ' + esc(money(cr)) + ' to the claim credit it spent. All of it or none of it &mdash; a batch is the unit <span class="cite">(d16, d22)</span>.' +
+              (unfreeze.length ? '<br><br><strong>' + unfreeze.map(function (i) { return esc('Invoice ' + i.ref); }).join(', ') + '</strong> ' +
+                (unfreeze.length === 1 ? 'returns' : 'return') + ' to <strong>Finalized</strong> and ' + (unfreeze.length === 1 ? 'becomes' : 'become') +
+                ' correctable in Receiving again &mdash; immutability attaches at <em>paid</em> <span class="cite">(E-02 d40, A-33)</span>.' : '') +
+              '</div><div class="void-acts"><button class="btn sm" data-act="void-no">Keep it</button>' +
+              '<button class="btn sm danger" data-act="void-yes" data-vid="' + b.id + '">Void</button></div></div>'
+            : '<button class="btn sm danger" style="margin-top:6px" data-act="void-ask" data-vid="' + b.id + '">Void this payment</button>')) +
+        '</div>' : '') +
       '</div>';
   }).join('');
 }
@@ -1453,7 +1499,7 @@ function rightSupplier() {
       '<div class="w-sub">' + esc(cl.reason || '') + '</div>' +
       ((cl.used || 0) > 0.005 ? '<div class="w-sub"><strong>' + esc(money(cl.used)) + '</strong> already spent of ' + esc(money(cl.amount)) + ' <span class="cite">(d20)</span></div>' : '') +
       '<button class="btn ink sm" style="margin-top:8px;justify-content:center" data-act="spend">Spend it in a settlement</button>' +
-      '<div class="caveat prop">Proposed &mdash; <strong>d18 supersedes d11</strong>. You pick which Invoices it lands on and how much lands on each; d11&rsquo;s automatic oldest-first distribution is retired, not kept as a default.</div>';
+      '<div class="caveat prop"><strong>d18 supersedes d11</strong>. You pick which Invoices it lands on and how much lands on each; d11&rsquo;s automatic oldest-first distribution is retired, not kept as a default.</div>';
   } else {
     h += '<div class="w-name none">No claim credit in hand.</div>' +
       '<div class="w-sub">Claims arrive here already raised, sent and carrying Pending or Credited <span class="cite">(from E-04)</span>.</div>';
@@ -1483,7 +1529,7 @@ function rightSupplier() {
     '<div class="stat"><span class="v' + (unc > 0.005 ? ' un' : ' nil') + '">' + esc(money(unc)) + '</span><span class="k">claims not counted</span></div>' +
     '<div class="stat span"><span class="v">' + esc(TERMS[s.terms].label) + '</span><span class="k">payment terms &mdash; from the invoice date</span></div>' +
     '</div>' +
-    '<div class="caveat prop">Terms are <strong>proposed</strong> &mdash; M-01 d19 puts the field on the Supplier, E-02 d45 carries it onto the Invoice. Nothing on record carries either today, which is why M-05&rsquo;s aging question could not be answered.</div>';
+    '<div class="caveat prop">Terms come from <strong>M-01 d19</strong> on the Supplier and <strong>E-02 d45</strong> on the Invoice. Neither existed before this branch, which is why M-05&rsquo;s aging question could not be answered.</div>';
   if (s.cur !== 'CAD') {
     h += '<div class="caveat warn">Invoiced in ' + esc(s.cur) + '. No store-currency equivalent is shown: M-05 requires it at the configured rate, and that rate lives in <span class="cite">M-06</span>, which is not built.</div>';
   }
@@ -1498,7 +1544,7 @@ function rightSupplier() {
   if (s.billing) {
     h += '<div class="sec"><span class="lab">Remit to</span>' +
       '<div class="small">' + s.billing.map(esc).join('<br>') + '</div>' +
-      '<div class="caveat prop">Proposed &mdash; <strong>M-05 d17, not ratified</strong>. The flow currently records that nothing here consumes the billing address <span class="cite">(from M-01 d13)</span>. Display only; edited on the Supplier card.</div></div>';
+      '<div class="caveat prop"><strong>M-05 d17.</strong> M-01 d13 captured this address and recorded that nothing consumed it; this is what now does. Display only &mdash; edited on the Supplier card.</div></div>';
   }
 
   h += '<div class="sec"><span class="lab">Payment history</span>' + batchHtml(s.id) +
@@ -1613,7 +1659,7 @@ function rightSelection() {
       '</div>';
     if (s.billing) {
       h += '<div class="sec"><span class="lab">Remit to</span><div class="small">' + s.billing.map(esc).join('<br>') + '</div>' +
-        '<div class="caveat prop">Proposed &mdash; <strong>M-05 d17, not ratified</strong>.</div></div>';
+        '<div class="caveat prop"><strong>M-05 d17</strong> &mdash; display only, edited on the Supplier card.</div></div>';
     }
     h += '<div class="sec"><span class="lab">The split</span>' +
       '<div class="split-line"><span>Claim credit</span><span class="mono" id="sp-cred">' + esc(money(t.cred, s.cur)) + '</span></div>' +
@@ -1716,7 +1762,7 @@ function rightNew() {
   if (billish) {
     h += '<label class="f"><span class="lab">Payment terms</span><select data-ef="terms">' +
       TERM_KEYS.map(function (k) { return '<option value="' + k + '"' + (e.terms === k ? ' selected' : '') + '>' + TERMS[k].label + '</option>'; }).join('') +
-      '</select><span class="hint">Defaulted from ' + esc(s.name) + '&rsquo;s <strong>' + esc(TERMS[s.terms].label) + '</strong> and overridable here &mdash; the paperwork wins <span class="cite">(E-02 d45 proposed)</span>. Due ' +
+      '</select><span class="hint">Defaulted from ' + esc(s.name) + '&rsquo;s <strong>' + esc(TERMS[s.terms].label) + '</strong> and overridable here &mdash; the paperwork wins <span class="cite">(E-02 d45)</span>. Due ' +
       (TERMS[e.terms].immediate ? '<strong>on receipt</strong>' : '<strong>' + esc(addDays(e.date, TERMS[e.terms].days)) + '</strong>') + '.</span></label>';
   }
   h += '</div>';
@@ -1781,6 +1827,7 @@ document.addEventListener('click', function (ev) {
   if ((el = t.closest('[data-batch]'))) {
     var b = el.getAttribute('data-batch');
     S.openBatch = S.openBatch === b ? null : b;
+    S.confirmVoid = null;
     renderRight(true); return;
   }
   if (t.closest('#slab-collapse')) { S.slab = false; render(); return; }
@@ -1811,6 +1858,9 @@ document.addEventListener('click', function (ev) {
     if (act === 'pay') { doPay(); return; }
     if (act === 'clear') { doClear(); return; }
     if (act === 'add') { doAdd(); return; }
+    if (act === 'void-ask') { S.confirmVoid = el.getAttribute('data-vid'); renderRight(true); return; }
+    if (act === 'void-no') { S.confirmVoid = null; renderRight(true); return; }
+    if (act === 'void-yes') { doVoid(el.getAttribute('data-vid')); return; }
   }
 
   if ((el = t.closest('[data-row]'))) {
@@ -1901,27 +1951,28 @@ $('t-settled').addEventListener('click', function () {
 function doPay() {
   var s = supBy(S.scope), items = selItems(), t = payTotals(), tgts = [];
   var pool = ITEMS.filter(function (i) { return i.sup === s.id && i.kind === 'claim'; });
-  var credLeft = t.cred;
 
   items.forEach(function (i) {
     var c = parseFloat(S.pay.cred[i.key]) || 0, p = parseFloat(S.pay.pay[i.key]) || 0;
     if (c > 0.005) {
       i.credited = r2((i.credited || 0) + c);
-      tgts.push({ key: i.key, label: i.type + ' ' + i.ref, amount: c, kind: 'credit' });
+      /* d20 — draw the credit down claim by claim, oldest first, and record
+         WHICH claim funded each target. d22 has to put it back exactly, and a
+         pool with no provenance cannot be reversed. (Which claim is drawn is
+         not the Manager's pick; d18 is about which INVOICES it lands on.) */
+      var owed = c;
+      for (var n = 0; n < pool.length && owed > 0.005; n++) {
+        var take = Math.min(owed, claimLeft(pool[n]));
+        if (take <= 0.005) continue;
+        pool[n].used = r2((pool[n].used || 0) + take);
+        tgts.push({ key: i.key, label: i.type + ' ' + i.ref, amount: take, kind: 'credit', fromClaim: pool[n].key });
+        owed = r2(owed - take);
+      }
     }
     if (p > 0.005) {
       i.paid = r2((i.paid || 0) + p);
       tgts.push({ key: i.key, label: i.type + ' ' + i.ref, amount: p, kind: 'payment' });
     }
-  });
-  /* d20 — spend the credit in hand, oldest claim first, in whatever parts
-     this settlement used. The CLAIM being drawn down is not something the
-     Manager picks; d18 is about which INVOICES the credit lands on. */
-  pool.forEach(function (cl) {
-    if (credLeft <= 0.005) return;
-    var take = Math.min(credLeft, claimLeft(cl));
-    cl.used = r2((cl.used || 0) + take);
-    credLeft = r2(credLeft - take);
   });
 
   BATCHES.unshift({
@@ -1933,6 +1984,32 @@ function doPay() {
   toast(money(t.tot, s.cur) + ' settled as one batch — ' + money(t.cred, s.cur) + ' credit, ' +
     money(t.pay, s.cur) + ' money' + (closed ? ', ' + closed + ' now paid in full' : '') + '.');
 }
+/* d22 — void the batch WHOLE. Every target is reversed: money back to the
+   balance owing, credit back to the claim that funded it. The batch itself is
+   never deleted and never edited; the void is appended against it. */
+function doVoid(id) {
+  var b = BATCHES.filter(function (x) { return x.id === id; })[0];
+  if (!b || b.voided) return;
+  var sid = b.sup, before = netOf(sid), unfroze = [];
+  b.targets.forEach(function (t) {
+    var it = ITEMS.filter(function (i) { return i.key === t.key; })[0];
+    if (!it) return;
+    var wasSettled = bandOf(it) === 'settled';
+    if (t.kind === 'payment') it.paid = r2((it.paid || 0) - t.amount);
+    else {
+      it.credited = r2((it.credited || 0) - t.amount);
+      var cl = ITEMS.filter(function (i) { return i.key === t.fromClaim; })[0];
+      if (cl) cl.used = r2((cl.used || 0) - t.amount);
+    }
+    if (wasSettled && bandOf(it) !== 'settled' && it.kind === 'invoice' && unfroze.indexOf(it.ref) < 0) unfroze.push(it.ref);
+  });
+  b.voided = { at: '2026-09-13', by: 'R. Duval' };
+  S.confirmVoid = null; S.sel = {}; S.pay = null;
+  bump(); render();
+  toast('Payment voided. Balance ' + money(before, supBy(sid).cur) + ' → ' + money(netOf(sid), supBy(sid).cur) +
+    (unfroze.length ? '. Invoice ' + unfroze.join(', ') + ' back to Finalized and correctable again (E-02 d40, A-33)' : '') + '.');
+}
+
 function doClear() {
   var items = selItems(), n = items.length, sid = S.scope, before = netOf(sid);
   items.forEach(function (i) { i.cleared = true; });

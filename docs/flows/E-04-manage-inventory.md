@@ -108,6 +108,11 @@ An optional cross-reference links the two, so a payout can be traced to the copi
 - **Deferred line problems** — an Employee may skip a problem item during receiving and resolve it here.
 - **Below-cost pricing raises a ReviewFlag** ([E-02](E-02-receive-inventory.md) d35, amending its decision 10), which applies to shelf prices set here as well as at receiving.
 
+**From [M-05](M-05-accounts-payable.md):**
+
+- **Voiding a *payment* is not voiding an *Invoice*, and does not belong here.** A PaymentBatch recorded in error is voided in accounts payable ([M-05](M-05-accounts-payable.md) d22); this flow still owns voiding and amending the Invoice itself. The two are different artifacts with different reasons: a wrong cheque number is M-05's, a wrong shipment is this flow's.
+- **A voided payment can un-freeze an Invoice.** An Invoice taken back out of **Paid** returns to Finalized and is corrected back in [E-02](E-02-receive-inventory.md) directly, *not* by an amendment appended here — the amendment route exists because a paid Invoice is immutable, and it no longer is. Reach for an amendment only while the Invoice is still paid.
+
 **From [E-05](E-05-sell-a-record.md):**
 
 - **Negative inventory is reconciled here.** The till lets stock go below zero rather than blocking a Sale.
