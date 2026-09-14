@@ -1,4 +1,4 @@
-<title>Accounts Payable, Three Tracks</title>
+<title>Accounts Payable, Three Tracks (retired)</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700;800&family=Archivo+Narrow:wght@600;700&display=swap">
 <style>
 /*
@@ -15,10 +15,23 @@
  * up, so track 2 is a real table. Forcing .lrow onto it would be symmetry
  * bought at the cost of the thing the screen is for.
  *
- * RECORDED. The seven rows this needed were ratified and written in:
- * M-05 d17–d21 (d18 supersedes d11), M-01 d19 and E-02 d45. The notes under
- * the screen carry their wording. Everything else is layout over decisions
- * that were already on record.
+ * RETIRED. This mock did its job and has been overtaken by the built screen
+ * at prototype/src/screens/AccountsPayable.tsx, which implements M-05 d17–d33.
+ * It is kept because it is the record of the design review that produced those
+ * decisions, and because several of them are easier to understand next to the
+ * drawing that argued for them.
+ *
+ * Do not read it as current. Known divergences, all of them decided AFTER this
+ * file stopped being maintained:
+ *   d33 — the Manager does NOT place a credit per Invoice. Ticking the
+ *         Invoices IS the choosing; inside that set the credit simply fills.
+ *         This mock still draws a credit box per row, which is the reading
+ *         d33 retired.
+ *   d32 — a reversing Adjustment is a counterweight, not a debit: it can be
+ *         cleared, never settled. This mock treats it as a debit.
+ *   d31 — struck, and only ever existed to patch d33's misreading.
+ *   E-04 d20 — a claim counts at what its credit memo GRANTS, which may be
+ *         less than what was claimed.
  */
 :root {
   --c-bg: #f1f1ef;
@@ -66,6 +79,22 @@ body {
   padding: 3px 8px; white-space: nowrap;
 }
 .stamp.live { color: var(--c-accent); border-color: var(--c-accent); }
+.stamp.retired { color: var(--c-danger); border-color: var(--c-danger); background: var(--c-danger-soft); }
+
+/* Retired. Loud on purpose: a stale mock that reads as current is worse than
+   no mock at all, and the page below still looks entirely plausible. */
+.retired-banner {
+  border: 2px solid var(--c-danger); background: var(--c-danger-soft);
+  padding: var(--sp-3) var(--sp-4); margin-bottom: var(--sp-4);
+  font-size: 13.5px; color: var(--c-ink-soft); line-height: 1.5;
+}
+.retired-banner strong { color: var(--c-ink); }
+.retired-banner span { display: block; margin-top: var(--sp-2); }
+.retired-banner code {
+  font-family: var(--font-mono); font-size: 12px;
+  background: var(--c-surface); border: 1px solid var(--c-border-strong); padding: 0 4px;
+}
+.screen { opacity: 0.82; }
 
 .controls {
   display: flex; align-items: center; gap: var(--sp-2); flex-wrap: wrap;
@@ -635,13 +664,26 @@ table.props td:first-child { white-space: nowrap; font-weight: 700; color: var(-
 </style>
 <div class="page">
 
+  <div class="retired-banner">
+    <strong>This mock is retired.</strong> It was the design artifact for the Accounts Payable review and has been
+    overtaken by the built screen — <code>prototype/src/screens/AccountsPayable.tsx</code>, implementing
+    <strong>M-05 d17–d33</strong>. It is kept as the record of the review that produced those decisions, not as a
+    statement of how the screen works.
+    <span>The largest divergence: this draws a <strong>credit box per Invoice</strong>. <strong>d33</strong> retired
+    that reading — the Manager chooses <em>which</em> Invoices by ticking them, and the credit fills the set. Also
+    stale here: <strong>d32</strong> (a reversal is cleared, never settled), <strong>d31</strong> (struck), and
+    <strong>E-04 d20</strong> (a claim counts at what the memo grants).</span>
+    <span>The decisions themselves are in <code>docs/flows/M-05-accounts-payable.md</code>; the schema they imply is
+    <code>docs/architecture.md</code> §2.8 and §5.</span>
+  </div>
+
   <header class="masthead">
     <div>
       <h1>Accounts Payable, in three tracks</h1>
       <p>M-05 laid out the way Sell, Find, Receive, Customers, Suppliers and On&nbsp;Order already are — a retractable slab on the left, the work in the middle, the thing you are acting on pinned to the right. Layout mock, not working code. All three modals go away: <strong>Record payment</strong> and <strong>Clear selected</strong> become the right track's reading of <em>the selection</em>, and <strong>Create new</strong> becomes its third state. Since the first pass: <strong>one selection settles anything</strong> — invoices, credit memos, claims, placeholders, in any mix — paid Invoices <strong>stay readable</strong> and name what settled them, every Invoice row <strong>opens in Receiving</strong>, a credit and a cheque <strong>settle in one act with a split you choose</strong>, there is a <strong>Due column</strong> — which needed payment terms that existed nowhere on record — a recorded payment can be <strong>voided</strong>, which turns out to mean an Invoice can stop being immutable, and a claim credit now goes out <strong>whole</strong> with any excess coming back as its own artifact — which is how "the supplier owes us" finally gets modelled.</p>
     </div>
     <span class="stamp">branch AccountsPayable-UI</span>
-    <span class="stamp live">recorded — M-05 d17–d28, M-01 d19, E-02 d45, A-33a/b</span>
+    <span class="stamp retired">retired — superseded by the built screen</span>
   </header>
 
   <div class="controls">

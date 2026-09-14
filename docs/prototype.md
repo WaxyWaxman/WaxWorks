@@ -190,6 +190,12 @@ that is a separate question nobody has answered yet._
   `Paid`: it is derived (A-33b), and Receiving's lock, the reconcile track and the ledger's bands
   all ask the same function. Voiding a settlement releases the Invoice with nothing to flip.
 
+- **The design mock is retired.** `design/accounts-payable-ui-mock.html` was the artifact this
+  screen was reviewed against and is kept as the record of the review that produced d17–d30 —
+  it carries the drafted wording of every one of those rows. It is **not** current: it draws a
+  credit box per Invoice, which d33 retired, and predates d31–d33 and E-04 d20. The file says
+  so at the top of itself rather than relying on anyone finding this line.
+
 - **What is still divergent.** Money is floats throughout (`lib/money.ts`), against A-15's
   integer minor units — fine for an in-memory mock, and **not to be carried into the schema**.
   `supplierBalance()` in `lib/totals.ts` is A-36's four-term derivation and is the single copy
