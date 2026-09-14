@@ -209,7 +209,7 @@ table.ln td.n{text-align:right;font-family:var(--font-mono)}
 <div class="wrapper">
 
 <h1 class="page-title">Supplier Claims, in three tracks
-  <small>Mock, revision 2 &mdash; not built. Matches the slab / work / sticky-act layout of What&rsquo;s on Order, Suppliers, Receiving and Accounts Payable.
+  <small>Mock, revision 3 &mdash; not built. Matches the slab / work / sticky-act layout of What&rsquo;s on Order, Suppliers, Receiving and Accounts Payable.
   Specified in <strong>E-04 &sect;&ldquo;Supplier claims&rdquo;</strong> (steps 1&ndash;6, decisions 9&ndash;12, 20); consumed by <strong>M-05</strong> d12, d26.</small></h1>
 
 <div class="app">
@@ -371,7 +371,7 @@ table.ln td.n{text-align:right;font-family:var(--font-mono)}
           <div class="caveat" style="margin:0 var(--sp-4) var(--sp-4)">
             <strong>The batch is the unit, not the tick.</strong> These two travel separately because they sit under different
             separators &mdash; the same key that batches orders in M-02, so claims argue on the same rhythm the orders were
-            placed on (d9). Neither has a number yet, and that absence <em>is</em> what &ldquo;unsent&rdquo; means.
+            placed on (d9). Neither has been sent, and <strong>that</strong> &mdash; the absent sent date &mdash; is what &ldquo;unsent&rdquo; means (d25). Not the absent number: d10 lets a person type that in, and a state hung on a hand-edited field is a hazard by construction (A-43).
           </div>
         </div>
 
@@ -410,6 +410,7 @@ table.ln td.n{text-align:right;font-family:var(--font-mono)}
               <div style="display:flex;gap:var(--sp-2);margin-top:var(--sp-3)">
                 <button class="btn sm primary">Record their answer</button>
                 <button class="btn sm ghost">Abandon&hellip;</button>
+                <button class="btn sm ghost">Void&hellip;</button>
               </div>
             </div>
           </div>
@@ -442,8 +443,7 @@ table.ln td.n{text-align:right;font-family:var(--font-mono)}
         <label class="field">
           <span>Claim number</span>
           <input value="42">
-          <span class="hint">Next ascending, checked unique. Overwrite it if they want their own reference (d10).
-          No prefix &mdash; on this screen everything is a claim.</span>
+          <span class="hint">Next ascending, checked unique. Overwrite it now if a supplier insists on their own reference (d10) — <strong>after sending it is frozen</strong> and a wrong one is fixed by voiding, not editing (d26, d27).</span>
         </label>
 
         <label class="field">
@@ -472,8 +472,7 @@ Inv 55021  Received damaged  Prince / Purple Rain   2 &times; $11.00 = $22.00
         combined total &mdash; step 3, verbatim.</span>
 
         <div class="caveat">
-          Sending <strong>assigns the number and starts the clock</strong>. Both facts are written in the same moment, which
-          is why a claim&rsquo;s <em>sent</em> date costs nothing extra to record.
+          Sending writes two things: the <strong>number</strong>, and the <strong>sent date</strong> that makes it sent. The date is the one the system reads — the number is ours to quote and nothing derives from it (d25, d26).
         </div>
       </div>
 
@@ -554,13 +553,50 @@ Inv 55021  Received damaged  Prince / Purple Rain   2 &times; $11.00 = $22.00
       </div>
       <div class="act-foot"><button class="btn block">Abandon claim 41</button></div>
     </aside>
+    <aside class="act">
+      <div class="act-head">
+        <div class="t">Void this claim</div>
+        <div class="s">Claim 41 &middot; claimed $24.40</div>
+      </div>
+      <div class="act-body">
+        <label class="field">
+          <span>Why it was wrong</span>
+          <select>
+            <option selected>Raised against the wrong copy</option>
+            <option>Wrong Invoice</option>
+            <option>Wrong reason or amount</option>
+            <option>Duplicate of another claim</option>
+            <option>Other &mdash; note required</option>
+          </select>
+        </label>
+        <label class="field">
+          <span>Note</span>
+          <textarea>Both copies were fine &mdash; the split seam was on the Rumours jacket, not this one.</textarea>
+        </label>
+
+        <div class="caveat">
+          <strong>Voiding is not abandoning.</strong> Abandon says <em>this claim was right and no money is coming</em>.
+          Void says <em>this claim was wrong and should never have been sent</em>. Both keep the row; reading one for the
+          other loses the difference between a loss and a mistake, which is the only thing the closed list is worth
+          consulting for later (d27).
+        </div>
+
+        <div class="deadfig">
+          <div class="fig"><span>Number 41</span><span>retired</span></div>
+          <p>Re-raising means a <strong>new claim with a new number</strong>. 41 is never reused, so the sequence has
+          gaps and is not a count of anything (d26). The void is appended as its own record rather than a field on the
+          claim &mdash; the shape A-36 sets for payment batches, for its reason.</p>
+        </div>
+      </div>
+      <div class="act-foot"><button class="btn block">Void claim 41</button></div>
+    </aside>
   </div>
 
   <div class="variant-say">
-    <h3>One track, three acts</h3>
-    <p>Track 3 follows what track 2 has selected: a batch shows the send, a sent claim shows both dispositions. The
-    dispositions are deliberately unequal in weight &mdash; <em>Mark Credited</em> is the primary orange, <em>Abandon</em>
-    is plain, because one brings money in and the other admits none is coming.</p>
+    <h3>One track, four acts</h3>
+    <p>Track 3 follows what track 2 has selected: a batch shows the send, a sent claim shows its three endings. Only
+    <em>Mark Credited</em> is the primary orange — <em>Abandon</em> and <em>Void</em> are plain, because one brings
+    money in and the other two admit that none is.</p>
     <p><strong>The amber box is the number worth designing around.</strong> E-04 d20 exists because what a supplier grants
     routinely differs from what was claimed, and says the memo&rsquo;s amount is recorded <em>alongside</em> the claim total
     rather than replacing it. Nothing on today&rsquo;s screen shows that gap, so the store absorbs a few dollars a claim with
@@ -576,13 +612,14 @@ Inv 55021  Received damaged  Prince / Purple Rain   2 &times; $11.00 = $22.00
   <h2>Where revision 2 landed</h2>
 
   <section class="note">
-    <h3><span class="tag ok">Settled</span> 1 &middot; Unsent, and it needs no new state</h3>
-    <p>&ldquo;Unsent&rdquo; replaces the code&rsquo;s invented <code>Draft</code>, and it is <strong>derived</strong>: d10
-    assigns the number on send, so <em>has no number yet</em> is exactly the set of unsent claims. No enum value, no
-    migration, and nothing to keep in step &mdash; the same derive-don&rsquo;t-store move A-33b makes for a paid Invoice.</p>
-    <div class="fix"><b>To write</b> An E-04 decision recording that the status enum stays <strong>Pending | Credited</strong>
-    as d11 says, that unsent is derived from the absent claim number, and that <code>types.ts</code>&rsquo;s
-    <code>Draft</code> goes.</div>
+    <h3><span class="tag ok">Written</span> 1 &middot; Unsent, derived from the sent date</h3>
+    <p>&ldquo;Unsent&rdquo; replaces the code&rsquo;s invented <code>Draft</code> and is <strong>derived</strong> &mdash; but
+    from the <strong>sent date</strong> (d23), not from the absent claim number as revision 2 had it. d10 designs the number
+    to be typed by a person, and hanging a state on a hand-edited field is a hazard by construction. The sent date is written
+    by the system in the same act and nobody has a reason to edit it.</p>
+    <p>That became <strong>E-04 d25</strong>, superseding d21&rsquo;s derivation while leaving its principle alone, and
+    <strong>A-43</strong> as the general rule: <em>a derived state keys on a fact the system writes, never on one a person
+    may edit.</em> It completes A-35 and A-33b, which said what to derive without ever saying from what.</p>
   </section>
 
   <section class="note">
@@ -593,9 +630,11 @@ Inv 55021  Received damaged  Prince / Purple Rain   2 &times; $11.00 = $22.00
     <p>So the unsent band draws <em>batches</em>, not tickable rows, and this screen has no multi-select at all in that band.
     That is a real simplification over revision 1, which had borrowed M-05 d27&rsquo;s ticking for a problem that does not
     have M-05&rsquo;s shape.</p>
-    <div class="fix"><b>To write</b> E-04 step 2 says claims &ldquo;accumulate&rdquo; and are batched by supplier and
-    separator; a decision should state that the batch is <strong>standing</strong> (one open per supplier per separator) and
-    that sending it is what numbers it.</div>
+    <p>Written as <strong>E-04 d22</strong>, which also settles where the letter comes from: it is
+    <strong>chosen as the claim is raised</strong> and blank by default, <em>not</em> inherited from the PurchaseOrder the
+    copy arrived on. That letter splits outgoing streams, and by the time a copy is in hand the stream that carried it has
+    been sent and closed &mdash; reusing it would batch claims by an accident of ordering history rather than by how the
+    store wants to argue them.</p>
   </section>
 
   <section class="note">
@@ -620,8 +659,9 @@ Inv 55021  Received damaged  Prince / Purple Rain   2 &times; $11.00 = $22.00
     <p><strong>What I would not build:</strong> aging buckets. A per-row figure, one sort and one chip is the whole
     affordance &mdash; the same line the Payable mock drew, for the same reason: a per-row fact and a report are different
     things, and only the first is a layout decision.</p>
-    <div class="fix"><b>To write</b> An E-04 decision adding <code>sentAt</code>, written when the claim number is assigned.
-    Without it, every waiting-based affordance on this screen comes out.</div>
+    <p>Written as <strong>E-04 d23</strong> &mdash; and it turned out to carry more weight than an affordance. Because the
+    sent date is written by the system, it is also the right thing to derive <em>sent-ness</em> from, which is what d25 and
+    A-43 do. The column bought a figure and a foundation for one write.</p>
   </section>
 
   <section class="note q">
@@ -638,14 +678,29 @@ Inv 55021  Received damaged  Prince / Purple Rain   2 &times; $11.00 = $22.00
     <p>&bull; <strong>It does not touch stock.</strong> The copies left on-hand when they were adjusted out under d3/d4.
     Abandoning stops the store expecting money and does nothing else &mdash; worth stating in the decision, because
     &ldquo;write it off&rdquo; reads like an inventory act and is not one.</p>
-    <div class="fix"><b>To write</b> An E-04 decision adding <strong>Abandoned</strong> as a second terminal disposition
-    alongside Credited, with a reason code (<em>declined / no response / not worth chasing / other</em>) and a note; the
-    claim is closed and kept, never deleted; stock is unaffected; and an abandoned claim can still be marked Credited if a
-    memo arrives later. It also partly answers E-04&rsquo;s open question, which should be amended rather than left whole.</div>
+    <p>Written as <strong>E-04 d24</strong>, manager-only following d3 &mdash; writing off money owed is the same standing
+    as a hard on-hand adjustment. <em>Accepted consequence recorded with it:</em> raising a claim is an Employee act and
+    disposing of a dead one is not, so an Employee can create work only a Manager can clear. A queue one role fills and
+    another drains backs up unless somebody looks &mdash; which is what d23&rsquo;s days-waiting figure exists to make
+    visible.</p>
   </section>
 
   <section class="note">
-    <h3><span class="tag ok">Done</span> 6 &middot; Numbering and slab order</h3>
+    <h3><span class="tag ok">Written</span> 6 &middot; Void, and why it is not Abandon</h3>
+    <p>The number is <strong>ours, not theirs</strong> &mdash; the supplier answers with their own credit memo reference,
+    which d20 makes the point of truth &mdash; so a wrong number costs nothing and uniqueness is the only property it has to
+    hold (<strong>d26</strong>). It is frozen on send, and a claim that is wrong is <strong>voided and raised again</strong>
+    rather than edited (<strong>d27</strong>).</p>
+    <p>That gives the screen two endings that both keep the row and mean opposite things, so they are drawn apart and
+    labelled: <em>abandon</em> is a loss, <em>void</em> is a mistake. <strong>A-44</strong> records why they are built
+    differently too &mdash; abandoned is a status the row carries, voided is a row in <code>supplier_claim_voids</code>,
+    because a <code>voided_at</code> column would be an update to the row the void exists to leave alone.</p>
+    <p><em>The cost, recorded:</em> &ldquo;is this claim finished&rdquo; becomes a status read <strong>or</strong> a join,
+    and a query that remembers only the first counts voided claims as live.</p>
+  </section>
+
+  <section class="note">
+    <h3><span class="tag ok">Done</span> 7 &middot; Numbering and slab order</h3>
     <p>The <code>CLM-</code> prefix is gone &mdash; claim numbers are plain ascending integers, and the column header says
     <em>Claim</em> so the row does not have to. d10 is untouched: still ascending, still unique, still overwritable where a
     supplier insists on their own reference.</p>
@@ -669,8 +724,9 @@ Inv 55021  Received damaged  Prince / Purple Rain   2 &times; $11.00 = $22.00
     <p>A supplier who issues a credit note <strong>against a different invoice</strong> than the one claimed
     <span class="cite">E-04:151</span>. Untouched by anything above, and not a layout question &mdash; it is about what a
     credit memo is allowed to reference.</p>
-    <p>Whether an abandoned claim should be <strong>visible in A/P at all</strong>. Pending claims surface there (step 6,
-    d12); a closed one presumably should not, but the decision above only says it closes here.</p>
+    <p>Whether a <strong>claim raised in error but never sent</strong> needs anything at all. d27 voids a <em>sent</em>
+    claim; an unsent line has no number, no sent date and no artifact in the world, so removing it from its batch ought to be
+    an ordinary edit &mdash; but nothing says so.</p>
   </section>
 </div>
 

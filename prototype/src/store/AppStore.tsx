@@ -54,9 +54,12 @@ import type {
   SaleLine,
   Section,
   Supplier,
+  ClaimVoid,
   SupplierClaim,
   TaxLine,
   Tender,
+  AbandonReason,
+  VoidReason,
 } from "../data/types";
 
 let seq = 100;
@@ -133,6 +136,9 @@ interface AppState {
   sales: Sale[];
   closeBatches: CloseBatch[]; // M-03 — Total Today's Sales / Undo End of Day
   claims: SupplierClaim[];
+  // E-04 d27, architecture A-44 — a void is a row, never a column, so it
+  // lives apart from the claim it retires rather than as a field on it.
+  claimVoids: ClaimVoid[];
   invoices: Invoice[];
   payableEntries: PayableEntry[]; // M-05 — manual ledger entries: Invoice/Claim/Credit/Adjustment/Consignment, not sourced from Receiving or Supplier Claims
   paymentBatches: PaymentBatch[]; // M-05 d16 — one row per settlement, across Invoices, entries and credits
@@ -270,12 +276,79 @@ const seed: AppState = {
   // without first walking a Receiving session — lines mirror the InventoryItems
   // INVENTORY already seeds as "arrived on" these same invoice numbers.
   claims: [
+    // E-04 d22 — two STANDING batches for the same supplier, kept apart by
+    // the separator chosen as each line was raised. Neither has a sent date,
+    // which is the whole of what "unsent" means (d25).
+    {
+      id: "claim-fab-base",
+      supplierId: "sup-fab",
+      status: "Pending",
+      lines: [
+        {
+          id: "cl-fab-base-1",
+          recordId: "r-purple",
+          invoiceNumber: "55021",
+          reason: "Received damaged",
+          note: "Seam split on both copies",
+          cost: 11,
+          qty: 2,
+        },
+      ],
+      createdBy: CURRENT_USER,
+      createdAt: "2026-09-11 10:20:00",
+      log: [{ at: "2026-09-11 10:20:00", text: "Claim opened — Received damaged (qty 2)" }],
+    },
+    {
+      id: "claim-fab-weekly",
+      supplierId: "sup-fab",
+      separator: "W",
+      status: "Pending",
+      lines: [
+        {
+          id: "cl-fab-weekly-1",
+          recordId: "r-kind",
+          invoiceNumber: "55021",
+          reason: "Billed / not shipped",
+          note: "Billed 1, none in the carton",
+          cost: 12,
+          qty: 1,
+        },
+      ],
+      createdBy: MANAGER_NAME,
+      createdAt: "2026-09-12 14:05:00",
+      log: [{ at: "2026-09-12 14:05:00", text: "Claim opened — Billed / not shipped (qty 1)" }],
+    },
+
+    // Sent and unanswered. d23's days-waiting figure is what makes this row
+    // ask a question rather than just sit there.
+    {
+      id: "claim-fab-41",
+      claimNumber: 41,
+      supplierId: "sup-fab",
+      status: "Pending",
+      sentAt: "2026-07-28 09:40:00",
+      lines: [
+        { id: "cl-41-1", recordId: "r-rumours", invoiceNumber: "54880", reason: "Short shipped", cost: 14.4, qty: 1 },
+        { id: "cl-41-2", recordId: "r-ok", invoiceNumber: "54880", reason: "Received damaged", cost: 10, qty: 1 },
+      ],
+      createdBy: MANAGER_NAME,
+      createdAt: "2026-07-27 16:00:00",
+      log: [
+        { at: "2026-07-27 16:00:00", text: "Claim opened — Short shipped (qty 1)" },
+        { at: "2026-07-28 09:40:00", text: "Claim 41 sent to claims@fabdist.example" },
+      ],
+    },
+
+    // E-04 d20 — claimed 12.40, the memo granted 10.90. The gap is a real
+    // cost the store absorbed and both figures are kept.
     {
       id: "claim-seed-1",
       claimNumber: 9,
       supplierId: "sup-fab",
       status: "Credited",
+      sentAt: "2026-09-02 09:15:00",
       creditMemo: "CM-2201",
+      creditedAmount: 10.9,
       lines: [
         {
           id: "cl-seed-1",
@@ -293,8 +366,64 @@ const seed: AppState = {
       log: [
         { at: "2026-09-01 09:00:00", text: "Claim opened — Received damaged (qty 1)" },
         { at: "2026-09-02 09:15:00", text: "Claim 9 sent to claims@fabdist.example" },
-        { at: "2026-09-03 11:30:00", text: "Marked Credited — supplier credit memo CM-2201" },
+        { at: "2026-09-03 11:30:00", text: "Marked Credited — supplier credit memo CM-2201 granting 10.90" },
       ],
+    },
+
+    // d24 — the claim was right and no money came.
+    {
+      id: "claim-indie-40",
+      claimNumber: 40,
+      supplierId: "sup-indie",
+      status: "Abandoned",
+      sentAt: "2026-06-15 11:00:00",
+      abandonment: {
+        reason: "Declined by supplier",
+        note: "They say the carton was sealed at their end. Not worth the argument over $21.",
+        at: "2026-08-03 15:20:00",
+        by: MANAGER_NAME,
+      },
+      lines: [
+        { id: "cl-40-1", recordId: "r-illmatic", invoiceNumber: "3390", reason: "Short shipped", cost: 21, qty: 1 },
+      ],
+      createdBy: CURRENT_USER,
+      createdAt: "2026-06-14 09:00:00",
+      log: [
+        { at: "2026-06-14 09:00:00", text: "Claim opened — Short shipped (qty 1)" },
+        { at: "2026-06-15 11:00:00", text: "Claim 40 sent to orders@indiedirect.example" },
+        { at: "2026-08-03 15:20:00", text: "Abandoned — Declined by supplier · They say the carton was sealed at their end." },
+      ],
+    },
+
+    // d27 — the claim itself was wrong. Number 36 is retired with it (d26).
+    {
+      id: "claim-crate-36",
+      claimNumber: 36,
+      supplierId: "sup-crate",
+      status: "Pending",
+      sentAt: "2026-08-20 10:00:00",
+      lines: [
+        { id: "cl-36-1", recordId: "r-astral", invoiceNumber: "CD-777", reason: "Wrong item", cost: 18, qty: 1 },
+      ],
+      createdBy: CURRENT_USER,
+      createdAt: "2026-08-19 13:00:00",
+      log: [
+        { at: "2026-08-19 13:00:00", text: "Claim opened — Wrong item (qty 1)" },
+        { at: "2026-08-20 10:00:00", text: "Claim 36 sent to hello@cratedigger.example" },
+        { at: "2026-08-22 09:10:00", text: "Voided — Raised against the wrong copy · The Astral Weeks that came short was on the other invoice." },
+      ],
+    },
+  ],
+
+  // E-04 d27, architecture A-44 — one row per voided claim, never a column.
+  claimVoids: [
+    {
+      id: "claimvoid-seed-1",
+      claimId: "claim-crate-36",
+      reason: "Raised against the wrong copy",
+      note: "The Astral Weeks that came short was on the other invoice.",
+      at: "2026-08-22 09:10:00",
+      by: MANAGER_NAME,
     },
   ],
   invoices: [
@@ -454,7 +583,7 @@ const seed: AppState = {
   lastViewedCustomerId: null,
   nextSaleNumber: 100241,
   nextHold: 2,
-  nextClaimNumber: 12,
+  nextClaimNumber: 42, // d26 — 36, 40 and 41 are spent; gaps are expected
   nextPoNumber: 0,
   nextInternalBarcode: 9000,
   nextInvoiceRef: 1,
@@ -518,7 +647,9 @@ interface AppContextValue extends AppState {
     note?: string,
   ) => { claimId: string; supplierName: string } | null;
   sendClaim: (claimId: string, claimNumber?: number) => { claimNumber: number } | null;
-  markClaimCredited: (claimId: string, creditMemo: string) => void;
+  markClaimCredited: (claimId: string, creditMemo: string, creditedAmount?: number) => void;
+  abandonClaim: (claimId: string, reason: AbandonReason, note?: string) => void;
+  voidClaim: (claimId: string, reason: VoidReason, note?: string) => void;
 
   reserve: (
     recordId: string,
@@ -1457,7 +1588,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
 
     const existing = s.claims.find(
       (c) =>
-        c.status === "Draft" &&
+        !c.sentAt &&
         c.supplierId === supplier.id &&
         (c.separator ?? "").trim() === sepKey,
     );
@@ -1483,7 +1614,10 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
       id,
       supplierId: supplier.id,
       separator: sepKey || undefined,
-      status: "Draft",
+      // E-04 d22 — a raised line joins the standing batch for its supplier
+      // and separator, or opens one. It is Pending from birth and unsent
+      // until it has a sent date (d25); there is no Draft status.
+      status: "Pending",
       lines: [line],
       createdBy: CURRENT_USER,
       createdAt: now(),
@@ -1495,7 +1629,9 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
 
   const sendClaim: AppContextValue["sendClaim"] = (claimId, claimNumber) => {
     const claim = s.claims.find((c) => c.id === claimId);
-    if (!claim || claim.status !== "Draft") return null;
+    // E-04 d25 — "already sent" is the presence of a sent date, not a status
+    // value and not the claim number (architecture A-43).
+    if (!claim || claim.sentAt) return null;
     const supplier = s.suppliers.find((sup) => sup.id === claim.supplierId)!;
     const used = new Set(s.claims.map((c) => c.claimNumber).filter((n): n is number => n !== undefined));
     let num = claimNumber ?? s.nextClaimNumber;
@@ -1508,7 +1644,10 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
           ? {
               ...c,
               status: "Pending",
+              // d23 — the number and the sent date are written in the same
+              // act. The date is the one anything derives from (d25).
               claimNumber: num,
+              sentAt: now(),
               log: [...c.log, { at: now(), text: `Claim ${num} sent to ${supplier.email}` }],
             }
           : c,
@@ -1517,7 +1656,10 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
     return { claimNumber: num };
   };
 
-  const markClaimCredited: AppContextValue["markClaimCredited"] = (claimId, creditMemo) =>
+  // E-04 d20 — the memo is the point of truth, and what it GRANTS may differ
+  // from what was claimed. Both figures are kept: the claim total stays
+  // readable as what was asked for. M-05 d26 counts the granted figure.
+  const markClaimCredited: AppContextValue["markClaimCredited"] = (claimId, creditMemo, creditedAmount) =>
     setS((prev) => ({
       ...prev,
       claims: prev.claims.map((c) =>
@@ -1526,11 +1668,66 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
               ...c,
               status: "Credited",
               creditMemo,
-              log: [...c.log, { at: now(), text: `Marked Credited — supplier credit memo ${creditMemo}` }],
+              creditedAmount,
+              log: [
+                ...c.log,
+                {
+                  at: now(),
+                  text:
+                    `Marked Credited — supplier credit memo ${creditMemo}` +
+                    (creditedAmount != null ? ` granting ${creditedAmount.toFixed(2)}` : ""),
+                },
+              ],
             }
           : c,
       ),
     }));
+
+  // E-04 d24 — the claim was right and no money is coming. Manager-only
+  // (following d3: writing off money owed is the same standing as a hard
+  // on-hand adjustment), reason-coded, and appended rather than deleted. The
+  // claim keeps its lines. Stock is untouched — the copies left on hand when
+  // they were adjusted out, and this only stops the store expecting payment.
+  const abandonClaim: AppContextValue["abandonClaim"] = (claimId, reason, note) =>
+    setS((prev) => ({
+      ...prev,
+      claims: prev.claims.map((c) =>
+        c.id === claimId
+          ? {
+              ...c,
+              status: "Abandoned",
+              abandonment: { reason, note, at: now(), by: MANAGER_NAME },
+              log: [
+                ...c.log,
+                { at: now(), text: `Abandoned — ${reason}${note ? ` · ${note}` : ""}` },
+              ],
+            }
+          : c,
+      ),
+    }));
+
+  // E-04 d27 — the claim itself was wrong and should never have been sent.
+  // A different act from abandoning, and built differently: architecture A-44
+  // makes the void a ROW, so nothing on the claim is updated. Its number is
+  // retired with it (d26) — re-raising means a new claim with a new number.
+  const voidClaim: AppContextValue["voidClaim"] = (claimId, reason, note) =>
+    setS((prev) =>
+      prev.claimVoids.some((v) => v.claimId === claimId)
+        ? prev // one void per claim, the shape A-36 makes structural
+        : {
+            ...prev,
+            claimVoids: [
+              { id: uid("claimvoid"), claimId, reason, note, at: now(), by: MANAGER_NAME },
+              ...prev.claimVoids,
+            ],
+            claims: prev.claims.map((c) =>
+              c.id === claimId
+                ? { ...c, log: [...c.log, { at: now(), text: `Voided — ${reason}${note ? ` · ${note}` : ""}` }] }
+                : c,
+            ),
+          },
+    );
+
 
   const reserve: AppContextValue["reserve"] = (recordId, itemId, customerId, qty, po) => {
     const rec = s.records.find((r) => r.id === recordId)!;
@@ -2778,6 +2975,8 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
       raiseClaim,
       sendClaim,
       markClaimCredited,
+      abandonClaim,
+      voidClaim,
       reserve,
       setCopyPrice,
       routeReturnLine,

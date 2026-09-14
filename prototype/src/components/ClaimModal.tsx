@@ -38,7 +38,7 @@ export function ClaimModal({
   const reason = reasonChoice === CUSTOM_REASON ? customReason.trim() : reasonChoice;
 
   const existingDraft = app.claims.find(
-    (c) => c.status === "Draft" && c.supplierId === item?.supplierId && (c.separator ?? "").trim() === sepKey,
+    (c) => !c.sentAt && c.supplierId === item?.supplierId && (c.separator ?? "").trim() === sepKey,
   );
 
   const commit = () => {

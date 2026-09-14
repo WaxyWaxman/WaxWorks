@@ -235,7 +235,52 @@ export const CLAIM_REASONS = [
 ] as const;
 export type ClaimReason = (typeof CLAIM_REASONS)[number];
 
-export type ClaimStatus = "Draft" | "Pending" | "Credited";
+// E-04 d11, d24. There is no `Draft`: the prototype carried one the record
+// never admitted, and d21 retired it. **Unsent is derived from `sentAt`**
+// (d25) — never from the absent claim number, which d10 lets a person type
+// and which a derived state must therefore not key on (architecture A-43).
+// So an unsent claim is an ordinary `Pending` one that has no sent date.
+export type ClaimStatus = "Pending" | "Credited" | "Abandoned";
+
+// E-04 d24 — why the store stopped expecting the money. Same shape as the
+// adjustment reason codes in d4: visible rather than gated.
+export const ABANDON_REASONS = [
+  "Declined by supplier",
+  "No response",
+  "Not worth chasing",
+  "Other",
+] as const;
+export type AbandonReason = (typeof ABANDON_REASONS)[number];
+
+// E-04 d27 — why the claim itself was wrong. A different question from
+// ABANDON_REASONS: those say no money is coming, these say the claim should
+// never have been sent.
+export const VOID_REASONS = [
+  "Raised against the wrong copy",
+  "Wrong Invoice",
+  "Wrong reason or amount",
+  "Duplicate of another claim",
+  "Other",
+] as const;
+export type VoidReason = (typeof VOID_REASONS)[number];
+
+/**
+ * E-04 d27, architecture A-44 — a claim void is a ROW, never a column.
+ * A `voidedAt` on the claim would be an update to the row the void exists to
+ * leave alone, and one-row-per-claim makes a double void unrepresentable
+ * rather than a check someone remembers (the rule A-36 sets for payment
+ * batches). Consequence, recorded in A-44: "is this claim finished" is a
+ * status read OR a lookup here, and code that forgets the second counts
+ * voided claims as live. `claimIsLive()` in lib/claims.ts is the one seam.
+ */
+export interface ClaimVoid {
+  id: string;
+  claimId: string;
+  reason: VoidReason;
+  note?: string;
+  at: string;
+  by: string;
+}
 
 export interface ClaimLine {
   id: string;
@@ -266,6 +311,13 @@ export interface SupplierClaim {
   // derives it from the presence of a live credit target naming this claim,
   // for the reason A-33b refuses a stored `paid` — a flag has a release path
   // (d22's void) that someone has to remember, and a derivation has none.
+  // E-04 d23 — stamped in the same act that assigns the number. Two jobs:
+  // it is the figure "days waiting" is measured from, and it is what d25
+  // derives sent-ness from. Absent = unsent.
+  sentAt?: string;
+  // E-04 d24 — set with status `Abandoned`. The status is the authority
+  // (architecture A-44); this is the detail behind it.
+  abandonment?: { reason: AbandonReason; note?: string; at: string; by: string };
   createdBy: string;
   createdAt: string;
   log: { at: string; text: string }[];

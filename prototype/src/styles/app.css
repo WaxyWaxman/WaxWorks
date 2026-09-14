@@ -2463,3 +2463,207 @@ tr.ap-row.settled:hover td { background: var(--c-surface-2); }
   margin-left: 6px; font-family: var(--font-narrow); font-size: 9px; font-weight: 700;
   letter-spacing: 0.06em; text-transform: uppercase; color: var(--c-ink-faint);
 }
+
+/* ======================================================================
+   SUPPLIER CLAIMS (E-04 §"Supplier claims") — the same three tracks as
+   Payable: a 320px slab that collapses to a 52px strip, the work, and a
+   344px act track that follows the selection.
+
+   The one structure NOT carried over is Payable's .ap-ledger table. A claim
+   is a few lines with prose in them — a reason and a note — rather than six
+   money columns that have to line up, so track 2 is a list of cards each
+   opening a short table, closer to On Order's row.
+   ====================================================================== */
+.claims-frame {
+  position: relative;
+  flex: 1; min-height: 0; min-width: 0;
+  display: grid; grid-template-columns: 320px minmax(0, 1fr) 344px;
+  background: var(--c-surface);
+}
+.claims-frame.slab-shut { grid-template-columns: 52px minmax(0, 1fr) 344px; }
+
+/* ---- Track 1 ---- */
+.claims-slab {
+  border-right: 1px solid var(--c-border-strong); background: var(--c-surface-2);
+  display: flex; flex-direction: column; min-height: 0; min-width: 0;
+}
+.claims-sortbar {
+  flex: none; display: flex; align-items: center; gap: var(--sp-2);
+  padding: 6px var(--sp-3); border-bottom: 1px solid var(--c-border-strong);
+}
+.claims-sortbar .lab {
+  font-family: var(--font-narrow); font-size: 9.5px; font-weight: 800;
+  letter-spacing: 0.09em; text-transform: uppercase; color: var(--c-ink-faint);
+}
+.claims-sortbar select {
+  font: inherit; font-size: var(--fs-sm); font-weight: 600; flex: 1; padding: 3px 6px;
+  border: 1px solid var(--c-border-strong); background: var(--c-surface);
+}
+.claims-band {
+  position: sticky; top: 0; z-index: 1;
+  padding: 5px var(--sp-3); background: var(--c-surface-2);
+  border-bottom: 1px solid var(--c-border);
+  font-family: var(--font-narrow); font-size: 9.5px; font-weight: 800;
+  letter-spacing: 0.09em; text-transform: uppercase; color: var(--c-ink-faint);
+  display: flex; justify-content: space-between;
+}
+.claims-srow {
+  width: 100%; text-align: left; font: inherit; cursor: pointer;
+  display: grid; grid-template-columns: 38px minmax(0, 1fr) auto; gap: var(--sp-2);
+  align-items: center; padding: 9px var(--sp-3);
+  border: none; border-bottom: 1px solid var(--c-border); background: var(--c-surface);
+}
+.claims-srow:hover { background: var(--c-accent-soft); }
+.claims-srow.on { background: var(--c-ink); color: #fff; }
+.claims-srow.on .sub, .claims-srow.on .code { color: #bdbdb8; }
+.claims-srow.on .code { border-color: #55554f; background: transparent; }
+.claims-srow .nm {
+  display: block; font-weight: 700; font-size: var(--fs-sm);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.claims-srow .sub {
+  display: block; font-size: var(--fs-xs); color: var(--c-ink-faint);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.claims-srow .amt { display: block; font-family: var(--font-mono); font-size: var(--fs-sm); font-weight: 700; }
+.claims-srow .wait {
+  display: block; font-size: 9.5px; font-weight: 800; letter-spacing: 0.05em;
+  text-transform: uppercase; color: var(--c-danger);
+}
+.claims-srow.on .wait { color: #ff9b8f; }
+
+/* ---- Track 2 ---- */
+.claims-main { display: flex; flex-direction: column; min-width: 0; min-height: 0; background: var(--c-surface); }
+.claims-main-head {
+  flex: none; display: flex; gap: var(--sp-3); align-items: flex-start;
+  padding: var(--sp-4); border-bottom: 1px solid var(--c-border-strong);
+}
+.claims-main-head h2 { font-size: var(--fs-lg); margin: 0; }
+.claims-list { overflow: auto; flex: 1; min-height: 0; }
+.claims-sec { border-bottom: 1px solid var(--c-border-strong); }
+.claims-sec-head {
+  position: sticky; top: 0; z-index: 1;
+  display: flex; align-items: baseline; gap: var(--sp-3);
+  padding: 7px var(--sp-4); background: var(--c-surface-2);
+  border-bottom: 1px solid var(--c-border);
+}
+.claims-sec-head .t {
+  font-family: var(--font-narrow); font-size: var(--fs-xs); font-weight: 800;
+  letter-spacing: 0.08em; text-transform: uppercase; white-space: nowrap;
+}
+.claims-sec-head .say { font-size: var(--fs-xs); color: var(--c-ink-faint); min-width: 0; }
+.claims-sec-head .tot { margin-left: auto; font-family: var(--font-mono); font-size: var(--fs-sm); font-weight: 700; }
+.claims-quiet {
+  padding: 10px var(--sp-4); font-size: var(--fs-sm); color: var(--c-ink-soft);
+  display: flex; gap: var(--sp-3); align-items: center; flex-wrap: wrap;
+}
+
+/* A standing batch (d22) — a card, because it is a container you send whole,
+   not a row you tick. */
+.claims-bucket {
+  border: 1px solid var(--c-border-strong); margin: var(--sp-3) var(--sp-4);
+  background: var(--c-surface); cursor: pointer;
+}
+.claims-bucket:hover { border-color: var(--c-accent); }
+.claims-bucket.on { border-color: var(--c-accent); border-width: 2px; background: var(--c-accent-soft); }
+.claims-bucket-top {
+  display: flex; align-items: center; gap: var(--sp-3);
+  padding: 9px var(--sp-3); border-bottom: 1px solid var(--c-border);
+}
+.claims-bucket-top .nm { font-weight: 800; font-size: var(--fs-sm); }
+.claims-bucket-top .sep {
+  font-family: var(--font-mono); font-weight: 600; font-size: var(--fs-xs); color: var(--c-ink-faint);
+}
+.claims-bucket-top .fig { margin-left: auto; font-weight: 700; }
+.claims-bucket-lines { padding: var(--sp-2) var(--sp-3) var(--sp-3); }
+
+.claims-card { border-bottom: 1px solid var(--c-border); }
+.claims-card.on { background: var(--c-accent-soft); box-shadow: inset 3px 0 0 var(--c-accent); }
+.claims-card.closed { opacity: 0.85; }
+.claims-card-top {
+  display: flex; gap: var(--sp-3); align-items: flex-start; padding: 10px var(--sp-4);
+}
+.claims-card-top .id {
+  display: flex; align-items: center; gap: 7px; flex-wrap: wrap;
+  font-weight: 800; font-size: var(--fs-sm);
+}
+.claims-card-top .meta { display: block; font-size: var(--fs-xs); color: var(--c-ink-faint); margin-top: 3px; }
+.claims-card-top .fig { margin-left: auto; text-align: right; font-weight: 700; white-space: nowrap; }
+.claims-card-top .fig .sub {
+  display: block; font-size: var(--fs-xs); font-weight: 600; color: var(--c-ink-faint);
+}
+.claims-card-lines { padding: 0 var(--sp-4) var(--sp-3) var(--sp-4); }
+
+table.claims-ln { width: 100%; border-collapse: collapse; font-size: var(--fs-sm); }
+table.claims-ln th {
+  text-align: left; font-family: var(--font-narrow); font-size: 9.5px; font-weight: 800;
+  letter-spacing: 0.08em; text-transform: uppercase; color: var(--c-ink-faint);
+  padding: 4px 8px 4px 0; border-bottom: 1px solid var(--c-border);
+}
+table.claims-ln td { padding: 5px 8px 5px 0; border-bottom: 1px solid var(--c-border); vertical-align: top; }
+.claims-reason {
+  display: inline-block; font-size: var(--fs-xs); font-weight: 800; letter-spacing: 0.03em;
+  text-transform: uppercase; border: 1px solid var(--c-border-strong);
+  padding: 1px 5px; color: var(--c-ink-soft); white-space: nowrap;
+}
+
+/* E-04 d20's gap — what the store absorbed. The screen's most important
+   number, and nothing showed it before. */
+.claims-delta {
+  background: var(--c-warn-soft); border: 1px solid var(--c-warn);
+  padding: var(--sp-3); margin: var(--sp-3) 0;
+}
+.claims-delta.over { background: var(--c-ok-soft); border-color: var(--c-ok); }
+.claims-delta .fig {
+  display: flex; justify-content: space-between;
+  font-family: var(--font-mono); font-weight: 700; font-size: var(--fs-md); color: var(--c-warn);
+}
+.claims-delta.over .fig { color: var(--c-ok); }
+.claims-delta p { margin: 6px 0 0; font-size: var(--fs-xs); color: var(--c-ink-soft); line-height: 1.5; }
+
+/* The other outcome: a write-off, deliberately grey where the credit is amber. */
+.claims-dead {
+  background: var(--c-surface-2); border: 1px solid var(--c-border-strong);
+  padding: var(--sp-3); margin: var(--sp-3) 0;
+}
+.claims-dead .fig {
+  display: flex; justify-content: space-between;
+  font-family: var(--font-mono); font-weight: 700; font-size: var(--fs-md); color: var(--c-ink-soft);
+}
+.claims-dead p { margin: 6px 0 0; font-size: var(--fs-xs); color: var(--c-ink-soft); line-height: 1.5; }
+
+/* ---- Track 3 ---- */
+.claims-act {
+  border-left: 1px solid var(--c-border-strong); background: var(--c-surface-2);
+  display: flex; flex-direction: column; min-height: 0; min-width: 0;
+}
+.claims-act-head {
+  flex: none; padding: var(--sp-3) var(--sp-4);
+  border-bottom: 1px solid var(--c-border-strong); background: var(--c-surface);
+}
+.claims-act-head .t {
+  font-family: var(--font-narrow); font-size: var(--fs-xs); font-weight: 800;
+  letter-spacing: 0.09em; text-transform: uppercase;
+}
+.claims-act-head .s { font-size: var(--fs-xs); color: var(--c-ink-faint); margin-top: 3px; }
+.claims-act-body { padding: var(--sp-4); overflow: auto; flex: 1; min-height: 0; }
+.claims-act-foot {
+  flex: none; padding: var(--sp-3) var(--sp-4);
+  border-top: 1px solid var(--c-border-strong); background: var(--c-surface);
+}
+.claims-mail {
+  background: var(--c-surface); border: 1px solid var(--c-border-strong); padding: var(--sp-3);
+  font-family: var(--font-mono); font-size: 10.5px; line-height: 1.6; color: var(--c-ink-soft);
+  white-space: pre-wrap; max-height: 190px; overflow: auto;
+}
+
+/* Below 1180px the act track drops to a band under the work, like every
+   other three-track screen here. */
+@media (max-width: 1180px) {
+  .claims-frame { grid-template-columns: 320px minmax(0, 1fr); }
+  .claims-frame.slab-shut { grid-template-columns: 52px minmax(0, 1fr); }
+  .claims-act {
+    grid-column: 1 / -1;
+    border-left: none; border-top: 2px solid var(--c-ink); max-height: 58dvh;
+  }
+}
