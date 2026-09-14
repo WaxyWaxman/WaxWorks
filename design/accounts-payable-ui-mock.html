@@ -638,10 +638,10 @@ table.props td:first-child { white-space: nowrap; font-weight: 700; color: var(-
   <header class="masthead">
     <div>
       <h1>Accounts Payable, in three tracks</h1>
-      <p>M-05 laid out the way Sell, Find, Receive, Customers, Suppliers and On&nbsp;Order already are — a retractable slab on the left, the work in the middle, the thing you are acting on pinned to the right. Layout mock, not working code. All three modals go away: <strong>Record payment</strong> and <strong>Clear selected</strong> become the right track's reading of <em>the selection</em>, and <strong>Create new</strong> becomes its third state. Since the first pass: paid Invoices <strong>stay readable</strong> and name what settled them, every Invoice row <strong>opens in Receiving</strong>, a credit and a cheque <strong>settle in one act with a split you choose</strong>, there is a <strong>Due column</strong> — which needed payment terms that existed nowhere on record — a recorded payment can be <strong>voided</strong>, which turns out to mean an Invoice can stop being immutable, and a claim credit now goes out <strong>whole</strong> with any excess coming back as its own artifact — which is how "the supplier owes us" finally gets modelled.</p>
+      <p>M-05 laid out the way Sell, Find, Receive, Customers, Suppliers and On&nbsp;Order already are — a retractable slab on the left, the work in the middle, the thing you are acting on pinned to the right. Layout mock, not working code. All three modals go away: <strong>Record payment</strong> and <strong>Clear selected</strong> become the right track's reading of <em>the selection</em>, and <strong>Create new</strong> becomes its third state. Since the first pass: <strong>one selection settles anything</strong> — invoices, credit memos, claims, placeholders, in any mix — paid Invoices <strong>stay readable</strong> and name what settled them, every Invoice row <strong>opens in Receiving</strong>, a credit and a cheque <strong>settle in one act with a split you choose</strong>, there is a <strong>Due column</strong> — which needed payment terms that existed nowhere on record — a recorded payment can be <strong>voided</strong>, which turns out to mean an Invoice can stop being immutable, and a claim credit now goes out <strong>whole</strong> with any excess coming back as its own artifact — which is how "the supplier owes us" finally gets modelled.</p>
     </div>
     <span class="stamp">branch AccountsPayable-UI</span>
-    <span class="stamp live">recorded — M-05 d17–d25, M-01 d19, E-02 d45, A-33a</span>
+    <span class="stamp live">recorded — M-05 d17–d28, M-01 d19, E-02 d45, A-33a/b</span>
   </header>
 
   <div class="controls">
@@ -790,6 +790,18 @@ table.props td:first-child { white-space: nowrap; font-weight: 700; color: var(-
           <td><strong>A remainder Credit is its own kind of artifact, not a manual ledger entry, and a supplier balance may go negative because of one.</strong> It is <strong>not</strong> covered by <span class="cite">d12</span>, whose defining characteristic is that a manual entry is "not sourced from Receiving or Supplier Claims" &mdash; a remainder is sourced from a claim by construction, and filing it as a Create-new Credit would have quietly retired the distinction d12 exists to draw. It behaves as <span class="cite">d14</span> says a Credit does: it reduces the balance the moment it is emitted, and is therefore never allocated again. <em>Accepted consequence:</em> a Supplier's balance can now read <strong>below zero</strong>, which nothing in this flow, M-01 or the architecture previously contemplated &mdash; so every surface reporting a balance has to render a negative rather than clamp it.</td>
         </tr>
         <tr>
+          <td>M-05 d26 <span class="badge ok">recorded</span></td>
+          <td><strong>A Credited claim counts against the balance from the moment it is Credited, exactly as a manual Credit does.</strong> Corrects a reading this screen had been carrying: a Credited claim sat outside the balance until applied, while a manual Credit reduced it on entry &mdash; the same thing, a credit memo the store holds, behaving two ways depending on which door it came in by. The line is <strong>agreed versus not yet agreed</strong>, not claim versus entry. A Pending claim and a Claim placeholder stay outside <span class="cite">(d14, unchanged)</span>. <em>Accepted consequence:</em> a balance can read negative purely because a large claim was accepted, before anyone has done anything &mdash; which is the point. You find out by looking, not by attempting a settlement and being surprised.</td>
+        </tr>
+        <tr>
+          <td>M-05 d27 <span class="badge accent">fixes a real bug</span></td>
+          <td><strong>The selection is the unit of settlement, and any unsettled row may be in it.</strong> One rule: <strong>credits in the selection attach to the debits in the selection; whatever cannot attach stays as it was; Claim placeholders retire contributing nothing; money covers the shortfall.</strong> <strong>Extends d15 rather than replacing it</strong> &mdash; clearing is now the case where the selection holds no debit, so there is nothing to consume the credit against, it <em>stays counted</em> exactly as d15 requires, and no money moves. This retired an <em>invented</em> restriction, not a decision: the screen had been refusing any selection that was neither payable-only nor entries-summing-to-zero, which no row asked for and which <span class="cite">d16</span>'s "whatever mix of Invoices and manual entries it paid" already contradicted. <em>Accepted consequence:</em> a placeholder can be retired by including it in a settlement &mdash; a Manager deciding to stop chasing it. It moves no money, but it is a real disposal.</td>
+        </tr>
+        <tr>
+          <td>M-05 d28 <span class="badge warn">generalises d24</span></td>
+          <td><strong>Every credit consumed by a settlement is consumed whole; whatever cannot attach comes back as a remainder Credit.</strong> Extends d24 from Credited claims to <em>every</em> credit, for the reason d24 already gave: a credit consumed in part carries a running remainder, and bounding one needs a lock on both the consuming and the reversing path. <em>Accepted consequence:</em> settling a $20.00 Invoice against a $34.00 Credit produces a $14.00 remainder rather than leaving the original at $14.00 &mdash; the ledger grows a row where it used to mutate one. That is the trade the house pattern makes everywhere, and it is what keeps a void able to put things back exactly.</td>
+        </tr>
+        <tr>
           <td>M-01 d19 <span class="badge ok">recorded</span></td>
           <td><strong>A Supplier carries payment terms — Net 15 / 30 / 45 / 60, On receipt, COD, or Prepaid — as the default terms for Invoices received from them.</strong> <strong>New field, constraining nothing existing.</strong> It is not <em>Cancel-by</em>, which this card already carries and which is an <em>ordering</em> figure: days from order-placed to auto-cancel an unfulfilled order. Nothing on this card, or anywhere else, recorded when a bill is due before this. <em>Accepted consequence:</em> <strong>Prepaid and COD are not aging terms</strong> and the field quietly admits two different kinds of thing. A Prepaid Supplier that nevertheless carries an outstanding balance is either a data-entry error or a real exception, and that is left open in M-05 rather than answered here — the mock surfaces it as an anomaly rather than choosing.</td>
         </tr>
@@ -870,6 +882,13 @@ table.props td:first-child { white-space: nowrap; font-weight: 700; color: var(-
       <h2>Two totals, not one</h2>
       <p>The slab's store-wide figure is <strong>one line per currency</strong>, not a sum. M-05 requires a Supplier's currency to carry through, with the store-currency equivalent shown at the configured rate &mdash; and that rate lives in <span class="cite">M-06</span>, which is not built. Adding CAD 282.45 to USD 23.75 would be inventing an exchange rate in the one place on the screen most likely to be read as authoritative.</p>
       <p>When M-06 lands, this becomes a single figure with the per-currency lines beneath it. Until then the honest shape is the one that cannot be wrong. The same restraint applies inside a foreign-currency supplier's ledger, where the caveat sits in track 3 rather than a fabricated conversion sitting in the table.</p>
+    </section>
+
+    <section class="note">
+      <h2>The bug that found the model</h2>
+      <p>Ticking an Invoice and a credit memo together used to produce <em>&ldquo;Neither action is legal here.&rdquo;</em> That refusal was not a decision. It came from this screen splitting one selection into two competing modes &mdash; payables-only settles, entries-summing-to-zero clears, anything else refused &mdash; and no row ever asked for it. <span class="cite">d3</span> had said the opposite from the very first decision made about this screen: the list is <em>one combined list, because what is owed is the net of both</em>.</p>
+      <p>The fix was not a third mode. It was noticing that <strong>one rule produces all of them</strong>: credits attach to the debits beside them, what cannot attach stays as it was, placeholders retire at nothing, money covers the rest. Clearing stops being a separate button and becomes the case where you ticked no debit &mdash; nothing to attach to, so the credit stays counted, which is <span class="cite">d15</span> word for word.</p>
+      <p>The double-count I had been guarding against turned out not to exist. Applying a credit does not reduce the balance; it changes what the credit is <em>attached to</em>. An Invoice of $68.65 against a $34.00 Credit is $34.65 owed, and settling both with $34.65 moves the balance by exactly the money that left. A credit only counts twice if it lingers as a standing reducer <em>and</em> is spent separately &mdash; which consuming it in the same act is what prevents.</p>
     </section>
 
     <section class="note">
@@ -1027,14 +1046,25 @@ var PAYMENT_METHODS = ['Cheque', 'Credit card', 'EFT', 'Cash'];
 var ENTRY_TYPES = ['Invoice', 'Claim', 'Credit', 'Adjustment', 'Consignment'];
 
 /* ---- derived ---- */
-function live(it) { return !it.cleared && !(it.kind === 'claim' && it.applied); }
+function live(it) {
+  if (it.cleared || it.clearedNote) return false;   // retired from attention (d15)
+  if (it.kind === 'claim' && it.applied) return false;
+  if (it.kind === 'remainder' && it.consumedAt) return false;
+  if (it.kind === 'entry' && it.type === 'Credit' && it.consumedAt) return false;
+  return true;
+}
 function itemsFor(sid) { return ITEMS.filter(function (i) { return i.sup === sid && live(i); }); }
 /* Two different questions, and d15 is why they are not the same one.
    `itemsFor` is what still NEEDS ATTENTION. `countedFor` is what the BALANCE
    is made of, and a cleared Credit stays in it: "a Claim was never counted; a
    Credit already was, and stays counted". */
 function countedFor(sid) {
-  return ITEMS.filter(function (i) { return i.sup === sid && !(i.kind === 'claim'); });
+  /* A CLEARED credit stays counted - d15 says so in as many words. A CONSUMED
+     credit does not: it has moved onto an Invoice, and counting it here as
+     well is the double-count everything else is arranged to avoid. */
+  return ITEMS.filter(function (i) {
+    return i.sup === sid && !i.consumedAt && !(i.kind === 'claim' && i.applied);
+  });
 }
 /* d24 — a claim is binary. No running remainder, so nothing to bound and
    nothing to lock: "is this claim applied" is a status check. */
@@ -1063,8 +1093,10 @@ function signedOf(it) {
   return it.amount; // a Claim placeholder: face value, but see bandOf
 }
 function balanceOf(it) {
-  if (it.kind === 'claim') return 0;                         // nets only when applied (step 6)
-  if (it.kind === 'entry' && it.type === 'Claim') return 0;  // placeholder (d14)
+  /* d26 - a Credited claim counts from the moment it is Credited, exactly
+     as a manual Credit does. The line is agreed-vs-not-agreed, not
+     claim-vs-entry, so only a Claim PLACEHOLDER stays outside (d14). */
+  if (it.kind === 'entry' && it.type === 'Claim') return 0;
   return signedOf(it);
 }
 function paidOf(it) {
@@ -1072,7 +1104,7 @@ function paidOf(it) {
   return r2((it.paid || 0) + (it.credited || 0));
 }
 function bandOf(it) {
-  if (it.kind === 'claim') return 'avail';
+  if (it.kind === 'claim') return 'counted';       // d26 - a credit memo is a credit
   if (it.kind === 'remainder') return 'counted';   // d25 — it has already netted
   if (it.kind === 'entry' && it.type === 'Claim') return 'uncounted';
   if (isPayable(it) && balanceOf(it) <= 0.005 && ((it.paid || 0) + (it.credited || 0)) > 0.005) return 'settled';
@@ -1117,6 +1149,12 @@ function creditPool(sid) {
 function owedTotal(sid) {
   return r2(openInvoicesOf(sid).reduce(function (s, i) { return s + balanceOf(i); }, 0));
 }
+/* d27 - a row is a DEBIT if it is something owed, a CREDIT if it is in the
+   store's favour, and a Claim placeholder is neither: it contributes nothing
+   to the money, ever, which is what makes it safe to tick. */
+function isDebit(it) { return isPayable(it) && balanceOf(it) > 0.005; }
+function isCredit(it) { return balanceOf(it) < -0.005; }
+function isPlaceholder(it) { return it.kind === 'entry' && it.type === 'Claim'; }
 function uncountedOf(sid) {
   return r2(itemsFor(sid).filter(function (i) { return bandOf(i) === 'uncounted'; })
     .reduce(function (s, i) { return s + signedOf(i); }, 0));
@@ -1131,7 +1169,7 @@ function worstOverdue(sid) {
   return o.length ? Math.max.apply(null, o) : null;
 }
 function clearedContribOf(sid) {
-  return r2(ITEMS.filter(function (i) { return i.sup === sid && i.cleared; })
+  return r2(ITEMS.filter(function (i) { return i.sup === sid && (i.cleared || i.clearedNote); })
     .reduce(function (s, i) { return s + balanceOf(i); }, 0));
 }
 function settledOf(sid) { return itemsFor(sid).filter(function (i) { return bandOf(i) === 'settled'; }); }
@@ -1360,7 +1398,10 @@ function ledgerRow(it, cur) {
   var bal = balanceOf(it), paid = paidOf(it), band = bandOf(it);
   var shown = band === 'uncounted' ? signedOf(it) : (band === 'avail' ? -it.amount : bal);
   var amount = it.kind === 'claim' ? it.amount : it.amount;
-  var selectable = (isPayable(it) && bal > 0.005) || it.kind === 'entry';
+  /* d27 - any unsettled row may be ticked. The old rule allowed only payable
+     rows and manual entries, which is why a Credited claim could not be
+     selected at all and an Invoice + Credit was refused. */
+  var selectable = band !== 'settled' && (isDebit(it) || isCredit(it) || isPlaceholder(it));
   var cls = 'lr' + (S.sel[it.key] ? ' on' : '') + (selectable ? '' : ' locked') +
     (isOverdue(it) ? ' over' : '') + (band === 'settled' ? ' settled' : '') +
     (it.kind === 'remainder' ? ' remainder' : '');
@@ -1648,171 +1689,152 @@ function payTotals() {
    in full, or to the limit of what the supplier is owed, whichever is smaller.
    The Manager decides only WHERE it lands. */
 function creditPlan() {
-  var s = supBy(S.scope), pool = creditPool(s.id), owed = owedTotal(s.id);
-  var capacity = r2(selItems().reduce(function (n, i) { return n + balanceOf(i); }, 0));
+  var items = selItems();
+  var debits = items.filter(isDebit);
+  var credits = items.filter(isCredit);
+  var holds = items.filter(isPlaceholder);
+  var debitTotal = r2(debits.reduce(function (n, i) { return n + balanceOf(i); }, 0));
+  var creditTotal = r2(credits.reduce(function (n, i) { return n - balanceOf(i); }, 0));
+  /* d27 - credits attach to the debits in the same selection. What cannot
+     attach stays as it was; d28 then makes the unattached part of a consumed
+     credit come back as a remainder rather than a partial row. */
+  var attach = r2(Math.min(creditTotal, debitTotal));
   return {
-    pool: pool, owed: owed, capacity: capacity,
-    toApply: r2(Math.min(pool, owed)),
-    remainder: r2(Math.max(0, pool - owed)),
+    items: items, debits: debits, credits: credits, holds: holds,
+    debitTotal: debitTotal, creditTotal: creditTotal,
+    attach: attach,
+    money: r2(debitTotal - attach),
+    remainder: r2(creditTotal - attach),
+    isClearing: debits.length === 0 && (credits.length + holds.length) > 0
   };
 }
 function payProblems() {
-  var s = supBy(S.scope), t = payTotals(), plan = creditPlan(), out = [];
-  if (S.pay.useCredit) {
-    if (plan.capacity < plan.toApply - 0.005) {
-      out.push('Tick ' + money(r2(plan.toApply - plan.capacity), s.cur) + ' more of what is outstanding, or the credit cannot go out in full - the total is not yours to choose (d23).');
-    } else if (Math.abs(t.cred - plan.toApply) > 0.005) {
-      out.push('Allocate exactly ' + money(plan.toApply, s.cur) + ' of credit - ' +
-        (t.cred < plan.toApply ? money(r2(plan.toApply - t.cred), s.cur) + ' still to place' : money(r2(t.cred - plan.toApply), s.cur) + ' over') + ' (d23).');
-    }
-  } else if (t.cred > 0.005) {
-    out.push('Credit is allocated but not switched on.');
+  var s = supBy(S.scope), tt = payTotals(), plan = creditPlan(), out = [];
+  if (plan.isClearing) return out;               // nothing to get wrong: no money moves
+  if (!plan.debits.length) { out.push('Nothing ticked that is owed.'); return out; }
+  if (Math.abs(tt.cred - plan.attach) > 0.005) {
+    out.push('Place exactly ' + money(plan.attach, s.cur) + ' of credit - ' +
+      (tt.cred < plan.attach ? money(r2(plan.attach - tt.cred), s.cur) + ' still to place'
+                             : money(r2(tt.cred - plan.attach), s.cur) + ' over') +
+      '. The total is not yours to choose (d23).');
   }
-  selItems().forEach(function (i) {
+  plan.debits.forEach(function (i) {
     var c = parseFloat(S.pay.cred[i.key]) || 0, p = parseFloat(S.pay.pay[i.key]) || 0;
     if (r2(c + p) > balanceOf(i) + 0.005) {
       out.push(i.type + ' ' + i.ref + ': ' + money(r2(c + p), s.cur) + ' against a balance of ' + money(balanceOf(i), s.cur) + '.');
     }
   });
-  if (t.pay > 0.005 && !S.pay.ref.trim()) out.push('A reference is required for the money half — it is what reconciles against the statement (d5).');
+  if (tt.pay > 0.005 && !S.pay.ref.trim()) out.push('A reference is required for the money half - it is what reconciles against the statement (d5).');
   return out;
 }
 
 function rightSelection() {
-  var s = supBy(S.scope), items = selItems();
-  var payable = items.filter(function (i) { return isPayable(i) && balanceOf(i) > 0.005; });
-  var allPayable = payable.length === items.length && items.length > 0;
-  var allEntries = items.every(function (i) { return i.kind === 'entry'; });
-  var signedSum = r2(items.reduce(function (t, i) { return t + signedOf(i); }, 0));
-  var clearOk = allEntries && items.length >= 2 && Math.abs(signedSum) <= 0.005;
+  var s = supBy(S.scope), plan = creditPlan();
+  var sig = selKeys().sort().join(',');
+  if (!S.pay || S.pay.for !== sig) {
+    S.pay = { for: sig, method: 'Cheque', ref: '', date: '2026-09-13', pay: {}, cred: {} };
+    plan.debits.forEach(function (i) { S.pay.pay[i.key] = balanceOf(i).toFixed(2); S.pay.cred[i.key] = '0.00'; });
+  }
+  var tt = payTotals(), probs = payProblems();
 
-  var h = '<div class="waiting"><span class="lab">Selected<span class="mono">' + items.length + '</span></span>' +
-    '<div class="w-name">' + (allPayable ? 'Settling' : clearOk ? 'Clearing against each other' : 'Not yet a legal action') + '</div>' +
+  var h = '<div class="waiting"><span class="lab">Selected<span class="mono">' + plan.items.length + '</span></span>' +
+    '<div class="w-name">' + (plan.isClearing ? 'Clearing \u2014 no money moves' : 'Settling') + '</div>' +
     '<div class="w-sub">' + esc(s.name) + '</div></div>';
 
-  if (allPayable) {
-    var sig = selKeys().sort().join(',');
-    if (!S.pay || S.pay.for !== sig) {
-      S.pay = { for: sig, method: 'Cheque', ref: '', date: '2026-09-13', pay: {}, cred: {}, useCredit: creditPool(s.id) > 0.005 };
-      payable.forEach(function (i) { S.pay.pay[i.key] = balanceOf(i).toFixed(2); S.pay.cred[i.key] = '0.00'; });
-    }
-    var pool = creditPool(s.id), t = payTotals(), probs = payProblems(), plan = creditPlan();
-    h += '<div class="acct-head"><div class="figure" id="pay-fig">' + esc(money(t.tot, s.cur)) + '</div>' +
-      '<div class="figure-say" id="pay-say">' + esc(money(t.cred, s.cur)) + ' credit + ' + esc(money(t.pay, s.cur)) + ' money</div>' +
-      '<div class="figure-sub">One <strong>PaymentBatch</strong> carrying both kinds of target <span class="cite">(d16, d19)</span>. Nothing instructs a bank &mdash; this is recording, not executing.</div>' +
-      '</div><div class="rule"></div>';
-    h += '<div class="acct-mid">';
-    if (pool > 0.005) {
-      h += '<div class="credit-bar" id="cbar">' +
-        '<label class="cbar-on"><input type="checkbox" data-usecred' + (S.pay.useCredit ? ' checked' : '') + '>' +
-        '<span>Apply the claim credit in hand</span><span class="mono">' + esc(money(pool)) + '</span></label>' +
-        '<div id="cbar-body"' + (S.pay.useCredit ? '' : ' hidden') + '>' +
-        '<div class="ln"><span>Goes out in this settlement</span><span class="mono" id="cbar-apply">' + esc(money(plan.toApply, s.cur)) + '</span></div>' +
-        '<div class="ln"><span>Still to place</span><span class="mono" id="cbar-left">' + esc(money(r2(plan.toApply - t.cred), s.cur)) + '</span></div>' +
-        (plan.remainder > 0.005
-          ? '<div class="ln rem"><span>Comes back as a remainder Credit</span><span class="mono">' + esc(money(plan.remainder, s.cur)) + '</span></div>'
-          : '') +
-        '<div class="who">The <strong>total is not yours to choose</strong> <span class="cite">(d23)</span> &mdash; a credit goes out in full, or to the limit of what is owed. You place it across the Invoices you ticked, and nothing is pre-filled <span class="cite">(d18)</span>.' +
-        (plan.remainder > 0.005
-          ? ' It is larger than everything ' + esc(s.name) + ' is owed, so ' + esc(money(plan.remainder, s.cur)) + ' comes back as its own artifact and this balance goes <strong>negative</strong> <span class="cite">(d24, d25)</span>.'
-          : '') +
-        '</div></div></div>';
-    } else {
-      h += '<div class="caveat">No claim credit in hand, so this settlement is money only. Neither a manual <strong>Credit</strong> nor a <strong>remainder Credit</strong> is allocatable here &mdash; both reduced the balance when they were created <span class="cite">(d14, d25)</span>.</div>';
-    }
-    h += '<div class="sec"><span class="lab">What it settles</span>' +
-      payable.map(function (i) {
-        var a = agingOf(i);
-        return '<div class="tgt-row dual" data-tgt="' + i.key + '"><div class="l">' +
-          '<div class="t">' + esc(i.type + ' ' + i.ref) + '</div>' +
-          '<div class="m">balance ' + esc(money(balanceOf(i), s.cur)) + (a ? ' · ' + (a.immediate ? esc(a.label) : (a.over > 0 ? a.over + 'd over' : 'in ' + (-a.over) + 'd')) : '') + '</div></div>' +
-          '<div class="inp"><span class="tag cr">credit</span><input type="number" step="0.01" min="0" class="cr" value="' + esc(S.pay.cred[i.key]) + '" data-cred="' + i.key + '"' + (pool > 0.005 && S.pay.useCredit ? '' : ' disabled') + ' aria-label="Credit against ' + esc(i.ref) + '"></div>' +
-          '<div class="inp"><span class="tag">money</span><input type="number" step="0.01" min="0" value="' + esc(S.pay.pay[i.key]) + '" data-amt="' + i.key + '" aria-label="Payment against ' + esc(i.ref) + '"></div>' +
-          '</div>';
-      }).join('') +
-      '<div class="caveat">Partial <em>payment</em> is supported <span class="cite">(d4)</span>; partial <em>credit</em> is not <span class="cite">(d24)</span>. Leave money at zero and the settlement is credit only, and no reference is then required.</div>' +
-      '</div>';
-    h += '<div class="sec"><span class="lab">How the money half was paid</span>' +
-      '<div class="f2"><label class="f"><span class="lab">Method</span><select data-pf="method">' +
-      PAYMENT_METHODS.map(function (m) { return '<option' + (S.pay.method === m ? ' selected' : '') + '>' + m + '</option>'; }).join('') +
-      '</select></label>' +
-      '<label class="f"><span class="lab">Date</span><input type="date" value="' + esc(S.pay.date) + '" data-pf="date"></label></div>' +
-      '<label class="f mono-in"><span class="lab">Reference</span>' +
-      '<input type="text" value="' + esc(S.pay.ref) + '" data-pf="ref" placeholder="Cheque 101">' +
-      '<span class="hint">Free text, on purpose: the bank statement is the reconciliation surface and its formats are not the store&rsquo;s to control <span class="cite">(d5)</span>.</span></label>' +
-      '<div class="caveat">Recorded by <strong>R. Duval</strong>, captured automatically <span class="cite">(d5)</span>.</div>' +
-      '</div>';
-    if (s.billing) {
-      h += '<div class="sec"><span class="lab">Remit to</span><div class="small">' + s.billing.map(esc).join('<br>') + '</div>' +
-        '<div class="caveat prop"><strong>M-05 d17</strong> &mdash; display only, edited on the Supplier card.</div></div>';
-    }
-    h += '<div class="sec"><span class="lab">The split</span>' +
-      '<div class="split-line"><span>Claim credit</span><span class="mono" id="sp-cred">' + esc(money(t.cred, s.cur)) + '</span></div>' +
-      '<div class="split-line"><span id="sp-method">' + esc(S.pay.method) + '</span><span class="mono" id="sp-pay">' + esc(money(t.pay, s.cur)) + '</span></div>' +
-      '<div class="split-line tot"><span>Settled</span><span class="mono" id="sp-tot">' + esc(money(t.tot, s.cur)) + '</span></div></div>';
-    h += '<div id="pay-probs">' + (probs.length ? '<div class="blocked"><div class="t">Not ready</div><div class="m">' + probs.map(esc).join('<br>') + '</div></div>' : '') + '</div>';
-    h += '</div>';
-    h += '<div class="acct-foot">' +
-      '<button class="btn accent primary" data-act="pay" id="pay-btn"' + (t.tot > 0 && !probs.length ? '' : ' disabled') + '>Settle ' + esc(money(t.tot, s.cur)) + '</button>' +
-      '<button class="btn ghost secondary" data-act="unsel">Cancel</button>' +
-      '<div class="foot-sub" id="pay-sub">A fully-settled Invoice leaves the outstanding list and stays readable below it <span class="cite">(step 5, d21)</span>.</div>' +
-      '</div>';
-  } else if (clearOk) {
-    h += '<div class="acct-head"><div class="figure cr">' + esc(money(0)) + '</div>' +
-      '<div class="figure-say">they sum to zero</div>' +
-      '<div class="figure-sub">Which is the whole condition <span class="cite">(d15)</span>.</div>' +
+  /* d27 - a selection with no debit has nothing for its credits to attach to,
+     so they stay counted and only the placeholders retire. That is d15's
+     clearing, arrived at by the general rule rather than a separate button. */
+  if (plan.isClearing) {
+    h += '<div class="acct-head"><div class="figure nil">' + esc(money(0)) + '</div>' +
+      '<div class="figure-say">nothing ticked is owed</div>' +
+      '<div class="figure-sub">So there is nothing for a credit to attach to <span class="cite">(d27)</span>.</div>' +
       '</div><div class="rule"></div>';
     h += '<div class="acct-mid">' +
-      '<div class="sec"><span class="lab">What is being cleared</span>' +
-      items.map(function (i) {
-        return '<div class="tgt-row" style="grid-template-columns:minmax(0,1fr) auto"><div class="l">' +
-          '<div class="t">' + esc(i.type + ' — ' + i.ref) + '</div>' +
-          '<div class="m">' + esc(i.date) + ' · ' + (bandOf(i) === 'uncounted' ? 'never counted' : 'already counted') + '</div></div>' +
-          '<span class="num mono" style="font-weight:700">' + esc(money(signedOf(i), s.cur)) + '</span></div>';
-      }).join('') + '</div>' +
       '<div class="zero-ok"><div class="t">The balance does not move</div>' +
-      '<div class="m">The Claim was never counted; the Credit already was, and stays counted. Clearing only retires both from what still needs attention <span class="cite">(d15)</span>.</div></div>' +
-      '<div class="sec"><div class="caveat">Neither is deleted or edited beyond the clearing fields &mdash; both stay in the ledger as history. Manual reconciliation only: nothing infers that two entries are related.</div>' +
-      '<div class="caveat warn">M-05 does not say whether a clearing can be reversed, so this mock does not offer it and does not promise it.</div></div>' +
+      '<div class="m">' + (plan.credits.length ? 'The credit was already counted and <strong>stays counted</strong> \u2014 it is not consumed, because there is no debit here to consume it against. ' : '') +
+      (plan.holds.length ? 'The placeholder was never counted and retires. ' : '') +
+      'Both stay in the ledger as history <span class="cite">(d15, d27)</span>.</div></div>' +
+      '<div class="sec"><span class="lab">Retiring</span>' +
+      plan.items.map(function (i) {
+        return '<div class="tgt-row" style="grid-template-columns:minmax(0,1fr) auto"><div class="l">' +
+          '<div class="t">' + esc(i.type + ' \u2014 ' + i.ref) + '</div>' +
+          '<div class="m">' + (isPlaceholder(i) ? 'never counted' : 'already counted, stays counted') + '</div></div>' +
+          '<span class="num mono" style="font-weight:700">' + esc(money(balanceOf(i), s.cur)) + '</span></div>';
+      }).join('') + '</div>' +
+      '<div class="sec"><div class="caveat warn">M-05 does not say whether a clearing can be reversed, so this mock does not offer it and does not promise it.</div></div>' +
       '</div>';
     h += '<div class="acct-foot">' +
-      '<button class="btn ink primary" data-act="clear">Clear these ' + items.length + ' entries</button>' +
+      '<button class="btn ink primary" data-act="clear">Clear these ' + plan.items.length + '</button>' +
       '<button class="btn ghost secondary" data-act="unsel">Cancel</button>' +
-      '<div class="foot-sub">Both remain readable in history afterwards.</div>' +
+      '<div class="foot-sub">Tick something that is owed to turn this into a settlement.</div>' +
       '</div>';
-  } else {
-    var why = [];
-    if (items.some(function (i) { return i.kind === 'entry' && i.type === 'Claim'; }) && items.some(isPayable)) {
-      why.push('A <strong>Claim placeholder</strong> cannot be settled &mdash; it is not money owed until it is cleared against a matching Credit <span class="cite">(d14)</span>.');
-    }
-    if (!allEntries && items.length >= 2) {
-      why.push('Clearing takes <strong>manual ledger entries only</strong>. A Receiving Invoice is not one, and accounts payable never edits one <span class="cite">(d9, d15)</span>.');
-    }
-    if (allEntries && items.length < 2) {
-      why.push('Clearing needs at least <strong>two</strong> entries to net against each other <span class="cite">(d15)</span>.');
-    }
-    if (allEntries && items.length >= 2 && Math.abs(signedSum) > 0.005) {
-      why.push('These do not sum to zero. They net to <strong>' + esc(money(signedSum, s.cur)) + '</strong>, and d15 requires exactly zero.');
-    }
-    if (!why.length) why.push('This mix is not something M-05 defines an action for.');
-    h += '<div class="acct-head"><div class="figure' + (Math.abs(signedSum) <= 0.005 ? ' nil' : '') + '">' + esc(money(signedSum, s.cur)) + '</div>' +
-      '<div class="figure-say">signed sum of what is ticked</div>' +
-      '<div class="figure-sub">Shown because it is the number both actions are judged against.</div>' +
-      '</div><div class="rule"></div>';
-    h += '<div class="acct-mid"><div class="blocked"><div class="t">Neither action is legal here</div>' +
-      '<div class="m">' + why.join('<br><br>') + '</div></div>' +
-      '<div class="sec"><span class="lab">Ticked</span>' +
-      items.map(function (i) {
-        return '<div class="tgt-row" style="grid-template-columns:minmax(0,1fr) auto"><div class="l">' +
-          '<div class="t">' + esc(i.type + ' — ' + i.ref) + '</div>' +
-          '<div class="m">' + (i.kind === 'entry' ? 'manual entry' : i.kind === 'claim' ? 'supplier claim' : 'Receiving invoice') + '</div></div>' +
-          '<span class="num mono" style="font-weight:700">' + esc(money(signedOf(i), s.cur)) + '</span></div>';
-      }).join('') + '</div>' +
-      '<div class="sec"><div class="caveat">This is the whole argument for the right track: today these are two greyed buttons and a <code>title</code> attribute.</div></div>' +
-      '</div>';
-    h += '<div class="acct-foot"><button class="btn ghost secondary" data-act="unsel">Clear selection</button>' +
-      '<div class="foot-sub">Untick until the selection is one thing or the other.</div></div>';
+    $('right').innerHTML = h;
+    return;
   }
+
+  h += '<div class="acct-head"><div class="figure" id="pay-fig">' + esc(money(tt.tot, s.cur)) + '</div>' +
+    '<div class="figure-say" id="pay-say">' + esc(money(tt.cred, s.cur)) + ' credit + ' + esc(money(tt.pay, s.cur)) + ' money</div>' +
+    '<div class="figure-sub">One <strong>PaymentBatch</strong> carrying both kinds of target <span class="cite">(d16, d19)</span>. Nothing instructs a bank \u2014 this is recording, not executing.</div>' +
+    '</div><div class="rule"></div>';
+
+  h += '<div class="acct-mid">';
+
+  // what the selection comes to
+  h += '<div class="sec"><span class="lab">What this selection comes to</span>' +
+    '<div class="split-line"><span>Owed \u2014 ' + plan.debits.length + ' item' + (plan.debits.length === 1 ? '' : 's') + '</span><span class="mono">' + esc(money(plan.debitTotal, s.cur)) + '</span></div>' +
+    (plan.credits.length
+      ? '<div class="split-line"><span>Credit ticked \u2014 ' + plan.credits.length + '</span><span class="mono">&minus;' + esc(money(plan.creditTotal, s.cur)) + '</span></div>'
+      : '') +
+    (plan.holds.length
+      ? '<div class="split-line"><span>Claim placeholders \u2014 ' + plan.holds.length + '</span><span class="mono">' + esc(money(0)) + '</span></div>'
+      : '') +
+    '<div class="split-line tot"><span>To pay</span><span class="mono" id="sp-tot">' + esc(money(plan.money, s.cur)) + '</span></div>' +
+    (plan.holds.length ? '<div class="caveat">A Claim placeholder contributes <strong>nothing to the money</strong>, ever <span class="cite">(d27)</span>. Ticking it retires it \u2014 a decision to stop chasing it.</div>' : '') +
+    (plan.remainder > 0.005 ? '<div class="caveat warn">' + esc(money(plan.remainder, s.cur)) + ' of credit cannot attach to anything ticked. It comes back as a <strong>remainder Credit</strong> and stays in the store&rsquo;s favour <span class="cite">(d25, d28)</span>.</div>' : '') +
+    '</div>';
+
+  h += '<div class="sec"><span class="lab">Place the credit, then the money</span>' +
+    plan.debits.map(function (i) {
+      var a = agingOf(i);
+      return '<div class="tgt-row dual" data-tgt="' + i.key + '"><div class="l">' +
+        '<div class="t">' + esc(i.type + ' ' + i.ref) + '</div>' +
+        '<div class="m">balance ' + esc(money(balanceOf(i), s.cur)) + (a ? ' \u00b7 ' + (a.immediate ? esc(a.label) : (a.over > 0 ? a.over + 'd over' : 'in ' + (-a.over) + 'd')) : '') + '</div></div>' +
+        '<div class="inp"><span class="tag cr">credit</span><input type="number" step="0.01" min="0" class="cr" value="' + esc(S.pay.cred[i.key]) + '" data-cred="' + i.key + '"' + (plan.attach > 0.005 ? '' : ' disabled') + ' aria-label="Credit against ' + esc(i.ref) + '"></div>' +
+        '<div class="inp"><span class="tag">money</span><input type="number" step="0.01" min="0" value="' + esc(S.pay.pay[i.key]) + '" data-amt="' + i.key + '" aria-label="Payment against ' + esc(i.ref) + '"></div>' +
+        '</div>';
+    }).join('') +
+    (plan.attach > 0.005
+      ? '<div class="credit-bar" id="cbar"><div class="ln"><span>Credit to place</span><span class="mono" id="cbar-apply">' + esc(money(plan.attach, s.cur)) + '</span></div>' +
+        '<div class="ln"><span>Still to place</span><span class="mono" id="cbar-left">' + esc(money(r2(plan.attach - tt.cred), s.cur)) + '</span></div>' +
+        '<div class="who">You choose <strong>where</strong> it lands <span class="cite">(d18)</span>, never <strong>how much</strong> <span class="cite">(d23)</span>. Nothing is pre-filled.</div></div>'
+      : '<div class="caveat">No credit ticked, so this settlement is money only. Tick a Credit or a Credited claim to net it off.</div>') +
+    '<div class="caveat">Partial <em>payment</em> is supported <span class="cite">(d4)</span>; partial <em>credit</em> is not <span class="cite">(d24, d28)</span>.</div>' +
+    '</div>';
+
+  h += '<div class="sec"><span class="lab">How the money half was paid</span>' +
+    '<div class="f2"><label class="f"><span class="lab">Method</span><select data-pf="method">' +
+    PAYMENT_METHODS.map(function (m) { return '<option' + (S.pay.method === m ? ' selected' : '') + '>' + m + '</option>'; }).join('') +
+    '</select></label>' +
+    '<label class="f"><span class="lab">Date</span><input type="date" value="' + esc(S.pay.date) + '" data-pf="date"></label></div>' +
+    '<label class="f mono-in"><span class="lab">Reference</span>' +
+    '<input type="text" value="' + esc(S.pay.ref) + '" data-pf="ref" placeholder="Cheque 101">' +
+    '<span class="hint">Free text, on purpose <span class="cite">(d5)</span>. Required only where money actually moves <span class="cite">(d19)</span>.</span></label>' +
+    '<div class="caveat">Recorded by <strong>R. Duval</strong>, captured automatically <span class="cite">(d5)</span>.</div>' +
+    '</div>';
+
+  if (s.billing) {
+    h += '<div class="sec"><span class="lab">Remit to</span><div class="small">' + s.billing.map(esc).join('<br>') + '</div>' +
+      '<div class="caveat prop"><strong>M-05 d17</strong> &mdash; display only, edited on the Supplier card.</div></div>';
+  }
+
+  h += '<div id="pay-probs">' + (probs.length ? '<div class="blocked"><div class="t">Not ready</div><div class="m">' + probs.map(esc).join('<br>') + '</div></div>' : '') + '</div>';
+  h += '</div>';
+
+  h += '<div class="acct-foot">' +
+    '<button class="btn accent primary" data-act="pay" id="pay-btn"' + (probs.length ? ' disabled' : '') + '>Settle ' + esc(money(tt.tot, s.cur)) + '</button>' +
+    '<button class="btn ghost secondary" data-act="unsel">Cancel</button>' +
+    '<div class="foot-sub" id="pay-sub">Anything ticked that reaches zero leaves the outstanding list and stays readable below it <span class="cite">(step 5, d21)</span>.</div>' +
+    '</div>';
   $('right').innerHTML = h;
 }
 
@@ -1935,7 +1957,9 @@ document.addEventListener('click', function (ev) {
     if (act === 'cancel-new') { S.mode = null; S.entry = null; bump(); render(); return; }
     if (act === 'toggle-settled') { S.showSettled = !S.showSettled; renderMain(); return; }
     if (act === 'spend') {
-      S.sel = {}; openInvoicesOf(S.scope).forEach(function (i) { S.sel[i.key] = true; });
+      S.sel = {};
+      itemsFor(S.scope).filter(isCredit).forEach(function (i) { S.sel[i.key] = true; });
+      openInvoicesOf(S.scope).forEach(function (i) { S.sel[i.key] = true; });
       S.mode = null; S.pay = null; bump(); render();
       toast('Every open Invoice ticked. Type the split you want — nothing is distributed for you (d18).');
       return;
@@ -1952,7 +1976,8 @@ document.addEventListener('click', function (ev) {
     var k = el.getAttribute('data-row');
     var item = ITEMS.filter(function (i) { return i.key === k; })[0];
     if (!item) return;
-    if (!((isPayable(item) && balanceOf(item) > 0.005) || item.kind === 'entry')) return;
+    if (bandOf(item) === 'settled') return;
+    if (!(isDebit(item) || isCredit(item) || isPlaceholder(item))) return;
     if (S.sel[k]) delete S.sel[k]; else S.sel[k] = true;
     S.mode = null; bump(); render();
   }
@@ -1966,28 +1991,27 @@ document.addEventListener('keydown', function (ev) {
 });
 
 function refreshPay() {
-  var s = supBy(S.scope), t = payTotals(), probs = payProblems(), plan = creditPlan();
-  $('pay-fig').textContent = money(t.tot, s.cur);
-  $('pay-say').textContent = money(t.cred, s.cur) + ' credit + ' + money(t.pay, s.cur) + ' money';
-  $('sp-cred').textContent = money(t.cred, s.cur);
-  $('sp-pay').textContent = money(t.pay, s.cur);
-  $('sp-tot').textContent = money(t.tot, s.cur);
-  $('sp-method').textContent = S.pay.method;
-  if ($('cbar-apply')) {
-    $('cbar-apply').textContent = money(plan.toApply, s.cur);
-    $('cbar-left').textContent = money(r2(plan.toApply - t.cred), s.cur);
-    $('cbar').classList.toggle('spent', S.pay.useCredit && Math.abs(t.cred - plan.toApply) > 0.005);
-  }
-  selItems().forEach(function (i) {
+  var s = supBy(S.scope), tt = payTotals(), probs = payProblems(), plan = creditPlan();
+  var set = function (id, v) { var n = $(id); if (n) n.textContent = v; };
+  set('pay-fig', money(tt.tot, s.cur));
+  set('pay-say', money(tt.cred, s.cur) + ' credit + ' + money(tt.pay, s.cur) + ' money');
+  set('cbar-apply', money(plan.attach, s.cur));
+  set('cbar-left', money(r2(plan.attach - tt.cred), s.cur));
+  if ($('cbar')) $('cbar').classList.toggle('spent', Math.abs(tt.cred - plan.attach) > 0.005);
+  plan.debits.forEach(function (i) {
     var row = document.querySelector('[data-tgt="' + i.key + '"]');
     if (!row) return;
     var c = parseFloat(S.pay.cred[i.key]) || 0, p = parseFloat(S.pay.pay[i.key]) || 0;
     row.classList.toggle('over', r2(c + p) > balanceOf(i) + 0.005);
   });
-  $('pay-probs').innerHTML = probs.length
-    ? '<div class="blocked"><div class="t">Not ready</div><div class="m">' + probs.map(esc).join('<br>') + '</div></div>' : '';
-  $('pay-btn').textContent = 'Settle ' + money(t.tot, s.cur);
-  $('pay-btn').disabled = !(t.tot > 0 && !probs.length);
+  if ($('pay-probs')) {
+    $('pay-probs').innerHTML = probs.length
+      ? '<div class="blocked"><div class="t">Not ready</div><div class="m">' + probs.map(esc).join('<br>') + '</div></div>' : '';
+  }
+  if ($('pay-btn')) {
+    $('pay-btn').textContent = 'Settle ' + money(tt.tot, s.cur);
+    $('pay-btn').disabled = probs.length > 0;
+  }
 }
 
 document.addEventListener('input', function (ev) {
@@ -2050,7 +2074,7 @@ $('t-clear').addEventListener('click', function () {
   setScope('fab'); S.sel = { 'en-claim': true, 'en-credit': true }; bump(); render();
 });
 $('t-bad').addEventListener('click', function () {
-  setScope('fab'); S.sel = { 'iv-55021': true, 'en-claim': true }; bump(); render();
+  setScope('fab'); S.sel = { 'iv-55021': true, 'en-credit': true, 'cl-9': true }; bump(); render();
 });
 $('t-settled').addEventListener('click', function () {
   setScope('crate'); S.showSettled = true; renderMain();
@@ -2058,11 +2082,10 @@ $('t-settled').addEventListener('click', function () {
 
 /* ---- actions. The mock mutates its own arrays; nothing persists. ---- */
 function doPay() {
-  var s = supBy(S.scope), items = selItems(), t = payTotals(), plan = creditPlan(), tgts = [];
-  var claims = S.pay.useCredit ? claimsInHand(s.id) : [];
-  var remainderKey = null;
+  var s = supBy(S.scope), plan = creditPlan(), tt = payTotals(), tgts = [];
+  var consumed = [], remainderKey = null;
 
-  items.forEach(function (i) {
+  plan.debits.forEach(function (i) {
     var c = parseFloat(S.pay.cred[i.key]) || 0, p = parseFloat(S.pay.pay[i.key]) || 0;
     if (c > 0.005) {
       i.credited = r2((i.credited || 0) + c);
@@ -2074,34 +2097,43 @@ function doPay() {
     }
   });
 
-  /* d24 - every claim in hand is consumed WHOLE. There is no running remainder
-     to draw down, so nothing has to be bounded under a lock: applying is a
-     status flip. d25 - what could not land on an Invoice comes back as its own
-     artifact rather than as state hidden inside the claim. */
-  claims.forEach(function (cl) { cl.applied = true; });
-  if (claims.length && plan.remainder > 0.005) {
+  /* d28 - every credit ticked is consumed WHOLE, claim or manual or remainder
+     alike. Nothing carries a partial state, so there is no running total to
+     bound under a lock. d25 - what could not attach comes back as its own
+     artifact instead of hiding inside the credit it came from. */
+  plan.credits.forEach(function (cr) {
+    consumed.push(cr);
+    if (cr.kind === 'claim') cr.applied = true;
+    else cr.consumedAt = S.pay.date;
+  });
+  if (plan.remainder > 0.005) {
     remainderKey = 'rem-' + Date.now();
     ITEMS.push({
       key: remainderKey, sup: s.id, kind: 'remainder', type: 'Credit',
-      ref: 'Remainder of ' + claims.map(function (c) { return c.ref; }).join(', '),
+      ref: 'Remainder of ' + consumed.map(function (c) { return c.ref; }).join(', '),
       date: S.pay.date, amount: plan.remainder,
-      fromClaims: claims.map(function (c) { return c.key; })
+      fromCredits: consumed.map(function (c) { return c.key; })
     });
   }
+
+  /* d27 - a placeholder contributes nothing and simply retires. */
+  var retired = plan.holds.length;
+  plan.holds.forEach(function (hd) { hd.cleared = true; });
 
   BATCHES.unshift({
     id: 'b' + Date.now(), sup: s.id, method: S.pay.method, ref: S.pay.ref.trim() || '\u2014',
     date: S.pay.date, by: 'R. Duval', targets: tgts,
-    claims: claims.map(function (c) { return c.key; }),
+    credits: consumed.map(function (c) { return c.key; }),
+    holds: plan.holds.map(function (hd) { return hd.key; }),
     remainder: remainderKey
   });
-  var closed = items.filter(function (i) { return balanceOf(i) <= 0.005; }).length;
+
+  var closed = plan.debits.filter(function (i) { return balanceOf(i) <= 0.005; }).length;
   S.sel = {}; S.pay = null; bump(); render();
-  toast(money(t.tot, s.cur) + ' settled as one batch \u2014 ' + money(t.cred, s.cur) + ' credit, ' +
-    money(t.pay, s.cur) + ' money' + (closed ? ', ' + closed + ' now paid in full' : '') +
-    (remainderKey
-      ? '. ' + money(plan.remainder, s.cur) + ' had nowhere to land and came back as a remainder Credit \u2014 ' + s.name + ' now owes the store (d25).'
-      : '.'));
+  toast(money(tt.tot, s.cur) + ' settled as one batch \u2014 ' + money(tt.cred, s.cur) + ' credit, ' +
+    money(tt.pay, s.cur) + ' money' + (closed ? ', ' + closed + ' now paid in full' : '') +
+    (retired ? ', ' + retired + ' placeholder' + (retired === 1 ? '' : 's') + ' retired' : '') +
+    (remainderKey ? '. ' + money(plan.remainder, s.cur) + ' of credit had nowhere to attach and came back as a remainder Credit (d25).' : '.'));
 }
 /* d22 — void the batch WHOLE. Every target is reversed: money back to the
    balance owing, credit back to the claim that funded it. The batch itself is
@@ -2134,9 +2166,15 @@ function doVoid(id) {
     else it.credited = r2((it.credited || 0) - tg.amount);
     if (wasSettled && bandOf(it) !== 'settled' && it.kind === 'invoice' && unfroze.indexOf(it.ref) < 0) unfroze.push(it.ref);
   });
-  (b.claims || []).forEach(function (k) {
-    var cl = ITEMS.filter(function (i) { return i.key === k; })[0];
-    if (cl) cl.applied = false;   // d24 - back whole, because it went out whole
+  (b.credits || b.claims || []).forEach(function (k) {
+    var cr = ITEMS.filter(function (i) { return i.key === k; })[0];
+    if (!cr) return;
+    if (cr.kind === 'claim') cr.applied = false;   // d24/d28 - back whole
+    else delete cr.consumedAt;
+  });
+  (b.holds || []).forEach(function (k) {
+    var hd = ITEMS.filter(function (i) { return i.key === k; })[0];
+    if (hd) hd.cleared = false;
   });
   if (b.remainder) ITEMS = ITEMS.filter(function (i) { return i.key !== b.remainder; });
 
@@ -2144,17 +2182,21 @@ function doVoid(id) {
   S.confirmVoid = null; S.sel = {}; S.pay = null;
   bump(); render();
   toast('Payment voided. Balance ' + money(before, supBy(sid).cur) + ' \u2192 ' + money(netOf(sid), supBy(sid).cur) +
-    ((b.claims || []).length ? '. Claim back in hand, whole (d24)' : '') +
+    ((b.credits || b.claims || []).length ? '. Credit back in hand, whole (d24, d28)' : '') +
     (b.remainder ? ' and its remainder Credit withdrawn' : '') +
     (unfroze.length ? '. Invoice ' + unfroze.join(', ') + ' back to Finalized and correctable again (E-02 d40, A-33)' : '') + '.');
 }
 
 function doClear() {
+  /* d27 - the no-debit case. Credits STAY COUNTED because there is nothing to
+     consume them against (d15's exact words); placeholders retire. The balance
+     does not move, and nothing is deleted. */
   var items = selItems(), n = items.length, sid = S.scope, before = netOf(sid);
-  items.forEach(function (i) { i.cleared = true; });
+  items.forEach(function (i) { if (isPlaceholder(i)) i.cleared = true; else i.clearedNote = true; });
   S.sel = {}; bump(); render();
-  toast(n + ' entries cleared against each other and retired from the list. Balance unchanged at ' +
-    money(netOf(sid), supBy(sid).cur) + ' (d15)' + (Math.abs(before - netOf(sid)) > 0.005 ? ' — BUG' : '') + '.');
+  toast(n + ' retired against each other. Balance unchanged at ' +
+    money(netOf(sid), supBy(sid).cur) + ' \u2014 a credit already counted and stays counted (d15, d27)' +
+    (Math.abs(before - netOf(sid)) > 0.005 ? ' \u2014 BUG' : '') + '.');
 }
 function doAdd() {
   var s = supBy(S.scope), e = S.entry;
