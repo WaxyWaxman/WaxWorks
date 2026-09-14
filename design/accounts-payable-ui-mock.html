@@ -1,0 +1,1651 @@
+<title>Accounts Payable, Three Tracks</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700;800&family=Archivo+Narrow:wght@600;700&display=swap">
+<style>
+/*
+ * M-05 — Accounts payable, re-laid as the till's three tracks.
+ *
+ * Palette, type and structural class names are lifted from
+ * design/whats-on-order-ui-mock.html verbatim. This mock adds no colour and
+ * almost no skeleton of its own, on purpose: Accounts Payable should read as
+ * the same screen as On Order, Customers, Find, Receive and Suppliers, doing
+ * a different errand.
+ *
+ * The one structure NOT carried over is the row. On Order's .lrow is a record
+ * plus its metadata; a payables ledger is six money columns that have to line
+ * up, so track 2 is a real table. Forcing .lrow onto it would be symmetry
+ * bought at the cost of the thing the screen is for.
+ *
+ * PROPOSED — NOT RATIFIED. One decision row needs appending to M-05 before
+ * this is built (the remit-to address); the notes under the screen say which
+ * and why. Everything else here is layout over decisions already recorded.
+ */
+:root {
+  --c-bg: #f1f1ef;
+  --c-surface: #ffffff;
+  --c-surface-2: #f7f7f5;
+  --c-ink: #111111;
+  --c-ink-soft: #55554f;
+  --c-ink-faint: #8a8a84;
+  --c-border: #e4e4e0;
+  --c-border-strong: #ccccc7;
+  --c-accent: #d64500;
+  --c-accent-ink: #ffffff;
+  --c-accent-soft: #fff4ee;
+  --c-ok: #1f6b3f;
+  --c-ok-soft: #eaf3ed;
+  --c-warn: #8a6a1a;
+  --c-warn-soft: #fbf4e4;
+  --c-danger: #c0392b;
+  --c-danger-soft: #fdf3f1;
+
+  --font-sans: "Archivo", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Helvetica, sans-serif;
+  --font-narrow: "Archivo Narrow", "Archivo", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: ui-monospace, "SF Mono", "Cascadia Mono", "Roboto Mono", Menlo, Consolas, monospace;
+
+  --sp-1: 4px; --sp-2: 8px; --sp-3: 12px; --sp-4: 16px; --sp-5: 24px; --sp-6: 32px;
+  --radius-sm: 2px;
+}
+
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+body {
+  margin: 0; background: var(--c-bg); color: var(--c-ink);
+  font-family: var(--font-sans); font-size: 14px; line-height: 1.45;
+  -webkit-font-smoothing: antialiased;
+}
+.page { max-width: 1580px; margin: 0 auto; padding: var(--sp-6) var(--sp-5) 96px; }
+
+/* ---- page furniture (not part of the app) ---- */
+.masthead { display: flex; align-items: flex-end; gap: var(--sp-5); flex-wrap: wrap; margin-bottom: var(--sp-4); }
+.masthead h1 { font-size: 30px; letter-spacing: -0.03em; margin: 0 0 2px; line-height: 1.05; }
+.masthead p { margin: 0; color: var(--c-ink-soft); max-width: 70ch; font-size: 14.5px; }
+.stamp {
+  font-family: var(--font-narrow); font-weight: 700; font-size: 11px; letter-spacing: 0.12em;
+  text-transform: uppercase; color: var(--c-ink-faint); border: 1px solid var(--c-border-strong);
+  padding: 3px 8px; white-space: nowrap;
+}
+.stamp.live { color: var(--c-accent); border-color: var(--c-accent); }
+
+.controls {
+  display: flex; align-items: center; gap: var(--sp-2); flex-wrap: wrap;
+  border: 1px solid var(--c-border-strong); background: var(--c-surface);
+  padding: var(--sp-2) var(--sp-3); margin-bottom: var(--sp-3);
+}
+.controls .lab { margin-right: var(--sp-1); }
+.toggle {
+  font: inherit; font-size: 12.5px; font-weight: 600; cursor: pointer;
+  border: 1px solid var(--c-border-strong); background: var(--c-surface-2);
+  color: var(--c-ink-soft); padding: 5px 10px; border-radius: var(--radius-sm);
+}
+.toggle:hover { border-color: var(--c-ink); color: var(--c-ink); }
+.toggle[aria-pressed="true"] { background: var(--c-ink); border-color: var(--c-ink); color: #fff; }
+.toggle:disabled { opacity: 0.4; cursor: not-allowed; }
+.toggle:focus-visible, .rail-ico:focus-visible, .chip:focus-visible, .sup:focus-visible,
+.tile:focus-visible, .lr:focus-visible { outline: 2px solid var(--c-accent); outline-offset: -2px; }
+.ctl-sep { width: 1px; align-self: stretch; background: var(--c-border-strong); margin: 0 var(--sp-2); }
+
+/* ---- the app frame ---- */
+.screen {
+  border: 1px solid var(--c-ink); background: var(--c-surface);
+  height: clamp(660px, 86dvh, 920px);
+  display: flex; flex-direction: column; overflow: hidden;
+}
+.band {
+  flex: none; height: 58px; display: flex; align-items: stretch;
+  background: var(--c-surface); border-bottom: 2px solid var(--c-ink);
+}
+.band .wordmark {
+  width: 168px; display: flex; align-items: center; gap: var(--sp-2); padding-left: 18px;
+  font-weight: 800; font-size: 16px; letter-spacing: 0.02em; border-right: 1px solid var(--c-border-strong);
+}
+.band .wordmark .dot { width: 10px; height: 10px; border-radius: 50%; background: var(--c-accent); }
+.band .mode {
+  flex: 1; display: flex; align-items: center; justify-content: center;
+  font-size: 14px; font-weight: 600; letter-spacing: 0.05em; color: var(--c-ink-soft);
+  border-right: 1px solid var(--c-border-strong);
+}
+.band .mode.on { background: var(--c-ink); color: #fff; font-weight: 800; }
+.band .who {
+  width: 172px; display: flex; flex-direction: column; justify-content: center;
+  padding-left: 16px; border-left: 1px solid var(--c-border-strong);
+}
+
+.lab {
+  font-family: var(--font-narrow); font-weight: 700; font-size: 11px; letter-spacing: 0.1em;
+  text-transform: uppercase; color: var(--c-ink-faint);
+}
+.xsmall { font-size: 11px; }
+.small { font-size: 12.5px; }
+.muted { color: var(--c-ink-faint); }
+.mono { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+
+/* Three tracks. The same 320 / 1fr / 344 skeleton as .cust-frame, .find-frame
+   and .wo-frame — this screen earns no special width either. */
+.frame {
+  flex: 1; min-height: 0; display: grid;
+  grid-template-columns: 320px minmax(0, 1fr) 344px;
+}
+.frame.slab-shut { grid-template-columns: 52px minmax(0, 1fr) 344px; }
+
+/* ============ TRACK 1 — the payables slab ============ */
+.slab {
+  border-right: 1px solid var(--c-border-strong); background: var(--c-surface-2);
+  display: flex; flex-direction: column; min-height: 0; min-width: 0;
+}
+.slab-head {
+  flex: none; display: flex; align-items: center; gap: var(--sp-2);
+  padding: var(--sp-2) var(--sp-2) var(--sp-2) var(--sp-3);
+  border-bottom: 1px solid var(--c-border-strong);
+}
+.slab-head .lab { flex: 1; }
+.rail-ico {
+  position: relative; width: 38px; height: 38px; flex: none; padding: 0; cursor: pointer;
+  display: grid; place-items: center; font-size: 15px; line-height: 1;
+  border: 1px solid var(--c-border-strong); background: var(--c-surface);
+  color: var(--c-ink); border-radius: var(--radius-sm);
+}
+.rail-ico:hover { border-color: var(--c-ink); }
+.rail-ico:disabled { opacity: 0.4; cursor: not-allowed; }
+.rail-badge {
+  position: absolute; top: -6px; right: -6px; min-width: 16px; height: 16px; padding: 0 4px;
+  background: var(--c-ink); color: #fff; border-radius: 8px;
+  font-family: var(--font-mono); font-size: 10px; font-weight: 700;
+  display: grid; place-items: center; line-height: 1;
+}
+.rail-badge.ok { background: var(--c-ok); }
+.rail-sep { width: 24px; height: 1px; background: var(--c-border-strong); flex: none; }
+
+.slab-open-only { display: flex; flex-direction: column; min-height: 0; flex: 1; }
+.slab-acts { flex: none; display: flex; gap: var(--sp-2); padding: var(--sp-3) var(--sp-3) 0; }
+.slab-acts .btn { flex: 1; justify-content: center; }
+
+/* The store-wide figure. Deliberately NOT one number: M-05 requires a
+   supplier's currency to carry through, and the store-currency rate that
+   would let these be added lives in M-06, which is not built. One total per
+   currency is the honest shape; a single sum would be a fabricated rate. */
+.slab-total {
+  flex: none; padding: var(--sp-3); border-bottom: 1px solid var(--c-border-strong);
+  background: var(--c-surface);
+}
+.slab-total .tot { display: flex; align-items: baseline; justify-content: space-between; gap: var(--sp-2); }
+.slab-total .tot + .tot { margin-top: 3px; }
+.slab-total .v { font-family: var(--font-mono); font-size: 20px; font-weight: 800; font-variant-numeric: tabular-nums; letter-spacing: -0.02em; }
+.slab-total .v.sub { font-size: 14px; font-weight: 700; color: var(--c-ink-soft); }
+.slab-total .hint { display: block; font-size: 10.5px; color: var(--c-ink-faint); margin-top: 5px; }
+
+.slab-search {
+  flex: none; padding: var(--sp-3); display: flex; flex-direction: column; gap: 6px;
+  border-bottom: 1px solid var(--c-border-strong);
+}
+.slab-search input {
+  font: inherit; font-size: 15px; font-weight: 600; width: 100%;
+  border: 2px solid var(--c-ink); background: var(--c-surface); color: var(--c-ink);
+  padding: 7px 10px; border-radius: var(--radius-sm);
+}
+.slab-search input::placeholder { color: var(--c-border-strong); font-weight: 400; }
+.slab-search .hint { font-size: 10.5px; color: var(--c-ink-faint); }
+
+.chips { display: flex; flex-wrap: wrap; gap: var(--sp-1); align-items: center; padding: var(--sp-2) var(--sp-3); border-bottom: 1px solid var(--c-border-strong); }
+.chip {
+  font: inherit; font-size: 11.5px; font-weight: 600; cursor: pointer;
+  border: 1px solid var(--c-border-strong); background: var(--c-surface); color: var(--c-ink-soft);
+  padding: 3px 7px; border-radius: var(--radius-sm); display: inline-flex; gap: 5px; align-items: center;
+}
+.chip .count { font-family: var(--font-mono); font-size: 10.5px; color: var(--c-ink-faint); }
+.chip:hover { border-color: var(--c-ink); color: var(--c-ink); }
+.chip.on { background: var(--c-ink); border-color: var(--c-ink); color: #fff; }
+.chip.on .count { color: #d5d5d1; }
+.chip:disabled { opacity: 0.4; cursor: not-allowed; }
+/* Green rather than the usual hot red: an unapplied credit is the one thing
+   on this screen that is in the STORE's favour. Colour means state. */
+.chip.good { border-color: var(--c-ok); color: var(--c-ok); }
+.chip.good .count { color: var(--c-ok); }
+.chip.good.on { background: var(--c-ok); border-color: var(--c-ok); color: #fff; }
+.chip.good.on .count { color: #cfe3d6; }
+
+.sortbar {
+  flex: none; display: flex; align-items: center; gap: var(--sp-2);
+  padding: 6px var(--sp-3); border-bottom: 1px solid var(--c-border-strong);
+}
+.sortbar select {
+  font: inherit; font-size: 11.5px; font-weight: 600; flex: 1; padding: 3px 6px;
+  border: 1px solid var(--c-border-strong); background: var(--c-surface); color: var(--c-ink);
+  border-radius: var(--radius-sm);
+}
+
+.slab-list { flex: 1; min-height: 0; overflow-y: auto; }
+.slab-band {
+  position: sticky; top: 0; z-index: 1; background: var(--c-surface-2);
+  border-bottom: 1px solid var(--c-border-strong); border-top: 1px solid var(--c-border-strong);
+  padding: var(--sp-2) var(--sp-3);
+  display: flex; align-items: baseline; justify-content: space-between; gap: var(--sp-2);
+}
+.slab-empty { padding: var(--sp-5) var(--sp-3); color: var(--c-ink-faint); font-size: 12.5px; text-align: center; }
+
+/* One Supplier. The same skeleton as On Order's .po and Suppliers' .sup: a
+   tile, two rows of text, one right-hand figure. The tile carries the short
+   code, because that is what a Supplier is called everywhere else. */
+.sup {
+  display: grid; grid-template-columns: 44px minmax(0, 1fr) auto; gap: 1px var(--sp-3);
+  align-items: baseline; width: 100%; text-align: left; cursor: pointer;
+  padding: var(--sp-2) var(--sp-3); border: none; border-bottom: 1px solid var(--c-border);
+  border-left: 3px solid transparent; background: var(--c-surface); font: inherit; color: var(--c-ink);
+}
+.sup:hover { background: var(--c-surface-2); }
+.sup.on { border-left-color: var(--c-accent); box-shadow: inset 0 0 0 1px var(--c-ink); }
+.sup .code {
+  grid-column: 1; grid-row: 1 / -1; align-self: center;
+  width: 44px; height: 34px; display: grid; place-items: center;
+  border: 1px solid var(--c-border); background: var(--c-surface-2);
+  font-family: var(--font-mono); font-size: 11px; font-weight: 700; color: var(--c-ink-soft);
+}
+.sup.cons .code { border-style: dashed; border-color: var(--c-ink-faint); }
+.sup .t { grid-column: 2; grid-row: 1; font-size: 12.5px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sup .m { grid-column: 2; grid-row: 2; font-size: 11px; color: var(--c-ink-faint); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sup .n {
+  grid-column: 3; grid-row: 1; font-family: var(--font-mono); font-size: 12.5px; font-weight: 700;
+  text-align: right; font-variant-numeric: tabular-nums; color: var(--c-ink); white-space: nowrap;
+}
+.sup .n.nil { color: var(--c-ink-faint); font-weight: 600; }
+.sup .k {
+  grid-column: 3; grid-row: 2; text-align: right; white-space: nowrap;
+  font-family: var(--font-narrow); font-size: 9px; font-weight: 700;
+  letter-spacing: 0.05em; text-transform: uppercase; color: var(--c-ink-faint);
+}
+.sup .k.good { color: var(--c-ok); }
+.sup.dim { opacity: 0.5; }
+
+/* Gift cards are not a Supplier, and the row says so rather than sitting in
+   the same list pretending to be one. d10 registers the liability here; the
+   slab is "what the store owes", and card holders are owed too. */
+.sup.gc { background: var(--c-surface-2); border-top: 2px solid var(--c-ink); }
+.sup.gc .code { border: 1px solid var(--c-ink); background: var(--c-ink); color: #fff; font-size: 15px; }
+
+.st-dot { width: 9px; height: 9px; border-radius: 50%; flex: none; display: inline-block; vertical-align: middle; }
+.st-dot.credit { background: var(--c-ok); }
+.st-dot.claim { background: var(--c-warn); }
+.st-dot.owed { background: var(--c-ink-soft); }
+.st-dot.settled { background: var(--c-border-strong); }
+
+/* the 52px shut strip */
+.slab-strip {
+  height: 100%; display: flex; flex-direction: column; align-items: center;
+  gap: var(--sp-2); padding: var(--sp-2) 0; min-height: 0;
+}
+.strip-stack { flex: 1; min-height: 0; overflow-y: auto; scrollbar-width: none; display: flex; flex-direction: column; align-items: center; gap: 6px; }
+.strip-stack::-webkit-scrollbar { display: none; }
+.tile {
+  position: relative; width: 38px; height: 38px; flex: none; padding: 0; cursor: pointer;
+  display: grid; place-items: center; border: 1px solid var(--c-border-strong);
+  border-radius: var(--radius-sm); background: var(--c-surface); color: var(--c-ink-soft);
+  font-family: var(--font-mono); font-size: 10.5px; font-weight: 700;
+}
+.tile:hover { border-color: var(--c-ink); }
+.tile.on { border-color: var(--c-ink); box-shadow: inset 3px 0 0 var(--c-accent); color: var(--c-ink); }
+.tile.gc { border-color: var(--c-ink); background: var(--c-ink); color: #fff; font-size: 15px; }
+.tile .st-dot { position: absolute; bottom: -3px; right: -3px; border: 2px solid var(--c-surface-2); width: 11px; height: 11px; }
+.strip-lab {
+  font-family: var(--font-narrow); font-size: 8.5px; font-weight: 700; letter-spacing: 0.12em;
+  text-transform: uppercase; color: var(--c-border-strong); writing-mode: vertical-rl; padding: var(--sp-1) 0;
+}
+
+/* ============ TRACK 2 — the combined ledger ============ */
+.main { display: flex; flex-direction: column; min-width: 0; min-height: 0; background: var(--c-surface); }
+.main-head {
+  flex: none; display: flex; align-items: flex-start; gap: var(--sp-3); flex-wrap: wrap;
+  padding: var(--sp-3) var(--sp-4); border-bottom: 2px solid var(--c-ink);
+}
+.main-head h2 { margin: 0; font-size: 27px; letter-spacing: -0.025em; line-height: 1.1; }
+.main-head .badges { display: flex; flex-wrap: wrap; gap: var(--sp-2); margin-top: 6px; align-items: center; }
+.head-acts { margin-left: auto; display: flex; gap: var(--sp-2); align-items: center; }
+
+.badge {
+  display: inline-flex; align-items: center; gap: 4px; font-family: var(--font-narrow);
+  font-size: 10.5px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase;
+  border: 1px solid var(--c-border-strong); color: var(--c-ink-soft); padding: 1px 6px; background: var(--c-surface);
+}
+.badge.ok { color: var(--c-ok); border-color: var(--c-ok); background: var(--c-ok-soft); }
+.badge.warn { color: var(--c-warn); border-color: var(--c-warn); background: var(--c-warn-soft); }
+.badge.danger { color: var(--c-danger); border-color: var(--c-danger); background: var(--c-danger-soft); }
+.badge.ink { color: #fff; background: var(--c-ink); border-color: var(--c-ink); }
+.badge.accent { color: var(--c-accent); border-color: var(--c-accent); background: var(--c-accent-soft); }
+.badge.mono { font-family: var(--font-mono); text-transform: none; letter-spacing: 0; font-weight: 600; }
+
+.btn {
+  display: inline-flex; align-items: center; gap: 6px; cursor: pointer; font: inherit;
+  font-size: 13px; font-weight: 600; padding: 6px 12px; border-radius: var(--radius-sm);
+  border: 1px solid var(--c-border-strong); background: var(--c-surface); color: var(--c-ink);
+}
+.btn:hover { border-color: var(--c-ink); }
+.btn.ink { background: var(--c-ink); border-color: var(--c-ink); color: #fff; }
+.btn.accent { background: var(--c-accent); border-color: var(--c-accent); color: var(--c-accent-ink); }
+.btn.ghost { border-color: transparent; background: transparent; color: var(--c-ink-soft); }
+.btn.danger { color: var(--c-danger); border-color: var(--c-border-strong); }
+.btn.danger:hover { border-color: var(--c-danger); background: var(--c-danger-soft); }
+.btn.sm { font-size: 11.5px; padding: 3px 8px; }
+.btn:disabled { opacity: 0.45; cursor: not-allowed; }
+
+.list-scroll { flex: 1; min-height: 0; overflow-y: auto; }
+
+/* The band. d14 draws one real line through this ledger — a Claim placeholder
+   does NOT move the balance until it is cleared — so the list is banded on
+   exactly that, and on nothing invented. Aging buckets are an OPEN QUESTION
+   in M-05 and this mock does not answer it: no 30/60/90 anywhere. */
+.grp {
+  position: sticky; top: 0; z-index: 2;
+  display: flex; align-items: baseline; justify-content: space-between; gap: var(--sp-2);
+  padding: var(--sp-2) var(--sp-4); background: var(--c-surface-2);
+  border-bottom: 1px solid var(--c-border-strong); border-top: 1px solid var(--c-border-strong);
+}
+.grp.uncounted { background: var(--c-warn-soft); border-color: var(--c-warn); }
+.grp.uncounted .lab { color: var(--c-warn); }
+.grp:first-child { border-top: none; }
+.grp .say { font-size: 10.5px; color: var(--c-ink-faint); font-weight: 600; }
+
+/* The ledger. A real table because these are money columns that have to line
+   up — see the note at the head of this file. */
+table.ledger { width: 100%; border-collapse: collapse; }
+table.ledger thead th {
+  position: sticky; top: 0; z-index: 1; background: var(--c-surface);
+  font-family: var(--font-narrow); font-weight: 700; font-size: 10px; letter-spacing: 0.08em;
+  text-transform: uppercase; color: var(--c-ink-faint); text-align: left;
+  padding: 6px var(--sp-2); border-bottom: 1px solid var(--c-ink); white-space: nowrap;
+}
+table.ledger th.r, table.ledger td.r { text-align: right; }
+table.ledger th:first-child, table.ledger td:first-child { padding-left: var(--sp-4); width: 30px; }
+table.ledger th:last-child, table.ledger td:last-child { padding-right: var(--sp-4); }
+table.ledger td {
+  padding: 7px var(--sp-2); border-bottom: 1px solid var(--c-border); font-size: 13px;
+  vertical-align: middle; background: var(--c-surface);
+}
+tr.lr { cursor: pointer; }
+tr.lr:hover td { background: var(--c-surface-2); }
+tr.lr.on td { background: var(--c-accent-soft); }
+tr.lr.on td:first-child { box-shadow: inset 3px 0 0 var(--c-accent); }
+tr.lr.locked { cursor: default; }
+tr.lr.locked td { color: var(--c-ink-faint); }
+tr.lr.locked:hover td { background: var(--c-surface); }
+td .ref { font-family: var(--font-mono); font-size: 12px; font-weight: 600; }
+td .num { font-family: var(--font-mono); font-variant-numeric: tabular-nums; white-space: nowrap; }
+td .num.bal { font-weight: 700; }
+td .num.cr { color: var(--c-ok); }
+td .num.nil { color: var(--c-ink-faint); }
+td .age { font-family: var(--font-narrow); font-size: 9.5px; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; color: var(--c-ink-faint); display: block; }
+td .sub { display: block; font-size: 10.5px; color: var(--c-ink-faint); }
+table.ledger .empty { color: var(--c-ink-faint); font-size: 12.5px; padding: var(--sp-5) var(--sp-4); text-align: center; }
+input[type="checkbox"] { width: 15px; height: 15px; accent-color: var(--c-accent); cursor: pointer; margin: 0; display: block; }
+input[type="checkbox"]:disabled { cursor: not-allowed; opacity: 0.3; }
+
+/* ============ TRACK 3 — the supplier, the selection, or the new entry ====== */
+.acct {
+  border-left: 1px solid var(--c-border-strong); background: var(--c-surface);
+  display: flex; flex-direction: column; min-height: 0;
+}
+/* The top slot, where On Order puts "who is waiting". Same reasoning: of
+   everything true about this supplier, an unapplied credit is the one thing
+   that is money sitting on the table, and d11 already says exactly where it
+   would land — so the band shows the landing before you press anything. */
+.waiting {
+  flex: none; border-bottom: 1px solid var(--c-border); background: var(--c-surface-2);
+  padding: var(--sp-3) var(--sp-4);
+}
+.waiting.live { background: var(--c-ok-soft); box-shadow: inset 3px 0 0 var(--c-ok); }
+.waiting .lab { display: flex; align-items: baseline; justify-content: space-between; gap: var(--sp-2); }
+.w-name { font-size: 15px; font-weight: 700; margin-top: 2px; }
+.w-name.none { font-size: 12.5px; font-weight: 600; color: var(--c-ink-faint); }
+.w-sub { font-size: 11px; color: var(--c-ink-soft); margin-top: 1px; }
+.w-split { margin-top: 6px; display: flex; flex-direction: column; gap: 2px; }
+.w-split .ln { display: flex; justify-content: space-between; gap: var(--sp-2); font-size: 11.5px; }
+.w-split .ln .mono { font-weight: 700; }
+
+.acct-head { flex: none; padding: var(--sp-3) var(--sp-4); }
+.figure { font-size: 46px; font-weight: 800; line-height: 1; letter-spacing: -0.035em; font-variant-numeric: tabular-nums; font-family: var(--font-mono); }
+.figure.nil { color: var(--c-ink-faint); font-size: 26px; font-weight: 700; }
+.figure.cr { color: var(--c-ok); }
+.figure-say { margin-top: 4px; font-size: 13px; font-weight: 600; }
+.figure-sub { margin-top: 2px; font-size: 11px; color: var(--c-ink-faint); }
+.rule { flex: none; height: 2px; background: var(--c-ink); }
+
+.acct-mid { flex: 1; min-height: 0; overflow-y: auto; padding: var(--sp-3) var(--sp-4); display: flex; flex-direction: column; gap: var(--sp-4); }
+.sec { display: flex; flex-direction: column; gap: 6px; }
+.standing { display: grid; grid-template-columns: 1fr 1fr; gap: var(--sp-2) var(--sp-3); }
+.stat { display: flex; flex-direction: column; gap: 1px; }
+.stat .v { font-family: var(--font-mono); font-size: 17px; font-weight: 700; font-variant-numeric: tabular-nums; line-height: 1.1; }
+.stat .v.cr { color: var(--c-ok); }
+.stat .v.un { color: var(--c-warn); }
+.stat .v.nil { color: var(--c-ink-faint); }
+.stat .k { font-family: var(--font-narrow); font-size: 9.5px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--c-ink-faint); }
+.stat.span { grid-column: 1 / -1; border-top: 1px solid var(--c-border); padding-top: 6px; }
+.stat.span .v { font-size: 14px; }
+
+/* Payment history, on the floor of the track — the same place History sits on
+   the Customer card, the Log sits on the Supplier card, and the line's log
+   sits on On Order. d16: one row per PaymentBatch, opened to see its targets,
+   NOT one row per target sharing a reference. */
+.batch {
+  border: 1px solid var(--c-border); background: var(--c-surface-2);
+  border-radius: var(--radius-sm);
+}
+.batch + .batch { margin-top: 5px; }
+.batch-head {
+  display: flex; align-items: baseline; justify-content: space-between; gap: var(--sp-2);
+  width: 100%; text-align: left; font: inherit; cursor: pointer; padding: 6px var(--sp-2);
+  background: none; border: none; color: var(--c-ink);
+}
+.batch-head:hover { background: var(--c-surface); }
+.batch-head .l { font-size: 12px; font-weight: 600; }
+.batch-head .l .mono { font-weight: 700; }
+.batch-body { padding: 0 var(--sp-2) var(--sp-2) var(--sp-2); border-top: 1px solid var(--c-border); }
+.batch-body .tgt { display: flex; justify-content: space-between; gap: var(--sp-2); font-size: 11.5px; padding: 3px 0; }
+.batch-body .by { font-size: 10.5px; color: var(--c-ink-faint); padding-top: 4px; }
+
+.sec-empty { font-size: 11.5px; color: var(--c-ink-faint); padding: 4px 0; }
+.caveat { font-size: 10.5px; color: var(--c-ink-faint); border-left: 2px solid var(--c-border-strong); padding-left: 7px; margin-top: 2px; }
+.caveat.warn { color: var(--c-warn); border-left-color: var(--c-warn); }
+.caveat.prop { color: var(--c-accent); border-left-color: var(--c-accent); }
+
+.acct-foot { flex: none; border-top: 2px solid var(--c-ink); padding: var(--sp-3) var(--sp-4); display: flex; flex-direction: column; gap: 6px; }
+.acct-foot .primary { justify-content: center; height: 56px; font-size: 18px; font-weight: 800; text-align: center; line-height: 1.15; }
+.acct-foot .secondary { justify-content: center; height: 36px; }
+.foot-sub { font-size: 11px; color: var(--c-ink-faint); text-align: center; }
+
+/* Fields, shared with the On Order mock's entry sheet. */
+.f { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.f input, .f select {
+  font: inherit; font-size: 14px; font-weight: 600; width: 100%; padding: 6px 9px;
+  border: 1px solid var(--c-border-strong); background: var(--c-surface); color: var(--c-ink);
+  border-radius: var(--radius-sm);
+}
+.f input:focus, .f select:focus { outline: 2px solid var(--c-accent); outline-offset: -1px; }
+.f .hint { font-size: 10.5px; color: var(--c-ink-faint); }
+.f.bad input { border-color: var(--c-danger); background: var(--c-danger-soft); }
+.f.mono-in input { font-family: var(--font-mono); }
+.f2 { display: grid; grid-template-columns: 1fr 1fr; gap: var(--sp-2); }
+
+/* One row of the payment being composed — the target, and what of it is being
+   paid. Partial is typed in, not chosen from a menu (d4). */
+.tgt-row {
+  display: grid; grid-template-columns: minmax(0, 1fr) 92px; gap: var(--sp-2);
+  align-items: center; padding: 6px 0; border-bottom: 1px solid var(--c-border);
+}
+.tgt-row .l { min-width: 0; }
+.tgt-row .l .t { font-size: 12.5px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tgt-row .l .m { font-size: 10.5px; color: var(--c-ink-faint); }
+.tgt-row input {
+  font-family: var(--font-mono); font-size: 13px; font-weight: 700; width: 100%; text-align: right;
+  padding: 4px 6px; border: 1px solid var(--c-border-strong); border-radius: var(--radius-sm);
+  background: var(--c-surface); color: var(--c-ink);
+}
+.tgt-row.over input { border-color: var(--c-danger); background: var(--c-danger-soft); }
+
+/* When the selection is legal for neither action, the track says which and
+   why, instead of leaving two greyed buttons and a tooltip to explain it. */
+.blocked { border-left: 3px solid var(--c-danger); background: var(--c-danger-soft); padding: var(--sp-3); }
+.blocked .t { font-size: 13px; font-weight: 700; color: var(--c-danger); }
+.blocked .m { font-size: 11.5px; color: var(--c-ink-soft); margin-top: 3px; }
+.zero-ok { border-left: 3px solid var(--c-ok); background: var(--c-ok-soft); padding: var(--sp-3); }
+.zero-ok .t { font-size: 13px; font-weight: 700; color: var(--c-ok); }
+.zero-ok .m { font-size: 11.5px; color: var(--c-ink-soft); margin-top: 3px; }
+
+/* Mock-only. Stands in for a state change this mock does not persist. */
+.toast {
+  position: absolute; left: 50%; transform: translateX(-50%); top: 70px; z-index: 20;
+  background: var(--c-ink); color: #fff; padding: 7px 14px; border-radius: var(--radius-sm);
+  font-family: var(--font-mono); font-size: 12px; font-weight: 600; pointer-events: none;
+  box-shadow: 0 4px 14px rgba(17,17,17,0.22); max-width: 70%; text-align: center;
+}
+
+/* ---- notes below the screen ---- */
+.notes { margin-top: var(--sp-6); display: grid; grid-template-columns: repeat(auto-fit, minmax(330px, 1fr)); gap: var(--sp-5); }
+.note h2 {
+  font-family: var(--font-narrow); font-size: 13px; font-weight: 700; letter-spacing: 0.1em;
+  text-transform: uppercase; color: var(--c-ink-faint); margin: 0 0 var(--sp-3);
+  padding-bottom: 5px; border-bottom: 1px solid var(--c-border-strong);
+}
+.note p, .note li, .note dd { font-size: 13.5px; color: var(--c-ink-soft); }
+.note p { margin: 0 0 var(--sp-3); }
+.note strong { color: var(--c-ink); }
+.note dl { margin: 0; display: flex; flex-direction: column; gap: var(--sp-3); }
+.note dt { font-weight: 700; color: var(--c-ink); font-size: 13.5px; }
+.note dd { margin: 2px 0 0; }
+.note ul { margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 6px; }
+.cite { font-family: var(--font-mono); font-size: 11.5px; color: var(--c-ink-faint); }
+.warnbox { border-left: 3px solid var(--c-accent); background: var(--c-accent-soft); padding: var(--sp-3) var(--sp-4); margin-bottom: var(--sp-3); }
+.warnbox p:last-child { margin-bottom: 0; }
+.note.wide { grid-column: 1 / -1; }
+table.props { width: 100%; border-collapse: collapse; }
+table.props th {
+  font-family: var(--font-narrow); font-weight: 700; font-size: 10px; letter-spacing: 0.08em;
+  text-transform: uppercase; color: var(--c-ink-faint); text-align: left;
+  padding: 5px var(--sp-3) 5px 0; border-bottom: 1px solid var(--c-ink); vertical-align: bottom;
+}
+table.props td { padding: 8px var(--sp-3) 8px 0; border-bottom: 1px solid var(--c-border); font-size: 13px; color: var(--c-ink-soft); vertical-align: top; }
+table.props td:first-child { white-space: nowrap; font-weight: 700; color: var(--c-ink); }
+
+@media (prefers-reduced-motion: no-preference) {
+  .frame { transition: grid-template-columns 160ms ease; }
+}
+@media (max-width: 1180px) {
+  .frame, .frame.slab-shut { grid-template-columns: 52px minmax(0, 1fr); grid-template-rows: minmax(0, 1fr) auto; }
+  .slab { grid-row: 1 / -1; }
+  .slab-open-only { display: none !important; }
+  .slab-strip { display: flex !important; }
+  .main { grid-column: 2; grid-row: 1; }
+  /* 58dvh, the same as Customers, Suppliers and On Order, and for the same
+     reason: this track also carries two fixed bands above its scroll. */
+  .acct { grid-column: 2; grid-row: 2; border-left: none; border-top: 2px solid var(--c-ink); max-height: 58dvh; }
+  .waiting, .acct-head { padding: var(--sp-2) var(--sp-4); }
+  .figure { font-size: 34px; }
+  .figure-sub { display: none; }
+  .acct-foot .primary { height: 48px; font-size: 16px; }
+}
+</style>
+<div class="page">
+
+  <header class="masthead">
+    <div>
+      <h1>Accounts Payable, in three tracks</h1>
+      <p>M-05 laid out the way Sell, Find, Receive, Customers, Suppliers and On&nbsp;Order already are — a retractable slab on the left, the work in the middle, the thing you are acting on pinned to the right. Layout mock, not working code. All three modals go away: <strong>Record payment</strong> and <strong>Clear selected</strong> become the right track's reading of <em>the selection</em>, and <strong>Create new</strong> becomes its third state. <strong>Gift card liability</strong> stops being a slab of table under the screen and becomes a destination in the slab, because the slab is a list of what the store owes and card holders are owed too.</p>
+    </div>
+    <span class="stamp">branch AccountsPayable-UI</span>
+    <span class="stamp live">proposed — 1 decision row to append</span>
+  </header>
+
+  <div class="controls">
+    <span class="lab">Mock controls</span>
+    <button class="toggle" id="t-slab" aria-pressed="true">Slab open</button>
+    <span class="ctl-sep"></span>
+    <span class="lab">Try</span>
+    <button class="toggle" id="t-pay">Select FAB1's two invoices</button>
+    <button class="toggle" id="t-clear">Select the claim + its credit</button>
+    <button class="toggle" id="t-bad">Select a bad mix</button>
+    <span class="ctl-sep"></span>
+    <span class="xsmall muted">Search, chips, sort, supplier scoping, row selection, Apply credit, Record payment, Clear and Create new are all live. Today is <span class="mono">13/09/2026</span>. Look up <span class="mono">walk</span> to reach a supplier with no payables at all.</span>
+  </div>
+
+  <div class="screen" style="position:relative">
+
+    <div class="toast" id="toast" hidden></div>
+
+    <div class="band">
+      <div class="wordmark"><span class="dot"></span>WAX WORKS</div>
+      <div class="mode">FIND</div>
+      <div class="mode">SELL</div>
+      <div class="mode">RECEIVE</div>
+      <div class="mode on">MORE</div>
+      <div class="who">
+        <span class="xsmall muted">Signed in</span>
+        <span class="small" style="font-weight:600">R. Duval · Manager</span>
+      </div>
+    </div>
+
+    <div class="frame" id="frame">
+
+      <!-- ============ TRACK 1 — the payables slab ============ -->
+      <nav class="slab" aria-label="What the store owes">
+
+        <div class="slab-strip" id="strip" hidden>
+          <button class="rail-ico" id="strip-expand" title="Open the list" aria-expanded="false" aria-label="Expand the payables list">&#10217;</button>
+          <button class="rail-ico" id="strip-new" title="Create a ledger entry by hand" aria-label="Create new ledger entry">&#65291;</button>
+          <button class="rail-ico" id="strip-credit" title="Credits waiting to be applied" aria-label="Credits waiting to be applied">
+            &#8681;<span class="rail-badge ok" id="strip-badge">1</span>
+          </button>
+          <div class="rail-sep"></div>
+          <div class="strip-stack" id="strip-stack"></div>
+          <div class="strip-lab">owed to</div>
+        </div>
+
+        <div class="slab-open-only" id="slab-open">
+          <div class="slab-head">
+            <span class="lab">Owed</span>
+            <button class="rail-ico" id="slab-collapse" title="Collapse — the ledger takes the width" aria-label="Collapse the list">&#10216;</button>
+          </div>
+
+          <div class="slab-total" id="slab-total"></div>
+
+          <div class="slab-acts">
+            <button class="btn ink" id="new-btn">&#65291; Create new</button>
+          </div>
+
+          <div class="slab-search">
+            <input type="search" id="q" placeholder="name &middot; short code &middot; account #" aria-label="Look up any supplier">
+            <span class="hint">The lookup reaches <strong>any</strong> Supplier, balance or no balance <span class="cite">(M-05 step 1)</span> — to read their history, or to log a new entry against them. No scan box: nothing in accounts payable has a barcode on it.</span>
+          </div>
+
+          <div class="chips" id="chips"></div>
+
+          <div class="sortbar">
+            <span class="lab">Sort</span>
+            <select id="sort">
+              <option value="name">Supplier name</option>
+              <option value="balance">Balance &mdash; largest first</option>
+              <option value="oldest">Oldest unpaid item</option>
+            </select>
+          </div>
+
+          <div class="slab-list" id="slab-list"></div>
+        </div>
+      </nav>
+
+      <!-- ============ TRACK 2 — the combined ledger, or the card registry ==== -->
+      <section class="main">
+        <div class="main-head">
+          <div style="min-width:0">
+            <h2 id="main-title">&mdash;</h2>
+            <div class="badges" id="main-badges"></div>
+          </div>
+          <div class="head-acts" id="main-acts"></div>
+        </div>
+        <div class="list-scroll" id="ledger"></div>
+      </section>
+
+      <!-- ============ TRACK 3 — the supplier, the selection, or the entry ==== -->
+      <aside class="acct" aria-label="The supplier, or what you have selected">
+        <div style="display:flex;flex-direction:column;min-height:0;flex:1" id="right"></div>
+      </aside>
+
+    </div>
+  </div>
+
+  <div class="notes">
+
+    <section class="note wide">
+      <h2>What M-05 would have to say</h2>
+      <div class="warnbox">
+        <p><strong>The layout needs no decisions.</strong> Three tracks, a retractable slab and a sticky right column are how this app already works — E-05 d29 by way of E-02 d38, E-07 d17, M-01 d17, and most recently M-02 d31 for Order Processing. Folding the three modals into track 3 changes no behaviour: <em>Record payment</em>, <em>Clear selected</em> and <em>Create new</em> do exactly what <span class="cite">d4, d5, d12&ndash;d16</span> already say, in a place that does not cover the ledger they are about.</p>
+        <p><strong>One row genuinely needs appending, and it is small.</strong> M-05 says of the Supplier's billing address, in as many words, that <em>&ldquo;Nothing here consumes it yet.&rdquo;</em> This layout consumes it — the remit-to address sits in track 3 while you are writing down a cheque number. That is a change to a recorded statement, so it is a decision row, not a detail.</p>
+        <p><strong>What this is worth.</strong> Not tidiness. Today the Manager ticks rows and then guesses which of two buttons will light up, with the reason hidden in a <code>title</code> attribute. Here <strong>the right track reads the selection back</strong> — what it sums to, which action it is legal for, and why the other one is not. The failure this prevents is the one M-05 d15 is most exposed to: <em>Clear</em> is manual reconciliation with no undo described anywhere in the flow, and a selection that does not sum to zero should be refused out loud rather than silently.</p>
+      </div>
+
+      <table class="props">
+        <tr><th style="width:104px">Proposed row</th><th>Wording</th></tr>
+        <tr>
+          <td>M-05 d17 <span class="badge accent">not ratified</span></td>
+          <td><strong>The Supplier's billing address is displayed on the accounts payable screen as the remit-to address, alongside the payment being recorded.</strong> <strong>Extends</strong> the M-01 d13 line inherited into this flow, which captures a billing address and notes that nothing here consumes it. Recording a payment is the moment the store asks &ldquo;where does the cheque go&rdquo;, and the answer is already on file one screen away. It is <em>display only</em>: nothing is printed, addressed, or sent, and M-01 remains the only place the address is edited. <em>Accepted consequence:</em> a stale billing address now looks authoritative at the moment it is most likely to be acted on, and nothing on this screen can tell that it is stale — the Supplier card is still the only place it is maintained.</td>
+        </tr>
+      </table>
+    </section>
+
+    <section class="note">
+      <h2>What each track is for</h2>
+      <dl>
+        <dt>Left &mdash; the payables slab (retractable)</dt>
+        <dd>The store-wide figure at the top, then the lookup, then the chips, then the sort, then <strong>who is owed</strong>. Two controls that do different jobs and look different: <strong>chips filter the list</strong> (their counts are suppliers), <strong>a supplier row scopes</strong> the middle to that supplier's ledger. The lookup is not a filter of the list — it reaches <em>any</em> Supplier including one with no payables at all, which is step 1's explicit requirement and the only way to start a <em>Create new</em> against a supplier you have never owed. Shut, a 52px strip carries Create new, a credits badge, and the suppliers tiled by their short code.</dd>
+        <dt>Middle &mdash; the combined ledger</dt>
+        <dd>Decision 3's one list &mdash; Invoices, Claims and manual entries together, because what is owed is the net of both. A real table rather than On&nbsp;Order's row grid: six money columns that have to line up is what this screen is <em>for</em>. Each row is a selection, not a navigation.</dd>
+        <dt>Right &mdash; the selection (sticky)</dt>
+        <dd>Three states, in strict priority: <strong>the new entry</strong> you are composing, else <strong>the selection</strong> you have ticked, else <strong>the supplier's standing</strong>. All three modals collapse into it.</dd>
+      </dl>
+    </section>
+
+    <section class="note">
+      <h2>Why the right track is the selection</h2>
+      <p>On&nbsp;Order's track 3 is <em>the line</em>; Customers' is <em>the customer</em>. The equivalent here is not one row &mdash; it is <strong>however many rows you have ticked</strong>, because every action in M-05 acts on a set. A payment covers a mix <span class="cite">(d16)</span>; clearing needs at least two <span class="cite">(d15)</span>; applying a credit spreads across all of them <span class="cite">(d11)</span>.</p>
+      <p>So the track reads the set back and names the one action it is legal for. <strong>Ticked invoices</strong> &rarr; per-target amounts, method, reference, date. <strong>Ticked entries summing to zero</strong> &rarr; clear, with d15's &ldquo;this changes nothing about the balance&rdquo; said where you can read it. <strong>Anything else</strong> &rarr; a red block that says the sum and what is wrong with it. The two disabled buttons and their tooltips go away.</p>
+    </section>
+
+    <section class="note">
+      <h2>One band, and the bands not drawn</h2>
+      <p>On&nbsp;Order bands its list on d19's overdue grouping. The equivalent line through a payables ledger is <span class="cite">d14</span>: a <strong>Claim placeholder does not move the balance</strong> until it is cleared against a matching Credit. Today that is a word in a Status column; here it is a band, and the figures above and below it mean different things.</p>
+      <p><strong>There are no aging bands.</strong> M-05 lists aging &mdash; 30/60/90 &mdash; as an open question, and specifically as one whose <em>home</em> is undecided: here, or in a general reporting surface. A mock that drew the buckets would answer that question by drawing it. Each row carries its age in days, and the slab offers <em>oldest unpaid first</em> as a sort; that is data and ordering, not a report, and neither commits the flow.</p>
+    </section>
+
+    <section class="note">
+      <h2>A thing the bands turned up</h2>
+      <p>In the screen as it stands the ledger's <strong>Balance</strong> column does not add up to the <strong>owed</strong> badge above it, and it cannot, because the column means two different things depending on the row.</p>
+      <p>A Credited-but-unapplied Supplier Claim renders as <code>-amount</code> at <span class="cite">screens/AccountsPayable.tsx:140</span>, and a Claim placeholder renders its signed face value at <span class="cite">screens/AccountsPayable.tsx:149</span> — but the net owed is computed from <code>invoiceBalance</code> plus <code>payableEntryContribution</code>, and <em>neither</em> of those rows contributes to it <span class="cite">(lib/totals.ts:150, :194)</span>. The figures are each defensible on their own; the column is not, because it mixes &ldquo;what this contributes&rdquo; with &ldquo;what this is worth for clearing&rdquo;.</p>
+      <p><strong>The code is right and the layout was hiding it.</strong> M-05 step 6 has the Manager mark a claim <em>Credited</em> and then <em>apply</em> it, as two acts; <span class="cite">d14</span> keeps a placeholder out of the balance entirely. Three bands, each with its own subtotal, make the table sum to the headline again &mdash; which is why this mock draws them, and why the fix is layout rather than arithmetic. <em>Not a decision: a reading of d6, d11 and d14 that the current screen does not make visible.</em></p>
+    </section>
+
+    <section class="note">
+      <h2>Why gift cards moved into the slab</h2>
+      <p>Today the registry is a full-width table under the supplier grid, which reads as an afterthought bolted to a screen about suppliers. But <span class="cite">d10</span> puts it here for a reason that is structural: it is <strong>money owed</strong>, and so is everything else in the slab. Making it the last destination in that list &mdash; under a rule, tiled in black so it never reads as a Supplier &mdash; says what d10 means without adding a word to the flow.</p>
+      <p>Selecting it scopes the middle track to the registry and the right track to the total liability. Nothing about it is editable here: loading and redeeming happen at the till <span class="cite">(E-05)</span>, and this is the register, not the mechanism.</p>
+    </section>
+
+    <section class="note">
+      <h2>Two totals, not one</h2>
+      <p>The slab's store-wide figure is <strong>one line per currency</strong>, not a sum. M-05 requires a Supplier's currency to carry through, with the store-currency equivalent shown at the configured rate &mdash; and that rate lives in <span class="cite">M-06</span>, which is not built. Adding CAD 282.45 to USD 23.75 would be inventing an exchange rate in the one place on the screen most likely to be read as authoritative.</p>
+      <p>When M-06 lands, this becomes a single figure with the per-currency lines beneath it. Until then the honest shape is the one that cannot be wrong. The same restraint applies inside a foreign-currency supplier's ledger, where the caveat sits in track 3 rather than a fabricated conversion sitting in the table.</p>
+    </section>
+
+    <section class="note">
+      <h2>The credit lands before you press it</h2>
+      <p>The top slot of track 3 &mdash; where On&nbsp;Order puts <em>who is waiting</em> &mdash; here holds <strong>a credit nobody has applied</strong>. Same reasoning: of everything true about this supplier, that is the one thing that is money on the table and the only one a person has to go and do.</p>
+      <p><span class="cite">d11</span> already specifies exactly where it will land: distributed across outstanding Invoices, <strong>oldest received first</strong>, absorbing any remainder on the last one. Since the algorithm is settled, the band can show the landing &mdash; which invoices, how much on each &mdash; <em>before</em> the button is pressed. Today that distribution is described in a <code>title</code> tooltip and only observable afterwards.</p>
+    </section>
+
+    <section class="note">
+      <h2>What is mock data</h2>
+      <p>The prototype's seed carries two open Invoices, one Credited claim and one Adjustment &mdash; enough to prove the store works, not enough to show a layout. This mock adds, <strong>for display only</strong>: a second F.A.B. invoice carrying a partial payment (so d4 has something to show), a Claim placeholder and the Credit that matches it (so d14's band and d15's clearing have rows), and one consignment Supplier, <em>Vinyl Revival</em>, so M-01's consignment flag and <span class="cite">d13</span>'s type default are visible.</p>
+      <p>None of that is a proposal about seed data. When this is built, the screen should render whatever the store holds, including the empty cases &mdash; which is why the settled supplier, the zero-balance card, and the reachable-but-inactive <em>Walk-in / trade-in</em> are all still in here.</p>
+    </section>
+
+    <section class="note">
+      <h2>Open, and deliberately left open</h2>
+      <ul>
+        <li><strong>A cross-supplier view.</strong> On&nbsp;Order's slab has a permanent <em>Everything on order</em> first row. This one has no equivalent, on purpose. A combined ledger implies a payment run across suppliers, and both <span class="cite">d7</span> (a claim applies only within one supplier) and <span class="cite">d16</span>'s PaymentBatch are supplier-scoped as written. Building the view first and discovering the model second is the wrong order. <strong>Recorded as an open question, not designed around.</strong></li>
+        <li><strong>Aging.</strong> Still open, still unanswered here &mdash; see above.</li>
+        <li><strong>Undoing a clear.</strong> <span class="cite">d15</span> says nothing is deleted and both entries stay in the ledger as history, but does not say whether a clearing can be reversed. The mock therefore does not offer it, and the confirmation in track 3 does not promise it can be undone.</li>
+        <li><strong>Who the reference belongs to.</strong> <span class="cite">d5</span> makes the payment reference free text because the bank statement is the reconciliation surface. Whether the screen should warn on a duplicate reference within one supplier is not decided, and is left alone.</li>
+        <li><strong>Currency movement.</strong> An invoice raised at one rate and paid at another is M-05's own open question. The payment composer records the amount in the supplier's currency and says nothing more.</li>
+      </ul>
+    </section>
+
+  </div>
+</div>
+<script>
+/* ======================================================================
+ * Mock behaviour. Enough to argue about the layout, and no more.
+ *
+ * The balance rules below follow the prototype's lib/totals.ts and M-05's
+ * own wording rather than being re-derived here:
+ *   - an Invoice's balance is amount less payments AND credits applied (d8)
+ *   - a Credited Supplier Claim nets nothing until it is APPLIED (step 6,
+ *     d11) — before that it is available, not counted
+ *   - a Claim placeholder never counts until cleared (d14)
+ *   - a Credit lands the moment it is entered; an Adjustment goes either
+ *     way at the Manager's choice (d14)
+ * ====================================================================== */
+
+var TODAY = new Date(2026, 8, 13); // 13/09/2026
+var r2 = function (n) { return Math.round(n * 100) / 100; };
+var $ = function (id) { return document.getElementById(id); };
+var esc = function (s) {
+  return String(s).replace(/[&<>"]/g, function (c) {
+    return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c];
+  });
+};
+var money = function (n, cur) {
+  var s = (n < 0 ? '-' : '') + '$' + Math.abs(r2(n)).toFixed(2);
+  return cur && cur !== 'CAD' ? s + ' ' + cur : s;
+};
+var days = function (iso) {
+  var p = iso.split('-');
+  return Math.round((TODAY - new Date(+p[0], +p[1] - 1, +p[2])) / 86400000);
+};
+
+/* ---- Suppliers. The first three and WALK are the prototype's seed. ---- */
+var SUPPLIERS = [
+  { id: 'fab', code: 'FAB1', name: 'F.A.B. Distribution', acct: 'WW-4471', cur: 'CAD', cons: false,
+    billing: ['PO Box 4471, Station A', 'Toronto, ON', 'Canada'] },
+  { id: 'indie', code: 'INDI', name: 'Indie Direct Supply', acct: '9927-A', cur: 'USD', cons: false,
+    billing: ['118 W 22nd St', 'New York, NY', 'United States'] },
+  { id: 'crate', code: 'CRAT', name: 'Crate Digger Wholesale', acct: 'CD-118', cur: 'CAD', cons: false,
+    billing: ['77 Avenue Mozart Est', 'Montréal, QC', 'Canada'] },
+  { id: 'vinyl', code: 'VRVL', name: 'Vinyl Revival Consignment', acct: 'VR-06', cur: 'CAD', cons: true,
+    billing: ['904 Rue Ontario Est', 'Montréal, QC', 'Canada'], mock: true },
+  { id: 'walkin', code: 'WALK', name: 'Walk-in / trade-in', acct: '', cur: 'CAD', cons: false, billing: null },
+];
+var supBy = function (id) { for (var i = 0; i < SUPPLIERS.length; i++) if (SUPPLIERS[i].id === id) return SUPPLIERS[i]; return null; };
+
+/* ---- The ledger. `mock:true` marks a row this file invented to show a
+       state the seed has no example of — see "What is mock data". ---- */
+var ITEMS = [
+  { key: 'iv-55021', sup: 'fab', kind: 'invoice', type: 'Invoice', ref: '55021', date: '2026-08-28', amount: 68.65, paid: 0, credited: 0, po: 'PO-1188' },
+  { key: 'iv-55188', sup: 'fab', kind: 'invoice', type: 'Invoice', ref: '55188', date: '2026-09-04', amount: 214.20, paid: 100, credited: 0, po: 'PO-1204', mock: true },
+  { key: 'cl-9', sup: 'fab', kind: 'claim', type: 'Credit', ref: '#9 · CM-2201', date: '2026-09-03', amount: 12.40, reason: 'Received damaged — Kind of Blue, qty 1', applied: false },
+  { key: 'en-claim', sup: 'fab', kind: 'entry', type: 'Claim', ref: 'Claim 11 — short shipped', date: '2026-09-08', amount: 34.00, mock: true },
+  { key: 'en-credit', sup: 'fab', kind: 'entry', type: 'Credit', ref: 'CM-2244', date: '2026-09-11', amount: 34.00, mock: true },
+
+  { key: 'iv-3390', sup: 'indie', kind: 'invoice', type: 'Invoice', ref: '3390', date: '2026-08-31', amount: 17.25, paid: 0, credited: 0, po: 'PO-1191' },
+  { key: 'en-adj', sup: 'indie', kind: 'entry', type: 'Adjustment', ref: 'Freight correction — INDI-3390', date: '2026-09-02', amount: 6.50, dir: 'increase' },
+
+  { key: 'en-cons', sup: 'vinyl', kind: 'entry', type: 'Consignment', ref: 'CS-0912', date: '2026-09-09', amount: 146.00, paid: 0, mock: true },
+];
+
+var BATCHES = [
+  { id: 'b2', sup: 'fab', method: 'Cheque', ref: 'Cheque 1041', date: '2026-09-08', by: 'R. Duval',
+    targets: [{ label: 'Invoice 55188', amount: 100.00 }], mock: true },
+  { id: 'b1', sup: 'crate', method: 'EFT', ref: 'EFT-88214', date: '2026-08-20', by: 'R. Duval',
+    targets: [{ label: 'Invoice CD-777', amount: 20.00 }] },
+];
+
+/* M-05 asks the registry for code, balance, issue date, last-used date and
+   the Customer. The prototype's GiftCard record carries only the first two
+   and an optional customer — the caveat in track 3 says so rather than the
+   columns quietly disappearing. */
+var CARDS = [
+  { code: 'GC-4417', bal: 25.00, customer: 'Ramona Vasquez', issued: '2026-06-14', used: '2026-08-22' },
+  { code: 'GC-2039', bal: 60.00, customer: null, issued: '2026-08-30', used: null, mock: true },
+  { code: 'GC-8890', bal: 0, customer: null, issued: '2026-09-02', used: null },
+];
+
+var PAYMENT_METHODS = ['Cheque', 'Credit card', 'EFT', 'Cash'];
+var ENTRY_TYPES = ['Invoice', 'Claim', 'Credit', 'Adjustment', 'Consignment'];
+
+/* ---- derived ---- */
+/* Two different questions, and d15 is the reason they are not the same one.
+   `itemsFor` is what still NEEDS ATTENTION — a cleared pair drops out of it.
+   `countedFor` is what the BALANCE is made of, and a cleared Credit stays in
+   it: "a Claim was never counted; a Credit already was, and stays counted".
+   Filtering the ledger and computing the balance off one list would quietly
+   raise the balance every time a Manager tidied one up. */
+function live(it) { return !it.cleared && !(it.kind === 'claim' && it.applied); }
+function itemsFor(sid) { return ITEMS.filter(function (i) { return i.sup === sid && live(i); }); }
+function countedFor(sid) {
+  return ITEMS.filter(function (i) { return i.sup === sid && !(i.kind === 'claim' && i.applied); });
+}
+
+function isPayable(it) {
+  if (it.kind === 'invoice') return true;
+  if (it.kind === 'claim') return false;
+  return it.type === 'Invoice' || it.type === 'Consignment' || (it.type === 'Adjustment' && it.dir !== 'decrease');
+}
+/* What the row is worth for CLEARING — its signed face value (d15). */
+function signedOf(it) {
+  if (it.kind === 'claim') return -it.amount;
+  if (it.type === 'Credit') return -it.amount;
+  if (it.type === 'Adjustment') return it.dir === 'decrease' ? -it.amount : it.amount;
+  if (isPayable(it)) return r2(it.amount - (it.paid || 0) - (it.credited || 0));
+  return it.amount; // a Claim placeholder: face value, but see bandOf
+}
+/* What the row currently contributes to the balance. */
+function balanceOf(it) {
+  if (it.kind === 'claim') return 0;                 // Credited, not yet applied
+  if (it.kind === 'entry' && it.type === 'Claim') return 0; // placeholder (d14)
+  return signedOf(it);
+}
+function paidOf(it) {
+  if (it.kind === 'claim') return null;
+  if (!isPayable(it)) return null;
+  return r2((it.paid || 0) + (it.credited || 0));
+}
+function bandOf(it) {
+  if (it.kind === 'claim') return 'avail';
+  if (it.kind === 'entry' && it.type === 'Claim') return 'uncounted';
+  return 'counted';
+}
+function netOf(sid) {
+  return r2(countedFor(sid).reduce(function (s, i) { return s + balanceOf(i); }, 0));
+}
+/* What the cleared rows are still worth, so the counted band's subtotal can
+   say so rather than silently disagreeing with the figure above it. */
+function clearedContribOf(sid) {
+  return r2(ITEMS.filter(function (i) { return i.sup === sid && i.cleared; })
+    .reduce(function (s, i) { return s + balanceOf(i); }, 0));
+}
+function availCreditOf(sid) {
+  return r2(itemsFor(sid).filter(function (i) { return i.kind === 'claim'; })
+    .reduce(function (s, i) { return s + i.amount; }, 0));
+}
+function uncountedOf(sid) {
+  return r2(itemsFor(sid).filter(function (i) { return bandOf(i) === 'uncounted'; })
+    .reduce(function (s, i) { return s + signedOf(i); }, 0));
+}
+function openInvoicesOf(sid) {
+  return itemsFor(sid).filter(function (i) { return isPayable(i) && balanceOf(i) > 0.005; })
+    .sort(function (a, b) { return a.date < b.date ? -1 : 1; });
+}
+function oldestOpen(sid) {
+  var o = openInvoicesOf(sid);
+  return o.length ? o[0].date : null;
+}
+/* Suppliers with any payables activity at all. The lookup reaches the rest. */
+function activity() {
+  return SUPPLIERS.filter(function (s) {
+    return ITEMS.some(function (i) { return i.sup === s.id; }) || BATCHES.some(function (b) { return b.sup === s.id; });
+  });
+}
+function dotOf(sid) {
+  if (availCreditOf(sid) > 0.005) return 'credit';
+  if (uncountedOf(sid) > 0.005) return 'claim';
+  return netOf(sid) > 0.005 ? 'owed' : 'settled';
+}
+/* d11 — where an applied credit lands: across outstanding Invoices, oldest
+   received first, the remainder absorbed on the last one. */
+function creditLanding(sid, amount) {
+  var open = openInvoicesOf(sid), left = amount, out = [];
+  for (var i = 0; i < open.length; i++) {
+    if (left <= 0.005) break;
+    var take = Math.min(left, balanceOf(open[i]));
+    if (i === open.length - 1) take = left; // remainder absorbed on the last
+    out.push({ it: open[i], amount: r2(take) });
+    left = r2(left - take);
+  }
+  return out;
+}
+
+/* ---- state ---- */
+var S = {
+  slab: true, scope: 'fab', q: '', chip: 'all', sort: 'name',
+  sel: {}, mode: null, openBatch: null,
+  pay: null, entry: null,
+};
+var selKeys = function () { return Object.keys(S.sel).filter(function (k) { return S.sel[k]; }); };
+var selItems = function () { return selKeys().map(function (k) { return ITEMS.filter(function (i) { return i.key === k; })[0]; }).filter(Boolean); };
+
+function toast(msg) {
+  var t = $('toast');
+  t.textContent = msg; t.hidden = false;
+  clearTimeout(toast._h);
+  toast._h = setTimeout(function () { t.hidden = true; }, 3600);
+}
+
+/* ====================== TRACK 1 ====================== */
+var CHIPS = [
+  { k: 'all', label: 'All' },
+  { k: 'owed', label: 'Owed' },
+  { k: 'credit', label: 'Credit to apply', good: true },
+  { k: 'claims', label: 'Claims open' },
+  { k: 'foreign', label: 'Foreign' },
+  { k: 'settled', label: 'Settled' },
+];
+function chipMatch(k, s) {
+  if (k === 'all') return true;
+  if (k === 'owed') return netOf(s.id) > 0.005;
+  if (k === 'credit') return availCreditOf(s.id) > 0.005;
+  if (k === 'claims') return uncountedOf(s.id) > 0.005;
+  if (k === 'foreign') return s.cur !== 'CAD';
+  if (k === 'settled') return netOf(s.id) <= 0.005;
+  return true;
+}
+function searched() {
+  var q = S.q.trim().toLowerCase();
+  if (!q) return null; // null = not looking anything up
+  return SUPPLIERS.filter(function (s) {
+    return s.name.toLowerCase().indexOf(q) >= 0 || s.code.toLowerCase().indexOf(q) >= 0 ||
+      (s.acct || '').toLowerCase().indexOf(q) >= 0;
+  });
+}
+function slabRows() {
+  var found = searched();
+  if (found) return found;
+  var list = activity().filter(function (s) { return chipMatch(S.chip, s); });
+  return list.sort(function (a, b) {
+    if (S.sort === 'balance') return netOf(b.id) - netOf(a.id) || a.name.localeCompare(b.name);
+    if (S.sort === 'oldest') {
+      var oa = oldestOpen(a.id), ob = oldestOpen(b.id);
+      if (!oa && !ob) return a.name.localeCompare(b.name);
+      if (!oa) return 1; if (!ob) return -1;
+      return oa < ob ? -1 : oa > ob ? 1 : 0;
+    }
+    return a.name.localeCompare(b.name);
+  });
+}
+
+function renderTotal() {
+  var byCur = {};
+  activity().forEach(function (s) { byCur[s.cur] = r2((byCur[s.cur] || 0) + netOf(s.id)); });
+  var curs = Object.keys(byCur).sort();
+  var gc = r2(CARDS.reduce(function (n, c) { return n + c.bal; }, 0));
+  var h = '';
+  curs.forEach(function (c, i) {
+    h += '<div class="tot"><span class="lab">' + (i === 0 ? 'Owed to suppliers' : '&nbsp;') + '</span>' +
+      '<span class="v' + (i ? ' sub' : '') + '">' + esc(money(byCur[c], c)) + '</span></div>';
+  });
+  h += '<div class="tot" style="margin-top:6px"><span class="lab">Gift cards</span>' +
+    '<span class="v sub">' + esc(money(gc)) + '</span></div>';
+  h += '<span class="hint">One line per currency, never a sum &mdash; the store-currency rate that would let these be added lives in M-06, which is not built.</span>';
+  $('slab-total').innerHTML = h;
+}
+
+function renderChips() {
+  var base = activity();
+  $('chips').innerHTML = CHIPS.map(function (c) {
+    var n = base.filter(function (s) { return chipMatch(c.k, s); }).length;
+    return '<button class="chip' + (c.good ? ' good' : '') + (S.chip === c.k ? ' on' : '') + '"' +
+      ' data-chip="' + c.k + '"' + (c.k !== 'all' && n === 0 ? ' disabled' : '') + '>' +
+      esc(c.label) + ' <span class="count">' + n + '</span></button>';
+  }).join('');
+}
+
+function supRow(s, cls) {
+  var net = netOf(s.id), cred = availCreditOf(s.id), open = itemsFor(s.id).length;
+  var oldest = oldestOpen(s.id);
+  var meta = '<span class="st-dot ' + dotOf(s.id) + '"></span> ' + esc(s.code) +
+    (s.cur !== 'CAD' ? ' · ' + esc(s.cur) : '') +
+    (s.cons ? ' · consignment' : '') +
+    (open ? ' · ' + open + ' open' : ' · nothing open') +
+    (oldest ? ' · ' + days(oldest) + 'd' : '');
+  var key = cred > 0.005 ? money(cred) + ' credit' : (net > 0.005 ? 'owing' : 'settled');
+  return '<button class="sup' + (s.cons ? ' cons' : '') + (S.scope === s.id ? ' on' : '') +
+    (cls || '') + '" data-sup="' + s.id + '">' +
+    '<span class="code">' + esc(s.code) + '</span>' +
+    '<span class="t">' + esc(s.name) + '</span>' +
+    '<span class="m">' + meta + '</span>' +
+    '<span class="n' + (net > 0.005 ? '' : ' nil') + '">' + esc(money(net, s.cur)) + '</span>' +
+    '<span class="k' + (cred > 0.005 ? ' good' : '') + '">' + esc(key) + '</span>' +
+    '</button>';
+}
+
+function renderSlab() {
+  renderTotal(); renderChips();
+  /* Sorting by balance orders figures in different currencies against each
+     other, which is the same M-06 gap the total refuses to paper over. The
+     sort still helps, so it stays — and says so rather than pretending. */
+  var mixed = new Set(activity().map(function (s) { return s.cur; })).size > 1;
+  var warn = $('sort-warn');
+  if (!warn) {
+    warn = document.createElement('span');
+    warn.id = 'sort-warn';
+    warn.className = 'xsmall muted';
+    warn.style.cssText = 'display:block;padding:0 var(--sp-3) 6px;font-size:10.5px;border-bottom:1px solid var(--c-border-strong)';
+    $('sort').closest('.sortbar').after(warn);
+  }
+  warn.hidden = !(S.sort === 'balance' && mixed);
+  warn.innerHTML = 'Ordering CAD and USD figures against each other &mdash; the same M-06 gap the total above refuses to paper over.';
+
+  var found = searched(), h = '';
+  if (found) {
+    h += '<div class="slab-band"><span class="lab">Lookup</span><span class="xsmall muted">' +
+      found.length + ' match' + (found.length === 1 ? '' : 'es') + ' · any supplier, balance or not</span></div>';
+    if (!found.length) h += '<div class="slab-empty">No supplier matches &ldquo;' + esc(S.q.trim()) + '&rdquo;.</div>';
+    found.forEach(function (s) {
+      var inactive = !activity().some(function (a) { return a.id === s.id; });
+      h += supRow(s, inactive ? ' dim' : '');
+    });
+    if (found.some(function (s) { return !activity().some(function (a) { return a.id === s.id; }); })) {
+      h += '<div class="slab-empty" style="padding:var(--sp-3)">Dimmed suppliers have no payables at all. They are reachable so history can be read, and so a <strong>Create new</strong> can be logged against them <span class="cite">(step 1)</span>.</div>';
+    }
+  } else {
+    var rows = slabRows();
+    var owed = rows.filter(function (s) { return netOf(s.id) > 0.005; });
+    var settled = rows.filter(function (s) { return netOf(s.id) <= 0.005; });
+    if (owed.length) {
+      h += '<div class="slab-band"><span class="lab">Outstanding</span><span class="xsmall muted">' + owed.length + '</span></div>';
+      owed.forEach(function (s) { h += supRow(s); });
+    }
+    if (settled.length) {
+      h += '<div class="slab-band"><span class="lab">Settled &mdash; no balance owing</span><span class="xsmall muted">' + settled.length + '</span></div>';
+      settled.forEach(function (s) { h += supRow(s, ' dim'); });
+    }
+    if (!rows.length) h += '<div class="slab-empty">No supplier matches this filter.</div>';
+    var gc = r2(CARDS.reduce(function (n, c) { return n + c.bal; }, 0));
+    h += '<button class="sup gc' + (S.scope === 'cards' ? ' on' : '') + '" data-sup="cards">' +
+      '<span class="code">&#9733;</span>' +
+      '<span class="t">Gift card liability</span>' +
+      '<span class="m">Owed to customers, not to a supplier · ' + CARDS.filter(function (c) { return c.bal > 0; }).length + ' live</span>' +
+      '<span class="n">' + esc(money(gc)) + '</span><span class="k">outstanding</span></button>';
+  }
+  $('slab-list').innerHTML = h;
+
+  var stack = activity().map(function (s) {
+    return '<button class="tile' + (S.scope === s.id ? ' on' : '') + '" data-sup="' + s.id + '" title="' +
+      esc(s.name + ' — ' + money(netOf(s.id), s.cur)) + '">' + esc(s.code) +
+      '<span class="st-dot ' + dotOf(s.id) + '"></span></button>';
+  }).join('') +
+    '<button class="tile gc' + (S.scope === 'cards' ? ' on' : '') + '" data-sup="cards" title="Gift card liability">&#9733;</button>';
+  $('strip-stack').innerHTML = stack;
+  var credits = activity().filter(function (s) { return availCreditOf(s.id) > 0.005; }).length;
+  $('strip-badge').textContent = credits;
+  $('strip-credit').hidden = credits === 0;
+}
+
+/* ====================== TRACK 2 ====================== */
+var BANDS = [
+  { k: 'counted', lab: 'Counted &mdash; this is the balance', say: 'These rows sum to the figure on the right.' },
+  { k: 'avail', lab: 'Credit confirmed, not yet applied', say: 'Nets across the invoices above, oldest received first, when applied (d11).' },
+  { k: 'uncounted', lab: 'Not counted until cleared', say: 'A Claim placeholder moves nothing until it is cleared against a matching Credit (d14).' },
+];
+
+function ledgerRow(it, cur) {
+  var bal = balanceOf(it), paid = paidOf(it), band = bandOf(it);
+  var shown = band === 'uncounted' ? signedOf(it) : (band === 'avail' ? -it.amount : bal);
+  var selectable = (isPayable(it) && bal > 0.005) || it.kind === 'entry';
+  var cls = 'lr' + (S.sel[it.key] ? ' on' : '') + (selectable ? '' : ' locked');
+  var status = it.kind === 'claim' ? 'Credited' :
+    (it.kind === 'entry' && it.type === 'Claim') ? 'Awaiting credit' :
+      (isPayable(it) ? ((it.paid || it.credited) ? 'Part paid' : 'Open') : 'Applied');
+  var numCls = shown < -0.005 ? ' cr' : (Math.abs(shown) <= 0.005 ? ' nil' : '');
+  return '<tr class="' + cls + '" data-row="' + it.key + '"' + (selectable ? ' tabindex="0"' : '') + '>' +
+    '<td>' + (selectable ? '<input type="checkbox"' + (S.sel[it.key] ? ' checked' : '') + ' data-cb="' + it.key + '" aria-label="Select ' + esc(it.type + ' ' + it.ref) + '">' : '') + '</td>' +
+    '<td>' + esc(it.type) + (it.mock ? '' : '') +
+    (it.kind === 'entry' ? '<span class="sub">entered by hand</span>' : (it.po ? '<span class="sub">' + esc(it.po) + '</span>' : '')) + '</td>' +
+    '<td><span class="ref">' + esc(it.ref) + '</span>' + (it.reason ? '<span class="sub">' + esc(it.reason) + '</span>' : '') + '</td>' +
+    '<td><span class="num">' + esc(it.date) + '</span><span class="age">' + days(it.date) + ' days</span></td>' +
+    '<td class="r"><span class="num">' + esc(money(it.amount, cur)) + '</span></td>' +
+    '<td class="r"><span class="num' + (paid ? '' : ' nil') + '">' + (paid == null ? '&mdash;' : esc(money(paid, cur))) + '</span></td>' +
+    '<td class="r"><span class="num bal' + numCls + '">' + esc(money(shown, cur)) + '</span></td>' +
+    '<td>' + esc(status) + '</td>' +
+    '</tr>';
+}
+
+function renderMain() {
+  if (S.scope === 'cards') return renderCards();
+  var s = supBy(S.scope);
+  $('main-title').textContent = s.name;
+  var net = netOf(s.id), cred = availCreditOf(s.id), n = selKeys().length;
+  var b = '<span class="badge ' + (net > 0.005 ? 'ink' : 'ok') + '">' + esc(money(net, s.cur)) + (net > 0.005 ? ' owed' : ' — settled') + '</span>';
+  b += '<span class="badge mono">' + esc(s.code) + (s.acct ? ' · ' + esc(s.acct) : '') + '</span>';
+  if (s.cur !== 'CAD') b += '<span class="badge warn">' + esc(s.cur) + '</span>';
+  if (s.cons) b += '<span class="badge">consignment</span>';
+  if (cred > 0.005) b += '<span class="badge ok">' + esc(money(cred)) + ' credit to apply</span>';
+  if (n) b += '<span class="badge accent">' + n + ' selected</span>';
+  $('main-badges').innerHTML = b;
+  $('main-acts').innerHTML = n
+    ? '<button class="btn sm" id="unsel">Clear selection</button>'
+    : '<button class="btn sm" id="new-btn-2">&#65291; Create new</button>';
+
+  var items = itemsFor(s.id);
+  var h = '';
+  if (!items.length) {
+    h = '<div class="grp"><span class="lab">Nothing outstanding</span></div>' +
+      '<div class="empty" style="padding:var(--sp-6) var(--sp-4);text-align:center;color:var(--c-ink-faint);font-size:12.5px">' +
+      'Nothing outstanding for ' + esc(s.name) + '.<br>Use <strong>Create new</strong> to log an Invoice, Claim, Credit, Adjustment or Consignment by hand ' +
+      '<span class="cite">(d12)</span>, or finalize an Invoice in Receiving.</div>';
+  } else {
+    BANDS.forEach(function (band) {
+      var rows = items.filter(function (i) { return bandOf(i) === band.k; })
+        .sort(function (a, b2) { return a.date < b2.date ? -1 : 1; });
+      if (!rows.length && !(band.k === 'counted' && Math.abs(clearedContribOf(s.id)) > 0.005)) return;
+      var sub = r2(rows.reduce(function (t, i) {
+        return t + (band.k === 'uncounted' ? signedOf(i) : (band.k === 'avail' ? -i.amount : balanceOf(i)));
+      }, 0));
+      var say = band.say, retired = 0;
+      if (band.k === 'counted') {
+        retired = clearedContribOf(s.id);
+        sub = r2(sub + retired);
+        if (Math.abs(retired) > 0.005) {
+          say = 'Includes ' + money(retired, s.cur) + ' from entries already cleared and retired from this list &mdash; a cleared Credit stays counted <span class="cite">(d15)</span>.';
+        }
+      }
+      h += '<div class="grp' + (band.k === 'uncounted' ? ' uncounted' : '') + '">' +
+        '<span class="lab">' + band.lab + '</span>' +
+        '<span class="say">' + say + ' &nbsp;<span class="mono" style="font-weight:700">' + esc(money(sub, s.cur)) + '</span></span></div>';
+      h += '<table class="ledger"><thead><tr>' +
+        '<th></th><th>Type</th><th>Reference</th><th>Date</th>' +
+        '<th class="r">Amount</th><th class="r">Paid / netted</th><th class="r">Balance</th><th>Status</th>' +
+        '</tr></thead><tbody>' +
+        rows.map(function (i) { return ledgerRow(i, s.cur); }).join('') +
+        '</tbody></table>';
+    });
+  }
+  $('ledger').innerHTML = h;
+}
+
+function renderCards() {
+  $('main-title').textContent = 'Gift card liability';
+  var tot = r2(CARDS.reduce(function (n, c) { return n + c.bal; }, 0));
+  $('main-badges').innerHTML = '<span class="badge ink">' + esc(money(tot)) + ' outstanding</span>' +
+    '<span class="badge">' + CARDS.filter(function (c) { return c.bal > 0; }).length + ' live of ' + CARDS.length + '</span>' +
+    '<span class="badge">owed to customers</span>';
+  $('main-acts').innerHTML = '';
+  $('ledger').innerHTML =
+    '<div class="grp"><span class="lab">The registry</span><span class="say">Loading and redeeming happen at the till <span class="cite">(E-05)</span> &mdash; this is the register, not the mechanism.</span></div>' +
+    '<table class="ledger"><thead><tr><th></th><th>Code</th><th>Customer</th><th>Issued</th><th>Last used</th><th class="r">Balance</th><th></th></tr></thead><tbody>' +
+    CARDS.map(function (c) {
+      return '<tr class="lr locked"><td></td>' +
+        '<td><span class="ref">' + esc(c.code) + '</span></td>' +
+        '<td>' + (c.customer ? esc(c.customer) : '<span class="muted">&mdash; not associated</span>') + '</td>' +
+        '<td><span class="num">' + esc(c.issued) + '</span></td>' +
+        '<td>' + (c.used ? '<span class="num">' + esc(c.used) + '</span>' : '<span class="muted">never</span>') + '</td>' +
+        '<td class="r"><span class="num bal' + (c.bal > 0 ? '' : ' nil') + '">' + esc(money(c.bal)) + '</span></td>' +
+        '<td>' + (c.bal > 0 ? '' : '<span class="muted xsmall">not yet loaded</span>') + '</td></tr>';
+    }).join('') + '</tbody></table>';
+}
+
+/* ====================== TRACK 3 ====================== */
+function rightKey() {
+  return S.scope + '|' + (S.mode || '-') + '|' + selKeys().sort().join(',') + '|' + S.openBatch + '|' + renderRight.gen;
+}
+renderRight.gen = 0;
+
+function renderRight(force) {
+  var k = rightKey();
+  if (!force && k === renderRight.last) return;
+  renderRight.last = k;
+  if (S.mode === 'new') return rightNew();
+  if (selKeys().length) return rightSelection();
+  if (S.scope === 'cards') return rightCards();
+  return rightSupplier();
+}
+
+function batchHtml(sid) {
+  var bs = BATCHES.filter(function (b) { return b.sup === sid; });
+  if (!bs.length) return '<div class="sec-empty">No payment recorded yet.</div>';
+  return bs.map(function (b) {
+    var tot = r2(b.targets.reduce(function (n, t) { return n + t.amount; }, 0));
+    var open = S.openBatch === b.id;
+    return '<div class="batch"><button class="batch-head" data-batch="' + b.id + '" aria-expanded="' + open + '">' +
+      '<span class="l">' + esc(b.date) + ' &mdash; ' + esc(b.method) + ' <span class="mono">' + esc(b.ref) + '</span></span>' +
+      '<span class="badge ok">' + esc(money(tot)) + '</span></button>' +
+      (open ? '<div class="batch-body">' +
+        b.targets.map(function (t) { return '<div class="tgt"><span>' + esc(t.label) + '</span><span class="mono">' + esc(money(t.amount)) + '</span></div>'; }).join('') +
+        '<div class="by">Recorded by ' + esc(b.by) + ' · one batch, however many targets it paid <span class="cite">(d16)</span></div></div>' : '') +
+      '</div>';
+  }).join('');
+}
+
+function rightSupplier() {
+  var s = supBy(S.scope);
+  var net = netOf(s.id), cred = availCreditOf(s.id), unc = uncountedOf(s.id);
+  var open = openInvoicesOf(s.id), oldest = oldestOpen(s.id);
+  var landing = cred > 0.005 ? creditLanding(s.id, cred) : [];
+
+  var h = '<div class="waiting' + (cred > 0.005 ? ' live' : '') + '">' +
+    '<span class="lab">Credit waiting to be applied<span class="mono">' + (cred > 0.005 ? esc(money(cred)) : '') + '</span></span>';
+  if (cred > 0.005) {
+    var cl = itemsFor(s.id).filter(function (i) { return i.kind === 'claim'; })[0];
+    h += '<div class="w-name">Claim ' + esc(cl.ref) + '</div>' +
+      '<div class="w-sub">' + esc(cl.reason || '') + '</div>' +
+      '<div class="w-split">' +
+      landing.map(function (l) {
+        return '<div class="ln"><span>&rarr; ' + esc(l.it.type + ' ' + l.it.ref) + '</span><span class="mono">' + esc(money(l.amount, s.cur)) + '</span></div>';
+      }).join('') +
+      '</div>' +
+      '<button class="btn ink sm" style="margin-top:8px;justify-content:center" data-apply="' + s.id + '">Apply ' + esc(money(cred)) + ' credit</button>' +
+      '<div class="caveat">Oldest received first, remainder absorbed on the last <span class="cite">(d11)</span>. It settles the balance the way a payment does &mdash; the difference is that no money leaves the store <span class="cite">(d6)</span>.</div>';
+  } else {
+    h += '<div class="w-name none">Nothing confirmed and unapplied.</div>' +
+      '<div class="w-sub">Claims arrive here already raised, sent and carrying Pending or Credited <span class="cite">(from E-04)</span>.</div>';
+  }
+  h += '</div>';
+
+  h += '<div class="acct-head">' +
+    '<div class="figure' + (net > 0.005 ? '' : (net < -0.005 ? ' cr' : ' nil')) + '">' + esc(money(net, s.cur)) + '</div>' +
+    '<div class="figure-say">' + (net > 0.005 ? 'owed to ' + esc(s.name) : net < -0.005 ? 'in the store&rsquo;s favour' : 'nothing owing') + '</div>' +
+    '<div class="figure-sub">Derived from amounts less payments and credits &mdash; never edited directly <span class="cite">(d8)</span>.</div>' +
+    '</div><div class="rule"></div>';
+
+  h += '<div class="acct-mid">';
+  h += '<div class="sec"><span class="lab">Standing</span><div class="standing">' +
+    '<div class="stat"><span class="v">' + open.length + '</span><span class="k">open, payable</span></div>' +
+    '<div class="stat"><span class="v' + (oldest ? '' : ' nil') + '">' + (oldest ? days(oldest) + 'd' : '—') + '</span><span class="k">oldest unpaid</span></div>' +
+    '<div class="stat"><span class="v' + (cred > 0.005 ? ' cr' : ' nil') + '">' + esc(money(cred)) + '</span><span class="k">credit available</span></div>' +
+    '<div class="stat"><span class="v' + (unc > 0.005 ? ' un' : ' nil') + '">' + esc(money(unc)) + '</span><span class="k">claims not counted</span></div>' +
+    '</div>';
+  if (s.cur !== 'CAD') {
+    h += '<div class="caveat warn">Invoiced in ' + esc(s.cur) + '. No store-currency equivalent is shown: M-05 requires it at the configured rate, and that rate lives in <span class="cite">M-06</span>, which is not built.</div>';
+  }
+  if (s.cons) {
+    h += '<div class="caveat">Carries the consignment flag, so an Invoice entered for them defaults to type <strong>Consignment</strong> <span class="cite">(d13)</span>.</div>';
+  }
+  h += '</div>';
+
+  if (s.billing) {
+    h += '<div class="sec"><span class="lab">Remit to</span>' +
+      '<div class="small">' + s.billing.map(esc).join('<br>') + '</div>' +
+      '<div class="caveat prop">Proposed &mdash; <strong>M-05 d17, not ratified</strong>. The flow currently records that nothing here consumes the billing address <span class="cite">(from M-01 d13)</span>. Display only; edited on the Supplier card.</div></div>';
+  }
+
+  h += '<div class="sec"><span class="lab">Payment history</span>' + batchHtml(s.id) + '</div>';
+  h += '</div>';
+
+  h += '<div class="acct-foot">' +
+    '<button class="btn ink primary" data-act="new">&#65291; Create new entry</button>' +
+    '<div class="foot-sub">' + (open.length
+      ? 'To record a payment, tick what it covers in the ledger.'
+      : 'Nothing payable to tick &mdash; a payment needs an open Invoice or entry.') + '</div>' +
+    '</div>';
+  $('right').innerHTML = h;
+}
+
+function rightCards() {
+  var tot = r2(CARDS.reduce(function (n, c) { return n + c.bal; }, 0));
+  $('right').innerHTML =
+    '<div class="waiting"><span class="lab">Owed to</span>' +
+    '<div class="w-name">Customers, not suppliers</div>' +
+    '<div class="w-sub">Registered here rather than buried in settings, because it is money the store owes <span class="cite">(d10)</span>.</div></div>' +
+    '<div class="acct-head"><div class="figure">' + esc(money(tot)) + '</div>' +
+    '<div class="figure-say">outstanding gift-card liability</div>' +
+    '<div class="figure-sub">The sum of every card carrying a balance.</div></div><div class="rule"></div>' +
+    '<div class="acct-mid">' +
+    '<div class="sec"><span class="lab">Standing</span><div class="standing">' +
+    '<div class="stat"><span class="v">' + CARDS.filter(function (c) { return c.bal > 0; }).length + '</span><span class="k">cards with a balance</span></div>' +
+    '<div class="stat"><span class="v">' + CARDS.filter(function (c) { return c.customer; }).length + '</span><span class="k">tied to a customer</span></div>' +
+    '</div></div>' +
+    '<div class="sec"><span class="lab">What is not here</span>' +
+    '<div class="caveat warn">M-05 asks the registry for issue date and last-used date. The prototype&rsquo;s GiftCard record carries <strong>code, balance and an optional customer only</strong> &mdash; the two date columns are mocked here and would need the record widening before this is built.</div>' +
+    '<div class="caveat">Nothing is editable on this screen. Loading and redeeming are the till&rsquo;s <span class="cite">(E-05)</span>.</div></div>' +
+    '</div>' +
+    '<div class="acct-foot"><div class="foot-sub">A register has no primary action.</div></div>';
+}
+
+function rightSelection() {
+  var s = supBy(S.scope), items = selItems();
+  var payable = items.filter(function (i) { return isPayable(i) && balanceOf(i) > 0.005; });
+  var allPayable = payable.length === items.length && items.length > 0;
+  var allEntries = items.every(function (i) { return i.kind === 'entry'; });
+  var signedSum = r2(items.reduce(function (t, i) { return t + signedOf(i); }, 0));
+  var clearOk = allEntries && items.length >= 2 && Math.abs(signedSum) <= 0.005;
+
+  var h = '<div class="waiting"><span class="lab">Selected<span class="mono">' + items.length + '</span></span>' +
+    '<div class="w-name">' + (allPayable ? 'Recording a payment' : clearOk ? 'Clearing against each other' : 'Not yet a legal action') + '</div>' +
+    '<div class="w-sub">' + esc(s.name) + '</div></div>';
+
+  if (allPayable) {
+    if (!S.pay || S.pay.for !== selKeys().sort().join(',')) {
+      S.pay = { for: selKeys().sort().join(','), method: 'Cheque', ref: '', date: '2026-09-13', amt: {} };
+      payable.forEach(function (i) { S.pay.amt[i.key] = balanceOf(i).toFixed(2); });
+    }
+    var tot = payTotal();
+    h += '<div class="acct-head"><div class="figure" id="pay-fig">' + esc(money(tot, s.cur)) + '</div>' +
+      '<div class="figure-say">to record across ' + payable.length + ' item' + (payable.length === 1 ? '' : 's') + '</div>' +
+      '<div class="figure-sub">One <strong>PaymentBatch</strong>, whatever mix it covers <span class="cite">(d16)</span>. Nothing instructs a bank &mdash; this is recording, not executing.</div>' +
+      '</div><div class="rule"></div>';
+    h += '<div class="acct-mid">' +
+      '<div class="sec"><span class="lab">What it covers</span>' +
+      payable.map(function (i) {
+        return '<div class="tgt-row" data-tgt="' + i.key + '"><div class="l">' +
+          '<div class="t">' + esc(i.type + ' ' + i.ref) + '</div>' +
+          '<div class="m">balance ' + esc(money(balanceOf(i), s.cur)) + ' · ' + days(i.date) + 'd old</div></div>' +
+          '<input type="number" step="0.01" min="0" value="' + esc(S.pay.amt[i.key]) + '" data-amt="' + i.key + '" aria-label="Amount to pay against ' + esc(i.ref) + '"></div>';
+      }).join('') +
+      '<div class="caveat">Full or partial &mdash; an Invoice carries its original amount, what has been paid, and what remains <span class="cite">(d4)</span>. Type less than the balance and the rest stays open.</div>' +
+      '</div>' +
+      '<div class="sec"><span class="lab">How it was paid</span>' +
+      '<div class="f2"><label class="f"><span class="lab">Method</span><select data-pf="method">' +
+      PAYMENT_METHODS.map(function (m) { return '<option' + (S.pay.method === m ? ' selected' : '') + '>' + m + '</option>'; }).join('') +
+      '</select></label>' +
+      '<label class="f"><span class="lab">Date</span><input type="date" value="' + esc(S.pay.date) + '" data-pf="date"></label></div>' +
+      '<label class="f mono-in"><span class="lab">Reference</span>' +
+      '<input type="text" value="' + esc(S.pay.ref) + '" data-pf="ref" placeholder="Cheque 101" autofocus>' +
+      '<span class="hint">Free text, on purpose: the bank statement is the reconciliation surface and its formats are not the store&rsquo;s to control <span class="cite">(d5)</span>.</span></label>' +
+      '<div class="caveat">Recorded by <strong>R. Duval</strong>, captured automatically <span class="cite">(d5)</span>.</div>' +
+      '</div>';
+    if (s.billing) {
+      h += '<div class="sec"><span class="lab">Remit to</span><div class="small">' + s.billing.map(esc).join('<br>') + '</div>' +
+        '<div class="caveat prop">Proposed &mdash; <strong>M-05 d17, not ratified</strong>.</div></div>';
+    }
+    h += '</div>';
+    h += '<div class="acct-foot">' +
+      '<button class="btn accent primary" data-act="pay" id="pay-btn"' + (tot > 0 && S.pay.ref.trim() ? '' : ' disabled') + '>Record ' + esc(money(tot, s.cur)) + '</button>' +
+      '<button class="btn ghost secondary" data-act="unsel">Cancel</button>' +
+      '<div class="foot-sub" id="pay-sub">' + (S.pay.ref.trim() ? 'A fully-paid Invoice leaves this list for payment history.' : 'A reference is required &mdash; it is what reconciles against the statement.') + '</div>' +
+      '</div>';
+  } else if (clearOk) {
+    h += '<div class="acct-head"><div class="figure cr">' + esc(money(0)) + '</div>' +
+      '<div class="figure-say">they sum to zero</div>' +
+      '<div class="figure-sub">Which is the whole condition <span class="cite">(d15)</span>.</div>' +
+      '</div><div class="rule"></div>';
+    h += '<div class="acct-mid">' +
+      '<div class="sec"><span class="lab">What is being cleared</span>' +
+      items.map(function (i) {
+        return '<div class="tgt-row" style="grid-template-columns:minmax(0,1fr) auto"><div class="l">' +
+          '<div class="t">' + esc(i.type + ' — ' + i.ref) + '</div>' +
+          '<div class="m">' + esc(i.date) + ' · ' + (bandOf(i) === 'uncounted' ? 'never counted' : 'already counted') + '</div></div>' +
+          '<span class="num mono" style="font-weight:700">' + esc(money(signedOf(i), s.cur)) + '</span></div>';
+      }).join('') + '</div>' +
+      '<div class="zero-ok"><div class="t">The balance does not move</div>' +
+      '<div class="m">The Claim was never counted; the Credit already was, and stays counted. Clearing only retires both from what still needs attention <span class="cite">(d15)</span>.</div></div>' +
+      '<div class="sec"><div class="caveat">Neither is deleted or edited beyond the clearing fields &mdash; both stay in the ledger as history. Manual reconciliation only: nothing infers that two entries are related.</div>' +
+      '<div class="caveat warn">M-05 does not say whether a clearing can be reversed, so this mock does not offer it and does not promise it.</div></div>' +
+      '</div>';
+    h += '<div class="acct-foot">' +
+      '<button class="btn ink primary" data-act="clear">Clear these ' + items.length + ' entries</button>' +
+      '<button class="btn ghost secondary" data-act="unsel">Cancel</button>' +
+      '<div class="foot-sub">Both remain readable in history afterwards.</div>' +
+      '</div>';
+  } else {
+    var why = [];
+    if (items.some(function (i) { return i.kind === 'entry' && i.type === 'Claim'; }) && items.some(function (i) { return isPayable(i); })) {
+      why.push('A <strong>Claim placeholder</strong> cannot be paid &mdash; it is not money owed until it is cleared against a matching Credit <span class="cite">(d14)</span>.');
+    }
+    if (!allEntries && items.length >= 2) {
+      why.push('Clearing takes <strong>manual ledger entries only</strong>. A Receiving Invoice is not one, and accounts payable never edits one <span class="cite">(d9, d15)</span>.');
+    }
+    if (allEntries && items.length < 2) {
+      why.push('Clearing needs at least <strong>two</strong> entries to net against each other <span class="cite">(d15)</span>.');
+    }
+    if (allEntries && items.length >= 2 && Math.abs(signedSum) > 0.005) {
+      why.push('These do not sum to zero. They net to <strong>' + esc(money(signedSum, s.cur)) + '</strong>, and d15 requires exactly zero.');
+    }
+    if (!why.length) why.push('This mix is not something M-05 defines an action for.');
+    h += '<div class="acct-head"><div class="figure' + (Math.abs(signedSum) <= 0.005 ? ' nil' : '') + '">' + esc(money(signedSum, s.cur)) + '</div>' +
+      '<div class="figure-say">signed sum of what is ticked</div>' +
+      '<div class="figure-sub">Shown because it is the number both actions are judged against.</div>' +
+      '</div><div class="rule"></div>';
+    h += '<div class="acct-mid"><div class="blocked"><div class="t">Neither action is legal here</div>' +
+      '<div class="m">' + why.join('<br><br>') + '</div></div>' +
+      '<div class="sec"><span class="lab">Ticked</span>' +
+      items.map(function (i) {
+        return '<div class="tgt-row" style="grid-template-columns:minmax(0,1fr) auto"><div class="l">' +
+          '<div class="t">' + esc(i.type + ' — ' + i.ref) + '</div>' +
+          '<div class="m">' + (i.kind === 'entry' ? 'manual entry' : i.kind === 'claim' ? 'supplier claim' : 'Receiving invoice') + '</div></div>' +
+          '<span class="num mono" style="font-weight:700">' + esc(money(signedOf(i), s.cur)) + '</span></div>';
+      }).join('') + '</div>' +
+      '<div class="sec"><div class="caveat">This is the whole argument for the right track: today these are two greyed buttons and a <code>title</code> attribute.</div></div>' +
+      '</div>';
+    h += '<div class="acct-foot"><button class="btn ghost secondary" data-act="unsel">Clear selection</button>' +
+      '<div class="foot-sub">Untick until the selection is one thing or the other.</div></div>';
+  }
+  $('right').innerHTML = h;
+}
+
+function payTotal() {
+  if (!S.pay) return 0;
+  return r2(Object.keys(S.pay.amt).reduce(function (t, k) { return t + (parseFloat(S.pay.amt[k]) || 0); }, 0));
+}
+
+function rightNew() {
+  var s = supBy(S.scope === 'cards' ? 'fab' : S.scope);
+  if (!S.entry) S.entry = { type: s.cons ? 'Consignment' : 'Invoice', ref: '', date: '2026-09-13', sub: '', tax: '0', fr: '0', misc: '0', dir: 'increase' };
+  var e = S.entry;
+  var tot = r2((parseFloat(e.sub) || 0) + (parseFloat(e.tax) || 0) + (parseFloat(e.fr) || 0) + (parseFloat(e.misc) || 0));
+  var signed = e.type === 'Credit' ? -tot : e.type === 'Claim' ? 0 : e.type === 'Adjustment' ? (e.dir === 'decrease' ? -tot : tot) : tot;
+
+  var h = '<div class="waiting"><span class="lab">Creating</span>' +
+    '<div class="w-name">A ledger entry, by hand</div>' +
+    '<div class="w-sub">Against ' + esc(s.name) + '</div></div>';
+  h += '<div class="acct-head"><div class="figure' + (tot > 0 ? (signed < 0 ? ' cr' : '') : ' nil') + '" id="new-fig">' + esc(money(signed, s.cur)) + '</div>' +
+    '<div class="figure-say" id="new-say">' + (e.type === 'Claim' ? 'placeholder — moves nothing yet' : signed < 0 ? 'reduces what is owed' : 'increases what is owed') + '</div>' +
+    '<div class="figure-sub">A lump subtotal/tax/freight/misc &mdash; never itemized against an InventoryItem <span class="cite">(d12)</span>.</div>' +
+    '</div><div class="rule"></div>';
+  h += '<div class="acct-mid">' +
+    '<div class="sec"><label class="f"><span class="lab">Type</span><select data-ef="type">' +
+    ENTRY_TYPES.map(function (t) { return '<option' + (e.type === t ? ' selected' : '') + '>' + t + '</option>'; }).join('') + '</select>' +
+    (s.cons ? '<span class="hint">Defaulted to <strong>Consignment</strong>: this Supplier carries the consignment flag <span class="cite">(d13)</span>.</span>' : '') +
+    '</label>';
+  if (e.type === 'Adjustment') {
+    h += '<label class="f"><span class="lab">Direction</span><select data-ef="dir">' +
+      '<option value="increase"' + (e.dir === 'increase' ? ' selected' : '') + '>Increases what is owed</option>' +
+      '<option value="decrease"' + (e.dir === 'decrease' ? ' selected' : '') + '>Decreases what is owed</option></select>' +
+      '<span class="hint">The Manager&rsquo;s choice at entry <span class="cite">(d14)</span>.</span></label>';
+  }
+  h += '<label class="f"><span class="lab">Reference</span><input type="text" value="' + esc(e.ref) + '" data-ef="ref" placeholder="a bill #, memo #, or note"></label>' +
+    '<label class="f"><span class="lab">Date</span><input type="date" value="' + esc(e.date) + '" data-ef="date"></label></div>';
+  h += '<div class="sec"><span class="lab">Amounts</span><div class="f2">' +
+    '<label class="f mono-in"><span class="lab">Subtotal</span><input type="number" step="0.01" min="0" value="' + esc(e.sub) + '" data-ef="sub"></label>' +
+    '<label class="f mono-in"><span class="lab">Tax</span><input type="number" step="0.01" min="0" value="' + esc(e.tax) + '" data-ef="tax"></label>' +
+    '<label class="f mono-in"><span class="lab">Freight</span><input type="number" step="0.01" min="0" value="' + esc(e.fr) + '" data-ef="fr"></label>' +
+    '<label class="f mono-in"><span class="lab">Misc</span><input type="number" step="0.01" min="0" value="' + esc(e.misc) + '" data-ef="misc"></label>' +
+    '</div>';
+  h += '<div class="caveat" id="new-caveat">' + entryCaveat(e.type) + '</div></div>';
+  h += '<div class="caveat">Not sourced from Receiving or Supplier Claims. The stock, claim or credit behind the number is treated as inventory unlinked to items &mdash; a deliberate shortcut, not a replacement for either <span class="cite">(d12)</span>.</div>';
+  h += '</div>';
+  h += '<div class="acct-foot">' +
+    '<button class="btn accent primary" data-act="add" id="add-btn"' + (tot > 0 ? '' : ' disabled') + '>Add ' + esc(e.type) + '</button>' +
+    '<button class="btn ghost secondary" data-act="cancel-new">Cancel</button>' +
+    '<div class="foot-sub" id="new-sub">' + (tot > 0 ? 'Total ' + esc(money(tot, s.cur)) : 'An amount is needed.') + '</div>' +
+    '</div>';
+  $('right').innerHTML = h;
+}
+
+function entryCaveat(t) {
+  if (t === 'Claim') return 'A <strong>Claim</strong> is a placeholder &mdash; logged before the supplier&rsquo;s credit memo is in hand. It does not affect the balance at all until it is cleared against a matching Credit <span class="cite">(d14)</span>.';
+  if (t === 'Credit') return 'A <strong>Credit</strong> always reduces the balance, the moment it is entered <span class="cite">(d14)</span>.';
+  if (t === 'Adjustment') return 'An <strong>Adjustment</strong> moves the balance either way &mdash; the Manager&rsquo;s choice at entry <span class="cite">(d14)</span>.';
+  if (t === 'Consignment') return 'The same default a real Receiving Invoice gets for a consignment Supplier <span class="cite">(d13)</span>.';
+  return 'An <strong>Invoice</strong> entered by hand is owed immediately. Accounts payable never creates a <em>Receiving</em> Invoice &mdash; it consumes those <span class="cite">(d9)</span>.';
+}
+
+/* ====================== render + events ====================== */
+function render() {
+  $('frame').classList.toggle('slab-shut', !S.slab);
+  $('slab-open').hidden = !S.slab;
+  $('strip').hidden = S.slab;
+  $('t-slab').setAttribute('aria-pressed', String(S.slab));
+  renderSlab();
+  renderMain();
+  renderRight();
+}
+function bump() { renderRight.gen++; }
+
+function setScope(id) {
+  S.scope = id; S.sel = {}; S.mode = null; S.pay = null; S.entry = null; S.openBatch = null;
+  bump(); render();
+}
+
+document.addEventListener('click', function (ev) {
+  var t = ev.target;
+  var el;
+
+  if ((el = t.closest('[data-sup]'))) { setScope(el.getAttribute('data-sup')); return; }
+  if ((el = t.closest('[data-chip]'))) {
+    var c = el.getAttribute('data-chip');
+    S.chip = (S.chip === c && c !== 'all') ? 'all' : c;
+    renderSlab(); return;
+  }
+  if ((el = t.closest('[data-batch]'))) {
+    var b = el.getAttribute('data-batch');
+    S.openBatch = S.openBatch === b ? null : b;
+    renderRight(true); return;
+  }
+  if (t.closest('#slab-collapse')) { S.slab = false; render(); return; }
+  if (t.closest('#strip-expand')) { S.slab = true; render(); setTimeout(function () { $('q').focus(); }, 0); return; }
+  if (t.closest('#strip-credit')) {
+    var withCredit = activity().filter(function (s) { return availCreditOf(s.id) > 0.005; });
+    if (withCredit.length) { S.slab = true; setScope(withCredit[0].id); }
+    return;
+  }
+  if (t.closest('#new-btn, #new-btn-2, #strip-new')) {
+    if (S.scope === 'cards') { toast('Gift cards are not a supplier — pick one first.'); return; }
+    S.sel = {}; S.mode = 'new'; S.entry = null; bump(); render(); return;
+  }
+  if (t.closest('#unsel')) { S.sel = {}; S.pay = null; bump(); render(); return; }
+
+  if ((el = t.closest('[data-act]'))) {
+    var act = el.getAttribute('data-act');
+    if (act === 'new') { S.sel = {}; S.mode = 'new'; S.entry = null; bump(); render(); return; }
+    if (act === 'unsel') { S.sel = {}; S.pay = null; bump(); render(); return; }
+    if (act === 'cancel-new') { S.mode = null; S.entry = null; bump(); render(); return; }
+    if (act === 'pay') { doPay(); return; }
+    if (act === 'clear') { doClear(); return; }
+    if (act === 'add') { doAdd(); return; }
+  }
+
+  // a ledger row toggles selection — the row IS the checkbox's hit area
+  if ((el = t.closest('[data-row]'))) {
+    var k = el.getAttribute('data-row');
+    var it = ITEMS.filter(function (i) { return i.key === k; })[0];
+    if (!it) return;
+    var selectable = (isPayable(it) && balanceOf(it) > 0.005) || it.kind === 'entry';
+    if (!selectable) return;
+    if (S.sel[k]) delete S.sel[k]; else S.sel[k] = true;
+    S.mode = null;
+    bump(); render();
+  }
+});
+
+document.addEventListener('keydown', function (ev) {
+  if (ev.key !== 'Enter' && ev.key !== ' ') return;
+  var el = ev.target.closest && ev.target.closest('[data-row]');
+  if (!el) return;
+  ev.preventDefault();
+  el.click();
+});
+
+document.addEventListener('input', function (ev) {
+  var t = ev.target, el;
+  if (t.id === 'q') { S.q = t.value; renderSlab(); return; }
+  if ((el = t.closest('[data-amt]'))) {
+    S.pay.amt[el.getAttribute('data-amt')] = el.value;
+    var tot = payTotal(), s = supBy(S.scope);
+    var over = selItems().some(function (i) { return (parseFloat(S.pay.amt[i.key]) || 0) > balanceOf(i) + 0.005; });
+    el.closest('.tgt-row').classList.toggle('over', (parseFloat(el.value) || 0) > balanceOf(ITEMS.filter(function (i) { return i.key === el.getAttribute('data-amt'); })[0]) + 0.005);
+    $('pay-fig').textContent = money(tot, s.cur);
+    $('pay-btn').textContent = 'Record ' + money(tot, s.cur);
+    $('pay-btn').disabled = !(tot > 0 && S.pay.ref.trim());
+    $('pay-sub').innerHTML = over
+      ? 'One amount is more than that item&rsquo;s balance &mdash; overpayment is not something M-05 defines.'
+      : (S.pay.ref.trim() ? 'A fully-paid Invoice leaves this list for payment history.' : 'A reference is required &mdash; it is what reconciles against the statement.');
+    return;
+  }
+  if ((el = t.closest('[data-pf]'))) {
+    S.pay[el.getAttribute('data-pf')] = el.value;
+    var tot2 = payTotal(), s2 = supBy(S.scope);
+    $('pay-btn').disabled = !(tot2 > 0 && S.pay.ref.trim());
+    $('pay-sub').innerHTML = S.pay.ref.trim() ? 'A fully-paid Invoice leaves this list for payment history.' : 'A reference is required &mdash; it is what reconciles against the statement.';
+    return;
+  }
+  if ((el = t.closest('[data-ef]'))) {
+    var f = el.getAttribute('data-ef');
+    S.entry[f] = el.value;
+    if (f === 'type' || f === 'dir') { bump(); renderRight(true); return; }
+    var e = S.entry, s3 = supBy(S.scope);
+    var tot3 = r2((parseFloat(e.sub) || 0) + (parseFloat(e.tax) || 0) + (parseFloat(e.fr) || 0) + (parseFloat(e.misc) || 0));
+    var signed = e.type === 'Credit' ? -tot3 : e.type === 'Claim' ? 0 : e.type === 'Adjustment' ? (e.dir === 'decrease' ? -tot3 : tot3) : tot3;
+    $('new-fig').textContent = money(signed, s3.cur);
+    $('new-fig').className = 'figure' + (tot3 > 0 ? (signed < 0 ? ' cr' : '') : ' nil');
+    $('new-say').textContent = e.type === 'Claim' ? 'placeholder — moves nothing yet' : signed < 0 ? 'reduces what is owed' : 'increases what is owed';
+    $('add-btn').disabled = !(tot3 > 0);
+    $('new-sub').textContent = tot3 > 0 ? 'Total ' + money(tot3, s3.cur) : 'An amount is needed.';
+  }
+});
+
+document.addEventListener('change', function (ev) {
+  var el = ev.target.closest && ev.target.closest('[data-pf], [data-ef]');
+  if (el && el.tagName === 'SELECT') {
+    var ev2 = new Event('input', { bubbles: true });
+    el.dispatchEvent(ev2);
+  }
+});
+
+$('sort').addEventListener('change', function () { S.sort = this.value; renderSlab(); });
+$('t-slab').addEventListener('click', function () { S.slab = !S.slab; render(); });
+
+/* ---- the "Try" buttons: a selection is fiddly to describe in prose ---- */
+$('t-pay').addEventListener('click', function () {
+  setScope('fab'); S.sel = { 'iv-55021': true, 'iv-55188': true }; bump(); render();
+});
+$('t-clear').addEventListener('click', function () {
+  setScope('fab'); S.sel = { 'en-claim': true, 'en-credit': true }; bump(); render();
+});
+$('t-bad').addEventListener('click', function () {
+  setScope('fab'); S.sel = { 'iv-55021': true, 'en-claim': true }; bump(); render();
+});
+
+/* ---- actions. The mock mutates its own arrays; nothing persists. ---- */
+function doPay() {
+  var s = supBy(S.scope), items = selItems(), tot = payTotal(), tgts = [];
+  items.forEach(function (i) {
+    var a = parseFloat(S.pay.amt[i.key]) || 0;
+    if (a <= 0) return;
+    i.paid = r2((i.paid || 0) + a);
+    tgts.push({ label: i.type + ' ' + i.ref, amount: a });
+  });
+  BATCHES.unshift({ id: 'b' + Date.now(), sup: s.id, method: S.pay.method, ref: S.pay.ref.trim(), date: S.pay.date, by: 'R. Duval', targets: tgts });
+  var closed = items.filter(function (i) { return balanceOf(i) <= 0.005; }).length;
+  S.sel = {}; S.pay = null; bump(); render();
+  toast(money(tot, s.cur) + ' recorded as one batch' + (closed ? ' — ' + closed + ' fully paid, now in history' : '') + '.');
+}
+function doClear() {
+  var items = selItems(), n = items.length, sid = S.scope, before = netOf(sid);
+  items.forEach(function (i) { i.cleared = true; });
+  S.sel = {}; bump(); render();
+  toast(n + ' entries cleared against each other and retired from the list. Balance unchanged at ' +
+    money(netOf(sid), supBy(sid).cur) + ' (d15)' + (Math.abs(before - netOf(sid)) > 0.005 ? ' — BUG' : '') + '.');
+}
+function doAdd() {
+  var s = supBy(S.scope), e = S.entry;
+  var tot = r2((parseFloat(e.sub) || 0) + (parseFloat(e.tax) || 0) + (parseFloat(e.fr) || 0) + (parseFloat(e.misc) || 0));
+  ITEMS.push({
+    key: 'en-' + Date.now(), sup: s.id, kind: 'entry', type: e.type,
+    ref: e.ref.trim() || '—', date: e.date, amount: tot,
+    dir: e.type === 'Adjustment' ? e.dir : undefined, paid: 0,
+  });
+  S.mode = null; S.entry = null; bump(); render();
+  toast(e.type + ' of ' + money(tot, s.cur) + ' added' + (e.type === 'Claim' ? ' — not counted until cleared (d14).' : '.'));
+}
+
+/* The credit's Apply action lives in the top band of track 3, not in a table
+   cell, because d11 makes it an action on the SUPPLIER's balance. */
+document.addEventListener('click', function (ev) {
+  var el = ev.target.closest && ev.target.closest('[data-apply]');
+  if (!el) return;
+  var sid = el.getAttribute('data-apply'), s = supBy(sid);
+  var cl = itemsFor(sid).filter(function (i) { return i.kind === 'claim'; })[0];
+  if (!cl) return;
+  var before = netOf(sid);
+  var landing = creditLanding(sid, cl.amount);
+  landing.forEach(function (l) { l.it.credited = r2((l.it.credited || 0) + l.amount); });
+  cl.applied = true;
+  bump(); render();
+  toast('Credit applied to ' + landing.map(function (l) { return l.it.type + ' ' + l.it.ref; }).join(', ') +
+    ', oldest first. Balance ' + money(before, s.cur) + ' → ' + money(netOf(sid), s.cur) + ' — no money left the store (d6).');
+});
+
+render();
+setTimeout(function () { var q = $('q'); if (q) q.focus(); }, 0);
+</script>
