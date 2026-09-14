@@ -116,7 +116,7 @@ _Partially derived from E-02. Refine as further flows land._
 | **Customer** | A person or business the store deals with. Optional on any Sale. Carries a signed account balance, a global discount, and a default tax line (E-07). |
 | **GiftCard** | A `GC`-prefixed code carrying a balance. Loaded as a SaleLine, redeemed as a Tender (E-05). |
 | **SupplierClaim** | A claim for credit against a supplier Invoice for short, damaged, or unshipped stock (E-04). Pending or Credited. |
-| **APPayment** | A payment recorded against a supplier Invoice — method, reference, amount, date (M-05). |
+| **PaymentBatch** | One settlement act, recorded once however many things it settled — method, reference, date, recorded-by, and **targets** naming what was settled and whether each was money or claim credit ([M-05](flows/M-05-accounts-payable.md) d16, d19). Voided whole, never edited (d22). Supersedes **APPayment**, which named one payment against one Invoice. |
 | **InventoryAdjustment** | A manager-only correction to stock, carrying a reason code, before/after counts, and attribution (E-04). |
 | **ReviewFlag** | A record that an Employee took an action worth a Manager's later attention — below-cost pricing, an adjustment beyond ±2%, a Sale driving stock negative. Carries the actor, the subject, and the figures that raised it. Acknowledged, never deleted ([M-04](flows/M-04-manage-users.md) d8). |
 | **Section** | Top-level reporting category (`VINYL`, `MERCH`). Genres roll up into Sections (M-06). |
@@ -179,7 +179,7 @@ _Status: **ratified**._
 
 **Auditability.** Attribution is required on every Sale, Return, void, hold cancellation, pay-out, inventory adjustment, override, Invoice finalization, and payment. Beyond attribution, four things are immutable or effectively so:
 
-- a finalized Invoice (E-02 decision 23);
+- a **paid** Invoice, and only for as long as it is paid ([E-02](flows/E-02-receive-inventory.md) d40, [architecture](architecture.md) A-33, A-33a). Immutability attaches at **paid**, not at finalize, and **releases** if the PaymentBatch that settled it is voided ([M-05](flows/M-05-accounts-payable.md) d22) — so this is the one entry in this list that is conditional rather than permanent. Between finalize and paid an Invoice is **correctable**;
 - SaleLine values, which are snapshotted at time of sale (E-05 decision 13);
 - a voided Sale's number, which is retained rather than reused (E-05 decision 4);
 - a User record, which is deactivated rather than deleted so historical attribution survives (M-04 decision 5).

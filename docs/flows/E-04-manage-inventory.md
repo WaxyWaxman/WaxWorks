@@ -36,7 +36,7 @@ It shows:
 | **Reserve** | Employee | Creates a **Held** Sale ([E-05](E-05-sell-a-record.md)), prompting for a quantity, or attaches a customer to an existing order line ([M-02](M-02-reorder-inventory.md)). |
 | **Order** | Employee | Raises a pending order line ([M-02](M-02-reorder-inventory.md)). |
 | **Claim** | Employee | Raises a return or credit claim against the supplier Invoice the copy arrived on — see below. |
-| **Void or amend Invoice** | **Manager** | Inherited from E-02. A **paid** Invoice is immutable ([E-02](E-02-receive-inventory.md) d40) — before that it is corrected in E-02 itself. The amendment is appended as a separate artifact against the original record, never an in-place edit. |
+| **Void or amend Invoice** | **Manager** | Inherited from E-02. A **paid** Invoice is immutable ([E-02](E-02-receive-inventory.md) d40) — before that it is corrected in E-02 itself, and **after** it, if the payment that settled it is voided ([M-05](M-05-accounts-payable.md) d22, [architecture](../architecture.md) A-33a): immutability holds only while the Invoice is paid, so reach for an amendment here only while it still is. The amendment is appended as a separate artifact against the original record, never an in-place edit. |
 | **Delete Record** | **Manager** | Removes a catalog Record. Past Sales referencing it are unaffected — line values are snapshotted (E-05 decision 13). |
 
 ### Pricing outside receiving
@@ -67,7 +67,7 @@ When a supplier ships short, ships damaged, or bills for something that never ar
 2. Claims accumulate against the supplier. The claims screen lists them grouped by supplier, respecting the ordering separator ([M-02](M-02-reorder-inventory.md)) so claims can be batched the way orders are.
 3. Employee sends a batched claim to the supplier's email address. The claim states, per line: the supplier Invoice number the copy arrived on, the reason code, artist, album title, cost, and quantity — plus a combined total.
 4. **Claim numbers** auto-generate ascending and are checked for uniqueness; an Employee may enter one manually if the supplier requires their own reference.
-5. The claim carries a status of **Pending** or **Credited**. Marking it Credited is a manual action taken when the supplier confirms.
+5. The claim carries a status of **Pending** or **Credited**. Marking it Credited is a manual action taken when the supplier confirms, and it captures **their credit memo reference and the amount that memo grants** — which need not be what was claimed (decision 20).
 6. Pending claims surface in [M-05](M-05-accounts-payable.md) alongside that supplier's outstanding Invoices, where the credit can be set against a balance owing.
 
 ---
@@ -108,6 +108,11 @@ An optional cross-reference links the two, so a payout can be traced to the copi
 - **Deferred line problems** — an Employee may skip a problem item during receiving and resolve it here.
 - **Below-cost pricing raises a ReviewFlag** ([E-02](E-02-receive-inventory.md) d35, amending its decision 10), which applies to shelf prices set here as well as at receiving.
 
+**From [M-05](M-05-accounts-payable.md):**
+
+- **Voiding a *payment* is not voiding an *Invoice*, and does not belong here.** A PaymentBatch recorded in error is voided in accounts payable ([M-05](M-05-accounts-payable.md) d22); this flow still owns voiding and amending the Invoice itself. The two are different artifacts with different reasons: a wrong cheque number is M-05's, a wrong shipment is this flow's.
+- **A voided payment can un-freeze an Invoice.** An Invoice taken back out of **Paid** returns to Finalized and is corrected back in [E-02](E-02-receive-inventory.md) directly, *not* by an amendment appended here — the amendment route exists because a paid Invoice is immutable, and it no longer is. Reach for an amendment only while the Invoice is still paid.
+
 **From [E-05](E-05-sell-a-record.md):**
 
 - **Negative inventory is reconciled here.** The till lets stock go below zero rather than blocking a Sale.
@@ -138,13 +143,14 @@ An optional cross-reference links the two, so a payout can be traced to the copi
 | 17 | **`.50`/`.99` rounding is a suggestion, not a rule.** **Amends decision 8**, following [E-02](E-02-receive-inventory.md) d32 |
 | 18 | **Reconciling negative inventory clears the oversold InventoryItem** the Sale minted — either by finalizing the Invoice that brings the real copy in, or by a reason-coded adjustment. Makes decision 6 concrete ([architecture](../architecture.md) §5.1) |
 | 19 | **A negative-inventory Sale mints its InventoryItem immediately** — sold from birth, tagged **oversold** — rather than the on-hand count itself going below zero. It reconciles automatically (oldest outstanding oversold copy first, ahead of minting new stock, backfilling cost/supplier) when a matching Invoice line is later received, or via a `Miscount / correction` adjustment when there's no shipment to explain it |
+| 20 | **The supplier's credit memo is the point of truth, not the claim.** Marking a claim **Credited** captures the memo's reference *and* **the amount it grants**, which is recorded alongside the claim total rather than replacing it. The two commonly differ: a supplier grants £28 against a £34 claim, having deducted the cost of the return. **The credited amount is the figure that counts** — it is what [M-05](M-05-accounts-payable.md) d26 puts into the Supplier's balance, what d27 lets a Manager attach to debits, and what d28 consumes whole. The claim total stays on the record as *what was asked for*, so the shortfall is visible rather than lost: “claimed £34, credited £28” is a fact about this supplier worth being able to read. **Nothing is written off.** A Pending claim counts for nothing (d12, [M-05](M-05-accounts-payable.md) d26), so a claim never enters the balance at its own total and there is no moment at which £34 was counted and has to be corrected down — the balance only ever sees the £28. A memo granting **more** than was claimed is equally valid and handled by the same rule. *Accepted consequence:* the shortfall is **derivable but not posted**, so it appears nowhere as a cost. Anything that wants to report what claims actually recover has to compare the two figures itself |
 
 ---
 
 ## Open questions
 
 - **Batch stock-take.** Reason-coded single adjustments are specified; counting a whole Section against the shelf and reconciling in one pass is not. It needs a session concept — count in progress, variances, then commit.
-- **Claim resolution beyond Credited.** A supplier may partially credit, deny, or issue a credit note against a different Invoice. v1 records only Pending and Credited.
+- **Claim resolution beyond Credited.** ~~A supplier may **partially credit**~~ — **resolved by decision 20**: the memo's amount is captured and governs, so a part credit is an ordinary Credited claim at the memo's figure. Still open: a supplier who **denies** a claim outright, and one who issues a credit note **against a different Invoice**. A denial is not *Credited*, and v1 has no third status for it.
 - **Re-grading a copy after it is sellable.** Editing a copy's grade is permitted, but a copy that was sold at a grade it no longer carries is a data question the snapshot rule sidesteps rather than answers.
 - **Who may delete a Record with stock on hand?** Currently manager-only with no guard against deleting a Record that still has sellable copies.
 - **Bin location** — see [E-03](E-03-search-inventory.md).

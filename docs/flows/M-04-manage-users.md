@@ -22,7 +22,7 @@ Everything in this table is something an Employee **cannot do at all**. It is di
 
 | Action | Flow | Why it's gated |
 |---|---|---|
-| **Void or amend** a finalized Invoice | [E-02](E-02-receive-inventory.md) d23, [E-04](E-04-manage-inventory.md) | Restates what was received and owed |
+| **Void or amend** a finalized Invoice | [E-02](E-02-receive-inventory.md) step 23 and d40, [E-04](E-04-manage-inventory.md) | Restates what was received and owed |
 | **Adjust on hand** | [E-04](E-04-manage-inventory.md) | Rewrites stock reality; always reason-coded |
 | **Process** pending orders into PurchaseOrders | [M-02](M-02-reorder-inventory.md) | Commits money to a supplier |
 | **Void a PurchaseOrder** | [M-02](M-02-reorder-inventory.md) | Unwinds committed paperwork |
