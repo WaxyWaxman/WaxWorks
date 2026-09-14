@@ -1,5 +1,6 @@
 import { isOpenOrderLine } from "./orderLines";
 import type {
+  ClaimVoid,
   InventoryItem,
   Invoice,
   PayableEntry,
@@ -223,8 +224,18 @@ export const claimCreditAmount = (c: SupplierClaim): number =>
 /**
  * d26 — the line is AGREED vs not yet agreed, not claim vs manual entry.
  * A Credited claim counts; a Pending one and a Claim placeholder do not.
+ *
+ * It also has to NOT be voided (E-04 d27). That second clause is the whole of
+ * architecture A-44's accepted consequence: a claim's two terminal
+ * dispositions are reached by different mechanisms — abandoned is a status the
+ * row carries, voided is a row in another table — so "is this claim finished"
+ * is a status read OR a lookup, and A-44 says in as many words that code
+ * remembering only the first counts voided claims as live. Requiring the voids
+ * here rather than accepting a bare claim is what makes forgetting them a
+ * compile error instead of a wrong balance.
  */
-export const claimIsAgreed = (c: SupplierClaim): boolean => c.status === "Credited";
+export const claimIsAgreed = (c: SupplierClaim, voids: ClaimVoid[]): boolean =>
+  c.status === "Credited" && !voids.some((v) => v.claimId === c.id);
 
 /**
  * A-37 — consumed is DERIVED from the existence of a credit target naming
@@ -263,6 +274,11 @@ export interface PayablesInput {
   claims: SupplierClaim[];
   paymentBatches: PaymentBatch[];
   batchVoids: PaymentBatchVoid[];
+  // E-04 d27 / architecture A-44. A claim is finished by a STATUS (Abandoned)
+  // or by the presence of a ROW here (voided), and A-44 records the cost of
+  // that: any query remembering only the first counts voided claims as live.
+  // This is the second half, carried so `claimIsAgreed` can consult both.
+  claimVoids: ClaimVoid[];
 }
 
 /**
@@ -277,7 +293,7 @@ export interface PayablesInput {
  * May be negative (d25): the supplier owes the store. Nothing clamps it.
  */
 export function supplierBalance(supplierId: string, input: PayablesInput): number {
-  const { invoices, payableEntries, claims, paymentBatches: b, batchVoids: v } = input;
+  const { invoices, payableEntries, claims, paymentBatches: b, batchVoids: v, claimVoids: cv } = input;
 
   const fromInvoices = invoices
     .filter((iv) => iv.supplierId === supplierId && iv.status !== "Draft")
@@ -288,7 +304,7 @@ export function supplierBalance(supplierId: string, input: PayablesInput): numbe
     .reduce((sum, e) => sum + payableEntryContribution(e, b, v), 0);
 
   const fromClaims = claims
-    .filter((c) => c.supplierId === supplierId && claimIsAgreed(c) && !creditIsConsumed(c.id, b, v))
+    .filter((c) => c.supplierId === supplierId && claimIsAgreed(c, cv) && !creditIsConsumed(c.id, b, v))
     .reduce((sum, c) => sum - claimCreditAmount(c), 0);
 
   return round2(fromInvoices + fromEntries + fromClaims);

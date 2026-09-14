@@ -1,4 +1,5 @@
 import type {
+  ClaimVoid,
   Invoice,
   PayableEntry,
   PayableEntrySource,
@@ -88,6 +89,11 @@ export interface PayablesData {
   claims: SupplierClaim[];
   paymentBatches: PaymentBatch[];
   batchVoids: PaymentBatchVoid[];
+  // E-04 d27 / architecture A-44. A claim is finished by a STATUS (Abandoned)
+  // or by the presence of a ROW here (voided), and A-44 records the cost of
+  // that: any query remembering only the first counts voided claims as live.
+  // This is the second half, carried so `claimIsAgreed` can consult both.
+  claimVoids: ClaimVoid[];
 }
 
 const addDays = (iso: string, n: number): string => {
@@ -136,7 +142,7 @@ export function ledgerRows(
   suppliers: Supplier[],
   today = new Date(),
 ): LedgerRow[] {
-  const { invoices, payableEntries, claims, paymentBatches: b, batchVoids: v } = data;
+  const { invoices, payableEntries, claims, paymentBatches: b, batchVoids: v, claimVoids: cv } = data;
   const supplier = suppliers.find((s) => s.id === supplierId);
   const rows: LedgerRow[] = [];
 
@@ -167,7 +173,7 @@ export function ledgerRows(
 
   // d26 — a Credited claim counts; a Pending one does not. The line is
   // agreed-vs-not-agreed, not claim-vs-entry.
-  for (const c of claims.filter((x) => x.supplierId === supplierId && claimIsAgreed(x))) {
+  for (const c of claims.filter((x) => x.supplierId === supplierId && claimIsAgreed(x, cv))) {
     if (creditIsConsumed(c.id, b, v)) continue;
     const amount = claimCreditAmount(c);
     const asked = claimTotal(c);

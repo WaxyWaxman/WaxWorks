@@ -1,6 +1,9 @@
 import { useState } from "react";
 import { CLAIM_REASONS, type InventoryItem, type RecordEntry } from "../data/types";
 import { money } from "../lib/money";
+import type { ClaimLineAgainst } from "../data/types";
+import { eligibleInvoices } from "../lib/claims";
+import { invoiceForItem, provenanceLabel, supplierIdForItem } from "../lib/provenance";
 import { useApp } from "../store/AppStore";
 import { Modal } from "./Modal";
 
@@ -24,30 +27,44 @@ export function ClaimModal({
   onDone: (confirmation: string) => void;
 }) {
   const app = useApp();
-  const claimable = items.filter((i) => i.supplierId);
+  // A-45 — claimable means the copy has paperwork behind it. An oversold
+  // copy has none until it is reconciled, and there is nobody to claim from.
+  const claimable = items.filter((i) => supplierIdForItem(i, app.invoices));
   const [itemId, setItemId] = useState(claimable[0]?.id ?? "");
   const [reasonChoice, setReasonChoice] = useState<string>("Received damaged");
   const [customReason, setCustomReason] = useState("");
   const [qty, setQty] = useState(1);
   const [separator, setSeparator] = useState("");
   const [note, setNote] = useState("");
+  // E-04 d28 — which of this Supplier's received Invoices the line is about.
+  // "" is the explicit NO-INVOICE choice, not an unfilled field: the option
+  // says so in words, which is the difference between a decision and a blank.
+  const [againstId, setAgainstId] = useState<string | null>(null);
 
   const item = claimable.find((i) => i.id === itemId);
-  const supplier = app.supplierFor(item?.supplierId);
+  const supplier = app.supplierFor(item ? supplierIdForItem(item, app.invoices) : undefined);
   const sepKey = separator.trim();
   const reason = reasonChoice === CUSTOM_REASON ? customReason.trim() : reasonChoice;
 
   const existingDraft = app.claims.find(
-    (c) => c.status === "Draft" && c.supplierId === item?.supplierId && (c.separator ?? "").trim() === sepKey,
+    (c) => !c.sentAt && c.supplierId === supplier?.id && (c.separator ?? "").trim() === sepKey,
   );
+
+  // The Invoices this line may name (d28): that Supplier's finalized ones —
+  // what the store actually received stock on. Never a typed number.
+  const eligible = supplier ? eligibleInvoices(record.id, supplier.id, app.invoices) : [];
+  // Until someone picks, the line follows the copy: the Invoice it arrived on.
+  const arrivedOn = item ? invoiceForItem(item, app.invoices) : undefined;
+  const chosen = againstId === null ? (arrivedOn?.id ?? "") : againstId;
 
   const commit = () => {
     if (!item) return;
-    const res = app.raiseClaim(item.id, reason, qty, separator, note.trim() || undefined);
+    const against: ClaimLineAgainst = chosen ? { kind: "invoice", invoiceId: chosen } : { kind: "none" };
+    const res = app.raiseClaim(item.id, reason, qty, separator, note.trim() || undefined, against);
     if (!res) return;
     onDone(
       `Claim raised against ${res.supplierName}${sepKey ? ` (sep ${sepKey})` : ""} — ` +
-        `${record.artist} — ${record.title}, ${reason}, qty ${qty}. Added to a Draft claim — ` +
+        `${record.artist} — ${record.title}, ${reason}, qty ${qty}. Added to an unsent batch — ` +
         `send it from Supplier Claims.`,
     );
     onClose();
@@ -76,7 +93,7 @@ export function ClaimModal({
       ) : (
         <div className="stack">
           <p className="small">
-            Claims accumulate against the supplier as a Draft — batched by supplier and separator,
+            Claims accumulate against the supplier in a standing batch — one per supplier and separator,
             the same way pending orders are (M-02) — and are sent together later from{" "}
             <strong>Supplier Claims</strong>. <em>(E-04 decision 9.)</em>
           </p>
@@ -85,12 +102,30 @@ export function ClaimModal({
             <select value={itemId} onChange={(e) => setItemId(e.target.value)}>
               {claimable.map((i) => (
                 <option key={i.id} value={i.id}>
-                  {i.grade} · {money(i.cost)} cost · {i.arrivedOnInvoice ?? "no invoice #"}
+                  {i.grade} · {money(i.cost)} cost · {provenanceLabel(i, app.invoices, app.suppliers) ?? "no invoice"}
                 </option>
               ))}
             </select>
           </label>
           {supplier && <div className="small muted">Supplier — {supplier.name}</div>}
+          <label className="field">
+            <span>Which invoice this is about</span>
+            <select value={chosen} onChange={(e) => setAgainstId(e.target.value)}>
+              {eligible.map((iv) => (
+                <option key={iv.id} value={iv.id}>
+                  {iv.invoiceNumber} · {iv.invoiceDate}
+                  {arrivedOn?.id === iv.id ? " — this copy arrived on it" : ""}
+                </option>
+              ))}
+              <option value="">Not about a specific invoice</option>
+            </select>
+            <span className="hint">
+              Every invoice this supplier has shipped <strong>{record.title}</strong> to us on — not only the one this
+              copy came in on, because they may credit against a different shipment of it (d28). It is{" "}
+              <strong>evidence of what is being argued</strong>, never where the credit lands: that is decided by
+              ticking in Accounts Payable (M-05 d27).
+            </span>
+          </label>
           <label className="field">
             <span>Reason</span>
             <select value={reasonChoice} onChange={(e) => setReasonChoice(e.target.value)}>

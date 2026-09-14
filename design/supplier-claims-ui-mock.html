@@ -1,0 +1,735 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Supplier Claims — three-track mock</title>
+<style>
+:root{
+  --c-bg:#f1f1ef; --c-surface:#fff; --c-surface-2:#f7f7f5;
+  --c-ink:#111; --c-ink-soft:#55554f; --c-ink-faint:#8a8a84;
+  --c-border:#e4e4e0; --c-border-strong:#ccccc7;
+  --c-accent:#d64500; --c-accent-ink:#fff; --c-accent-soft:#fff4ee; --c-accent-dark:#a83700;
+  --c-ok:#1f6b3f; --c-ok-soft:#eaf3ed;
+  --c-warn:#8a6a1a; --c-warn-soft:#fbf4e4;
+  --c-danger:#c0392b; --c-danger-soft:#fdf3f1;
+  --font-sans:"Archivo",ui-sans-serif,system-ui,-apple-system,"Segoe UI",Helvetica,sans-serif;
+  --font-narrow:"Archivo Narrow","Archivo",ui-sans-serif,system-ui,sans-serif;
+  --font-mono:ui-monospace,"SF Mono","Cascadia Mono","Roboto Mono",Menlo,Consolas,monospace;
+  --fs-xs:11px; --fs-sm:12.5px; --fs-base:14px; --fs-md:16px; --fs-lg:20px; --fs-xl:27px;
+  --sp-1:4px; --sp-2:8px; --sp-3:12px; --sp-4:16px; --sp-5:24px; --sp-6:32px;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--c-bg);color:var(--c-ink);font-family:var(--font-sans);font-size:var(--fs-base);line-height:1.45}
+h1,h2,h3,h4{margin:0 0 var(--sp-3);line-height:1.2}
+p{margin:0 0 var(--sp-3)}
+code,.mono{font-family:var(--font-mono);font-size:.92em}
+.wrapper{max-width:1500px;margin:0 auto;padding:var(--sp-5)}
+.page-title{font-size:var(--fs-xl);letter-spacing:-.01em}
+.page-title small{display:block;font-size:var(--fs-sm);font-weight:400;color:var(--c-ink-soft);letter-spacing:0;margin-top:6px}
+
+/* ---------- chrome ---------- */
+.app{border:2px solid var(--c-ink);background:var(--c-surface);overflow:hidden}
+.topbar{display:flex;align-items:stretch;height:46px;border-bottom:2px solid var(--c-ink);background:var(--c-surface)}
+.brand{display:flex;align-items:center;gap:var(--sp-2);padding:0 var(--sp-5);border-right:1px solid var(--c-border-strong);
+  font-family:var(--font-narrow);font-weight:800;letter-spacing:.08em;text-transform:uppercase;font-size:var(--fs-sm)}
+.brand .dot{width:10px;height:10px;border-radius:50%;background:var(--c-accent)}
+.topbar nav{display:flex}
+.topbar nav a{display:flex;flex-direction:column;justify-content:center;padding:0 var(--sp-3);
+  border-right:1px solid var(--c-border-strong);color:var(--c-ink-soft);font-size:var(--fs-sm);font-weight:600;text-decoration:none}
+.topbar nav a em{font-family:var(--font-mono);font-style:normal;font-size:9.5px;font-weight:500;color:var(--c-ink-faint)}
+.topbar nav a.on{background:var(--c-ink);color:#fff}
+.topbar nav a.on em{color:#bdbdb8}
+.topbar .who{margin-left:auto;display:flex;align-items:center;padding:0 var(--sp-4);font-size:var(--fs-xs);color:var(--c-ink-faint)}
+
+/* ---------- the three tracks ---------- */
+.frame{display:grid;grid-template-columns:320px minmax(0,1fr) 344px;min-height:660px;background:var(--c-surface)}
+
+/* track 1 */
+.slab{border-right:1px solid var(--c-border-strong);background:var(--c-surface-2);display:flex;flex-direction:column;min-width:0}
+.slab-head{padding:var(--sp-3);border-bottom:1px solid var(--c-border-strong);display:flex;align-items:center;gap:var(--sp-2)}
+.slab-head .lab{font-family:var(--font-narrow);font-size:var(--fs-xs);font-weight:800;letter-spacing:.09em;text-transform:uppercase;color:var(--c-ink-faint)}
+.collapse{margin-left:auto;border:1px solid var(--c-border-strong);background:var(--c-surface);width:24px;height:24px;
+  display:flex;align-items:center;justify-content:center;cursor:pointer;color:var(--c-ink-soft);font-size:var(--fs-sm)}
+.slab-pad{padding:var(--sp-3);border-bottom:1px solid var(--c-border-strong)}
+.slab-pad input{width:100%;font:inherit;font-size:var(--fs-sm);padding:7px 9px;border:1px solid var(--c-border-strong);background:var(--c-surface)}
+.hint{display:block;font-size:var(--fs-xs);color:var(--c-ink-faint);margin-top:6px;line-height:1.4}
+.chips{display:flex;flex-wrap:wrap;gap:5px;padding:var(--sp-3);border-bottom:1px solid var(--c-border-strong)}
+.chip{border:1px solid var(--c-border-strong);background:var(--c-surface);font:inherit;font-size:var(--fs-xs);font-weight:700;
+  padding:3px 8px;cursor:pointer;display:flex;gap:5px;align-items:center}
+.chip .n{color:var(--c-ink-faint);font-family:var(--font-mono);font-size:10px}
+.chip.on{background:var(--c-ink);color:#fff;border-color:var(--c-ink)}
+.chip.on .n{color:#bdbdb8}
+.sortbar{display:flex;align-items:center;gap:var(--sp-2);padding:6px var(--sp-3);border-bottom:1px solid var(--c-border-strong)}
+.sortbar .lab{font-family:var(--font-narrow);font-size:9.5px;font-weight:800;letter-spacing:.09em;text-transform:uppercase;color:var(--c-ink-faint)}
+.sortbar select{font:inherit;font-size:var(--fs-sm);font-weight:600;flex:1;padding:3px 6px;border:1px solid var(--c-border-strong);background:var(--c-surface)}
+.slab-list{overflow:auto}
+.sband{padding:5px var(--sp-3);background:var(--c-surface-2);border-bottom:1px solid var(--c-border);
+  font-family:var(--font-narrow);font-size:9.5px;font-weight:800;letter-spacing:.09em;text-transform:uppercase;color:var(--c-ink-faint);
+  display:flex;justify-content:space-between;position:sticky;top:0}
+.srow{display:grid;grid-template-columns:38px minmax(0,1fr) auto;gap:var(--sp-2);align-items:center;
+  padding:9px var(--sp-3);border-bottom:1px solid var(--c-border);cursor:pointer;background:var(--c-surface)}
+.srow:hover{background:var(--c-accent-soft)}
+.srow.on{background:var(--c-ink);color:#fff}
+.srow.on .sub,.srow.on .code{color:#bdbdb8}
+.code{font-family:var(--font-mono);font-size:10px;font-weight:700;border:1px solid var(--c-border-strong);
+  padding:2px 4px;text-align:center;color:var(--c-ink-soft);background:var(--c-surface-2)}
+.srow.on .code{border-color:#55554f;background:transparent}
+.srow .nm{font-weight:700;font-size:var(--fs-sm);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.srow .sub{font-size:var(--fs-xs);color:var(--c-ink-faint);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.srow .amt{font-family:var(--font-mono);font-size:var(--fs-sm);font-weight:700;text-align:right}
+.srow .wait{font-size:9.5px;font-weight:800;letter-spacing:.05em;text-transform:uppercase;color:var(--c-danger);text-align:right}
+.srow.on .wait{color:#ff9b8f}
+
+/* track 2 */
+.work{display:flex;flex-direction:column;min-width:0;background:var(--c-surface)}
+.work-head{display:flex;gap:var(--sp-3);align-items:flex-start;padding:var(--sp-4);border-bottom:1px solid var(--c-border-strong)}
+.work-head h2{font-size:var(--fs-lg);margin:0}
+.badges{display:flex;flex-wrap:wrap;gap:6px;margin-top:7px}
+.badge{font-size:var(--fs-xs);font-weight:700;border:1px solid var(--c-border-strong);padding:2px 7px;color:var(--c-ink-soft);background:var(--c-surface-2)}
+.badge.ink{background:var(--c-ink);color:#fff;border-color:var(--c-ink)}
+.badge.ok{background:var(--c-ok-soft);color:var(--c-ok);border-color:var(--c-ok)}
+.badge.warn{background:var(--c-warn-soft);color:var(--c-warn);border-color:var(--c-warn)}
+.badge.danger{background:var(--c-danger-soft);color:var(--c-danger);border-color:var(--c-danger)}
+.badge.accent{background:var(--c-accent);color:#fff;border-color:var(--c-accent)}
+.badge.mono{font-family:var(--font-mono)}
+.work-acts{margin-left:auto;display:flex;gap:var(--sp-2)}
+.work-list{overflow:auto;flex:1}
+.band{border-bottom:1px solid var(--c-border-strong)}
+.band-head{display:flex;align-items:baseline;gap:var(--sp-3);padding:7px var(--sp-4);background:var(--c-surface-2);
+  border-bottom:1px solid var(--c-border);position:sticky;top:0}
+.band-head .t{font-family:var(--font-narrow);font-size:var(--fs-xs);font-weight:800;letter-spacing:.08em;text-transform:uppercase}
+.band-head .say{font-size:var(--fs-xs);color:var(--c-ink-faint)}
+.band-head .tot{margin-left:auto;font-family:var(--font-mono);font-size:var(--fs-sm);font-weight:700}
+.claim{border-bottom:1px solid var(--c-border)}
+.claim-top{display:grid;grid-template-columns:26px minmax(0,1fr) auto;gap:var(--sp-3);align-items:center;padding:10px var(--sp-4)}
+.claim-top:hover{background:var(--c-accent-soft)}
+.claim.picked{background:var(--c-accent-soft);box-shadow:inset 3px 0 0 var(--c-accent)}
+.claim-top input{width:15px;height:15px;accent-color:var(--c-accent)}
+.claim-id{font-weight:800;font-size:var(--fs-sm);display:flex;align-items:center;gap:7px;flex-wrap:wrap}
+.claim-id .no{font-family:var(--font-mono)}
+.claim-meta{font-size:var(--fs-xs);color:var(--c-ink-faint);margin-top:3px}
+.claim-fig{text-align:right;font-family:var(--font-mono);font-weight:700}
+.claim-fig .sub{display:block;font-family:var(--font-sans);font-size:var(--fs-xs);font-weight:600;color:var(--c-ink-faint)}
+.lines{padding:0 var(--sp-4) var(--sp-3) 52px}
+table.ln{width:100%;border-collapse:collapse;font-size:var(--fs-sm)}
+table.ln th{text-align:left;font-family:var(--font-narrow);font-size:9.5px;font-weight:800;letter-spacing:.08em;
+  text-transform:uppercase;color:var(--c-ink-faint);padding:4px 8px 4px 0;border-bottom:1px solid var(--c-border)}
+table.ln td{padding:5px 8px 5px 0;border-bottom:1px solid var(--c-border);vertical-align:top}
+table.ln td.n{text-align:right;font-family:var(--font-mono)}
+.reason{font-size:var(--fs-xs);font-weight:800;letter-spacing:.03em;text-transform:uppercase;
+  border:1px solid var(--c-border-strong);padding:1px 5px;color:var(--c-ink-soft);white-space:nowrap}
+.reason.dmg{background:var(--c-danger-soft);color:var(--c-danger);border-color:var(--c-danger)}
+.reason.short{background:var(--c-warn-soft);color:var(--c-warn);border-color:var(--c-warn)}
+.reason.never{background:var(--c-accent-soft);color:var(--c-accent-dark);border-color:var(--c-accent)}
+.collapsed{padding:10px var(--sp-4);font-size:var(--fs-sm);color:var(--c-ink-soft);display:flex;gap:var(--sp-2);align-items:center}
+
+/* track 3 */
+.act{border-left:1px solid var(--c-border-strong);background:var(--c-surface-2);display:flex;flex-direction:column;min-width:0}
+.act-head{padding:var(--sp-3) var(--sp-4);border-bottom:1px solid var(--c-border-strong);background:var(--c-surface)}
+.act-head .t{font-family:var(--font-narrow);font-size:var(--fs-xs);font-weight:800;letter-spacing:.09em;text-transform:uppercase}
+.act-head .s{font-size:var(--fs-xs);color:var(--c-ink-faint);margin-top:3px}
+.act-body{padding:var(--sp-4);overflow:auto;flex:1}
+.field{display:block;margin-bottom:var(--sp-3)}
+.field>span{display:block;font-family:var(--font-narrow);font-size:9.5px;font-weight:800;letter-spacing:.08em;
+  text-transform:uppercase;color:var(--c-ink-faint);margin-bottom:4px}
+.field input,.field select,.field textarea{width:100%;font:inherit;font-size:var(--fs-sm);padding:6px 8px;
+  border:1px solid var(--c-border-strong);background:var(--c-surface)}
+.field textarea{min-height:62px;resize:vertical;font-size:var(--fs-xs);line-height:1.5}
+.rowline{display:flex;justify-content:space-between;align-items:baseline;padding:5px 0;border-bottom:1px solid var(--c-border);font-size:var(--fs-sm)}
+.rowline .n{font-family:var(--font-mono);font-weight:700}
+.rowline.total{border-bottom:none;border-top:2px solid var(--c-ink);margin-top:4px;padding-top:8px;font-size:var(--fs-md)}
+.rowline.total .n{font-size:var(--fs-lg)}
+.delta{background:var(--c-warn-soft);border:1px solid var(--c-warn);padding:var(--sp-3);margin:var(--sp-3) 0}
+.delta .fig{display:flex;justify-content:space-between;font-family:var(--font-mono);font-weight:700;font-size:var(--fs-md);color:var(--c-warn)}
+.delta p{margin:6px 0 0;font-size:var(--fs-xs);color:var(--c-ink-soft);line-height:1.5}
+.caveat{background:var(--c-surface);border:1px solid var(--c-border-strong);border-left:3px solid var(--c-ink);
+  padding:var(--sp-3);font-size:var(--fs-xs);color:var(--c-ink-soft);line-height:1.55;margin:var(--sp-3) 0}
+.act-foot{padding:var(--sp-3) var(--sp-4);border-top:1px solid var(--c-border-strong);background:var(--c-surface)}
+.btn{font:inherit;font-size:var(--fs-sm);font-weight:700;padding:7px 12px;border:1px solid var(--c-ink);
+  background:var(--c-surface);color:var(--c-ink);cursor:pointer}
+.btn.primary{background:var(--c-accent);border-color:var(--c-accent);color:#fff}
+.btn.block{width:100%;justify-content:center;display:block}
+.btn.sm{font-size:var(--fs-xs);padding:4px 9px}
+.btn.ghost{border-color:var(--c-border-strong);color:var(--c-ink-soft)}
+.mailprev{background:var(--c-surface);border:1px solid var(--c-border-strong);padding:var(--sp-3);
+  font-family:var(--font-mono);font-size:10.5px;line-height:1.6;color:var(--c-ink-soft);white-space:pre-wrap;max-height:190px;overflow:auto}
+
+/* ---------- variant panel ---------- */
+.variant{margin-top:var(--sp-6);display:grid;grid-template-columns:344px minmax(0,1fr);gap:var(--sp-5);align-items:start}
+.variant .act{border:2px solid var(--c-ink);min-height:0}
+.variant-say h3{font-size:var(--fs-md)}
+.variant-say p{font-size:var(--fs-sm);color:var(--c-ink-soft)}
+
+/* ---------- notes ---------- */
+.notes{margin-top:var(--sp-6)}
+.note{background:var(--c-surface);border:1px solid var(--c-border-strong);border-left:4px solid var(--c-ink);
+  padding:var(--sp-4);margin-bottom:var(--sp-4)}
+.note.q{border-left-color:var(--c-accent)}
+.note.drift{border-left-color:var(--c-danger)}
+.note h3{font-size:var(--fs-md);display:flex;align-items:center;gap:var(--sp-2);flex-wrap:wrap}
+.tag{font-family:var(--font-narrow);font-size:9.5px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;
+  border:1px solid var(--c-border-strong);padding:2px 6px;color:var(--c-ink-soft);background:var(--c-surface-2)}
+.tag.q{background:var(--c-accent);color:#fff;border-color:var(--c-accent)}
+.tag.drift{background:var(--c-danger);color:#fff;border-color:var(--c-danger)}
+.tag.ok{background:var(--c-ok-soft);color:var(--c-ok);border-color:var(--c-ok)}
+.note p{font-size:var(--fs-sm);color:var(--c-ink-soft)}
+.note p strong{color:var(--c-ink)}
+.cite{font-family:var(--font-mono);font-size:10.5px;color:var(--c-ink-faint);white-space:nowrap}
+.ask{background:var(--c-accent-soft);border:1px solid var(--c-accent);padding:var(--sp-3);margin-top:var(--sp-3);
+  font-size:var(--fs-sm);color:var(--c-ink)}
+.ask b{display:block;font-family:var(--font-narrow);font-size:9.5px;font-weight:800;letter-spacing:.08em;
+  text-transform:uppercase;color:var(--c-accent-dark);margin-bottom:4px}
+@media(max-width:1180px){
+  .frame{grid-template-columns:320px minmax(0,1fr)}
+  .act{grid-column:1/-1;border-left:none;border-top:2px solid var(--c-ink);max-height:58dvh}
+  .variant{grid-template-columns:1fr}
+}
+
+.bucket{border:1px solid var(--c-border-strong);margin:var(--sp-3) var(--sp-4);background:var(--c-surface);cursor:pointer}
+.bucket:hover{border-color:var(--c-accent)}
+.bucket.on{border-color:var(--c-accent);border-width:2px;background:var(--c-accent-soft)}
+.bucket-top{display:flex;align-items:center;gap:var(--sp-3);padding:9px var(--sp-3);border-bottom:1px solid var(--c-border)}
+.bucket.on .bucket-top{border-bottom-color:var(--c-accent)}
+.bucket-name{font-weight:800;font-size:var(--fs-sm)}
+.bucket-name .sep{font-family:var(--font-mono);font-weight:600;font-size:var(--fs-xs);color:var(--c-ink-faint)}
+.bucket-fig{margin-left:auto;font-family:var(--font-mono);font-weight:700}
+.bucket .lines{padding:var(--sp-2) var(--sp-3) var(--sp-3)}
+.reason.decl{background:#f2f2ef;color:var(--c-ink-soft);border-color:var(--c-border-strong)}
+.stack{display:flex;flex-direction:column;gap:var(--sp-5)}
+.deadfig{background:var(--c-surface-2);border:1px solid var(--c-border-strong);padding:var(--sp-3);margin:var(--sp-3) 0}
+.deadfig .fig{display:flex;justify-content:space-between;font-family:var(--font-mono);font-weight:700;font-size:var(--fs-md);color:var(--c-ink-soft)}
+.deadfig p{margin:6px 0 0;font-size:var(--fs-xs);color:var(--c-ink-soft);line-height:1.5}
+.fix{background:var(--c-ok-soft);border:1px solid var(--c-ok);padding:var(--sp-3);margin-top:var(--sp-3);font-size:var(--fs-sm);color:var(--c-ink)}
+.fix b{display:block;font-family:var(--font-narrow);font-size:9.5px;font-weight:800;letter-spacing:.08em;
+  text-transform:uppercase;color:var(--c-ok);margin-bottom:4px}
+</style>
+</head>
+<body>
+<div class="wrapper">
+
+<h1 class="page-title">Supplier Claims, in three tracks
+  <small>Mock, revision 3 &mdash; not built. Matches the slab / work / sticky-act layout of What&rsquo;s on Order, Suppliers, Receiving and Accounts Payable.
+  Specified in <strong>E-04 &sect;&ldquo;Supplier claims&rdquo;</strong> (steps 1&ndash;6, decisions 9&ndash;12, 20); consumed by <strong>M-05</strong> d12, d26.</small></h1>
+
+<div class="app">
+  <div class="topbar">
+    <div class="brand"><span class="dot"></span>Wax Works</div>
+    <nav>
+      <a href="#">Find<em>E-03/04</em></a>
+      <a href="#">Sell<em>E-05</em></a>
+      <a href="#">Receive<em>E-02</em></a>
+      <a class="on" href="#">Claims<em>E-04</em></a>
+      <a href="#">Payable<em>M-05</em></a>
+      <a href="#">More<em>6 more &#9662;</em></a>
+    </nav>
+    <div class="who">E. Okafor (Employee) &middot; Till 1 &middot; Prototype</div>
+  </div>
+
+  <div class="frame">
+
+    <!-- ============ TRACK 1 ============ -->
+    <aside class="slab">
+      <div class="slab-head">
+        <span class="lab">Suppliers with claims</span>
+        <button class="collapse" title="Collapse to a 52px strip">&lsaquo;</button>
+      </div>
+
+      <div class="slab-pad">
+        <input type="search" placeholder="name &middot; short code">
+        <span class="hint">Claims are <strong>raised elsewhere</strong> &mdash; from a titlecard&rsquo;s <em>Claim vs. supplier</em>,
+        or from a line flagged during receiving (step 1). This screen batches, sends and closes them; it has no
+        <em>&#65291; New</em>, on purpose.</span>
+      </div>
+
+      <div class="chips">
+        <button class="chip on">All <span class="n">5</span></button>
+        <button class="chip">Unsent <span class="n">2</span></button>
+        <button class="chip">Waiting <span class="n">3</span></button>
+        <button class="chip">Waiting 30d+ <span class="n">1</span></button>
+        <button class="chip">Closed <span class="n">2</span></button>
+      </div>
+
+      <div class="sortbar">
+        <span class="lab">Sort</span>
+        <select>
+          <option>Supplier name, A&ndash;Z</option>
+          <option>Longest waiting</option>
+          <option>Largest value</option>
+          <option>Oldest unsent</option>
+        </select>
+      </div>
+
+      <div class="slab-list">
+        <div class="sband"><span>Unsent &mdash; ours to send</span><span>2</span></div>
+
+        <div class="srow on">
+          <span class="code">FAB1</span>
+          <span><span class="nm">F.A.B. Distribution</span><span class="sub">2 unsent &middot; 1 waiting</span></span>
+          <span><span class="amt">$34.00</span><span class="wait">47d waiting</span></span>
+        </div>
+
+        <div class="srow">
+          <span class="code">NRTH</span>
+          <span><span class="nm">Northern Pressings</span><span class="sub">1 unsent</span></span>
+          <span><span class="amt">$12.75</span></span>
+        </div>
+
+        <div class="sband"><span>Waiting on the supplier</span><span>2</span></div>
+
+        <div class="srow">
+          <span class="code">CRAT</span>
+          <span><span class="nm">Crate Digger Wholesale</span><span class="sub">claim 39 &middot; sent 4d ago</span></span>
+          <span><span class="amt">$18.00</span><span class="wait">4d waiting</span></span>
+        </div>
+
+        <div class="srow">
+          <span class="code">INDI</span>
+          <span><span class="nm">Indie Direct Supply</span><span class="sub">claim 40 &middot; USD</span></span>
+          <span><span class="amt">$21.00</span><span class="wait">9d waiting</span></span>
+        </div>
+
+        <div class="sband"><span>Closed</span><span>2</span></div>
+
+        <div class="srow">
+          <span class="code">FAB1</span>
+          <span><span class="nm">F.A.B. Distribution</span><span class="sub">claim 38 &middot; CM-2201 &middot; counting in A/P</span></span>
+          <span><span class="amt">$12.40</span></span>
+        </div>
+
+        <div class="srow">
+          <span class="code">CRAT</span>
+          <span><span class="nm">Crate Digger Wholesale</span><span class="sub">claim 36 &middot; abandoned</span></span>
+          <span><span class="amt">$0.00</span></span>
+        </div>
+      </div>
+    </aside>
+
+    <!-- ============ TRACK 2 ============ -->
+    <section class="work">
+      <div class="work-head">
+        <div style="min-width:0">
+          <h2>F.A.B. Distribution</h2>
+          <div class="badges">
+            <span class="badge ink">$34.00 unsent</span>
+            <span class="badge mono">FAB1</span>
+            <span class="badge danger">claim 41 &mdash; 47 days waiting</span>
+          </div>
+        </div>
+        <div class="work-acts">
+          <button class="btn sm">Open in A/P</button>
+        </div>
+      </div>
+
+      <div class="work-list">
+
+        <!-- ---- unsent buckets ---- -->
+        <div class="band">
+          <div class="band-head">
+            <span class="t">Not sent &mdash; one batch each</span>
+            <span class="say">A raised line lands in the batch for its separator. Sending a batch is what turns it into a numbered claim.</span>
+            <span class="tot">$34.00</span>
+          </div>
+
+          <div class="bucket on">
+            <div class="bucket-top">
+              <span class="bucket-name">Base batch <span class="sep">no separator</span></span>
+              <span class="badge accent">selected</span>
+              <span class="bucket-fig">$22.00</span>
+            </div>
+            <div class="lines">
+              <table class="ln">
+                <tr><th style="width:82px">Invoice</th><th style="width:138px">Reason</th><th>Record</th><th style="width:44px" class="n">Qty</th><th style="width:70px" class="n">Cost</th></tr>
+                <tr>
+                  <td class="mono">55021</td>
+                  <td><span class="reason dmg">Received damaged</span></td>
+                  <td><strong>Prince</strong> &mdash; Purple Rain<br><span class="hint" style="margin:0">Seam split on both copies &middot; Warner Bros. 1984</span></td>
+                  <td class="n">2</td><td class="n">$22.00</td>
+                </tr>
+              </table>
+            </div>
+          </div>
+
+          <div class="bucket">
+            <div class="bucket-top">
+              <span class="bucket-name">Weekly batch <span class="sep">SEP &middot; WEEKLY</span></span>
+              <span class="bucket-fig">$12.00</span>
+            </div>
+            <div class="lines">
+              <table class="ln">
+                <tr><th style="width:82px">Invoice</th><th style="width:138px">Reason</th><th>Record</th><th style="width:44px" class="n">Qty</th><th style="width:70px" class="n">Cost</th></tr>
+                <tr>
+                  <td class="mono">55021</td>
+                  <td><span class="reason never">Billed / not shipped</span></td>
+                  <td><strong>Miles Davis</strong> &mdash; Kind of Blue<br><span class="hint" style="margin:0">Billed 1, none in the carton &middot; Columbia 1959</span></td>
+                  <td class="n">1</td><td class="n">$12.00</td>
+                </tr>
+              </table>
+            </div>
+          </div>
+
+          <div class="caveat" style="margin:0 var(--sp-4) var(--sp-4)">
+            <strong>The batch is the unit, not the tick.</strong> These two travel separately because they sit under different
+            separators &mdash; the same key that batches orders in M-02, so claims argue on the same rhythm the orders were
+            placed on (d9). Neither has been sent, and <strong>that</strong> &mdash; the absent sent date &mdash; is what &ldquo;unsent&rdquo; means (d25). Not the absent number: d10 lets a person type that in, and a state hung on a hand-edited field is a hazard by construction (A-43).
+          </div>
+        </div>
+
+        <!-- ---- sent ---- -->
+        <div class="band">
+          <div class="band-head">
+            <span class="t">Sent &mdash; awaiting their answer</span>
+            <span class="say">Outside the balance until Credited (M-05 d26), so nothing here is money A/P is counting on.</span>
+            <span class="tot">$24.40</span>
+          </div>
+
+          <div class="claim">
+            <div class="claim-top">
+              <input type="checkbox">
+              <span>
+                <span class="claim-id">Claim <span class="no">41</span>
+                  <span class="badge danger">47 days waiting</span></span>
+                <span class="claim-meta">Sent 2026-07-29 by R. Duval &middot; 2 lines &middot; base batch</span>
+              </span>
+              <span class="claim-fig">$24.40<span class="sub">claimed</span></span>
+            </div>
+            <div class="lines">
+              <table class="ln">
+                <tr><th style="width:82px">Invoice</th><th style="width:138px">Reason</th><th>Record</th><th style="width:44px" class="n">Qty</th><th style="width:70px" class="n">Cost</th></tr>
+                <tr>
+                  <td class="mono">54880</td><td><span class="reason short">Short shipped</span></td>
+                  <td><strong>Fleetwood Mac</strong> &mdash; Rumours</td>
+                  <td class="n">1</td><td class="n">$14.40</td>
+                </tr>
+                <tr>
+                  <td class="mono">54880</td><td><span class="reason dmg">Received damaged</span></td>
+                  <td><strong>Talking Heads</strong> &mdash; Remain in Light</td>
+                  <td class="n">1</td><td class="n">$10.00</td>
+                </tr>
+              </table>
+              <div style="display:flex;gap:var(--sp-2);margin-top:var(--sp-3)">
+                <button class="btn sm primary">Record their answer</button>
+                <button class="btn sm ghost">Abandon&hellip;</button>
+                <button class="btn sm ghost">Void&hellip;</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- ---- closed ---- -->
+        <div class="band">
+          <div class="band-head">
+            <span class="t">Closed</span>
+            <span class="say">Credited claims are A/P&rsquo;s business now; abandoned ones are nobody&rsquo;s.</span>
+            <span class="tot">$12.40</span>
+          </div>
+          <div class="collapsed">
+            <button class="btn sm ghost">Show 1 credited, 1 abandoned &#9662;</button>
+            <span class="hint" style="margin:0">Collapsed with a count &mdash; M-05 d21&rsquo;s treatment of settled Invoices, for its reason: it grows without bound.</span>
+          </div>
+        </div>
+
+      </div>
+    </section>
+
+    <!-- ============ TRACK 3 ============ -->
+    <aside class="act">
+      <div class="act-head">
+        <div class="t">Send this batch</div>
+        <div class="s">Base batch &middot; F.A.B. Distribution &middot; 1 line</div>
+      </div>
+
+      <div class="act-body">
+        <label class="field">
+          <span>Claim number</span>
+          <input value="42">
+          <span class="hint">Next ascending, checked unique. Overwrite it now if a supplier insists on their own reference (d10) — <strong>after sending it is frozen</strong> and a wrong one is fixed by voiding, not editing (d26, d27).</span>
+        </label>
+
+        <label class="field">
+          <span>Email to</span>
+          <input value="orders@fabdist.example">
+          <span class="hint">The Supplier&rsquo;s one email, which M-01 records as where <em>orders and claims</em> both go.</span>
+        </label>
+
+        <label class="field">
+          <span>Argued against</span>
+          <input value="F.A.B. Distribution &mdash; 14 Wexford Rd, Scarborough ON">
+          <span class="hint">Their <strong>shipping</strong> address &mdash; where stock ships from, which M-01 d13 already
+          names as the address a claim is argued against. Not the billing address, which is where cheques go.</span>
+        </label>
+
+        <div class="rowline"><span>Prince &mdash; Purple Rain <span class="hint" style="display:inline">&times;2</span></span><span class="n">$22.00</span></div>
+        <div class="rowline total"><span>Claimed</span><span class="n">$22.00</span></div>
+
+        <label class="field" style="margin-top:var(--sp-4)"><span>What they will receive</span></label>
+        <div class="mailprev">Claim 42 &mdash; Wax Works
+Supplier: F.A.B. Distribution
+
+Inv 55021  Received damaged  Prince / Purple Rain   2 &times; $11.00 = $22.00
+                                               Total        $22.00</div>
+        <span class="hint">Per line: the Invoice it arrived on, the reason code, artist, title, cost and quantity, plus a
+        combined total &mdash; step 3, verbatim.</span>
+
+        <div class="caveat">
+          Sending writes two things: the <strong>number</strong>, and the <strong>sent date</strong> that makes it sent. The date is the one the system reads — the number is ours to quote and nothing derives from it (d25, d26).
+        </div>
+      </div>
+
+      <div class="act-foot">
+        <button class="btn primary block">Send claim 42 &mdash; $22.00</button>
+      </div>
+    </aside>
+
+  </div>
+</div>
+
+<!-- ================= the act track's other two states ================= -->
+<div class="variant">
+  <div class="stack">
+    <aside class="act">
+      <div class="act-head">
+        <div class="t">Record their answer</div>
+        <div class="s">Claim 41 &middot; claimed $24.40</div>
+      </div>
+      <div class="act-body">
+        <label class="field">
+          <span>Their credit memo</span>
+          <input value="CM-2208">
+          <span class="hint">Their reference, not ours. This is the point of truth (d20).</span>
+        </label>
+        <label class="field">
+          <span>Amount it grants</span>
+          <input value="18.40">
+          <span class="hint">Pre-filled with what was claimed. Change it to whatever the memo says.</span>
+        </label>
+
+        <div class="delta">
+          <div class="fig"><span>Absorbed</span><span>$6.00</span></div>
+          <p>Claimed <strong>$24.40</strong>, granted <strong>$18.40</strong>. A real cost the store is accepting &mdash;
+          typically the cost of the return. The claim&rsquo;s own total is <strong>recorded alongside</strong> the memo&rsquo;s
+          figure rather than overwritten (d20), so it stays visible afterwards.</p>
+        </div>
+
+        <div class="caveat">
+          Marking this Credited hands it to Accounts Payable: <strong>$18.40 counts against F.A.B.&rsquo;s balance</strong>
+          from that moment, attached to an Invoice or not <span class="cite">M-05 d26</span>.
+        </div>
+      </div>
+      <div class="act-foot"><button class="btn primary block">Mark Credited &mdash; $18.40</button></div>
+    </aside>
+
+    <aside class="act">
+      <div class="act-head">
+        <div class="t">Abandon this claim</div>
+        <div class="s">Claim 41 &middot; claimed $24.40 &middot; 47 days</div>
+      </div>
+      <div class="act-body">
+        <label class="field">
+          <span>Why</span>
+          <select>
+            <option>They declined it</option>
+            <option selected>No response</option>
+            <option>Not worth chasing</option>
+            <option>Other &mdash; note required</option>
+          </select>
+        </label>
+        <label class="field">
+          <span>Note</span>
+          <textarea>Chased twice by phone, no answer. Writing it off.</textarea>
+        </label>
+
+        <div class="deadfig">
+          <div class="fig"><span>Written off</span><span>$24.40</span></div>
+          <p>Nothing is expected from them now. <strong>The stock is unaffected</strong> &mdash; it left on-hand when the
+          copies were adjusted out, and abandoning the claim only stops the store waiting for money.</p>
+        </div>
+
+        <div class="caveat">
+          The claim is <strong>not deleted</strong>. It closes with its reason and keeps its lines, which is the same
+          append-rather-than-erase shape the rest of the system uses for a finished artifact. If a memo turns up in
+          three months it can still be marked Credited from here.
+        </div>
+      </div>
+      <div class="act-foot"><button class="btn block">Abandon claim 41</button></div>
+    </aside>
+    <aside class="act">
+      <div class="act-head">
+        <div class="t">Void this claim</div>
+        <div class="s">Claim 41 &middot; claimed $24.40</div>
+      </div>
+      <div class="act-body">
+        <label class="field">
+          <span>Why it was wrong</span>
+          <select>
+            <option selected>Raised against the wrong copy</option>
+            <option>Wrong Invoice</option>
+            <option>Wrong reason or amount</option>
+            <option>Duplicate of another claim</option>
+            <option>Other &mdash; note required</option>
+          </select>
+        </label>
+        <label class="field">
+          <span>Note</span>
+          <textarea>Both copies were fine &mdash; the split seam was on the Rumours jacket, not this one.</textarea>
+        </label>
+
+        <div class="caveat">
+          <strong>Voiding is not abandoning.</strong> Abandon says <em>this claim was right and no money is coming</em>.
+          Void says <em>this claim was wrong and should never have been sent</em>. Both keep the row; reading one for the
+          other loses the difference between a loss and a mistake, which is the only thing the closed list is worth
+          consulting for later (d27).
+        </div>
+
+        <div class="deadfig">
+          <div class="fig"><span>Number 41</span><span>retired</span></div>
+          <p>Re-raising means a <strong>new claim with a new number</strong>. 41 is never reused, so the sequence has
+          gaps and is not a count of anything (d26). The void is appended as its own record rather than a field on the
+          claim &mdash; the shape A-36 sets for payment batches, for its reason.</p>
+        </div>
+      </div>
+      <div class="act-foot"><button class="btn block">Void claim 41</button></div>
+    </aside>
+  </div>
+
+  <div class="variant-say">
+    <h3>One track, four acts</h3>
+    <p>Track 3 follows what track 2 has selected: a batch shows the send, a sent claim shows its three endings. Only
+    <em>Mark Credited</em> is the primary orange — <em>Abandon</em> and <em>Void</em> are plain, because one brings
+    money in and the other two admit that none is.</p>
+    <p><strong>The amber box is the number worth designing around.</strong> E-04 d20 exists because what a supplier grants
+    routinely differs from what was claimed, and says the memo&rsquo;s amount is recorded <em>alongside</em> the claim total
+    rather than replacing it. Nothing on today&rsquo;s screen shows that gap, so the store absorbs a few dollars a claim with
+    no surface that ever says so.</p>
+    <p><strong>The grey box is the same idea for the other outcome.</strong> An abandoned claim is a write-off, and writing
+    it down is what makes the decision visible later &mdash; which is the whole argument M-05 d27 makes for retiring a
+    placeholder out loud rather than letting it happen quietly.</p>
+  </div>
+</div>
+
+<!-- ================= notes ================= -->
+<div class="notes">
+  <h2>Where revision 2 landed</h2>
+
+  <section class="note">
+    <h3><span class="tag ok">Written</span> 1 &middot; Unsent, derived from the sent date</h3>
+    <p>&ldquo;Unsent&rdquo; replaces the code&rsquo;s invented <code>Draft</code> and is <strong>derived</strong> &mdash; but
+    from the <strong>sent date</strong> (d23), not from the absent claim number as revision 2 had it. d10 designs the number
+    to be typed by a person, and hanging a state on a hand-edited field is a hazard by construction. The sent date is written
+    by the system in the same act and nobody has a reason to edit it.</p>
+    <p>That became <strong>E-04 d25</strong>, superseding d21&rsquo;s derivation while leaving its principle alone, and
+    <strong>A-43</strong> as the general rule: <em>a derived state keys on a fact the system writes, never on one a person
+    may edit.</em> It completes A-35 and A-33b, which said what to derive without ever saying from what.</p>
+  </section>
+
+  <section class="note">
+    <h3><span class="tag ok">Settled</span> 2 &middot; The batch is the unit, and it is standing</h3>
+    <p>A raised line drops into its supplier&rsquo;s batch &mdash; the <strong>base</strong> one, or a
+    <strong>separator-exclusive</strong> one where the line carries a separator. Sending a batch turns it into one numbered
+    claim. Nobody picks lines at send time; the separator already did.</p>
+    <p>So the unsent band draws <em>batches</em>, not tickable rows, and this screen has no multi-select at all in that band.
+    That is a real simplification over revision 1, which had borrowed M-05 d27&rsquo;s ticking for a problem that does not
+    have M-05&rsquo;s shape.</p>
+    <p>Written as <strong>E-04 d22</strong>, which also settles where the letter comes from: it is
+    <strong>chosen as the claim is raised</strong> and blank by default, <em>not</em> inherited from the PurchaseOrder the
+    copy arrived on. That letter splits outgoing streams, and by the time a copy is in hand the stream that carried it has
+    been sent and closed &mdash; reusing it would batch claims by an accident of ordering history rather than by how the
+    store wants to argue them.</p>
+  </section>
+
+  <section class="note">
+    <h3><span class="tag ok">Settled</span> 3 &middot; The address was already decided &mdash; my note was wrong</h3>
+    <p>Revision 1 said a claims address was &ldquo;not yet a field.&rdquo; It is. <strong>M-01 d13 already carries a shipping
+    address and already designates it</strong> &mdash; &ldquo;where stock ships from &mdash; the address a claim is argued
+    against&rdquo; <span class="cite">M-01:40</span>, with the same words repeated in the type
+    <span class="cite">types.ts:35&ndash;41</span>. The email field is likewise recorded as &ldquo;where orders/claims are
+    sent&rdquo; <span class="cite">M-01:38</span>.</p>
+    <p>So there is nothing to decide and nothing to add. The send panel now shows both, labelled so the difference from the
+    <em>billing</em> address &mdash; where cheques go, M-01 d17 &mdash; is visible at the moment it matters.</p>
+  </section>
+
+  <section class="note q">
+    <h3><span class="tag q">My answer</span> 4 &middot; Days waiting &mdash; yes, and it is nearly free</h3>
+    <p>You asked whether we should care. <strong>Yes</strong>, for one reason that only became true in this revision: with
+    <em>Abandon</em> on the screen, waiting time is the thing that <em>prompts</em> the decision. Without it nobody ever
+    decides &mdash; a claim just sits, which is exactly the orphan you were pointing at.</p>
+    <p>And it is cheap. The number is assigned on send; writing <code>sentAt</code> in that same moment is one more column on
+    a write that already happens. Contrast M-05&rsquo;s aging, which needed a payment-terms concept in two other flows before
+    anything could be computed at all.</p>
+    <p><strong>What I would not build:</strong> aging buckets. A per-row figure, one sort and one chip is the whole
+    affordance &mdash; the same line the Payable mock drew, for the same reason: a per-row fact and a report are different
+    things, and only the first is a layout decision.</p>
+    <p>Written as <strong>E-04 d23</strong> &mdash; and it turned out to carry more weight than an affordance. Because the
+    sent date is written by the system, it is also the right thing to derive <em>sent-ness</em> from, which is what d25 and
+    A-43 do. The column bought a figure and a foundation for one write.</p>
+  </section>
+
+  <section class="note q">
+    <h3><span class="tag q">New</span> 5 &middot; Abandon &mdash; the disposal claims never had</h3>
+    <p>Your suggestion, and it fills a hole the record already half-admits. E-04&rsquo;s open question covers a supplier who
+    <em>denies</em> a claim <span class="cite">E-04:151</span> and offers nothing; meanwhile <strong>M-05 d27 already
+    retires a Claim <em>placeholder</em></strong> by including it in a settlement, and justifies it in words that fit here
+    exactly &mdash; &ldquo;a Manager deciding to stop chasing it &hellip; a real disposal, and the screen should say so rather
+    than letting it happen quietly.&rdquo; An E-04 claim has no equivalent.</p>
+    <p>Two things worth being precise about, because they change how big this is:</p>
+    <p>&bull; <strong>It is not a money orphan.</strong> M-05 d26 keeps a Pending claim <em>outside</em> the balance, so an
+    unanswered claim was never inflating what A/P thinks is owed. It is a <em>visual</em> orphan &mdash; a row that never
+    leaves. That makes Abandon a tidying act, not a correction, which is the right expectation to set.</p>
+    <p>&bull; <strong>It does not touch stock.</strong> The copies left on-hand when they were adjusted out under d3/d4.
+    Abandoning stops the store expecting money and does nothing else &mdash; worth stating in the decision, because
+    &ldquo;write it off&rdquo; reads like an inventory act and is not one.</p>
+    <p>Written as <strong>E-04 d24</strong>, manager-only following d3 &mdash; writing off money owed is the same standing
+    as a hard on-hand adjustment. <em>Accepted consequence recorded with it:</em> raising a claim is an Employee act and
+    disposing of a dead one is not, so an Employee can create work only a Manager can clear. A queue one role fills and
+    another drains backs up unless somebody looks &mdash; which is what d23&rsquo;s days-waiting figure exists to make
+    visible.</p>
+  </section>
+
+  <section class="note">
+    <h3><span class="tag ok">Written</span> 6 &middot; Void, and why it is not Abandon</h3>
+    <p>The number is <strong>ours, not theirs</strong> &mdash; the supplier answers with their own credit memo reference,
+    which d20 makes the point of truth &mdash; so a wrong number costs nothing and uniqueness is the only property it has to
+    hold (<strong>d26</strong>). It is frozen on send, and a claim that is wrong is <strong>voided and raised again</strong>
+    rather than edited (<strong>d27</strong>).</p>
+    <p>That gives the screen two endings that both keep the row and mean opposite things, so they are drawn apart and
+    labelled: <em>abandon</em> is a loss, <em>void</em> is a mistake. <strong>A-44</strong> records why they are built
+    differently too &mdash; abandoned is a status the row carries, voided is a row in <code>supplier_claim_voids</code>,
+    because a <code>voided_at</code> column would be an update to the row the void exists to leave alone.</p>
+    <p><em>The cost, recorded:</em> &ldquo;is this claim finished&rdquo; becomes a status read <strong>or</strong> a join,
+    and a query that remembers only the first counts voided claims as live.</p>
+  </section>
+
+  <section class="note">
+    <h3><span class="tag ok">Done</span> 7 &middot; Numbering and slab order</h3>
+    <p>The <code>CLM-</code> prefix is gone &mdash; claim numbers are plain ascending integers, and the column header says
+    <em>Claim</em> so the row does not have to. d10 is untouched: still ascending, still unique, still overwritable where a
+    supplier insists on their own reference.</p>
+    <p>The slab now bands <strong>Unsent first</strong>, then waiting, then closed, and the default sort is
+    <strong>supplier name A&ndash;Z</strong>. Worth noting this is the reverse of M-01 d17&rsquo;s reasoning and agrees with
+    its conclusion: A&ndash;Z is a lookup, and bands across a lookup split the name you want into two places &mdash; but here
+    the bands are a <em>work queue</em> (send these, then chase those), which is what the screen is for, so they earn their
+    place under any sort.</p>
+  </section>
+
+  <section class="note">
+    <h3><span class="tag">Layout</span> Carried over unchanged</h3>
+    <p>320px slab collapsing to a 52px strip; 344px sticky act track; the 1180px breakpoint where the act drops to a 58dvh
+    band under the work. Chips, sort bar and banded list exactly as Suppliers and Payable have them.</p>
+    <p>Not carried over: Payable&rsquo;s <code>.ap-ledger</code> table. A claim is a few lines with prose in them &mdash; a
+    reason and a note &mdash; rather than six money columns that must align, so track 2 is a list opening to short tables.</p>
+  </section>
+
+  <section class="note q">
+    <h3><span class="tag q">Still open</span> What is not answered</h3>
+    <p>A supplier who issues a credit note <strong>against a different invoice</strong> than the one claimed
+    <span class="cite">E-04:151</span>. Untouched by anything above, and not a layout question &mdash; it is about what a
+    credit memo is allowed to reference.</p>
+    <p>Whether a <strong>claim raised in error but never sent</strong> needs anything at all. d27 voids a <em>sent</em>
+    claim; an unsent line has no number, no sent date and no artifact in the world, so removing it from its batch ought to be
+    an ordinary edit &mdash; but nothing says so.</p>
+  </section>
+</div>
+
+</div>
+</body>
+</html>

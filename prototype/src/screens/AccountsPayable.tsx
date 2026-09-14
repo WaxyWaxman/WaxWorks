@@ -67,6 +67,7 @@ export function AccountsPayable() {
     claims: app.claims,
     paymentBatches: app.paymentBatches,
     batchVoids: app.batchVoids,
+    claimVoids: app.claimVoids,
   };
 
   const balanceOf = (id: string) => supplierBalance(id, data);

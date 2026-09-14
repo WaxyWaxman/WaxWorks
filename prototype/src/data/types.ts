@@ -42,8 +42,12 @@ export interface InventoryItem {
   conditionNote?: string;
   status: ItemStatus;
   heldByCustomerId?: string;
-  arrivedOnInvoice?: string;
-  supplierId?: string; // set when arrivedOnInvoice traces to a Supplier — claimable
+  // architecture A-45, E-02 d48 — the InvoiceLine this copy was minted from,
+  // and the ONLY link back to its paperwork. The Invoice is one lookup away
+  // and the Supplier two; neither is stored here. Absent = not received on
+  // any Invoice, which is an oversold copy until E-04 d19 reconciles it.
+  // Resolve it through lib/provenance.ts, never by parsing a label.
+  invoiceLineId?: string;
   // "Oversold" (lexicon) — minted straight from a Sale, before any Invoice
   // line ever backed it (E-05 decision 21 allows selling into negative
   // inventory). It's real from the moment it's sold — status is "sold" from
@@ -235,13 +239,78 @@ export const CLAIM_REASONS = [
 ] as const;
 export type ClaimReason = (typeof CLAIM_REASONS)[number];
 
-export type ClaimStatus = "Draft" | "Pending" | "Credited";
+// E-04 d11, d24. There is no `Draft`: the prototype carried one the record
+// never admitted, and d21 retired it. **Unsent is derived from `sentAt`**
+// (d25) — never from the absent claim number, which d10 lets a person type
+// and which a derived state must therefore not key on (architecture A-43).
+// So an unsent claim is an ordinary `Pending` one that has no sent date.
+export type ClaimStatus = "Pending" | "Credited" | "Abandoned";
+
+// E-04 d24 — why the store stopped expecting the money. Same shape as the
+// adjustment reason codes in d4: visible rather than gated.
+export const ABANDON_REASONS = [
+  "Declined by supplier",
+  "No response",
+  "Not worth chasing",
+  "Other",
+] as const;
+export type AbandonReason = (typeof ABANDON_REASONS)[number];
+
+// E-04 d27 — why the claim itself was wrong. A different question from
+// ABANDON_REASONS: those say no money is coming, these say the claim should
+// never have been sent.
+export const VOID_REASONS = [
+  "Raised against the wrong copy",
+  "Wrong Invoice",
+  "Wrong reason or amount",
+  "Duplicate of another claim",
+  "Other",
+] as const;
+export type VoidReason = (typeof VOID_REASONS)[number];
+
+/**
+ * E-04 d27, architecture A-44 — a claim void is a ROW, never a column.
+ * A `voidedAt` on the claim would be an update to the row the void exists to
+ * leave alone, and one-row-per-claim makes a double void unrepresentable
+ * rather than a check someone remembers (the rule A-36 sets for payment
+ * batches). Consequence, recorded in A-44: "is this claim finished" is a
+ * status read OR a lookup here, and code that forgets the second counts
+ * voided claims as live. `claimIsLive()` in lib/claims.ts is the one seam.
+ */
+export interface ClaimVoid {
+  id: string;
+  claimId: string;
+  reason: VoidReason;
+  note?: string;
+  at: string;
+  by: string;
+}
+
+/**
+ * E-04 d28 — what a claim line is arguing about.
+ *
+ * A union rather than an optional id, because "names Invoice X" and "is
+ * deliberately about no Invoice" are different facts and a nullable field
+ * cannot tell either of them from "somebody forgot". The `none` case is an
+ * explicit choice a person makes, per line.
+ *
+ * NOT to be confused with an Invoice that has no supplier reference: E-02 d1
+ * auto-generates `REF####` for those, so every Invoice in the system has a
+ * number. `none` means *not about a particular shipment*.
+ *
+ * And it is EVIDENCE, never routing. A claim credit settles the supplier
+ * balance (M-05 d6, d26); what it attaches to is decided by ticking at
+ * settlement (M-05 d27, d33). A line naming 55021 may settle against 54880.
+ */
+export type ClaimLineAgainst =
+  | { kind: "invoice"; invoiceId: string }
+  | { kind: "none" };
 
 export interface ClaimLine {
   id: string;
   recordId: string;
   itemId?: string;
-  invoiceNumber?: string;
+  against: ClaimLineAgainst;
   reason: string; // one of CLAIM_REASONS, or free text (E-04 §"Supplier claims")
   note?: string;
   cost: number;
@@ -266,6 +335,13 @@ export interface SupplierClaim {
   // derives it from the presence of a live credit target naming this claim,
   // for the reason A-33b refuses a stored `paid` — a flag has a release path
   // (d22's void) that someone has to remember, and a derivation has none.
+  // E-04 d23 — stamped in the same act that assigns the number. Two jobs:
+  // it is the figure "days waiting" is measured from, and it is what d25
+  // derives sent-ness from. Absent = unsent.
+  sentAt?: string;
+  // E-04 d24 — set with status `Abandoned`. The status is the authority
+  // (architecture A-44); this is the detail behind it.
+  abandonment?: { reason: AbandonReason; note?: string; at: string; by: string };
   createdBy: string;
   createdAt: string;
   log: { at: string; text: string }[];

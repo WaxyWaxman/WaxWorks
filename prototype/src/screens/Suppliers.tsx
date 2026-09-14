@@ -65,6 +65,7 @@ export function Suppliers() {
       payableEntries: app.payableEntries,
       paymentBatches: app.paymentBatches,
       batchVoids: app.batchVoids,
+      claimVoids: app.claimVoids,
       claims: app.claims,
       pendingOrders: app.pendingOrders,
       inventory: app.inventory,

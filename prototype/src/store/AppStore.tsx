@@ -6,6 +6,7 @@ import {
   type ReactNode,
 } from "react";
 import { computeDayBreakdown, type DayBreakdown } from "../lib/dayBreakdown";
+import { invoiceForItem, supplierIdForItem } from "../lib/provenance";
 import { money } from "../lib/money";
 import {
   customerBalanceDelta,
@@ -29,6 +30,7 @@ import {
   TAX_LINES,
 } from "../data/seed";
 import type {
+  ClaimLineAgainst,
   CloseBatch,
   Customer,
   GiftCard,
@@ -54,9 +56,12 @@ import type {
   SaleLine,
   Section,
   Supplier,
+  ClaimVoid,
   SupplierClaim,
   TaxLine,
   Tender,
+  AbandonReason,
+  VoidReason,
 } from "../data/types";
 
 let seq = 100;
@@ -133,6 +138,9 @@ interface AppState {
   sales: Sale[];
   closeBatches: CloseBatch[]; // M-03 — Total Today's Sales / Undo End of Day
   claims: SupplierClaim[];
+  // E-04 d27, architecture A-44 — a void is a row, never a column, so it
+  // lives apart from the claim it retires rather than as a field on it.
+  claimVoids: ClaimVoid[];
   invoices: Invoice[];
   payableEntries: PayableEntry[]; // M-05 — manual ledger entries: Invoice/Claim/Credit/Adjustment/Consignment, not sourced from Receiving or Supplier Claims
   paymentBatches: PaymentBatch[]; // M-05 d16 — one row per settlement, across Invoices, entries and credits
@@ -270,18 +278,112 @@ const seed: AppState = {
   // without first walking a Receiving session — lines mirror the InventoryItems
   // INVENTORY already seeds as "arrived on" these same invoice numbers.
   claims: [
+    // E-04 d22 — two STANDING batches for the same supplier, kept apart by
+    // the separator chosen as each line was raised. Neither has a sent date,
+    // which is the whole of what "unsent" means (d25).
+    {
+      id: "claim-fab-base",
+      supplierId: "sup-fab",
+      status: "Pending",
+      lines: [
+        {
+          id: "cl-fab-base-1",
+          recordId: "r-purple",
+          against: { kind: "invoice", invoiceId: "inv-seed-fab" },
+          reason: "Received damaged",
+          note: "Seam split on both copies",
+          cost: 11,
+          qty: 2,
+        },
+      ],
+      createdBy: CURRENT_USER,
+      createdAt: "2026-09-11 10:20:00",
+      log: [{ at: "2026-09-11 10:20:00", text: "Claim opened — Received damaged (qty 2)" }],
+    },
+    {
+      id: "claim-fab-weekly",
+      supplierId: "sup-fab",
+      separator: "W",
+      status: "Pending",
+      lines: [
+        {
+          id: "cl-fab-weekly-1",
+          recordId: "r-illmatic",
+          against: { kind: "invoice", invoiceId: "inv-seed-fab" },
+          reason: "Billed / not shipped",
+          note: "Billed 1, none in the carton",
+          cost: 12,
+          qty: 1,
+        },
+        {
+          // E-04 d28's other shape: deliberately not about a shipment. Not a
+          // blank someone forgot, and not E-02 d1's REF#### case either —
+          // that is an Invoice whose supplier gave no number, which is a
+          // different thing entirely.
+          id: "cl-fab-weekly-2",
+          recordId: "r-tote",
+          against: { kind: "none" },
+          reason: "Short shipped",
+          note: "Promo tote bundle they invoice separately and never sent paperwork for",
+          cost: 4.5,
+          qty: 2,
+        },
+      ],
+      createdBy: MANAGER_NAME,
+      createdAt: "2026-09-12 14:05:00",
+      log: [{ at: "2026-09-12 14:05:00", text: "Claim opened — Billed / not shipped (qty 1)" }],
+    },
+
+    // Sent and unanswered. d23's days-waiting figure is what makes this row
+    // ask a question rather than just sit there.
+    {
+      id: "claim-fab-41",
+      claimNumber: 41,
+      supplierId: "sup-fab",
+      status: "Pending",
+      sentAt: "2026-07-28 09:40:00",
+      lines: [
+        {
+          id: "cl-41-1",
+          recordId: "r-rumours",
+          against: { kind: "invoice", invoiceId: "inv-seed-fab" },
+          reason: "Short shipped",
+          cost: 14.4,
+          qty: 1,
+        },
+        {
+          id: "cl-41-2",
+          recordId: "r-blue",
+          against: { kind: "invoice", invoiceId: "inv-seed-fab" },
+          reason: "Received damaged",
+          cost: 10,
+          qty: 1,
+        },
+      ],
+      createdBy: MANAGER_NAME,
+      createdAt: "2026-07-27 16:00:00",
+      log: [
+        { at: "2026-07-27 16:00:00", text: "Claim opened — Short shipped (qty 1)" },
+        { at: "2026-07-28 09:40:00", text: "Claim 41 sent to claims@fabdist.example" },
+      ],
+    },
+
+    // E-04 d20 — claimed 12.40, the memo granted 10.90. The gap is a real
+    // cost the store absorbed and both figures are kept.
     {
       id: "claim-seed-1",
       claimNumber: 9,
       supplierId: "sup-fab",
       status: "Credited",
+      sentAt: "2026-09-02 09:15:00",
       creditMemo: "CM-2201",
+      creditedAmount: 10.9,
       lines: [
         {
           id: "cl-seed-1",
           recordId: "r-blue",
           itemId: "i-blue-1",
-          invoiceNumber: "55021",
+          against: { kind: "invoice", invoiceId: "inv-seed-fab" },
           reason: "Received damaged",
           note: "Corner ding on jacket, sleeve only",
           cost: 12.4,
@@ -293,8 +395,78 @@ const seed: AppState = {
       log: [
         { at: "2026-09-01 09:00:00", text: "Claim opened — Received damaged (qty 1)" },
         { at: "2026-09-02 09:15:00", text: "Claim 9 sent to claims@fabdist.example" },
-        { at: "2026-09-03 11:30:00", text: "Marked Credited — supplier credit memo CM-2201" },
+        { at: "2026-09-03 11:30:00", text: "Marked Credited — supplier credit memo CM-2201 granting 10.90" },
       ],
+    },
+
+    // d24 — the claim was right and no money came.
+    {
+      id: "claim-indie-40",
+      claimNumber: 40,
+      supplierId: "sup-indie",
+      status: "Abandoned",
+      sentAt: "2026-06-15 11:00:00",
+      abandonment: {
+        reason: "Declined by supplier",
+        note: "They say the carton was sealed at their end. Not worth the argument over $21.",
+        at: "2026-08-03 15:20:00",
+        by: MANAGER_NAME,
+      },
+      lines: [
+        {
+          id: "cl-40-1",
+          recordId: "r-illmatic",
+          against: { kind: "invoice", invoiceId: "inv-seed-indie" },
+          reason: "Short shipped",
+          cost: 21,
+          qty: 1,
+        },
+      ],
+      createdBy: CURRENT_USER,
+      createdAt: "2026-06-14 09:00:00",
+      log: [
+        { at: "2026-06-14 09:00:00", text: "Claim opened — Short shipped (qty 1)" },
+        { at: "2026-06-15 11:00:00", text: "Claim 40 sent to orders@indiedirect.example" },
+        { at: "2026-08-03 15:20:00", text: "Abandoned — Declined by supplier · They say the carton was sealed at their end." },
+      ],
+    },
+
+    // d27 — the claim itself was wrong. Number 36 is retired with it (d26).
+    {
+      id: "claim-crate-36",
+      claimNumber: 36,
+      supplierId: "sup-crate",
+      status: "Pending",
+      sentAt: "2026-08-20 10:00:00",
+      lines: [
+        {
+          id: "cl-36-1",
+          recordId: "r-illmatic",
+          against: { kind: "invoice", invoiceId: "inv-seed-crate-paid" },
+          reason: "Wrong item",
+          cost: 18,
+          qty: 1,
+        },
+      ],
+      createdBy: CURRENT_USER,
+      createdAt: "2026-08-19 13:00:00",
+      log: [
+        { at: "2026-08-19 13:00:00", text: "Claim opened — Wrong item (qty 1)" },
+        { at: "2026-08-20 10:00:00", text: "Claim 36 sent to hello@cratedigger.example" },
+        { at: "2026-08-22 09:10:00", text: "Voided — Raised against the wrong copy · The Illmatic that came short was on the other invoice." },
+      ],
+    },
+  ],
+
+  // E-04 d27, architecture A-44 — one row per voided claim, never a column.
+  claimVoids: [
+    {
+      id: "claimvoid-seed-1",
+      claimId: "claim-crate-36",
+      reason: "Raised against the wrong copy",
+      note: "The Illmatic that came short was on the other invoice.",
+      at: "2026-08-22 09:10:00",
+      by: MANAGER_NAME,
     },
   ],
   invoices: [
@@ -454,7 +626,7 @@ const seed: AppState = {
   lastViewedCustomerId: null,
   nextSaleNumber: 100241,
   nextHold: 2,
-  nextClaimNumber: 12,
+  nextClaimNumber: 42, // d26 — 36, 40 and 41 are spent; gaps are expected
   nextPoNumber: 0,
   nextInternalBarcode: 9000,
   nextInvoiceRef: 1,
@@ -516,9 +688,14 @@ interface AppContextValue extends AppState {
     qty: number,
     separator?: string,
     note?: string,
+    // E-04 d28 — chosen from that Supplier's received Invoices, or explicitly
+    // none. Defaults to the Invoice the copy arrived on.
+    against?: ClaimLineAgainst,
   ) => { claimId: string; supplierName: string } | null;
   sendClaim: (claimId: string, claimNumber?: number) => { claimNumber: number } | null;
-  markClaimCredited: (claimId: string, creditMemo: string) => void;
+  markClaimCredited: (claimId: string, creditMemo: string, creditedAmount?: number) => void;
+  abandonClaim: (claimId: string, reason: AbandonReason, note?: string) => void;
+  voidClaim: (claimId: string, reason: VoidReason, note?: string) => void;
 
   reserve: (
     recordId: string,
@@ -1439,16 +1616,35 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
   // claim as extra lines — the same batching key pending orders use (M-02) —
   // rather than becoming N separate claims that all have to be sent one by
   // one. E-04 §"Supplier claims".
-  const raiseClaim: AppContextValue["raiseClaim"] = (itemId, reason, qty, separator, note) => {
+  // Where a claim line points when nobody chooses (E-04 d28). A copy records
+  // the Invoice it arrived on as a DISPLAY STRING — `arrivedOnInvoice` is
+  // "FAB1 55021", not a reference — so this resolves it back to the Invoice by
+  // supplier and number. That string is the same weakness d28 removed from the
+  // claim line and it is still here, one layer down; see the open question.
+  // E-04 d28 — where a claim line points when nobody chooses: the Invoice the
+  // copy actually arrived on, which A-45 makes a lookup rather than the string
+  // match this used to be.
+  const defaultAgainst = (item: InventoryItem): ClaimLineAgainst => {
+    const iv = invoiceForItem(item, s.invoices);
+    return iv ? { kind: "invoice", invoiceId: iv.id } : { kind: "none" };
+  };
+
+  const raiseClaim: AppContextValue["raiseClaim"] = (itemId, reason, qty, separator, note, against) => {
     const item = s.inventory.find((i) => i.id === itemId);
-    if (!item?.supplierId) return null;
-    const supplier = s.suppliers.find((sup) => sup.id === item.supplierId)!;
+    if (!item) return null;
+    const supplierId = supplierIdForItem(item, s.invoices);
+    const supplier = s.suppliers.find((sup) => sup.id === supplierId);
+    if (!supplier) return null;
     const sepKey = (separator ?? "").trim();
     const line = {
       id: uid("claimline"),
+      // d28 — the reference is EVIDENCE of what is being argued, not where
+      // the credit lands (M-05 d27 decides that by ticking). Defaults to
+      // where the copy came from; the caller may point it elsewhere among
+      // that Supplier's received Invoices, or at nothing.
+      against: against ?? defaultAgainst(item),
       recordId: item.recordId,
       itemId: item.id,
-      invoiceNumber: item.arrivedOnInvoice,
       reason,
       note,
       cost: item.cost,
@@ -1457,7 +1653,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
 
     const existing = s.claims.find(
       (c) =>
-        c.status === "Draft" &&
+        !c.sentAt &&
         c.supplierId === supplier.id &&
         (c.separator ?? "").trim() === sepKey,
     );
@@ -1483,7 +1679,10 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
       id,
       supplierId: supplier.id,
       separator: sepKey || undefined,
-      status: "Draft",
+      // E-04 d22 — a raised line joins the standing batch for its supplier
+      // and separator, or opens one. It is Pending from birth and unsent
+      // until it has a sent date (d25); there is no Draft status.
+      status: "Pending",
       lines: [line],
       createdBy: CURRENT_USER,
       createdAt: now(),
@@ -1495,7 +1694,9 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
 
   const sendClaim: AppContextValue["sendClaim"] = (claimId, claimNumber) => {
     const claim = s.claims.find((c) => c.id === claimId);
-    if (!claim || claim.status !== "Draft") return null;
+    // E-04 d25 — "already sent" is the presence of a sent date, not a status
+    // value and not the claim number (architecture A-43).
+    if (!claim || claim.sentAt) return null;
     const supplier = s.suppliers.find((sup) => sup.id === claim.supplierId)!;
     const used = new Set(s.claims.map((c) => c.claimNumber).filter((n): n is number => n !== undefined));
     let num = claimNumber ?? s.nextClaimNumber;
@@ -1508,7 +1709,10 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
           ? {
               ...c,
               status: "Pending",
+              // d23 — the number and the sent date are written in the same
+              // act. The date is the one anything derives from (d25).
               claimNumber: num,
+              sentAt: now(),
               log: [...c.log, { at: now(), text: `Claim ${num} sent to ${supplier.email}` }],
             }
           : c,
@@ -1517,7 +1721,10 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
     return { claimNumber: num };
   };
 
-  const markClaimCredited: AppContextValue["markClaimCredited"] = (claimId, creditMemo) =>
+  // E-04 d20 — the memo is the point of truth, and what it GRANTS may differ
+  // from what was claimed. Both figures are kept: the claim total stays
+  // readable as what was asked for. M-05 d26 counts the granted figure.
+  const markClaimCredited: AppContextValue["markClaimCredited"] = (claimId, creditMemo, creditedAmount) =>
     setS((prev) => ({
       ...prev,
       claims: prev.claims.map((c) =>
@@ -1526,11 +1733,66 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
               ...c,
               status: "Credited",
               creditMemo,
-              log: [...c.log, { at: now(), text: `Marked Credited — supplier credit memo ${creditMemo}` }],
+              creditedAmount,
+              log: [
+                ...c.log,
+                {
+                  at: now(),
+                  text:
+                    `Marked Credited — supplier credit memo ${creditMemo}` +
+                    (creditedAmount != null ? ` granting ${creditedAmount.toFixed(2)}` : ""),
+                },
+              ],
             }
           : c,
       ),
     }));
+
+  // E-04 d24 — the claim was right and no money is coming. Manager-only
+  // (following d3: writing off money owed is the same standing as a hard
+  // on-hand adjustment), reason-coded, and appended rather than deleted. The
+  // claim keeps its lines. Stock is untouched — the copies left on hand when
+  // they were adjusted out, and this only stops the store expecting payment.
+  const abandonClaim: AppContextValue["abandonClaim"] = (claimId, reason, note) =>
+    setS((prev) => ({
+      ...prev,
+      claims: prev.claims.map((c) =>
+        c.id === claimId
+          ? {
+              ...c,
+              status: "Abandoned",
+              abandonment: { reason, note, at: now(), by: MANAGER_NAME },
+              log: [
+                ...c.log,
+                { at: now(), text: `Abandoned — ${reason}${note ? ` · ${note}` : ""}` },
+              ],
+            }
+          : c,
+      ),
+    }));
+
+  // E-04 d27 — the claim itself was wrong and should never have been sent.
+  // A different act from abandoning, and built differently: architecture A-44
+  // makes the void a ROW, so nothing on the claim is updated. Its number is
+  // retired with it (d26) — re-raising means a new claim with a new number.
+  const voidClaim: AppContextValue["voidClaim"] = (claimId, reason, note) =>
+    setS((prev) =>
+      prev.claimVoids.some((v) => v.claimId === claimId)
+        ? prev // one void per claim, the shape A-36 makes structural
+        : {
+            ...prev,
+            claimVoids: [
+              { id: uid("claimvoid"), claimId, reason, note, at: now(), by: MANAGER_NAME },
+              ...prev.claimVoids,
+            ],
+            claims: prev.claims.map((c) =>
+              c.id === claimId
+                ? { ...c, log: [...c.log, { at: now(), text: `Voided — ${reason}${note ? ` · ${note}` : ""}` }] }
+                : c,
+            ),
+          },
+    );
+
 
   const reserve: AppContextValue["reserve"] = (recordId, itemId, customerId, qty, po) => {
     const rec = s.records.find((r) => r.id === recordId)!;
@@ -1810,7 +2072,6 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
               }
             : x,
         ),
-      inventory: prev.inventory.map((i) => (i.supplierId === mergeId ? { ...i, supplierId: keepId } : i)),
       pendingOrders: prev.pendingOrders.map((p) => (p.supplierId === mergeId ? { ...p, supplierId: keepId } : p)),
       claims: prev.claims.map((c) => (c.supplierId === mergeId ? { ...c, supplierId: keepId } : c)),
       invoices: prev.invoices.map((iv) => (iv.supplierId === mergeId ? { ...iv, supplierId: keepId } : iv)),
@@ -1847,10 +2108,11 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
   // the Invoice is already Finalized — the "becomes sellable" moment already
   // happened for this Invoice, so a line added afterward mints immediately
   // rather than waiting for a Finalize that has already occurred).
+  // A-45 removed two parameters from this function: it took a Supplier and an
+  // invoice number purely to render `arrivedOnInvoice`. Minting now records
+  // the line the copy came from and nothing else, which is the whole fact.
   const mintItemsForLine = (
-    line: { recordId: string; grade: Grade; acceptedPrice: number; cost: number; qty: number },
-    supplier: Supplier,
-    invoiceNumber: string,
+    line: { id: string; recordId: string; grade: Grade; acceptedPrice: number; cost: number; qty: number },
     startSeq: number,
     // Oversold items claimed by an earlier line in the same batch (finalize
     // can carry several lines for the same Record) — skip them so two lines
@@ -1883,8 +2145,9 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
         cost: line.cost,
         internalBarcode: code,
         status: "sellable",
-        arrivedOnInvoice: `${supplier.shortName} ${invoiceNumber}`,
-        supplierId: supplier.id,
+        // A-45 — a reference, not a rendered caption. The supplier's short
+        // name and the invoice number are read from the rows that own them.
+        invoiceLineId: line.id,
       });
     }
     return { items, itemIds, nextSeq: seq, reconciledIds };
@@ -1897,8 +2160,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
     inventory: InventoryItem[],
     reconciledIds: string[],
     cost: number,
-    arrivedOnInvoice: string,
-    supplierId: string,
+    invoiceLineId: string,
   ): InventoryItem[] =>
     reconciledIds.length === 0
       ? inventory
@@ -1907,8 +2169,9 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
             ? {
                 ...i,
                 cost,
-                arrivedOnInvoice,
-                supplierId,
+                // A-45 — reconciling gives the copy the paperwork it was sold
+                // without. Before this it had none, and said so.
+                invoiceLineId,
                 oversoldReconciledAt: now(),
                 oversoldReconciledBy: CURRENT_USER,
                 oversoldReconciledVia: "received" as const,
@@ -1937,7 +2200,6 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
   const addInvoiceLine: AppContextValue["addInvoiceLine"] = (invoiceId, line) => {
     const invoice = s.invoices.find((iv) => iv.id === invoiceId);
     if (!invoice || invoiceIsPaid(invoice, s.paymentBatches, s.batchVoids)) return;
-    const supplier = s.suppliers.find((sup) => sup.id === invoice.supplierId)!;
     const cost = round2(line.listPrice * (1 - line.discountPct / 100));
     let newLine: InvoiceLine = { id: uid("invline"), ...line, cost };
 
@@ -1945,7 +2207,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
     let nextBarcodeSeq = s.nextInternalBarcode;
     let reconciledIds: string[] = [];
     if (invoice.status === "Finalized") {
-      const minted = mintItemsForLine(newLine, supplier, invoice.invoiceNumber, nextBarcodeSeq);
+      const minted = mintItemsForLine(newLine, nextBarcodeSeq);
       mintedItems = minted.items;
       nextBarcodeSeq = minted.nextSeq;
       reconciledIds = minted.reconciledIds;
@@ -1969,8 +2231,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
         mintedItems.length ? [...prev.inventory, ...mintedItems] : prev.inventory,
         reconciledIds,
         newLine.cost,
-        `${supplier.shortName} ${invoice.invoiceNumber}`,
-        supplier.id,
+        newLine.id,
       ),
       nextInternalBarcode: nextBarcodeSeq,
       invoices: prev.invoices.map((iv) =>
@@ -2120,8 +2381,6 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
     const updatedLines = invoice.lines.map((line) => {
       const { items, itemIds, nextSeq, reconciledIds } = mintItemsForLine(
         line,
-        supplier,
-        invoice.invoiceNumber,
         barcodeSeq,
         new Set(allReconciledIds),
       );
@@ -2134,8 +2393,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
         reconciledInventory ?? s.inventory,
         reconciledIds,
         line.cost,
-        `${supplier.shortName} ${invoice.invoiceNumber}`,
-        supplier.id,
+        line.id,
       );
       return { ...line, itemIds };
     });
@@ -2778,6 +3036,8 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
       raiseClaim,
       sendClaim,
       markClaimCredited,
+      abandonClaim,
+      voidClaim,
       reserve,
       setCopyPrice,
       routeReturnLine,
