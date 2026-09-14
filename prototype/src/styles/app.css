@@ -2507,27 +2507,41 @@ tr.ap-row.settled:hover td { background: var(--c-surface-2); }
   letter-spacing: 0.09em; text-transform: uppercase; color: var(--c-ink-faint);
   display: flex; justify-content: space-between;
 }
+/* Laid out like .sup-row, and for its reason: a code, a name over its meta,
+   and a figure over its badge. Each cell is PLACED rather than nested in
+   wrapper spans, so the name and the figure are separate grid items with a
+   real gutter between them — nested wrappers left the name butting into the
+   number with only 8px, which read as one run-on line once a supplier had
+   both a long name and a wide badge. */
 .claims-srow {
   width: 100%; text-align: left; font: inherit; cursor: pointer;
-  display: grid; grid-template-columns: 38px minmax(0, 1fr) auto; gap: var(--sp-2);
-  align-items: center; padding: 9px var(--sp-3);
+  display: grid; grid-template-columns: 38px minmax(0, 1fr) auto; gap: 1px var(--sp-3);
+  align-items: baseline; padding: var(--sp-2) var(--sp-3);
   border: none; border-bottom: 1px solid var(--c-border); background: var(--c-surface);
 }
 .claims-srow:hover { background: var(--c-accent-soft); }
 .claims-srow.on { background: var(--c-ink); color: #fff; }
 .claims-srow.on .sub, .claims-srow.on .code { color: #bdbdb8; }
 .claims-srow.on .code { border-color: #55554f; background: transparent; }
+.claims-srow .code { grid-column: 1; grid-row: 1 / -1; align-self: center; }
 .claims-srow .nm {
-  display: block; font-weight: 700; font-size: var(--fs-sm);
+  grid-column: 2; grid-row: 1; font-weight: 700; font-size: var(--fs-sm);
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 .claims-srow .sub {
-  display: block; font-size: var(--fs-xs); color: var(--c-ink-faint);
+  grid-column: 2; grid-row: 2; font-size: var(--fs-xs); color: var(--c-ink-faint);
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
-.claims-srow .amt { display: block; font-family: var(--font-mono); font-size: var(--fs-sm); font-weight: 700; }
+/* tabular-nums so the figures line up down the column instead of wandering
+   with the digit widths, the same treatment .sup-row .n gets. */
+.claims-srow .amt {
+  grid-column: 3; grid-row: 1; text-align: right; white-space: nowrap;
+  font-family: var(--font-mono); font-size: var(--fs-sm); font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
 .claims-srow .wait {
-  display: block; font-size: 9.5px; font-weight: 800; letter-spacing: 0.05em;
+  grid-column: 3; grid-row: 2; text-align: right; white-space: nowrap;
+  font-size: 9.5px; font-weight: 800; letter-spacing: 0.05em;
   text-transform: uppercase; color: var(--c-danger);
 }
 .claims-srow.on .wait { color: #ff9b8f; }
@@ -2594,7 +2608,14 @@ tr.ap-row.settled:hover td { background: var(--c-surface-2); }
 }
 .claims-card-lines { padding: 0 var(--sp-4) var(--sp-3) var(--sp-4); }
 
-table.claims-ln { width: 100%; border-collapse: collapse; font-size: var(--fs-sm); }
+/* Below the 1180px breakpoint the act track drops under the work, and the
+   work track gets narrow enough that the fixed Invoice/Reason/Qty/Cost widths
+   leave the Record column a few pixels — enough to stack "Purple Rain" one
+   word per line. The table keeps a floor and its card scrolls sideways
+   instead, which is the treatment tables get everywhere here: a table may be
+   wider than its container, inside its own overflow-x. */
+.claims-bucket-lines, .claims-card-lines { overflow-x: auto; }
+table.claims-ln { width: 100%; min-width: 430px; border-collapse: collapse; font-size: var(--fs-sm); }
 table.claims-ln th {
   text-align: left; font-family: var(--font-narrow); font-size: 9.5px; font-weight: 800;
   letter-spacing: 0.08em; text-transform: uppercase; color: var(--c-ink-faint);
