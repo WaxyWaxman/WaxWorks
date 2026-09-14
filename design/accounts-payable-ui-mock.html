@@ -1026,7 +1026,7 @@ var ITEMS = [
   /* Bigger than everything Vinyl Revival is owed ($146.00), so applying it
      leaves $74.00 with nowhere to land — the d24/d25 case, and the only way
      to see a supplier balance go below zero. */
-  { key: 'cl-14', sup: 'vinyl', kind: 'claim', type: 'Credit', ref: '#14 · VR-CM-88', date: '2026-09-10', amount: 220.00, reason: 'Whole carton water-damaged in transit — 12 copies', mock: true },
+  { key: 'cl-14', sup: 'vinyl', kind: 'claim', type: 'Credit', ref: '#14 · VR-CM-88', date: '2026-09-10', claimed: 228.00, amount: 220.00, reason: 'Whole carton water-damaged in transit — 12 copies', shortfall: 'they deducted $8.00 return freight', mock: true },
 ];
 
 var BATCHES = [
@@ -1416,6 +1416,7 @@ function ledgerRow(it, cur) {
     (it.kind === 'remainder' ? ' remainder' : '');
   var status = it.kind === 'reversal' ? 'Reverses a remainder' :
     it.kind === 'remainder' ? 'Credit in our favour' :
+    (it.kind === 'claim' && it.claimed && it.claimed > it.amount + 0.005) ? 'Credited short' :
     it.kind === 'claim' ? 'Credited' :
     (it.kind === 'entry' && it.type === 'Claim') ? 'Awaiting credit' :
       band === 'settled' ? 'Paid' :
@@ -1435,7 +1436,11 @@ function ledgerRow(it, cur) {
       : it.kind === 'remainder' ? '<span class="sub">remainder &mdash; not a manual entry (d25)</span>'
       : it.kind === 'entry' ? '<span class="sub">entered by hand</span>'
       : (it.po ? '<span class="sub">' + esc(it.po) + '</span>' : '')) + '</td>' +
-    '<td><span class="ref">' + esc(it.ref) + '</span>' + (it.reason ? '<span class="sub">' + esc(it.reason) + '</span>' : '') + '</td>' +
+    '<td><span class="ref">' + esc(it.ref) + '</span>' + (it.reason ? '<span class="sub">' + esc(it.reason) + '</span>' : '') +
+    (it.claimed && it.claimed > it.amount + 0.005
+      ? '<span class="sub" style="color:var(--c-warn)">claimed ' + esc(money(it.claimed)) + ', credited ' + esc(money(it.amount)) +
+        (it.shortfall ? ' — ' + esc(it.shortfall) : '') + ' <span class="cite">(E-04 d20)</span></span>'
+      : '') + '</td>' +
     '<td><span class="num">' + esc(it.invDate || it.date) + '</span><span class="age">' + days(it.invDate || it.date) + ' days</span></td>' +
     '<td>' + dueCell(it) + '</td>' +
     '<td class="r"><span class="num">' + esc(money(amount, cur)) + '</span></td>' +
@@ -1600,6 +1605,11 @@ function rightSupplier() {
     var cl = itemsFor(s.id).filter(function (i) { return i.kind === 'claim'; })[0];
     h += '<div class="w-name">Claim ' + esc(cl.ref) + '</div>' +
       '<div class="w-sub">' + esc(cl.reason || '') + '</div>' +
+      (cl.claimed && cl.claimed > cl.amount + 0.005
+        ? '<div class="w-sub" style="color:var(--c-warn)">Claimed ' + esc(money(cl.claimed)) + ', credited ' + esc(money(cl.amount)) +
+          '. The <strong>credit memo</strong> is the point of truth, not the claim' + (cl.shortfall ? ' — ' + esc(cl.shortfall) : '') +
+          ' <span class="cite">(E-04 d20)</span>.</div>'
+        : '') +
       (creditPool(s.id) > owedTotal(s.id) + 0.005
         ? '<div class="w-sub">Larger than the <strong>' + esc(money(owedTotal(s.id), s.cur)) + '</strong> outstanding &mdash; applying it returns ' +
           esc(money(r2(creditPool(s.id) - owedTotal(s.id)), s.cur)) + ' as a remainder Credit <span class="cite">(d25)</span>.</div>'
