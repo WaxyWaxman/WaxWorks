@@ -311,42 +311,6 @@ export const RECORDS: RecordEntry[] = [
   },
 
   // Catalog-only (a catalog match we do not hold) — E-03 decision 5
-  {
-    id: "r-horses",
-    artist: "Patti Smith",
-    title: "Horses",
-    label: "Arista",
-    catalogNo: "AL 4066",
-    format: "LP, Album",
-    year: 1975,
-    country: "US",
-    genreId: "gn-art-punk",
-    // A-61 — the tags this Record was adopted under, the one the MAP
-    // matched marked. A snapshot, never re-resolved.
-    providerTags: [
-      { tag: "Art Punk", votes: 52, matched: true },
-    ],
-    art: "🐎",
-    manufacturerUpc: "060758004321",
-    discogsId: "377464",
-    minOnHand: 0,
-    catalogOnly: true,
-  },
-  {
-    id: "r-ok",
-    artist: "Radiohead",
-    title: "OK Computer",
-    label: "Parlophone",
-    catalogNo: "NODATA 01",
-    format: "LP, Album",
-    year: 1997,
-    country: "UK",
-    genreId: "gn-alt-rock",
-    art: "💻",
-    discogsId: "1092149",
-    minOnHand: 0,
-    catalogOnly: true,
-  },
 ];
 
 // ---- Inventory items (physical copies) ----
@@ -387,6 +351,37 @@ export const INVENTORY: InventoryItem[] = [
 //   rc-neu            one unmapped tag   -> prompts, and CAN offer a map row
 //   rc-shaggs         no tags at all     -> prompts, and CANNOT offer one
 export const RELEASE_CACHE: ReleaseCacheEntry[] = [
+  // Moved out of RECORDS: these were `catalogOnly` Records, which was one
+  // type standing in for two things. A provider match is not a Record — it
+  // has no genre, no Section and no stock, and there is nothing for those to
+  // sit on until adoption (E-03 d18, architecture A-6).
+  {
+    id: "rc-horses",
+    artist: "Patti Smith",
+    title: "Horses",
+    label: "Arista",
+    catalogNo: "AL 4066",
+    format: "LP, Album",
+    year: 1975,
+    country: "US",
+    art: "🐎",
+    manufacturerUpc: "060758004321",
+    tags: [
+      { tag: "Art Punk", votes: 52 },
+    ],
+  },
+  {
+    id: "rc-ok",
+    artist: "Radiohead",
+    title: "OK Computer",
+    label: "Parlophone",
+    catalogNo: "NODATA 01",
+    format: "LP, Album",
+    year: 1997,
+    country: "UK",
+    art: "💻",
+    // No tags: the provider carries no genre for this pressing.
+  },
   {
     id: "rc-satchidananda",
     artist: "Alice Coltrane",

@@ -36,7 +36,6 @@ export interface RecordEntry {
   discogsId?: string;
   stickyPrice?: number; // New stock only
   minOnHand: number;
-  catalogOnly?: boolean; // a Discogs match we do not hold
   // A default only — the Supplier actually used is recorded on each order
   // line (M-02), so the same title can be bought from different Suppliers
   // over time without rewriting history.

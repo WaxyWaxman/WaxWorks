@@ -773,7 +773,10 @@ function LookupModal({
       ]
         .filter(Boolean)
         .some((f) => String(f).toLowerCase().includes(query));
-    return app.records.filter((r) => !r.catalogOnly && match(r));
+    // Every Record here is one the shop adopted (d18), so there is nothing
+    // to filter out: a provider match is not a Record and never appears in
+    // this list. E-05 d34 is what brings one in, and it adopts first.
+    return app.records.filter((r) => match(r));
   }, [query, app.records, app.genres, app.sections]);
 
   return (

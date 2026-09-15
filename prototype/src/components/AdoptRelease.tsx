@@ -20,19 +20,28 @@ import { selectableGenres, sectionLabelFor } from "../lib/taxonomy";
 export function AdoptRelease({
   release,
   unmapped,
+  defaultGenreId,
   by,
   onAdopted,
   onCancel,
 }: {
   release: ReleaseCacheEntry;
   unmapped: ProviderTag[];
+  // d19 — the prompt asks only for what is BLANK. Where the map resolved a
+  // genre, it arrives pre-filled and this is a confirmation, not a question.
+  defaultGenreId?: string;
   by: string;
   onAdopted: (rec: RecordEntry) => void;
   onCancel: () => void;
 }) {
   const app = useApp();
   const offered = selectableGenres(app.genres);
-  const [genreId, setGenreId] = useState("");
+  const [genreId, setGenreId] = useState(defaultGenreId ?? "");
+  // E-03 d20 — OPTIONAL. A title brought in with no stock has nothing to
+  // price it from, so the shop's own intended shelf price is the only
+  // figure that exists. Left blank it stays blank; E-02 d12 means the
+  // first New-mode receipt overwrites whatever is set here anyway.
+  const [price, setPrice] = useState("");
   // d53 — the tag a map row would be written against: the best-voted one the
   // map does not already cover. Undefined where the release carried no tags.
   const mappableTag = unmapped[0];
@@ -46,7 +55,7 @@ export function AdoptRelease({
     // manager-only. A row is never inferred: only the tag the operator was
     // actually shown gets one.
     if (alsoMap && mappableTag) app.addMapRow(mappableTag.tag, genreId, by);
-    const rec = app.adoptRelease(release.id, genreId);
+    const rec = app.adoptRelease(release.id, genreId, price ? Number(price) : undefined);
     if (rec) onAdopted(rec);
   };
 
@@ -103,6 +112,17 @@ export function AdoptRelease({
               </option>
             ))}
           </select>
+        </label>
+
+        <label className="field">
+          <span>Selling price — optional (d20)</span>
+          <input
+            type="number"
+            step="0.01"
+            value={price}
+            placeholder="leave blank to price it at the first receipt"
+            onChange={(e) => setPrice(e.target.value)}
+          />
         </label>
 
         {mappableTag && (

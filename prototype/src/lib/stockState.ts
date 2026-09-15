@@ -136,7 +136,11 @@ export function stockFacts(record: RecordEntry, input: StockInput): StockFacts {
   let state: StockState;
   if (present > 0) state = "here";
   else if (onOrder > 0) state = "coming";
-  else if (record.catalogOnly) state = "never";
+  // E-03 d17 — *never stocked* is derived from holding no copies and
+  // having no history, NOT from being a catalog-only match. A Record adopted
+  // deliberately and never ordered is never stocked while having nothing to
+  // do with the provider; a provider match is not a Record at all (d18), so
+  // it never reaches this function.
   else if (everSold > 0 || input.inventory.some((i) => i.recordId === record.id)) state = "before";
   else state = "never";
 

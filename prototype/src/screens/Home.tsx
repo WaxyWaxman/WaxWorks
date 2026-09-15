@@ -99,7 +99,7 @@ const NOT_BUILT = [
 ];
 
 export function Home() {
-  const { sales, discogsUp, toggleDiscogs } = useApp();
+  const { sales, providerUp, toggleProvider } = useApp();
   const held = sales.filter((s) => s.state === "Held");
   return (
     <div>
@@ -132,8 +132,8 @@ export function Home() {
         </span>
         <span className="right">
           Catalog provider:{" "}
-          <button className="btn sm" onClick={toggleDiscogs}>
-            {discogsUp ? "🟢 up — click to simulate outage" : "🔴 down — click to restore"}
+          <button className="btn sm" onClick={toggleProvider}>
+            {providerUp ? "🟢 up — click to simulate outage" : "🔴 down — click to restore"}
           </button>
         </span>
       </div>

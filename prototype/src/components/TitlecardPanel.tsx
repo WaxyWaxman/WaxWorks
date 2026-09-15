@@ -79,13 +79,6 @@ export function TitlecardPanel({
 
   return (
     <div>
-      {record.catalogOnly && (
-        <div className="callout">
-          This is a <strong>catalog match we don’t hold</strong>. Acting on it — ordering,
-          stocking, editing — pulls it into the local catalog and prompts for store-specific fields
-          (supplier, Section). <em>(E-03 decision 6.)</em>
-        </div>
-      )}
 
       <div className="grid cols-2">
         <div className="stack">

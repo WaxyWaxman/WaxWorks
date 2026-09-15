@@ -2,7 +2,8 @@ import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { FindAnswer } from "../components/FindAnswer";
 import { FindSelection } from "../components/FindSelection";
-import { FindSlab, type Hit } from "../components/FindSlab";
+import { FindSlab, hitId, hitState, type Hit } from "../components/FindSlab";
+import { ReleaseSelection } from "../components/ReleaseSelection";
 import type { RecordEntry } from "../data/types";
 import { readStored, writeStored } from "../lib/tillMemory";
 import { resolveScan } from "../lib/resolve";
@@ -48,6 +49,11 @@ export function Search() {
   const [filter, setFilter] = useState<StockState | null>(null);
   // Open on arrival, cursor in the box: Find begins with a search. (The till
   // rail starts shut for the opposite reason — a sale begins with a scan.)
+  // E-03 d21 — the local half searches `term` as it is typed; the provider
+  // half searches `providerTerm`, which is only set on Enter. Two states
+  // rather than one is the whole mechanism: "where is this in the shop" never
+  // waits on, or spends, a provider request.
+  const [providerTerm, setProviderTerm] = useState("");
   const [slabOpen, setSlabOpen] = useState(() => readStored(SLAB_KEY, true));
   const [recentIds, setRecentIds] = useState<string[]>(() => readStored<string[]>(RECENT_KEY, []));
 
@@ -78,32 +84,68 @@ export function Search() {
     };
 
     const input = { inventory: app.inventory, pendingOrders: app.pendingOrders, sales: app.sales, invoices: app.invoices };
-    const rows = app.records
-      // A catalog-only match is a provider result: when the provider is down
-      // it simply isn't there to show (E-03 decision 8).
-      .filter((r) => match(r) && (app.discogsUp || !r.catalogOnly))
-      .map((r) => ({ record: r, facts: stockFacts(r, input) }));
+    // Ours: every Record here is one the shop adopted (d18).
+    const rows: Hit[] = app.records
+      .filter((r) => match(r))
+      .map((r) => ({ kind: "record" as const, record: r, facts: stockFacts(r, input) }));
 
     // E-03 decision 4 — stock we hold sorts first. The four states extend that
     // into one ranked list: here, on the way, had before, never stocked, with
     // the most stock first inside each band.
-    rows.sort(
+    // E-03 d21 — the provider half answers only on Enter, so it keys off
+    // `providerTerm` rather than what is being typed. The local half above
+    // never waits on it and never spends a request against the rate limit.
+    //
+    // d8 — with the provider unreachable there is simply nothing to add,
+    // and now the outage shows at the moment it was asked for.
+    const pq = providerTerm.trim().toLowerCase();
+    const adopted = new Set(app.records.map((r) => r.manufacturerUpc).filter(Boolean));
+    const releases: Hit[] =
+      pq && app.providerUp
+        ? app.releaseCache
+            .filter(
+              (rel) =>
+                !adopted.has(rel.manufacturerUpc) &&
+                !app.records.some((r) => r.artist === rel.artist && r.title === rel.title) &&
+                [rel.artist, rel.title, rel.label, rel.catalogNo].some((f) =>
+                  f.toLowerCase().includes(pq),
+                ),
+            )
+            .map((rel) => ({ kind: "release" as const, release: rel }))
+        : [];
+
+    const all = [...rows, ...releases];
+    // E-03 decision 4 — stock we hold sorts first, and an unadopted match
+    // bands as *never stocked* like any Record with nothing on the shelf (d17).
+    all.sort(
       (a, b) =>
-        stockRank(a.facts.state) - stockRank(b.facts.state) ||
-        b.facts.onHand - a.facts.onHand ||
-        a.record.artist.localeCompare(b.record.artist),
+        stockRank(hitState(a)) - stockRank(hitState(b)) ||
+        (b.kind === "record" ? b.facts.onHand : 0) - (a.kind === "record" ? a.facts.onHand : 0) ||
+        (a.kind === "record" ? a.record.artist : a.release.artist).localeCompare(
+          b.kind === "record" ? b.record.artist : b.release.artist,
+        ),
     );
-    return rows;
-  }, [term, app.records, app.inventory, app.pendingOrders, app.sales, app.invoices, app.discogsUp]);
+    return all;
+  }, [
+    term,
+    providerTerm,
+    app.records,
+    app.releaseCache,
+    app.inventory,
+    app.pendingOrders,
+    app.sales,
+    app.invoices,
+    app.providerUp,
+  ]);
 
   const counts = useMemo(() => {
     const c: Record<StockState, number> = { here: 0, coming: 0, before: 0, never: 0 };
-    for (const h of hits) c[h.facts.state] += 1;
+    for (const h of hits) c[hitState(h)] += 1;
     return c;
   }, [hits]);
 
   const visible = useMemo(
-    () => (filter ? hits.filter((h) => h.facts.state === filter) : hits),
+    () => (filter ? hits.filter((h) => hitState(h) === filter) : hits),
     [hits, filter],
   );
 
@@ -111,11 +153,18 @@ export function Search() {
   // — but the moment something is picked it goes in the URL and stops moving,
   // which is what lets the recent strip be clicked while a stale search term
   // is still in the box.
-  const selectedId = recordId ?? visible[0]?.record.id ?? hits[0]?.record.id;
+  const selectedId = recordId ?? (visible[0] && hitId(visible[0])) ?? (hits[0] && hitId(hits[0]));
   // Resolved against the CATALOG, not against the result list. Looking it up
   // in the results would make the selection a function of the search box —
   // type a term the pinned Record doesn't match and the middle and right
   // tracks would empty out, which is the opposite of what pinning it is for.
+  // d18 — the selection is a Record of ours, or a provider match we have not
+  // adopted. Resolved against the catalog and the cache rather than against
+  // the result list, for the reason below.
+  const selectedRelease = useMemo(
+    () => (selectedId ? app.releaseCache.find((r) => r.id === selectedId) : undefined),
+    [selectedId, app.releaseCache],
+  );
   const selected = useMemo(() => {
     const record = selectedId ? app.recordFor(selectedId) : undefined;
     if (!record) return undefined;
@@ -125,7 +174,7 @@ export function Search() {
   // The pinned selection is not among the rows currently listed — the slab has
   // no highlighted row, and the selection track says so rather than leaving
   // that looking broken.
-  const offList = Boolean(recordId) && !visible.some((h) => h.record.id === selectedId);
+  const offList = Boolean(recordId) && !visible.some((h) => hitId(h) === selectedId);
 
   const select = (id: string) => {
     nav(`/search/${id}`, { replace: true });
@@ -167,9 +216,16 @@ export function Search() {
         open={slabOpen}
         onOpenChange={setSlabOpen}
         term={term}
-        onTermChange={setTerm}
+        onTermChange={(v) => {
+          setTerm(v);
+          // d21 — provider results belong to the term they were ASKED
+          // for. Typing anything else makes them stale, so they go rather
+          // than sitting under a search that no longer describes them.
+          setProviderTerm("");
+        }}
+        onSubmit={() => setProviderTerm(term)}
         onScan={doScan}
-        providerDown={!app.discogsUp}
+        providerDown={!app.providerUp}
         hits={hits}
         counts={counts}
         filter={filter}
@@ -179,7 +235,13 @@ export function Search() {
         recent={recent}
       />
 
-      {selected ? (
+      {selectedRelease ? (
+        <ReleaseSelection
+          release={selectedRelease}
+          by={app.sessionUser?.initials ?? ""}
+          onAdopted={(rec) => select(rec.id)}
+        />
+      ) : selected ? (
         <>
           <FindSelection
             record={selected.record}
@@ -202,7 +264,7 @@ export function Search() {
           <div>
             <h2>Nothing found</h2>
             <p className="muted">
-              {app.discogsUp
+              {app.providerUp
                 ? "No Record matches that search. Try fewer words, or scan the sleeve."
                 : "The catalog provider is unreachable, so catalog-only matches are hidden. Local inventory is unaffected."}
             </p>
