@@ -22,6 +22,7 @@ import { countField, figureField, integerOnly, numericOnly } from "../lib/fields
 import { outstandingQty } from "../lib/orderLines";
 import { invoiceIsPaid, round2 } from "../lib/totals";
 import { useApp } from "../store/AppStore";
+import { useActor } from "../components/Identify";
 
 // E-02 Receiving, on the till's three-track frame (d38): the worklist slab you
 // pick from, the Invoice, and the reconcile figures. The frame is pinned to the
@@ -229,6 +230,7 @@ function OpenExistingModal({ onClose, onPick }: { onClose: () => void; onPick: (
 
 function NewInvoiceModal({ onClose, onCreated }: { onClose: () => void; onCreated: (id: string) => void }) {
   const app = useApp();
+  const withActor = useActor();
   const [supplierId, setSupplierId] = useState(app.suppliers[0]?.id ?? "");
   const [mode, setMode] = useState<IntakeMode>("New");
   const [invoiceNumber, setInvoiceNumber] = useState("");
@@ -261,20 +263,26 @@ function NewInvoiceModal({ onClose, onCreated }: { onClose: () => void; onCreate
           <button
             className="btn primary"
             disabled={!canSubmit}
-            onClick={() => {
-              const id = app.startInvoice({
-                supplierId,
-                intakeMode: mode,
-                invoiceNumber: invoiceNumber.trim(),
-                invoiceDate: invoiceDate.trim(),
-                receivedDate: receivedDate.trim(),
-                statedSubtotal: Number(statedSubtotal) || 0,
-                tax: Number(tax) || 0,
-                freight: Number(freight) || 0,
-              });
-              onCreated(id);
-              onClose();
-            }}
+            // Tier 2 (E-01 d5): silent while somebody is signed in, prompts
+            // inline when nobody is. Receiving is covered BY the session
+            // rather than prompting per action (d12) — but with no session
+            // there is nothing covering it.
+            onClick={() =>
+              withActor("New intake", () => {
+                const id = app.startInvoice({
+                  supplierId,
+                  intakeMode: mode,
+                  invoiceNumber: invoiceNumber.trim(),
+                  invoiceDate: invoiceDate.trim(),
+                  receivedDate: receivedDate.trim(),
+                  statedSubtotal: Number(statedSubtotal) || 0,
+                  tax: Number(tax) || 0,
+                  freight: Number(freight) || 0,
+                });
+                onCreated(id);
+                onClose();
+              })
+            }
           >
             Open invoice
           </button>
@@ -415,6 +423,7 @@ function InvoiceEditor({
   // path into the staging card, so picking and scanning cannot drift apart.
   const [stagedOrder, setStagedOrder] = useState<PendingOrderLine | null>(null);
   const app = useApp();
+  const withActor = useActor();
   const invoice = app.invoiceFor(invoiceId)!;
   const supplier = app.supplierFor(invoice.supplierId)!;
 
@@ -461,11 +470,13 @@ function InvoiceEditor({
     return () => window.clearTimeout(t);
   }, [toast]);
 
-  const doFinalize = () => {
+  // Tier 2 (d5). Finalizing turns a draft into what the store owes, so it is attributed even though the scanning before it was covered by the session (d12).
+  const doFinalize = () =>
+    withActor("Finalize invoice", () => {
     if (delta !== 0) app.setInvoiceTotalOverride(invoiceId, enteredTotal);
     const res = app.finalizeInvoice(invoiceId);
     if (res) setFinalizedCount(res.itemCount);
-  };
+  });;
 
   const doSaveUpdates = () => {
     if (delta !== 0) app.setInvoiceTotalOverride(invoiceId, enteredTotal);

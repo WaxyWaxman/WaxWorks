@@ -5,6 +5,7 @@ import type { ClaimLineAgainst } from "../data/types";
 import { eligibleInvoices } from "../lib/claims";
 import { invoiceForItem, provenanceLabel, supplierIdForItem } from "../lib/provenance";
 import { useApp } from "../store/AppStore";
+import { useActor } from "./Identify";
 import { Modal } from "./Modal";
 
 const CUSTOM_REASON = "Custom…";
@@ -27,6 +28,7 @@ export function ClaimModal({
   onDone: (confirmation: string) => void;
 }) {
   const app = useApp();
+  const withActor = useActor();
   // A-45 — claimable means the copy has paperwork behind it. An oversold
   // copy has none until it is reconciled, and there is nobody to claim from.
   const claimable = items.filter((i) => supplierIdForItem(i, app.invoices));
@@ -57,7 +59,9 @@ export function ClaimModal({
   const arrivedOn = item ? invoiceForItem(item, app.invoices) : undefined;
   const chosen = againstId === null ? (arrivedOn?.id ?? "") : againstId;
 
-  const commit = () => {
+  // Tier 2 (d5). claim_create stays an Employee action (A-38), so it needs an actor rather than a Manager.
+  const commit = () =>
+    withActor("Raise claim", () => {
     if (!item) return;
     const against: ClaimLineAgainst = chosen ? { kind: "invoice", invoiceId: chosen } : { kind: "none" };
     const res = app.raiseClaim(item.id, reason, qty, separator, note.trim() || undefined, against);
@@ -68,7 +72,7 @@ export function ClaimModal({
         `send it from Supplier Claims.`,
     );
     onClose();
-  };
+  });;
 
   return (
     <Modal

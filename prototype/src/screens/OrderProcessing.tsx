@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { ManagerOverride } from "../components/ManagerOverride";
+import { ManagerAuthorize } from "../components/ManagerAuthorize";
 import { Modal } from "../components/Modal";
 import { SeparatorSelect } from "../components/SeparatorSelect";
 import {
@@ -23,6 +23,7 @@ import { isOpenOrderLine, receivedAgainst } from "../lib/orderLines";
 import { readStored, writeStored } from "../lib/tillMemory";
 import { daysAgo, orderReady, separatorCounts } from "../lib/totals";
 import { useApp } from "../store/AppStore";
+import { useActor } from "../components/Identify";
 
 // Order Processing (M-02 Phase 2), laid out as the till's three tracks — the
 // same frame as Sell, Find, Receive, Customers, Suppliers and What's on Order
@@ -89,6 +90,7 @@ function voidedPo(lines: PendingOrderLine[]): boolean {
 
 export function OrderProcessing() {
   const app = useApp();
+  const withActor = useActor();
 
   const [slabOpen, setSlabOpen] = useState(() => readStored(SLAB_KEY, true));
   const [query, setQuery] = useState("");
@@ -314,7 +316,9 @@ export function OrderProcessing() {
     setStatusMsg(null);
   };
 
-  const commitProcess = () => {
+  // Tier 2 (d5). Committing money to a supplier (M-02).
+  const commitProcess = () =>
+    withActor("Process orders", () => {
     if (!scopedStream) return;
     const res = app.processOrderStream(
       scopedStream.supplier.id,
@@ -331,7 +335,7 @@ export function OrderProcessing() {
         ? `PO ${res.poNumber} emailed to ${scopedStream.supplier.email} — ${res.lineCount} line${res.lineCount === 1 ? "" : "s"}, ${res.unitCount} units.`
         : `PO ${res.poNumber} marked placed via ${scopedStream.supplier.orderVia} — a printable order document was produced; a person still has to send it.`,
     );
-  };
+  });;
 
   // Same merge-on-conflict rule as retargeting one line (d17), applied to a
   // whole stream at once.
@@ -1152,7 +1156,7 @@ function VoidPoModal({
 
   if (authorising) {
     return (
-      <ManagerOverride
+      <ManagerAuthorize
         reason={`Void ${poNumber} — ${counts.returned + counts.split} line${counts.returned + counts.split === 1 ? "" : "s"} affected`}
         onConfirm={doVoid}
         onCancel={() => setAuthorising(false)}

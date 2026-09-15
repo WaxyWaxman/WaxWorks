@@ -7,6 +7,7 @@ import type {
   RecordEntry,
   Supplier,
   TaxLine,
+  User,
 } from "./types";
 
 // ---- Tax table (M-06) ----
@@ -400,5 +401,77 @@ export const CUSTOMERS: Customer[] = [
   },
 ];
 
-export const CURRENT_USER = "E. Okafor (Employee)";
-export const MANAGER_NAME = "R. Delacroix (Manager)";
+// M-04. Initials are stored trimmed and upper-cased (d20) and are unique among
+// ACTIVE users (d13 as amended by d16) - T. Okonkwo below holds TO because the
+// departed T. Oyelaran released it, which is exactly the case d16 accepts and
+// why every audit surface shows a name rather than stopping at the letters.
+export const USERS: User[] = [
+  {
+    id: "user-eo",
+    name: "E. Okafor",
+    initials: "EO",
+    role: "Employee",
+    active: true,
+    log: [{ at: "2026-01-12T09:00:00", text: "Added as Employee by R. Delacroix" }],
+  },
+  {
+    id: "user-rd",
+    name: "R. Delacroix",
+    initials: "RD",
+    role: "Manager",
+    active: true,
+    // Seeded so the barrier is reachable in review. One letter, deliberately:
+    // E-01 d21 is explicit that this is a speed bump, not a secret.
+    password: "p",
+    log: [{ at: "2025-11-03T09:00:00", text: "Added as Manager by seed migration" }],
+  },
+  {
+    id: "user-jm",
+    name: "J. Mbeki",
+    initials: "JM",
+    role: "Manager",
+    active: true,
+    log: [
+      { at: "2026-02-02T10:15:00", text: "Added as Employee by R. Delacroix" },
+      { at: "2026-06-18T16:40:00", text: "Role: Employee -> Manager (by R. Delacroix)" },
+    ],
+  },
+  {
+    // Kept deliberately: a Manager reachable with ONE keystroke and NO
+    // password, so the manager-only space is always openable in review
+    // without hunting for a credential. Do not give this one a password.
+    id: "user-y",
+    name: "Y. Nakamura",
+    initials: "Y",
+    role: "Manager",
+    active: true,
+    log: [{ at: "2025-11-03T09:00:00", text: "Added as Manager by seed migration" }],
+  },
+  {
+    id: "user-to-old",
+    name: "T. Oyelaran",
+    initials: "TO",
+    role: "Employee",
+    active: false,
+    log: [
+      { at: "2025-09-01T09:00:00", text: "Added as Employee by R. Delacroix" },
+      { at: "2026-04-30T17:05:00", text: "Deactivated by R. Delacroix - initials TO released" },
+    ],
+  },
+  {
+    id: "user-to-new",
+    name: "T. Okonkwo",
+    initials: "TO",
+    role: "Employee",
+    active: true,
+    log: [{ at: "2026-05-11T09:30:00", text: "Added as Employee by J. Mbeki - initials TO, released by T. Oyelaran" }],
+  },
+];
+
+// Kept as strings because 68 call sites across seven files read them, and
+// E-01's session (below, in the store) is what actually decides who is acting.
+// Derived rather than typed out so they cannot drift from USERS.
+const seedActor = USERS.find((u) => u.id === "user-eo")!;
+const seedManager = USERS.find((u) => u.id === "user-rd")!;
+export const CURRENT_USER = `${seedActor.name} (${seedActor.role})`;
+export const MANAGER_NAME = `${seedManager.name} (${seedManager.role})`;

@@ -2711,3 +2711,88 @@ table.claims-ln td { padding: 5px 8px 5px 0; border-bottom: 1px solid var(--c-bo
   color: var(--c-danger); border: 1px solid var(--c-danger);
   background: var(--c-danger-soft); padding: 1px 5px;
 }
+
+/* ---- M-04 Users ------------------------------------------------------------
+   Reuses .cust-frame / .cust-main / .cust-head / .cust-scroll / .cust-acct /
+   .cust-acct-foot and the .sup-slab / .slab-* / .hit / .filter-chip / .badge
+   family, the same way Suppliers does. Only what genuinely differs is here.
+
+   What differs: a deactivated user has to stay visible and readable rather
+   than being hidden, because M-04 d5 keeps the row forever and d19 can bring
+   it back — so "off" is a weight, not a disappearance. And the right track is
+   a log rather than a figure, since A-55 makes before-and-after the point. */
+
+.slab-strip .strip-ini { font-size: 18px; line-height: 1; }
+
+.hit.user-off { opacity: 0.55; }
+.hit.user-off .ini { background: var(--c-surface-2); color: var(--c-muted); }
+
+.badge.off { background: var(--c-surface-2); color: var(--c-muted); border-color: var(--c-border-strong); }
+
+.users-empty { padding: var(--sp-3); }
+
+.loglist { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--sp-2); }
+.loglist > li { border-left: 2px solid var(--c-border-strong); padding: 0 0 0 var(--sp-2); }
+
+/* ---- E-01 identification -----------------------------------------------
+   Built for the counter: no Enter, no OK, Escape cancels the action. The
+   field is large because it is aimed at while looking at a customer, and the
+   hint under it resolves to a NAME rather than echoing the letters back —
+   initials are reusable (M-04 d16), so the letters are not the confirmation. */
+
+.idy-scrim {
+  position: fixed; inset: 0; z-index: 90;
+  background: color-mix(in srgb, var(--c-ink) 42%, transparent);
+  display: flex; align-items: flex-start; justify-content: center; padding-top: 14vh;
+}
+.idy {
+  background: var(--c-surface); border: 2px solid var(--c-ink);
+  padding: var(--sp-4); width: min(360px, 92vw);
+  display: flex; flex-direction: column; gap: var(--sp-2);
+}
+.idy-reason { font-weight: 700; }
+.idy-input {
+  font-size: 34px; font-weight: 700; letter-spacing: 0.16em; text-align: center;
+  text-transform: uppercase; padding: var(--sp-2); width: 100%;
+  border: 2px solid var(--c-border-strong); background: var(--c-surface);
+}
+.idy-input:focus { outline: none; border-color: var(--c-ink); }
+.idy-input.bad { border-color: var(--c-danger); color: var(--c-danger); }
+.idy-hint { min-height: 1.4em; font-size: var(--fs-sm); color: var(--c-muted); text-align: center; }
+.idy-hint.ok { color: var(--c-ok); font-weight: 700; }
+.idy-foot {
+  display: flex; justify-content: space-between; gap: var(--sp-2);
+  font-size: var(--fs-xs); color: var(--c-muted); border-top: 1px solid var(--c-border); padding-top: var(--sp-2);
+}
+.idy-esc { white-space: nowrap; }
+.idy-none { color: var(--c-muted); }
+.sess-name { font-weight: 700; }
+.sess-out { margin-left: var(--sp-2); }
+
+/* The session chip's menu. The name is the control — Log out matters but is
+   not a per-minute action, so it does not hold width on the till's busiest
+   strip (E-01 d13/d10 are why it has to exist at all: the lapse has no
+   maximum and an Open Sale suppresses it). */
+.sess-wrap { position: relative; }
+.sess-name {
+  font-weight: 700; background: none; border: none; padding: 0; cursor: pointer;
+  color: inherit; font-size: inherit; font-family: inherit;
+}
+.sess-name:hover, .sess-name.on { text-decoration: underline; }
+.sess-menu {
+  position: absolute; top: calc(100% + 6px); right: 0; z-index: 60;
+  background: var(--c-surface); border: 2px solid var(--c-ink);
+  min-width: 220px; padding: var(--sp-2); display: flex; flex-direction: column; gap: var(--sp-2);
+}
+.sess-item {
+  text-align: left; background: none; border: 1px solid var(--c-border-strong);
+  padding: var(--sp-2); cursor: pointer; font: inherit; font-weight: 700;
+}
+.sess-item:hover { background: var(--c-surface-2); border-color: var(--c-ink); }
+.sess-note { font-size: var(--fs-xs); color: var(--c-muted); }
+.idy-who { text-align: center; font-weight: 700; }
+.idy-hint.bad { color: var(--c-danger); font-weight: 700; }
+.idy-sub {
+  font-size: var(--fs-sm); color: var(--c-muted);
+  border-top: 1px solid var(--c-border); padding-top: var(--sp-2);
+}

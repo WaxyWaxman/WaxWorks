@@ -20,6 +20,7 @@ import type { Supplier } from "../data/types";
 import { readStored, writeStored } from "../lib/tillMemory";
 import { apState, supplierApBalance, supplierFacts } from "../lib/supplierFacts";
 import { useApp } from "../store/AppStore";
+import { useActor } from "../components/Identify";
 
 // M-01 Suppliers, laid out as the till's three tracks (d12): the slab you look
 // in, the card you opened, and the ledger. The frame is pinned to the viewport
@@ -36,6 +37,7 @@ const RECENT_MAX = 9;
 
 export function Suppliers() {
   const app = useApp();
+  const withActor = useActor();
   const nav = useNavigate();
   const { supplierId } = useParams();
 
@@ -171,17 +173,20 @@ export function Suppliers() {
   const startNew = (presetName?: string) =>
     setDraft({ ...blankSupplier, name: presetName ?? "", billing: {}, shipping: {} });
 
-  const addDraft = () => {
-    if (!draft) return;
-    const id = app.addSupplier({
-      ...draft,
-      name: draft.name.trim(),
-      shortName: draft.shortName.trim().toUpperCase(),
+  // Tier 2 (E-01 d5) — see Customers. A Supplier's log records who added it
+  // (M-01 d4), so the actor has to be known before the row is written.
+  const addDraft = () =>
+    withActor("New supplier", () => {
+      if (!draft) return;
+      const id = app.addSupplier({
+        ...draft,
+        name: draft.name.trim(),
+        shortName: draft.shortName.trim().toUpperCase(),
+      });
+      setDraft(null);
+      setQuery("");
+      select(id);
     });
-    setDraft(null);
-    setQuery("");
-    select(id);
-  };
 
   const canAdd =
     Boolean(draft?.name.trim()) &&
@@ -276,11 +281,12 @@ export function Suppliers() {
               </button>
               <button
                 className="btn danger"
-                onClick={() => {
+                onClick={() =>
+                  withActor("Delete supplier", () => {
                   app.deleteSupplier(selected.id);
                   setDeleting(false);
                   nav("/suppliers", { replace: true });
-                }}
+                })}
               >
                 Delete
               </button>

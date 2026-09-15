@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useApp } from "../store/AppStore";
 import { Modal } from "./Modal";
-import { ManagerOverride } from "./ManagerOverride";
+import { ManagerAuthorize } from "./ManagerAuthorize";
 import type { ReviewFlagKind } from "../data/types";
 
 const KIND_LABEL: Record<ReviewFlagKind, string> = {
@@ -57,7 +57,7 @@ export function ReviewQueueBadge() {
         </Modal>
       )}
       {acking && (
-        <ManagerOverride
+        <ManagerAuthorize
           reason="Acknowledge this review flag."
           onCancel={() => setAcking(null)}
           onConfirm={(by) => {

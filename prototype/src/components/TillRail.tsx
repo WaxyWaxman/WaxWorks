@@ -4,6 +4,7 @@ import type { Sale } from "../data/types";
 import { money } from "../lib/money";
 import { saleTotals } from "../lib/totals";
 import { useApp } from "../store/AppStore";
+import { useIdentify } from "./Identify";
 import { HoldsModal, OtherFunctionsModal, SearchModal } from "./TillFunctions";
 import { ChevronLeft, ChevronRight } from "./Chevrons";
 
@@ -67,6 +68,7 @@ const Magnifier = () => (
 
 export function TillRail({ activeSaleId }: { activeSaleId?: string }) {
   const app = useApp();
+  const identify = useIdentify();
   const nav = useNavigate();
   const [open, setOpen] = useState(loadRailOpen);
   // The rail owns its own functions rather than asking the screen to host
@@ -109,8 +111,31 @@ export function TillRail({ activeSaleId }: { activeSaleId?: string }) {
     .slice(0, 6);
   const inFlight = openSales.length + openReturns.length;
 
-  const newSale = () => nav(`/sell/${app.newSale()}`);
-  const newReturn = () => nav(`/return/${app.newSale({ isReturn: true })}`);
+  // E-01 d12 and d15 — opening a Sale prompts for initials EVERY time, session
+  // or not, because at the counter the person ringing changes constantly and a
+  // Sale's attribution is the thing worth being sure of.
+  //
+  // A Return is NOT a second case (d15): a Return IS a Sale with negative
+  // lines (E-06 steps 1-2), so it gets this same prompt rather than one of its
+  // own. Listing it separately described a prompt nothing ever reached.
+  const newSale = () =>
+    identify.request({
+      reason: "New sale",
+      always: true,
+      onOk: (u) => {
+        app.identify(u.id);
+        nav(`/sell/${app.newSale()}`);
+      },
+    });
+  const newReturn = () =>
+    identify.request({
+      reason: "New return",
+      always: true,
+      onOk: (u) => {
+        app.identify(u.id);
+        nav(`/return/${app.newSale({ isReturn: true })}`);
+      },
+    });
 
   // A sale number is only findable if you already know it; the name is what
   // staff actually remember. Walk-ins say so rather than leaving a gap.

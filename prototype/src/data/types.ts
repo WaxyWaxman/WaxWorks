@@ -654,3 +654,38 @@ export interface ReviewFlag {
   acknowledgedBy?: string;
   acknowledgedAt?: string;
 }
+
+// ---------------------------------------------------------------------------
+// Users (M-04) and the staff session (E-01)
+// ---------------------------------------------------------------------------
+
+// Two roles, Manager a strict superset of Employee (M-04 d1). There is no tier
+// above Manager: M-04 d11 puts the Store's assigned identifiers outside the
+// role model, and d14 protects the last Manager with a floor rule rather than
+// with a role that outranks them.
+export type UserRole = "Employee" | "Manager";
+
+export interface User {
+  id: string;
+  name: string;
+  // Stored NORMALISED - trimmed and upper-cased on write (M-04 d20), so the
+  // uniqueness check is a plain comparison and no shift key can mint a
+  // near-duplicate at the counter.
+  initials: string;
+  role: UserRole;
+  // Deactivated, never deleted (M-04 d5): every Sale, adjustment and
+  // authorisation stays attributed to whoever performed it, so the row has to
+  // outlive their leaving. Uniqueness of initials is among ACTIVE users only
+  // (d13 as amended by d16) - a departed user's initials are released.
+  active: boolean;
+  // E-01 d21. OPTIONAL, for anyone, up to 8 characters. It is a barrier and
+  // not authentication — a shop may well use a single letter — so nothing in
+  // the model treats it as proof of identity. Absent means no second step.
+  //
+  // Plain text here because this is an in-memory mock with no server; the
+  // real thing hashes it and never logs the value (see the decision).
+  password?: string;
+  // Before-and-after, per A-55: without it, who promoted whom exists nowhere
+  // after the second change, and this is the privilege boundary.
+  log: { at: string; text: string }[];
+}

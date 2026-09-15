@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { ClaimModal } from "../components/ClaimModal";
 import { PriceEditModal, PrintLabelModal } from "../components/CopyModals";
-import { ManagerOverride } from "../components/ManagerOverride";
+import { ManagerAuthorize } from "../components/ManagerAuthorize";
 import { OrderModal } from "../components/OrderModal";
 import { ReserveModal } from "../components/ReserveModal";
 import type { InventoryItem } from "../data/types";
@@ -360,7 +360,7 @@ export function TitlecardPanel({
         <OrderModal record={record} onClose={() => setOrdering(false)} onDone={onStatus} />
       )}
       {adjusting && (
-        <ManagerOverride
+        <ManagerAuthorize
           reason={`Force ${outstandingOversold.length} outstanding oversold cop${outstandingOversold.length === 1 ? "y" : "ies"} of ${record.artist} — ${record.title} back to zero. Use this only when there's no incoming shipment to explain the deficit — receiving matching stock reconciles it automatically instead.`}
           onCancel={() => setAdjusting(false)}
           onConfirm={(by) => {

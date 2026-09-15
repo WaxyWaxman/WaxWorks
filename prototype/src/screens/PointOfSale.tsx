@@ -4,17 +4,18 @@ import { BarcodeInput } from "../components/BarcodeInput";
 import { Modal } from "../components/Modal";
 import { TillRail } from "../components/TillRail";
 import { VoidSaleModal } from "../components/VoidSaleModal";
-import { CURRENT_USER } from "../data/seed";
 import type { InventoryItem, RecordEntry, Sale, SaleLine, TenderType } from "../data/types";
 import { money } from "../lib/money";
 import { resolveScan } from "../lib/resolve";
 import { availableOnHand, balanceDue, saleTotals } from "../lib/totals";
 import { useApp } from "../store/AppStore";
+import { useIdentify, useActor } from "../components/Identify";
 
 const TENDERS: TenderType[] = ["Cash", "Credit Card", "Account Balance", "Gift Card", "Pay-out", "Used Credit"];
 
 export function PointOfSale() {
   const app = useApp();
+  const identify = useIdentify();
   const nav = useNavigate();
   const { saleId } = useParams();
 
@@ -57,7 +58,19 @@ export function PointOfSale() {
           <div className="stack">
             <div className="lab">No sale open</div>
             <p className="muted">Start one here, or pick something up from the rail.</p>
-            <button className="btn primary" onClick={() => nav(`/sell/${app.newSale()}`)}>
+            <button
+              className="btn primary"
+              onClick={() =>
+                identify.request({
+                  reason: "New sale",
+                  always: true,
+                  onOk: (u) => {
+                    app.identify(u.id);
+                    nav(`/sell/${app.newSale()}`);
+                  },
+                })
+              }
+            >
               + New sale
             </button>
           </div>
@@ -69,6 +82,7 @@ export function PointOfSale() {
 
 function SaleEditor() {
   const app = useApp();
+  const withActor = useActor();
   const nav = useNavigate();
   const sale = app.activeSale!;
   const totals = saleTotals(sale, app.taxLines);
@@ -177,7 +191,12 @@ function SaleEditor() {
           {/* Every Open Sale is locked to whoever started it, so saying so on
               your own sale is noise — and in a fixed header it reads as an
               error. The lock only matters when somebody else holds it. */}
-          {sale.lockedBy && sale.lockedBy !== CURRENT_USER && (
+          {/* E-05 d23 — compare against the SESSION actor, which is what the
+              store stamps on lockedBy. It used to compare against a constant,
+              which matched only because the store used the same constant; once
+              the session became real the two diverged and every Sale opened by
+              anyone but the seeded Employee read as locked by someone else. */}
+          {sale.lockedBy && sale.lockedBy !== app.actorName && (
             <>
               <span className="badge warn">locked · {sale.lockedBy}</span>
               <button className="btn ghost sm" onClick={() => app.forceUnlockSale(sale.id)}>
@@ -599,7 +618,9 @@ function SaleEditor() {
                   key={method}
                   className="btn"
                   onClick={() => {
-                    app.addLog(sale.id, `Customer contacted by ${method.toLowerCase()} — ${CURRENT_USER}`);
+                    withActor("Log customer contact", (actor) =>
+                      app.addLog(sale.id, `Customer contacted by ${method.toLowerCase()} — ${actor}`),
+                    );
                     setLoggingContact(false);
                   }}
                 >

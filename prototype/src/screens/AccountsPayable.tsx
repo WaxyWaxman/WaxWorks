@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { PayableSlab, type PayableChip, type PayableSort } from "../components/PayableSlab";
 import { SettleTrack } from "../components/SettleTrack";
-import { CURRENT_USER } from "../data/seed";
 import type { PayableEntryType, PaymentMethod } from "../data/types";
 import {
   autoPlacement,
@@ -16,12 +15,16 @@ import { money } from "../lib/money";
 import { readStored, writeStored } from "../lib/tillMemory";
 import { round2, supplierBalance } from "../lib/totals";
 import { useApp } from "../store/AppStore";
+import { useNavigate } from "react-router-dom";
+import { ManagerAuthorize } from "../components/ManagerAuthorize";
 
 // Accounts payable (M-05), laid out as the till's three tracks — the same
 // frame as Sell, Find, Receive, Customers, Suppliers and On Order (E-05 d29
 // by way of E-02 d38, E-07 d17, M-01 d17, M-02 d31). Manager-only in its
-// entirety (d2), labelled by convention like every other manager surface;
-// nothing here is gated behind real auth, because E-01 is not built.
+// entirety (d2), and now actually gated: a Manager authorises in place on
+// arrival (M-04 d24, A-28a) and their name is what every artifact here
+// carries. It used to be labelled manager-only by convention and enforced
+// nowhere, on the grounds that E-01 was not built — which stopped being true.
 //
 // The middle track is a real TABLE rather than On Order's row grid: six money
 // columns that have to line up is what this screen is for, and forcing .lrow
@@ -45,6 +48,12 @@ const SLAB_KEY = "waxworks.payable.slab";
 
 export function AccountsPayable() {
   const app = useApp();
+  // M-05 d2 — manager-only in its entirety, so the screen is authorised once
+  // on arrival rather than per action. Unlike the back office, the actor and
+  // the authoriser here are the SAME person: there is no Employee acting
+  // underneath, so this replaces the Tier 2 prompt rather than adding to it.
+  const nav = useNavigate();
+  const [authorisedBy, setAuthorisedBy] = useState<string | null>(null);
   const [slabOpen, setSlabOpen] = useState(() => readStored(SLAB_KEY, true));
   const [scope, setScope] = useState<string>("");
   const [query, setQuery] = useState("");
@@ -139,6 +148,7 @@ export function AccountsPayable() {
 
   const giftTotal = round2(app.giftCards.reduce((n, g) => n + g.balance, 0));
 
+  // Tier 2 (d5). Manager-only under A-28a, which records BOTH names — this is the acting half.
   const doSettle = () => {
     if (!supplier) return;
     const auto = autoPlacement(plan);
@@ -157,7 +167,7 @@ export function AccountsPayable() {
         credits: plan.credits.map((c) => ({ id: c.creditId!, amount: -c.balance, label: c.reference })),
         placeholderIds: plan.holds.map((h) => h.id),
       },
-      CURRENT_USER,
+      authorisedBy ?? "",
     );
     const closed = plan.debits.filter((d) => d.balance <= round2(creditOn(form, d.key, auto) + moneyOn(form, d.key, d.balance, auto)) + 0.005).length;
     setMsg(
@@ -174,7 +184,7 @@ export function AccountsPayable() {
     const before = supplier ? balanceOf(supplier.id) : 0;
     app.clearPayableEntries(
       selectedRows.filter((r) => r.kind === "entry").map((r) => r.id),
-      CURRENT_USER,
+      authorisedBy ?? "",
     );
     const after = supplier ? balanceOf(supplier.id) : 0;
     setMsg(
@@ -188,7 +198,7 @@ export function AccountsPayable() {
   const doVoid = (batchId: string) => {
     if (!supplier) return;
     const before = balanceOf(supplier.id);
-    app.voidPaymentBatch(batchId, CURRENT_USER);
+    app.voidPaymentBatch(batchId, authorisedBy ?? "");
     setMsg(
       `Settlement voided. Balance was ${money(before)} — nothing was deleted; where it emitted a remainder, a reversing Adjustment was appended beside it (d30).`,
     );
@@ -202,6 +212,16 @@ export function AccountsPayable() {
     credit: {} as Record<string, string>,
     money: {} as Record<string, string>,
   });
+
+  if (!authorisedBy)
+    return (
+      <ManagerAuthorize
+        title="Accounts payable — manager only"
+        reason="Accounts payable is manager-only in its entirety (M-05 d2, architecture A-28a). A Manager authorises in place; their name is recorded on every payment, clearing and ledger entry made here."
+        onConfirm={(by) => setAuthorisedBy(by)}
+        onCancel={() => nav(-1)}
+      />
+    );
 
   return (
     <div className={"ap-frame" + (slabOpen ? "" : " slab-shut")}>

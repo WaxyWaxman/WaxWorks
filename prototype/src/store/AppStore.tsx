@@ -8,6 +8,7 @@ import {
 import { computeDayBreakdown, type DayBreakdown } from "../lib/dayBreakdown";
 import { invoiceForItem, supplierIdForItem } from "../lib/provenance";
 import { money } from "../lib/money";
+import * as usersLib from "../lib/users";
 import {
   customerBalanceDelta,
   invoiceIsPaid,
@@ -28,6 +29,7 @@ import {
   RECORDS,
   SUPPLIERS,
   TAX_LINES,
+  USERS,
 } from "../data/seed";
 import type {
   ClaimLineAgainst,
@@ -56,6 +58,8 @@ import type {
   SaleLine,
   Section,
   Supplier,
+  User,
+  UserRole,
   ClaimVoid,
   SupplierClaim,
   TaxLine,
@@ -131,6 +135,14 @@ interface AppState {
   records: RecordEntry[];
   inventory: InventoryItem[];
   customers: Customer[];
+  users: User[];
+  // E-01. The session is CLIENT state and can be nothing else (A-3, A-50):
+  // what the database trusts is the terminal's enrollment, initials are
+  // attribution on top. Modelled here for the same reason.
+  sessionUserId: string | null;
+  sessionLastActivity: number;
+  // Store setting, default 300s (M-06 d45, A-50), and NO maximum (E-01 d13).
+  sessionLapseSeconds: number;
   suppliers: Supplier[];
   giftCards: GiftCard[];
   taxLines: TaxLine[];
@@ -165,6 +177,10 @@ const seed: AppState = {
   records: RECORDS,
   inventory: INVENTORY,
   customers: CUSTOMERS,
+  users: USERS,
+  sessionUserId: null,
+  sessionLastActivity: Date.now(),
+  sessionLapseSeconds: 300,
   suppliers: SUPPLIERS,
   giftCards: GIFT_CARDS,
   taxLines: TAX_LINES,
@@ -640,6 +656,30 @@ const seed: AppState = {
 
 interface AppContextValue extends AppState {
   activeSale: Sale | null;
+  sessionUser: User | null;
+  actorName: string;
+  sessionLapseSeconds: number;
+  setSessionLapseSeconds: (n: number) => void;
+  identify: (userId: string) => void;
+  endSession: () => void;
+  touchSession: () => void;
+  sessionLastActivity: number;
+  userFor: (id?: string) => User | undefined;
+  activeManagerCount: () => number;
+  // Every one of these is manager-only (A-55) and every one returns a reason
+  // rather than throwing, because M-04 d13 and A-54 both require the refusal
+  // to say WHICH thing blocked it - a refusal that does not name its cause
+  // reads as the system simply saying no.
+  addUser: (input: { name: string; initials: string; role: UserRole }, by: string) => UserWriteResult;
+  changeUserRole: (userId: string, role: UserRole, by: string) => UserWriteResult;
+  deactivateUser: (userId: string, by: string) => UserWriteResult;
+  reactivateUser: (userId: string, initials: string, by: string) => UserWriteResult;
+  correctUser: (userId: string, patch: { name?: string; initials?: string }, by: string) => UserWriteResult;
+  setUserPassword: (userId: string, password: string, by: string) => UserWriteResult;
+  // E-01 d21 — a password holder's session is capped at the 5-minute default
+  // however long the shop set the lapse to.
+  effectiveLapseSeconds: number;
+
   recordFor: (id?: string) => RecordEntry | undefined;
   customerFor: (id?: string) => Customer | undefined;
   itemFor: (id?: string) => InventoryItem | undefined;
@@ -910,10 +950,47 @@ interface AppContextValue extends AppState {
   ) => { poNumber: string; lineCount: number; unitCount: number; emailed: boolean } | null;
 }
 
+// Every user write answers with a reason rather than a boolean: M-04 d13 has
+// the Manager resolve a clash on the spot, and A-54's rule that a refusal must
+// name what blocked it applies here too.
+export type UserWriteResult = { ok: true; id: string } | { ok: false; reason: string };
+
 const Ctx = createContext<AppContextValue | null>(null);
 
 export function AppStoreProvider({ children }: { children: ReactNode }) {
   const [s, setS] = useState<AppState>(seed);
+
+  // -------------------------------------------------------------------------
+  // The staff session (E-01)
+  //
+  // An actor and a timer, in the browser. A-3 and A-50 are explicit that it
+  // can be nothing else — the lapse "is a client-side timer and can be
+  // nothing else" — so the prototype models it in exactly the place the real
+  // thing will live, rather than pretending there is a session row.
+  // -------------------------------------------------------------------------
+
+  const sessionUser = s.users.find((u) => u.id === s.sessionUserId && u.active) ?? null;
+
+  // What every attributed write stamps. With no session open the actions that
+  // reach the store have all prompted for initials first (d5, d12, d15), so
+  // this is the fallback for the ones that have not been wired through the
+  // prompt yet rather than a state anyone should reach.
+  const effectiveLapseSeconds = usersLib.effectiveLapseSeconds(sessionUser, s.sessionLapseSeconds);
+
+  const actorName: string = sessionUser ? `${sessionUser.name} (${sessionUser.role})` : CURRENT_USER;
+
+  const identify: AppContextValue["identify"] = (userId) =>
+    setS((prev) => ({ ...prev, sessionUserId: userId, sessionLastActivity: Date.now() }));
+
+  const endSession: AppContextValue["endSession"] = () =>
+    setS((prev) => ({ ...prev, sessionUserId: null }));
+
+  const touchSession: AppContextValue["touchSession"] = () =>
+    setS((prev) => (prev.sessionUserId ? { ...prev, sessionLastActivity: Date.now() } : prev));
+
+  const setSessionLapseSeconds: AppContextValue["setSessionLapseSeconds"] = (n) =>
+    setS((prev) => ({ ...prev, sessionLapseSeconds: Math.max(30, n) }));
+
 
   const patchSale = (saleId: string, fn: (sale: Sale) => Sale) =>
     setS((prev) => ({
@@ -928,7 +1005,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
       id: uid("flag"),
       kind,
       summary,
-      recordedBy: CURRENT_USER,
+      recordedBy: actorName,
       at: now(),
       acknowledged: false,
     };
@@ -966,10 +1043,10 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
       id,
       state: "Open",
       customerId: undefined,
-      createdBy: CURRENT_USER,
+      createdBy: actorName,
       createdAt: now(),
       isReturn: opts?.isReturn,
-      lockedBy: CURRENT_USER,
+      lockedBy: actorName,
       lines: [],
       tenders: [],
       log: [{ at: now(), text: opts?.isReturn ? "Return started" : "Sale started" }],
@@ -1004,9 +1081,9 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
       state: "Open",
       customerId: sale.customerId,
       po: sale.po,
-      createdBy: CURRENT_USER,
+      createdBy: actorName,
       createdAt: now(),
-      lockedBy: CURRENT_USER,
+      lockedBy: actorName,
       replacesSaleId: sale.id,
       lines: sale.lines.map((l) => ({ ...l, id: uid("line") })),
       tenders: [],
@@ -1030,9 +1107,9 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
       state: "Open",
       customerId: sale.customerId,
       po: sale.po,
-      createdBy: CURRENT_USER,
+      createdBy: actorName,
       createdAt: now(),
-      lockedBy: CURRENT_USER,
+      lockedBy: actorName,
       lines: sale.lines.map((l) => ({ ...l, id: uid("line"), inventoryItemId: undefined })),
       tenders: [],
       log: [{ at: now(), text: `Copied from Sale ${sale.saleNumber ?? sale.holdRef ?? "—"} — lines are a pricing template, re-scan each copy` }],
@@ -1069,6 +1146,53 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
 
   // E-07 — Search/New/Delete. Every other field is edited in place on the
   // open card, not through a separate Edit flow.
+  // -------------------------------------------------------------------------
+  // Users (M-04, architecture A-55)
+  //
+  // Thin wrapper only. The rules live in lib/users.ts as pure functions,
+  // because A-55 puts both invariants in the write path and a rule that can
+  // only be exercised by clicking a button is a rule nothing can test.
+  // -------------------------------------------------------------------------
+
+  const userFor: AppContextValue["userFor"] = (id) => s.users.find((u) => u.id === id);
+
+  const activeManagerCount: AppContextValue["activeManagerCount"] = () =>
+    usersLib.activeManagerCount(s.users);
+
+  // Each of these applies the pure reducer and commits only on success, so a
+  // refusal leaves state untouched and hands the caller the reason to show.
+  const commit = (r: usersLib.UserWrite): UserWriteResult => {
+    if (!r.ok) return r;
+    setS((prev) => ({ ...prev, users: r.users }));
+    return { ok: true, id: r.id };
+  };
+
+  const addUser: AppContextValue["addUser"] = (input, by) =>
+    commit(usersLib.addUser(s.users, input, by, { id: uid("user") }));
+
+  const changeUserRole: AppContextValue["changeUserRole"] = (userId, role, by) =>
+    commit(usersLib.changeUserRole(s.users, userId, role, by));
+
+  // M-04 d15 as corrected by d18: a deactivation stops new work under those
+  // initials AT ONCE. There is no server-side session to end, so what
+  // "immediately" means here is that the actor no longer resolves — the same
+  // shape as actor_resolve refusing (A-55). An Open Sale is untouched and
+  // stays finishable; only the session goes.
+  const deactivateUser: AppContextValue["deactivateUser"] = (userId, by) => {
+    const r = commit(usersLib.deactivateUser(s.users, userId, by));
+    if (r.ok && s.sessionUserId === userId) endSession();
+    return r;
+  };
+
+  const reactivateUser: AppContextValue["reactivateUser"] = (userId, initials, by) =>
+    commit(usersLib.reactivateUser(s.users, userId, initials, by));
+
+  const correctUser: AppContextValue["correctUser"] = (userId, patch, by) =>
+    commit(usersLib.correctUser(s.users, userId, patch, by));
+
+  const setUserPassword: AppContextValue["setUserPassword"] = (userId, password, by) =>
+    commit(usersLib.setUserPassword(s.users, userId, password, by));
+
   const addCustomer: AppContextValue["addCustomer"] = (input) => {
     const id = uid("cust");
     const customer: Customer = { id, primaryId: s.nextCustomerPrimaryId, ...input, balance: 0 };
@@ -1426,13 +1550,13 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
         x.id === saleId
           ? {
               ...x,
-              lockedBy: CURRENT_USER,
-              log: [...x.log, { at: now(), text: `Lock forced from ${was} to ${CURRENT_USER}` }],
+              lockedBy: actorName,
+              log: [...x.log, { at: now(), text: `Lock forced from ${was} to ${actorName}` }],
             }
           : x,
       ),
     }));
-    raiseReviewFlag("sale-lock-broken", `Sale lock broken — ${was} to ${CURRENT_USER} on an open Sale.`);
+    raiseReviewFlag("sale-lock-broken", `Sale lock broken — ${was} to ${actorName} on an open Sale.`);
   };
 
   // Void — Open or Current only (E-05 decision 5): a Held Sale uses Cancel
@@ -1688,7 +1812,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
       // until it has a sent date (d25); there is no Draft status.
       status: "Pending",
       lines: [line],
-      createdBy: CURRENT_USER,
+      createdBy: actorName,
       createdAt: now(),
       log: [{ at: now(), text: `Claim opened — ${reason} (qty ${qty})` }],
     };
@@ -1890,7 +2014,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
       holdRef: ref,
       po: poKey || undefined,
       customerId,
-      createdBy: CURRENT_USER,
+      createdBy: actorName,
       createdAt: now(),
       lines: [line],
       tenders: [],
@@ -1996,7 +2120,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
       misc: 0,
       status: "Draft",
       lines: [],
-      createdBy: CURRENT_USER,
+      createdBy: actorName,
       createdAt: now(),
       log: [
         {
@@ -2043,7 +2167,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
   // M-01 — nothing here is gated. Any Employee can New/Edit/Copy a Supplier.
   const addSupplier: AppContextValue["addSupplier"] = (input) => {
     const id = uid("sup");
-    const supplier: Supplier = { id, ...input, log: [{ at: now(), text: `Added by ${CURRENT_USER}` }] };
+    const supplier: Supplier = { id, ...input, log: [{ at: now(), text: `Added by ${actorName}` }] };
     setS((prev) => ({ ...prev, suppliers: [...prev.suppliers, supplier] }));
     return id;
   };
@@ -2053,7 +2177,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
       ...prev,
       suppliers: prev.suppliers.map((s) =>
         s.id === supplierId
-          ? { ...s, ...patch, log: [...s.log, { at: now(), text: `Edited by ${CURRENT_USER}` }] }
+          ? { ...s, ...patch, log: [...s.log, { at: now(), text: `Edited by ${actorName}` }] }
           : s,
       ),
     }));
@@ -2078,7 +2202,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
       id,
       name: `${src.name} (copy)`,
       defaultForSecondHand: false,
-      log: [{ at: now(), text: `Copied from ${src.name} by ${CURRENT_USER}` }],
+      log: [{ at: now(), text: `Copied from ${src.name} by ${actorName}` }],
     };
     setS((prev) => ({ ...prev, suppliers: [...prev.suppliers, copy] }));
     return id;
@@ -2104,7 +2228,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
             ? {
                 ...x,
                 defaultForSecondHand: x.defaultForSecondHand || merge.defaultForSecondHand,
-                log: [...x.log, ...merge.log, { at: now(), text: `Merged with ${merge.name} by ${CURRENT_USER}` }],
+                log: [...x.log, ...merge.log, { at: now(), text: `Merged with ${merge.name} by ${actorName}` }],
               }
             : x,
         ),
@@ -2133,9 +2257,9 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
       ...prev,
       suppliers: prev.suppliers.map((s) =>
         s.id === supplierId
-          ? { ...s, defaultForSecondHand: true, log: [...s.log, { at: now(), text: `Marked default for second-hand by ${CURRENT_USER}` }] }
+          ? { ...s, defaultForSecondHand: true, log: [...s.log, { at: now(), text: `Marked default for second-hand by ${actorName}` }] }
           : s.defaultForSecondHand
-            ? { ...s, defaultForSecondHand: false, log: [...s.log, { at: now(), text: `Unmarked default for second-hand by ${CURRENT_USER}` }] }
+            ? { ...s, defaultForSecondHand: false, log: [...s.log, { at: now(), text: `Unmarked default for second-hand by ${actorName}` }] }
             : s,
       ),
     }));
@@ -2209,7 +2333,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
                 // without. Before this it had none, and said so.
                 invoiceLineId,
                 oversoldReconciledAt: now(),
-                oversoldReconciledBy: CURRENT_USER,
+                oversoldReconciledBy: actorName,
                 oversoldReconciledVia: "received" as const,
               }
             : i,
@@ -2677,7 +2801,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
       freight: input.freight,
       misc: input.misc,
       adjustmentDirection: type === "Adjustment" ? input.adjustmentDirection ?? "increase" : undefined,
-      createdBy: CURRENT_USER,
+      createdBy: actorName,
       createdAt: now(),
       log: [{ at: now(), text: `${type} entered — ${input.reference || "no reference given"}` }],
     };
@@ -2738,7 +2862,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
     setS((prev) => ({
       ...prev,
       pendingOrders: prev.pendingOrders.map((o) =>
-        o.id === id ? { ...o, log: [...(o.log ?? []), { at: now(), text: `${text} by ${CURRENT_USER}` }] } : o,
+        o.id === id ? { ...o, log: [...(o.log ?? []), { at: now(), text: `${text} by ${actorName}` }] } : o,
       ),
     }));
     return order;
@@ -2761,7 +2885,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
     if (onPo.length === 0) return { returned: 0, split: 0, untouched: 0 };
 
     const stamp = now();
-    const who = `${CURRENT_USER}${by ? ` (manager ${by})` : ""}`;
+    const who = `${actorName}${by ? ` (manager ${by})` : ""}`;
     let returned = 0;
     let split = 0;
     let untouched = 0;
@@ -2810,7 +2934,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
         status: undefined,
         expectedDate: undefined,
         createdAt: stamp,
-        createdBy: CURRENT_USER,
+        createdBy: actorName,
         log: [
           {
             at: stamp,
@@ -2855,7 +2979,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
           // The date belongs to Shipped; clearing the status clears it too,
           // rather than leaving a due date on a cancelled line.
           expectedDate: status === "Shipped" ? expectedDate : undefined,
-          log: [...(o.log ?? []), { at: now(), text: `${from} → ${to}${when} by ${CURRENT_USER}` }],
+          log: [...(o.log ?? []), { at: now(), text: `${from} → ${to}${when} by ${actorName}` }],
         };
       }),
     }));
@@ -2872,7 +2996,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
       sellPrice: input.sellPrice,
       customerId: input.customerId,
       followUpDays: input.followUpDays,
-      createdBy: CURRENT_USER,
+      createdBy: actorName,
       createdAt: now(),
     };
     setS((prev) => ({ ...prev, pendingOrders: [...prev.pendingOrders, line] }));
@@ -2952,7 +3076,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
       customerId: l.customerId,
       followUpDays: input.followUpDays,
       followUpSetAt: placedStamp,
-      createdBy: CURRENT_USER,
+      createdBy: actorName,
       createdAt: placedStamp,
       recordedAt: at,
       // d23 — the line's own history says where it came from, so "why is this
@@ -2960,7 +3084,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
       log: [
         {
           at,
-          text: `Recorded as already placed on ${num} — ordered ${input.placedOn} via ${supplier.orderVia}. Entered by ${CURRENT_USER}; nothing was sent from here.`,
+          text: `Recorded as already placed on ${num} — ordered ${input.placedOn} via ${supplier.orderVia}. Entered by ${actorName}; nothing was sent from here.`,
         },
       ],
     }));
@@ -3114,6 +3238,23 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
       poNumberTaken,
       recordPlacedOrder,
       processOrderStream,
+      sessionUser,
+      actorName,
+      sessionLapseSeconds: s.sessionLapseSeconds,
+      setSessionLapseSeconds,
+      identify,
+      endSession,
+      touchSession,
+      sessionLastActivity: s.sessionLastActivity,
+      userFor,
+      activeManagerCount,
+      addUser,
+      changeUserRole,
+      deactivateUser,
+      reactivateUser,
+      correctUser,
+      setUserPassword,
+      effectiveLapseSeconds,
     }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [s],
