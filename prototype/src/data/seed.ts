@@ -8,6 +8,11 @@ import type {
   Supplier,
   TaxLine,
   User,
+  SectionRow,
+  TenderRow,
+  CurrencyRow,
+  StoreSettings,
+  StoreDetails,
 } from "./types";
 
 // ---- Tax table (M-06) ----
@@ -475,3 +480,65 @@ const seedActor = USERS.find((u) => u.id === "user-eo")!;
 const seedManager = USERS.find((u) => u.id === "user-rd")!;
 export const CURRENT_USER = `${seedActor.name} (${seedActor.role})`;
 export const MANAGER_NAME = `${seedManager.name} (${seedManager.role})`;
+
+// ---- M-06 settings ----
+// Pre-loaded rather than empty, because §7's seed.sql carries the
+// configuration rows and A-53 lands the tables in M1/M2 — a shop never starts
+// with no Sections and no tenders.
+
+export const SECTIONS: SectionRow[] = [
+  { code: "VI", name: "Vinyl", countsAsRevenue: true, tracksStockDefault: true, discountable: true, returnable: true, active: true },
+  { code: "ME", name: "Merch", countsAsRevenue: true, tracksStockDefault: true, discountable: true, returnable: true, active: true },
+  // d20 — one Section each for freight and gift cards, split because one is
+  // revenue and the other a liability. d30 makes the gift card Section
+  // discountable:false and returnable:false — a load discounted 10% is a
+  // straight loss, and one returned is a cash-out dressed as a refund.
+  { code: "FR", name: "Freight", countsAsRevenue: false, tracksStockDefault: false, discountable: true, returnable: false, active: true, systemOwned: true },
+  { code: "GC", name: "Gift cards", countsAsRevenue: false, tracksStockDefault: false, discountable: false, returnable: false, active: true, systemOwned: true },
+];
+
+export const TENDERS: TenderRow[] = [
+  { id: "tn-cash", name: "Cash", behavior: "Cash", active: true, glCode: "1000" },
+  // d22 — many tenders, one behaviour. Both of these settle as a card.
+  { id: "tn-visa", name: "Visa", behavior: "Credit Card", active: true, glCode: "1010" },
+  { id: "tn-mc", name: "Mastercard", behavior: "Credit Card", active: true, glCode: "1010" },
+  { id: "tn-debit", name: "Debit", behavior: "Credit Card", active: true, glCode: "1011" },
+  { id: "tn-acct", name: "On account", behavior: "Account Balance", active: true, glCode: "1200" },
+  { id: "tn-gift", name: "Gift card", behavior: "Gift Card", active: true, glCode: "2100" },
+  { id: "tn-payout", name: "Pay-out", behavior: "Pay-out", active: true, glCode: "1001" },
+  { id: "tn-used", name: "Used credit", behavior: "Used Credit", active: true, glCode: "1300" },
+  // d26 — cash rounding is its own tender, written by the system and never
+  // offered at the till, so it is shown here and cannot be edited away.
+  { id: "tn-round", name: "Cash rounding", behavior: "Cash", active: true, systemOwned: true },
+];
+
+export const CURRENCIES: CurrencyRow[] = [
+  { code: "CAD", name: "Canadian dollar", rate: 1, rateSetOn: "2026-01-01", active: true },
+  // d38 — a PLANNING rate the shop sets conservatively; there is no separate
+  // buffer. d33 — it carries the date it was last set, and the screen shows it.
+  { code: "USD", name: "US dollar", rate: 1.42, rateSetOn: "2026-08-02", active: true },
+];
+
+export const HOME_CURRENCY = "CAD"; // d34 — set once, everything denominated against it
+
+export const STORE_SETTINGS: StoreSettings = {
+  sessionLapseSeconds: 300,
+  priceEndingMinor: 99,
+  deadStockDays: 180,
+  streamAgingDays: 14,
+  drawerPolicy: "cash",
+  receiptWidth: "80mm",
+};
+
+export const STORE_DETAILS: StoreDetails = {
+  legalName: "9302145 Canada Inc.",
+  tradingName: "Wax Works",
+  address: { line1: "4271 Rue Saint-Denis", city: "Montreal", provinceState: "QC", country: "Canada" },
+  phone: "514-555-0100",
+  email: "hello@waxworks.example",
+  website: "waxworks.example",
+  receiptFooter: "Returns accepted any time, in any condition, with or without a receipt.",
+  receiptFooterOn: true,
+  storeId: "0041982",
+  position: 1,
+};

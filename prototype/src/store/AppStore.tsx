@@ -30,6 +30,12 @@ import {
   SUPPLIERS,
   TAX_LINES,
   USERS,
+  SECTIONS,
+  TENDERS,
+  CURRENCIES,
+  HOME_CURRENCY,
+  STORE_SETTINGS,
+  STORE_DETAILS,
 } from "../data/seed";
 import type {
   ClaimLineAgainst,
@@ -60,6 +66,13 @@ import type {
   Supplier,
   User,
   UserRole,
+  SectionRow,
+  TenderRow,
+  CurrencyRow,
+  StoreSettings,
+  StoreDetails,
+  SettingsLogEntry,
+  PostalAddress,
   ClaimVoid,
   SupplierClaim,
   TaxLine,
@@ -136,6 +149,13 @@ interface AppState {
   inventory: InventoryItem[];
   customers: Customer[];
   users: User[];
+  sections: SectionRow[];
+  tenders: TenderRow[];
+  currencies: CurrencyRow[];
+  homeCurrency: string;
+  storeSettings: StoreSettings;
+  storeDetails: StoreDetails;
+  settingsLog: SettingsLogEntry[];
   // E-01. The session is CLIENT state and can be nothing else (A-3, A-50):
   // what the database trusts is the terminal's enrollment, initials are
   // attribution on top. Modelled here for the same reason.
@@ -178,6 +198,13 @@ const seed: AppState = {
   inventory: INVENTORY,
   customers: CUSTOMERS,
   users: USERS,
+  sections: SECTIONS,
+  tenders: TENDERS,
+  currencies: CURRENCIES,
+  homeCurrency: HOME_CURRENCY,
+  storeSettings: STORE_SETTINGS,
+  storeDetails: STORE_DETAILS,
+  settingsLog: [],
   sessionUserId: null,
   sessionLastActivity: Date.now(),
   sessionLapseSeconds: 300,
@@ -664,6 +691,17 @@ interface AppContextValue extends AppState {
   endSession: () => void;
   touchSession: () => void;
   sessionLastActivity: number;
+  // M-06 settings. Every one of these is manager-only (A-28a) and every one
+  // appends a settingsLog row carrying the actor and the values BEFORE and
+  // AFTER (A-52) — the value is what makes the log worth keeping, since d8's
+  // never-retroactive rule means the old one is the only record of what
+  // yesterday's Sales were computed against.
+  setStoreSetting: <K extends keyof StoreSettings>(key: K, value: StoreSettings[K], by: string) => void;
+  setStoreDetail: (key: keyof Omit<StoreDetails, "storeId" | "position">, value: string | boolean | PostalAddress, by: string) => void;
+  upsertSection: (row: SectionRow, by: string) => SettingsWriteResult;
+  upsertTender: (row: TenderRow, by: string) => SettingsWriteResult;
+  upsertCurrency: (row: CurrencyRow, by: string) => SettingsWriteResult;
+  setHomeCurrency: (code: string, by: string) => void;
   userFor: (id?: string) => User | undefined;
   activeManagerCount: () => number;
   // Every one of these is manager-only (A-55) and every one returns a reason
@@ -954,6 +992,23 @@ interface AppContextValue extends AppState {
 // the Manager resolve a clash on the spot, and A-54's rule that a refusal must
 // name what blocked it applies here too.
 export type UserWriteResult = { ok: true; id: string } | { ok: false; reason: string };
+export type SettingsWriteResult = { ok: true } | { ok: false; reason: string };
+
+// What the log records a value AS. A row is rendered rather than stringified
+// so "before" reads as something a person can compare, which is the only
+// reason A-52 asks for it.
+function describe(v: unknown): string {
+  if (v === undefined || v === null) return "(none)";
+  if (typeof v === "boolean") return v ? "yes" : "no";
+  if (typeof v === "object") {
+    const o = v as Record<string, unknown>;
+    return Object.entries(o)
+      .filter(([k]) => k !== "id" && k !== "systemOwned")
+      .map(([k, val]) => `${k}: ${describe(val)}`)
+      .join(", ");
+  }
+  return String(v);
+}
 
 const Ctx = createContext<AppContextValue | null>(null);
 
@@ -1146,6 +1201,112 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
 
   // E-07 — Search/New/Delete. Every other field is edited in place on the
   // open card, not through a separate Edit flow.
+  // -------------------------------------------------------------------------
+  // M-06 settings
+  //
+  // A-52: a settings write is a definer function like any other write, and it
+  // is logged with its actor. The prototype models the log rather than the
+  // function, because the log is the part a reviewer can see is missing —
+  // before this, changing a tax rate or a Section flag left no recorded actor
+  // anywhere, while M-01 d4 logged every edit to a Supplier's card.
+  //
+  // d9 runs through all of it: referenced settings are DEACTIVATED, never
+  // deleted, so nothing here offers a delete.
+  // -------------------------------------------------------------------------
+
+  const logSetting = (group: string, key: string, before: unknown, after: unknown, by: string) =>
+    setS((prev) => ({
+      ...prev,
+      settingsLog: [
+        ...prev.settingsLog,
+        {
+          at: new Date().toISOString().slice(0, 19),
+          actor: by,
+          group,
+          key,
+          before: describe(before),
+          after: describe(after),
+        },
+      ],
+    }));
+
+  const setStoreSetting: AppContextValue["setStoreSetting"] = (key, value, by) => {
+    const before = s.storeSettings[key];
+    if (before === value) return;
+    setS((prev) => ({ ...prev, storeSettings: { ...prev.storeSettings, [key]: value } }));
+    logSetting("Store settings", String(key), before, value, by);
+  };
+
+  const setStoreDetail: AppContextValue["setStoreDetail"] = (key, value, by) => {
+    const before = (s.storeDetails as unknown as Record<string, unknown>)[key];
+    if (before === value) return;
+    setS((prev) => ({ ...prev, storeDetails: { ...prev.storeDetails, [key]: value } }));
+    logSetting("Store details", String(key), before, value, by);
+  };
+
+  const upsertSection: AppContextValue["upsertSection"] = (row, by) => {
+    const code = row.code.trim().toUpperCase();
+    if (code.length !== 2) return { ok: false, reason: "A Section code is two characters (d28)." };
+    if (!row.name.trim()) return { ok: false, reason: "A name is required." };
+    const existing = s.sections.find((x) => x.code === code);
+    const clash = s.sections.find((x) => x.code !== code && x.name.toLowerCase() === row.name.trim().toLowerCase());
+    if (clash) return { ok: false, reason: `${clash.name} already uses that name (${clash.code}).` };
+    const next = { ...row, code, name: row.name.trim() };
+    setS((prev) => ({
+      ...prev,
+      sections: existing
+        ? prev.sections.map((x) => (x.code === code ? next : x))
+        : [...prev.sections, next],
+    }));
+    logSetting("Sections", code, existing ?? "(none)", next, by);
+    return { ok: true };
+  };
+
+  const upsertTender: AppContextValue["upsertTender"] = (row, by) => {
+    if (!row.name.trim()) return { ok: false, reason: "A name is required." };
+    const existing = s.tenders.find((x) => x.id === row.id);
+    if (existing?.systemOwned && (row.name !== existing.name || !row.active))
+      return {
+        ok: false,
+        reason: `${existing.name} is written by the system (d26) — it cannot be renamed or switched off.`,
+      };
+    const next = { ...row, name: row.name.trim() };
+    setS((prev) => ({
+      ...prev,
+      tenders: existing ? prev.tenders.map((x) => (x.id === row.id ? next : x)) : [...prev.tenders, next],
+    }));
+    logSetting("Tenders", next.name, existing ?? "(none)", next, by);
+    return { ok: true };
+  };
+
+  const upsertCurrency: AppContextValue["upsertCurrency"] = (row, by) => {
+    const code = row.code.trim().toUpperCase();
+    if (code.length !== 3) return { ok: false, reason: "A currency code is three letters." };
+    if (!(row.rate > 0)) return { ok: false, reason: "A rate has to be greater than zero." };
+    const existing = s.currencies.find((x) => x.code === code);
+    // d33 — the rate carries the date it was last set, and the shop does not
+    // type that date: setting a rate stamps today, which is the whole of how
+    // the staleness risk is answered.
+    const next = {
+      ...row,
+      code,
+      rateSetOn: existing && existing.rate === row.rate ? existing.rateSetOn : new Date().toLocaleDateString("en-CA"),
+    };
+    setS((prev) => ({
+      ...prev,
+      currencies: existing ? prev.currencies.map((x) => (x.code === code ? next : x)) : [...prev.currencies, next],
+    }));
+    logSetting("Currencies", code, existing ?? "(none)", next, by);
+    return { ok: true };
+  };
+
+  const setHomeCurrency: AppContextValue["setHomeCurrency"] = (code, by) => {
+    if (code === s.homeCurrency) return;
+    const before = s.homeCurrency;
+    setS((prev) => ({ ...prev, homeCurrency: code }));
+    logSetting("Currencies", "home currency", before, code, by);
+  };
+
   // -------------------------------------------------------------------------
   // Users (M-04, architecture A-55)
   //
@@ -3246,6 +3407,19 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
       endSession,
       touchSession,
       sessionLastActivity: s.sessionLastActivity,
+      sections: s.sections,
+      tenders: s.tenders,
+      currencies: s.currencies,
+      homeCurrency: s.homeCurrency,
+      storeSettings: s.storeSettings,
+      storeDetails: s.storeDetails,
+      settingsLog: s.settingsLog,
+      setStoreSetting,
+      setStoreDetail,
+      upsertSection,
+      upsertTender,
+      upsertCurrency,
+      setHomeCurrency,
       userFor,
       activeManagerCount,
       addUser,

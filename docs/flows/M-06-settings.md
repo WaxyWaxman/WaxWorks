@@ -201,7 +201,7 @@ and purchase orders sent to suppliers (decision 46).
 | Trading name | The name on the door. Used on receipts |
 | Address | One. A ship-to split is not carried (decision 46) |
 | Phone · Email · Website | Contact block |
-| Logo | A **URL** (decision 49) |
+| ~~Logo~~ | ~~A **URL** (decision 49)~~ — **superseded by decision 51**, below |
 | Receipt footer | Free text, with its own on/off flag — the return policy lives here |
 | Receipt width | `80mm` (default), `58mm`, or letter (decision 50) |
 | **Logo** | An **uploaded image** — PNG or JPEG, 512 KB, stored by us (decision 51). Not a URL |

@@ -2796,3 +2796,10 @@ table.claims-ln td { padding: 5px 8px 5px 0; border-bottom: 1px solid var(--c-bo
   font-size: var(--fs-sm); color: var(--c-muted);
   border-top: 1px solid var(--c-border); padding-top: var(--sp-2);
 }
+
+/* M-06 Settings reuses the Users frame entirely — slab, main, log. Only the
+   inline table inputs differ, because a settings table is a grid of small
+   values rather than a list of names. */
+input.mini { width: 72px; text-align: right; }
+table.data input[type="text"], table.data input:not([type]) { width: 100%; }
+table.data td { vertical-align: middle; }

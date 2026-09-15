@@ -14,6 +14,7 @@ import { WhatsOnOrder } from "./screens/WhatsOnOrder";
 import { Suppliers } from "./screens/Suppliers";
 import { AccountsPayable } from "./screens/AccountsPayable";
 import { Users } from "./screens/Users";
+import { Settings } from "./screens/Settings";
 import { ReviewQueueBadge } from "./components/ReviewQueue";
 import { useEffect as useEffectShell } from "react";
 
@@ -60,7 +61,10 @@ const MORE_NAV: { group: string; items: { to: string; label: string; flow: strin
   },
   {
     group: "Administration",
-    items: [{ to: "/users", label: "Users", flow: "M-04" }],
+    items: [
+      { to: "/users", label: "Users", flow: "M-04" },
+      { to: "/settings", label: "Settings", flow: "M-06" },
+    ],
   },
   {
     group: "This prototype",
@@ -242,7 +246,8 @@ function AppShell() {
     location.pathname.startsWith("/suppliers") ||
     location.pathname.startsWith("/on-order") ||
     location.pathname.startsWith("/orders") ||
-    location.pathname.startsWith("/users");
+    location.pathname.startsWith("/users") ||
+    location.pathname.startsWith("/settings");
 
   return (
     <div className={"app" + (ownsWindow ? " app-fixed" : "")}>
@@ -288,6 +293,8 @@ function AppShell() {
           <Route path="/payable" element={<AccountsPayable />} />
           <Route path="/users" element={<Users />} />
           <Route path="/users/:userId" element={<Users />} />
+          <Route path="/settings" element={<Settings />} />
+          <Route path="/settings/:group" element={<Settings />} />
         </Routes>
       </main>
     </div>
