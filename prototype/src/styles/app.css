@@ -2803,3 +2803,16 @@ table.claims-ln td { padding: 5px 8px 5px 0; border-bottom: 1px solid var(--c-bo
 input.mini { width: 72px; text-align: right; }
 table.data input[type="text"], table.data input:not([type]) { width: 100%; }
 table.data td { vertical-align: middle; }
+
+/* E-02 d51 — a thin margin is warned about, not priced away. Short of
+   below-cost's `bad`, which d35 flags; this only says the decided price is
+   under what this supplier's Discount implies. */
+.recv-readout-fig.warn .v {
+  color: var(--c-warn);
+}
+.recv-margin-warn {
+  display: block;
+  color: var(--c-warn);
+  font-size: 11px;
+  line-height: 1.2;
+}

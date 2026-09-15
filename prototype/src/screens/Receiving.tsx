@@ -19,7 +19,8 @@ import {
   type Supplier,
 } from "../data/types";
 import { readStored, writeStored } from "../lib/tillMemory";
-import { money, roundUpShelf } from "../lib/money";
+import { money } from "../lib/money";
+import { priceLine } from "../lib/pricing";
 import { countField, figureField, integerOnly, numericOnly } from "../lib/fields";
 import { outstandingQty } from "../lib/orderLines";
 import { invoiceIsPaid, round2 } from "../lib/totals";
@@ -404,12 +405,35 @@ function useLinePricing(opts: {
 }) {
   const listPrice = Number(opts.listRaw) || 0;
   const discountPct = Number(opts.discountRaw) || 0;
-  const extPrice = round2(listPrice * (1 - discountPct / 100));
-  const suggested = opts.stickyPrice ?? roundUpShelf(listPrice * (1 + opts.supplier.discountPct / 100));
+  // d51 — the rules live in lib/pricing so they can be exercised without
+  // a screen, and so the margin benchmark cannot drift from the pre-fill.
+  const base = priceLine({
+    listPrice,
+    lineDiscountPct: discountPct,
+    supplierMarkupPct: opts.supplier.discountPct,
+    decidedPrice: opts.stickyPrice,
+  });
+  const suggested = base.prefill;
   const sellPrice = opts.autoAccept ? suggested : Number(opts.sellRaw ?? suggested.toFixed(2)) || 0;
-  const marginPct = sellPrice > 0 ? round2(((sellPrice - extPrice) / sellPrice) * 100) : 0;
-  const belowCost = sellPrice > 0 && sellPrice < extPrice;
-  return { listPrice, discountPct, extPrice, suggested, sellPrice, marginPct, belowCost };
+  const priced = priceLine({
+    listPrice,
+    lineDiscountPct: discountPct,
+    supplierMarkupPct: opts.supplier.discountPct,
+    decidedPrice: opts.stickyPrice,
+    acceptedPrice: sellPrice,
+  });
+  return {
+    listPrice,
+    discountPct,
+    extPrice: priced.cost,
+    suggested,
+    sellPrice,
+    marginPct: priced.marginPct,
+    belowCost: priced.belowCost,
+    thinMargin: priced.thinMargin,
+    targetMarginPct: priced.targetMarginPct,
+    computed: priced.computed,
+  };
 }
 
 function InvoiceEditor({
@@ -838,7 +862,17 @@ function StageCard({
     setLookupOpen(true);
   };
 
-  const { listPrice, discountPct, extPrice, suggested, sellPrice, marginPct, belowCost } =
+  const {
+    listPrice,
+    discountPct,
+    extPrice,
+    suggested,
+    sellPrice,
+    marginPct,
+    belowCost,
+    thinMargin,
+    targetMarginPct,
+  } =
     useLinePricing({
       listRaw,
       discountRaw,
@@ -1013,7 +1047,7 @@ function StageCard({
               <div
                 className={
                   "recv-readout-fig lead" +
-                  (listPrice <= 0 ? " idle" : belowCost ? " bad" : " ok")
+                  (listPrice <= 0 ? " idle" : belowCost ? " bad" : thinMargin ? " warn" : " ok")
                 }
               >
                 <span className="lab">Margin</span>
@@ -1022,6 +1056,19 @@ function StageCard({
                     on every receipt (d13) — until it is, this says so rather
                     than flattering the line. */}
                 <span className="v">{listPrice > 0 ? `${marginPct.toFixed(1)}%` : "—"}</span>
+                {/* d51 — the decided price stands and the margin is complained
+                    about, because overriding it would quietly re-price a record a
+                    customer saw last week. WARNS rather than flags: d35 already
+                    raises a ReviewFlag for below-cost, which is rare and serious,
+                    where a thin margin is neither — a flag on every one would
+                    fill the queue with rows nobody reads (A-48 in reverse). The
+                    benchmark is the Supplier's own Discount field (M-01), so
+                    there is nothing to configure. */}
+                {thinMargin && (
+                  <small className="recv-margin-warn">
+                    under {targetMarginPct.toFixed(1)}% for this supplier
+                  </small>
+                )}
               </div>
               <div className={"recv-readout-fig" + (listPrice > 0 ? "" : " idle")}>
                 <span className="lab">Net · {lineQty} cop{lineQty === 1 ? "y" : "ies"}</span>
