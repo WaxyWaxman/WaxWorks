@@ -58,8 +58,14 @@ function lastManagerReason(name: string): string {
   return `${name} is the only active Manager. Promote somebody else first — a Store always has at least one (M-04 d14).`;
 }
 
+// One character is allowed. M-04 d13 never set a minimum — the two-character
+// floor was an implementation invention — and a single letter is only safe
+// because E-01 d19 matches EXACTLY: `Y` resolves to Y and never shadows YM,
+// which is precisely what prefix matching could not do.
+export const INITIALS_MIN = 1;
+
 function checkInitials(v: string): string | null {
-  if (normalizeInitials(v).length < 2) return "Initials need at least two characters.";
+  if (normalizeInitials(v).length < INITIALS_MIN) return "Initials are required.";
   return null;
 }
 

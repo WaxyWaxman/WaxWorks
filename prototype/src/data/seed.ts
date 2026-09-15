@@ -437,6 +437,17 @@ export const USERS: User[] = [
     ],
   },
   {
+    // Kept deliberately: a Manager reachable with ONE keystroke and NO
+    // password, so the manager-only space is always openable in review
+    // without hunting for a credential. Do not give this one a password.
+    id: "user-y",
+    name: "Y. Nakamura",
+    initials: "Y",
+    role: "Manager",
+    active: true,
+    log: [{ at: "2025-11-03T09:00:00", text: "Added as Manager by seed migration" }],
+  },
+  {
     id: "user-to-old",
     name: "T. Oyelaran",
     initials: "TO",

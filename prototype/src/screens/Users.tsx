@@ -4,7 +4,7 @@ import { SpecNote } from "../components/SpecNote";
 import type { User, UserRole } from "../data/types";
 import { readStored, writeStored } from "../lib/tillMemory";
 import { useApp, type UserWriteResult } from "../store/AppStore";
-import { MANAGER_NAME } from "../data/seed";
+import { ManagerOverride } from "../components/ManagerOverride";
 
 // M-04 Users, on the till's three tracks like every other back-office screen:
 // the slab you look in, the person you opened, and their log.
@@ -51,6 +51,17 @@ export function Users() {
   // One refusal at a time, shown where the action was taken. Cleared by the
   // next action rather than by a timer, so it cannot vanish while being read.
   const [refusal, setRefusal] = useState<string | null>(null);
+  // M-04 d11 and architecture A-55 make ALL user administration manager-only,
+  // and the screen was enforcing none of it — anyone could open /users and
+  // clear a Manager's password. A-28a's mechanism is an in-place
+  // authorisation, so the whole screen is gated once on arrival and the
+  // authorising Manager's name is what lands in every log row from then on,
+  // rather than a hardcoded constant.
+  //
+  // Gated as a WHOLE rather than per action, following M-05's "manager-only
+  // in its entirety": administering users is a sitting-down job, and a prompt
+  // per row is d12's trains-you-not-to-read problem again.
+  const [authorisedBy, setAuthorisedBy] = useState<string | null>(null);
 
   const setSlab = (v: boolean) => {
     setSlabOpen(v);
@@ -104,13 +115,23 @@ export function Users() {
 
   const addDraft = () => {
     if (!draft) return;
-    const r = app.addUser(draft, MANAGER_NAME);
+    const r = app.addUser(draft, authorisedBy ?? "");
     if (run(r) && r.ok) {
       setDraft(null);
       setQuery("");
       nav(`/users/${r.id}`);
     }
   };
+
+  if (!authorisedBy)
+    return (
+      <ManagerOverride
+        title="Users — manager only"
+        reason="Adding, re-roling, deactivating and setting a password are manager-only (M-04 d11, architecture A-55). A Manager authorises in place; their name is recorded against everything done here."
+        onConfirm={(by) => setAuthorisedBy(by)}
+        onCancel={() => nav(-1)}
+      />
+    );
 
   return (
     <div className={"cust-frame" + (slabOpen ? "" : " slab-shut")}>
@@ -186,6 +207,7 @@ export function Users() {
           draft={draft}
           managers={managers}
           refusal={refusal}
+          by={authorisedBy}
           onChange={(p) => setDraft((d) => (d ? { ...d, ...p } : d))}
           onCancel={() => {
             setDraft(null);
@@ -200,6 +222,7 @@ export function Users() {
           managers={managers}
           refusal={refusal}
           onRun={run}
+          by={authorisedBy}
         />
       ) : (
         <div className="cust-nosel">
@@ -221,6 +244,7 @@ function NewUserCard({
   draft,
   managers,
   refusal,
+  by,
   onChange,
   onCancel,
   onAdd,
@@ -228,6 +252,7 @@ function NewUserCard({
   draft: { name: string; initials: string; role: UserRole };
   managers: number;
   refusal: string | null;
+  by: string;
   onChange: (p: Partial<{ name: string; initials: string; role: UserRole }>) => void;
   onCancel: () => void;
   onAdd: () => void;
@@ -236,7 +261,7 @@ function NewUserCard({
     <section className="cust-main">
       <div className="cust-head">
         <h2>New user</h2>
-        <span className="small muted">Manager-only (A-55)</span>
+        <span className="small muted">Authorised by {by}</span>
       </div>
       <div className="cust-scroll">
         <div className="stack">
@@ -304,11 +329,15 @@ function UserCard({
   managers,
   refusal,
   onRun,
+  by,
 }: {
   user: User;
   managers: number;
   refusal: string | null;
   onRun: (r: UserWriteResult) => boolean;
+  // The Manager who authorised this screen (M-04 d11, A-28a). Every log row
+  // written here carries their name rather than a constant.
+  by: string;
 }) {
   const app = useApp();
   // d22 — corrections. Live fields like the Supplier and Customer cards, but
@@ -353,7 +382,7 @@ function UserCard({
               onChange={(e) => setName(e.target.value)}
               onBlur={() => {
                 if (name !== user.name) {
-                  if (!onRun(app.correctUser(user.id, { name }, MANAGER_NAME))) setName(user.name);
+                  if (!onRun(app.correctUser(user.id, { name }, by))) setName(user.name);
                 }
               }}
             />
@@ -367,7 +396,7 @@ function UserCard({
               onChange={(e) => setInitials(e.target.value)}
               onBlur={() => {
                 if (initials.trim().toUpperCase() !== user.initials) {
-                  if (!onRun(app.correctUser(user.id, { initials }, MANAGER_NAME)))
+                  if (!onRun(app.correctUser(user.id, { initials }, by)))
                     setInitials(user.initials);
                 }
               }}
@@ -375,7 +404,7 @@ function UserCard({
           </label>
 
           {user.active && (
-            <PasswordField key={user.id} user={user} onRun={onRun} />
+            <PasswordField key={user.id} user={user} onRun={onRun} by={by} />
           )}
 
           {user.active ? (
@@ -385,13 +414,13 @@ function UserCard({
                 <div className="btn-row">
                   <button
                     className={"btn" + (user.role === "Employee" ? " primary" : " ghost")}
-                    onClick={() => onRun(app.changeUserRole(user.id, "Employee", MANAGER_NAME))}
+                    onClick={() => onRun(app.changeUserRole(user.id, "Employee", by))}
                   >
                     Employee
                   </button>
                   <button
                     className={"btn" + (user.role === "Manager" ? " primary" : " ghost")}
-                    onClick={() => onRun(app.changeUserRole(user.id, "Manager", MANAGER_NAME))}
+                    onClick={() => onRun(app.changeUserRole(user.id, "Manager", by))}
                   >
                     Manager
                   </button>
@@ -423,7 +452,7 @@ function UserCard({
                 />
                 <button
                   className="btn primary"
-                  onClick={() => onRun(app.reactivateUser(user.id, reactivateWith, MANAGER_NAME))}
+                  onClick={() => onRun(app.reactivateUser(user.id, reactivateWith, by))}
                 >
                   Reactivate
                 </button>
@@ -439,7 +468,7 @@ function UserCard({
             className="btn danger cust-primary"
             // Deliberately NOT disabled on the last Manager — see the note at
             // the top of this file. The store refuses and says why.
-            onClick={() => onRun(app.deactivateUser(user.id, MANAGER_NAME))}
+            onClick={() => onRun(app.deactivateUser(user.id, by))}
             title={lastManager ? "Will be refused — this is the only active Manager" : undefined}
           >
             Deactivate
@@ -459,7 +488,15 @@ function UserCard({
 // E-01 d21 — optional, for anyone, up to 8 characters. Deliberately plain
 // about what it is: the screen says "barrier", not "security", because a shop
 // setting it to one letter should not think it has done more than it has.
-function PasswordField({ user, onRun }: { user: User; onRun: (r: UserWriteResult) => boolean }) {
+function PasswordField({
+  user,
+  onRun,
+  by,
+}: {
+  user: User;
+  onRun: (r: UserWriteResult) => boolean;
+  by: string;
+}) {
   const app = useApp();
   const [value, setValue] = useState("");
   const [open, setOpen] = useState(false);
@@ -480,7 +517,7 @@ function PasswordField({ user, onRun }: { user: User; onRun: (r: UserWriteResult
           {user.password && (
             <button
               className="btn ghost sm"
-              onClick={() => onRun(app.setUserPassword(user.id, "", MANAGER_NAME))}
+              onClick={() => onRun(app.setUserPassword(user.id, "", by))}
             >
               Clear
             </button>
@@ -514,7 +551,7 @@ function PasswordField({ user, onRun }: { user: User; onRun: (r: UserWriteResult
         <button
           className="btn primary sm"
           onClick={() => {
-            if (onRun(app.setUserPassword(user.id, value, MANAGER_NAME))) {
+            if (onRun(app.setUserPassword(user.id, value, by))) {
               setValue("");
               setOpen(false);
             }
