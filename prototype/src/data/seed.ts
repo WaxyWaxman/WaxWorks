@@ -555,20 +555,20 @@ export const STORE_DETAILS: StoreDetails = {
 // (d48), and cannot be split by rate when a period spans a change (M-03 d15).
 
 export const TAX_TYPES: TaxType[] = [
-  { code: "a", name: "GST", ratePpm: 50_000, registrationNumber: "R123456789", glAccount: "2310", active: true },
-  { code: "b", name: "QST", ratePpm: 99_750, registrationNumber: "1234567890TQ0001", glAccount: "2320", active: true },
+  { code: "a", name: "GST", ratePpm: 50_000, registrationNumber: "R123456789", glAccount: "2310" },
+  { code: "b", name: "QST", ratePpm: 99_750, registrationNumber: "1234567890TQ0001", glAccount: "2320" },
   // Each HST rate is its OWN tax type, and that is the model working rather
   // than a workaround: a tax type is "one tax that exists" carrying one rate
   // (d11), and Ontario's 13% and New Brunswick's 15% are remitted separately
   // at different rates. One "HST" row could not hold both.
-  { code: "f", name: "HST (ON)", ratePpm: 130_000, glAccount: "2330", active: true },
-  { code: "g", name: "HST (NB/NL/PE)", ratePpm: 150_000, glAccount: "2331", active: true },
-  { code: "h", name: "HST (NS)", ratePpm: 140_000, glAccount: "2332", active: true },
-  { code: "c", name: "PST (BC)", ratePpm: 70_000, glAccount: "2340", active: true },
-  { code: "d", name: "PST (SK)", ratePpm: 60_000, glAccount: "2341", active: true },
-  { code: "e", name: "RST (MB)", ratePpm: 70_000, glAccount: "2342", active: true },
+  { code: "f", name: "HST (ON)", ratePpm: 130_000, glAccount: "2330" },
+  { code: "g", name: "HST (NB/NL/PE)", ratePpm: 150_000, glAccount: "2331" },
+  { code: "h", name: "HST (NS)", ratePpm: 140_000, glAccount: "2332" },
+  { code: "c", name: "PST (BC)", ratePpm: 70_000, glAccount: "2340" },
+  { code: "d", name: "PST (SK)", ratePpm: 60_000, glAccount: "2341" },
+  { code: "e", name: "RST (MB)", ratePpm: 70_000, glAccount: "2342" },
   // d15 — taxable at 0% and REPORTABLE, which a blank cell is not.
-  { code: "z", name: "Zero-rated", ratePpm: 0, active: true },
+  { code: "z", name: "Zero-rated", ratePpm: 0 },
 ];
 
 export const PRODUCT_TAX_CODES: ProductTaxCode[] = [

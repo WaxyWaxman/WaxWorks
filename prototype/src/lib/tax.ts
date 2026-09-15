@@ -62,6 +62,14 @@ export function parseCell(spec: string): ParsedCell {
   return { codes: codes.slice(0, 2), compound };
 }
 
+// A-63 — liveness is DERIVED. A tax type is live where a cell names it, so
+// this is the whole answer to "is this tax being charged", and there is no
+// stored flag that could disagree with it. The settings screen reports this
+// instead of offering an Active switch.
+export function taxTypeUseCount(cells: { spec: string }[], code: string): number {
+  return cells.filter((c) => parseCell(c.spec).codes.includes(code)).length;
+}
+
 // The line's tax, one entry per tax type applied.
 //
 // Returns COMPONENTS rather than a total on purpose: A-57 and §5 snapshot "the
@@ -81,7 +89,11 @@ export function resolveLineTax(
   const out: TaxComponent[] = [];
   let first = 0;
   codes.forEach((code, i) => {
-    const t = types.find((x) => x.code === code && x.active);
+    // No `active` filter: a tax type has none (A-63). A cell naming a type
+    // IS what makes it live, so resolution takes whatever the cell names.
+    // A code naming no type at all is a broken cell, not a silent zero —
+    // it cannot arise from the editor, which only writes letters it has.
+    const t = types.find((x) => x.code === code);
     if (!t) return;
     const rate = taxRateAt(t, at);
     // d16 — each tax is rounded to the cent AS IT IS APPLIED, not at the end.

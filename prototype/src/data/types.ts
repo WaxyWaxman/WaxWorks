@@ -864,7 +864,14 @@ export interface TaxType {
   // Reserved and not drawn — there is no chart of accounts yet. The field
   // exists so one needs no migration, the move A-14 makes for cover_art_path.
   glAccount?: string;
-  active: boolean;
+  // NO `active` FLAG, and its absence is the decision (M-06 d57,
+  // architecture A-63). A tax type is the one piece of configuration here
+  // with no assignments — nothing is filed under `b`, and a completed Sale
+  // line snapshots the rate rather than referencing the row (A-57) — so a
+  // cell naming it is the only reference, and liveness is DERIVED from the
+  // cells rather than stored beside them. `ab+` -> `a` is how `b` stops
+  // being charged. A stored flag let a housekeeping toggle silently charge
+  // less tax, which is the defect A-63 closes by making it unrepresentable.
 }
 
 export interface ProductTaxCode {
