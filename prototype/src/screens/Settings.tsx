@@ -662,6 +662,7 @@ function TaxEditor({ by, onRun }: { by: string; onRun: (r: SettingsWriteResult) 
         queued: a second replaces it, and a pending change whose date has passed is promoted into
         the current rate first, so an elapsed one is never silently dropped (d52).
       </p>
+      <NewTaxType by={by} onRun={onRun} />
 
       <h3>Product tax codes</h3>
       <p className="small muted">
@@ -747,9 +748,149 @@ function TaxEditor({ by, onRun }: { by: string; onRun: (r: SettingsWriteResult) 
         own (d14). A blank cell means out of scope — <code>{"\u2014"}</code> here, and no tax line at
         all on the receipt.
       </p>
+      <NewTaxGroup by={by} onRun={onRun} />
 
       <WorkedExample />
     </>
+  );
+}
+
+// Adding a tax type. Nothing is ever deleted (d9) — a type that stops
+// applying is deactivated, because cells and completed Sales reference it.
+function NewTaxType({ by, onRun }: { by: string; onRun: (r: SettingsWriteResult) => boolean }) {
+  const app = useApp();
+  const [open, setOpen] = useState(false);
+  const [code, setCode] = useState("");
+  const [name, setName] = useState("");
+  const [rate, setRate] = useState("");
+
+  if (!open)
+    return (
+      <button className="btn ghost sm" onClick={() => setOpen(true)}>
+        ＋ New tax type
+      </button>
+    );
+
+  return (
+    <div className="stack callout">
+      <div className="btn-row">
+        <label className="field">
+          <span>Code — one letter</span>
+          <input className="mini" value={code} maxLength={1} onChange={(e) => setCode(e.target.value)} />
+        </label>
+        <label className="field">
+          <span>Name</span>
+          <input value={name} placeholder="e.g. PST (BC)" onChange={(e) => setName(e.target.value)} />
+        </label>
+        <label className="field">
+          <span>Rate %</span>
+          <input className="mini" value={rate} placeholder="7" onChange={(e) => setRate(e.target.value)} />
+        </label>
+      </div>
+      <div className="btn-row">
+        <button
+          className="btn primary sm"
+          onClick={() => {
+            const ok = onRun(
+              app.upsertTaxType(
+                {
+                  code: code.trim().toLowerCase(),
+                  name: name.trim(),
+                  ratePpm: Math.round(Number(rate) * 10000),
+                  active: true,
+                },
+                by,
+              ),
+            );
+            if (ok) {
+              setCode("");
+              setName("");
+              setRate("");
+              setOpen(false);
+            }
+          }}
+        >
+          Add tax type
+        </button>
+        <button className="btn ghost sm" onClick={() => setOpen(false)}>
+          Cancel
+        </button>
+      </div>
+      <div className="small muted">
+        The letter is what composes a cell — a new type is charged nowhere until a cell names it.
+        Existing cells and completed Sales are untouched (d8).
+      </div>
+    </div>
+  );
+}
+
+// Adding a tax group. A new group starts with EVERY CELL BLANK, which is out
+// of scope rather than zero-rated (d15) — a jurisdiction charges nothing until
+// somebody says what it charges, and blank is the honest starting state.
+function NewTaxGroup({ by, onRun }: { by: string; onRun: (r: SettingsWriteResult) => boolean }) {
+  const app = useApp();
+  const [open, setOpen] = useState(false);
+  const [description, setDescription] = useState("");
+  const [shortName, setShortName] = useState("");
+
+  if (!open)
+    return (
+      <button className="btn ghost sm" onClick={() => setOpen(true)}>
+        ＋ New tax group
+      </button>
+    );
+
+  return (
+    <div className="stack callout">
+      <div className="btn-row">
+        <label className="field">
+          <span>Description</span>
+          <input
+            value={description}
+            placeholder="e.g. Manitoba"
+            onChange={(e) => setDescription(e.target.value)}
+          />
+        </label>
+        <label className="field">
+          <span>
+            ShortName — up to 4{" "}
+            <SpecNote cite="M-06 d11, E-07">
+              This is what appears on a Customer's card, so it has to be readable at a glance
+              rather than a code somebody has to look up.
+            </SpecNote>
+          </span>
+          <input className="mini" value={shortName} maxLength={4} onChange={(e) => setShortName(e.target.value)} />
+        </label>
+      </div>
+      <div className="btn-row">
+        <button
+          className="btn primary sm"
+          onClick={() => {
+            const ok = onRun(
+              app.upsertTaxGroup(
+                { id: `tg-${shortName.trim().toLowerCase() || Date.now()}`, description, shortName, active: true },
+                by,
+              ),
+            );
+            if (ok) {
+              setDescription("");
+              setShortName("");
+              setOpen(false);
+            }
+          }}
+        >
+          Add tax group
+        </button>
+        <button className="btn ghost sm" onClick={() => setOpen(false)}>
+          Cancel
+        </button>
+      </div>
+      <div className="small muted">
+        It starts with every cell blank — out of scope, charging nothing, until you fill the grid
+        in. That is deliberate: a new jurisdiction that silently charged the standard rate would be
+        the worse default.
+      </div>
+    </div>
   );
 }
 

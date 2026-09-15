@@ -557,33 +557,20 @@ export const STORE_DETAILS: StoreDetails = {
 // (d48), and cannot be split by rate when a period spans a change (M-03 d15).
 
 export const TAX_TYPES: TaxType[] = [
-  {
-    code: "a",
-    name: "GST",
-    ratePpm: 50_000, // 5% — A-47's parts per million
-    registrationNumber: "R123456789",
-    glAccount: "2310",
-    active: true,
-    // d52 / A-58 — one pending change, entered when it was announced. Set in
-    // the past so the prototype shows a rate that has already taken effect
-    // and can be promoted; the Settings editor queues new ones.
-  },
-  {
-    code: "b",
-    name: "QST",
-    ratePpm: 99_750, // 9.975% — the rate basis points could not hold
-    registrationNumber: "1234567890TQ0001",
-    glAccount: "2320",
-    active: true,
-  },
-  {
-    code: "z",
-    name: "Zero-rated",
-    ratePpm: 0,
-    active: true,
-    // d15 — a zero-rate type is NOT a blank cell. This one is taxable at 0%
-    // and reportable; a blank cell is out of scope and reports nothing.
-  },
+  { code: "a", name: "GST", ratePpm: 50_000, registrationNumber: "R123456789", glAccount: "2310", active: true },
+  { code: "b", name: "QST", ratePpm: 99_750, registrationNumber: "1234567890TQ0001", glAccount: "2320", active: true },
+  // Each HST rate is its OWN tax type, and that is the model working rather
+  // than a workaround: a tax type is "one tax that exists" carrying one rate
+  // (d11), and Ontario's 13% and New Brunswick's 15% are remitted separately
+  // at different rates. One "HST" row could not hold both.
+  { code: "f", name: "HST (ON)", ratePpm: 130_000, glAccount: "2330", active: true },
+  { code: "g", name: "HST (NB/NL/PE)", ratePpm: 150_000, glAccount: "2331", active: true },
+  { code: "h", name: "HST (NS)", ratePpm: 140_000, glAccount: "2332", active: true },
+  { code: "c", name: "PST (BC)", ratePpm: 70_000, glAccount: "2340", active: true },
+  { code: "d", name: "PST (SK)", ratePpm: 60_000, glAccount: "2341", active: true },
+  { code: "e", name: "RST (MB)", ratePpm: 70_000, glAccount: "2342", active: true },
+  // d15 — taxable at 0% and REPORTABLE, which a blank cell is not.
+  { code: "z", name: "Zero-rated", ratePpm: 0, active: true },
 ];
 
 export const PRODUCT_TAX_CODES: ProductTaxCode[] = [
@@ -593,25 +580,84 @@ export const PRODUCT_TAX_CODES: ProductTaxCode[] = [
   { code: "3", description: "Zero-rated — taxable at 0%, reportable", active: true },
 ];
 
+// Every province and territory. The point of seeding all of them is that the
+// two-table model is the thing being reviewed: thirteen jurisdictions sharing
+// ONE GST row is exactly what d11 replaced d1 to make possible, and a single
+// blended rate per jurisdiction could not do it.
+//
+// RATES ARE ILLUSTRATIVE AND WANT CHECKING AGAINST CURRENT LEGISLATION before
+// anybody trades on them. They are seed data for a prototype, not tax advice.
 export const TAX_GROUPS: TaxGroup[] = [
-  { id: "tg-qc", description: "Quebec", shortName: "QC", active: true },
+  { id: "tg-ab", description: "Alberta", shortName: "AB", active: true },
+  { id: "tg-bc", description: "British Columbia", shortName: "BC", active: true },
+  { id: "tg-mb", description: "Manitoba", shortName: "MB", active: true },
+  { id: "tg-nb", description: "New Brunswick", shortName: "NB", active: true },
+  { id: "tg-nl", description: "Newfoundland and Labrador", shortName: "NL", active: true },
+  { id: "tg-ns", description: "Nova Scotia", shortName: "NS", active: true },
+  { id: "tg-nt", description: "Northwest Territories", shortName: "NT", active: true },
+  { id: "tg-nu", description: "Nunavut", shortName: "NU", active: true },
   { id: "tg-on", description: "Ontario", shortName: "ON", active: true },
+  { id: "tg-pe", description: "Prince Edward Island", shortName: "PE", active: true },
+  { id: "tg-qc", description: "Quebec", shortName: "QC", active: true },
+  { id: "tg-sk", description: "Saskatchewan", shortName: "SK", active: true },
+  { id: "tg-yt", description: "Yukon", shortName: "YT", active: true },
   { id: "tg-whl", description: "Wholesale", shortName: "WHL", active: true },
 ];
 
-// d13 — stored as rows, drawn as a grid. Quebec composes GST then QST on the
-// subtotal (`ab`); Ontario charges HST-equivalent as a single tax here; and a
-// gift card load is out of scope everywhere, which is a BLANK cell and not a
-// zero rate (d15) — loading a card is not a taxable supply at all.
+// d13 — stored as rows, drawn as a grid.
+//
+// Two things to read here. FIRST, the GST-only jurisdictions (AB, NT, NU, YT)
+// and the HST ones each name a single tax, while QC, BC, SK and MB name two —
+// the same grid expresses both with no special case. SECOND, Quebec is `ab`
+// and NOT `ab+`: QST has been calculated on the price EXCLUDING GST since
+// 2013, so it does not compound. The `+` exists for jurisdictions that do
+// compound, and M-06's worked example uses it to show the fifteen cents it
+// would cost if Quebec did.
+const gstOnly = ["tg-ab", "tg-nt", "tg-nu", "tg-yt"];
+const hst15 = ["tg-nb", "tg-nl", "tg-pe"];
+
 export const TAX_GROUP_CELLS: TaxGroupCell[] = [
+  ...gstOnly.flatMap((g) => [
+    { groupId: g, productTaxCode: "1", spec: "a" },
+    { groupId: g, productTaxCode: "B", spec: "a" },
+    { groupId: g, productTaxCode: "2", spec: "" },
+    { groupId: g, productTaxCode: "3", spec: "z" },
+  ]),
+  ...hst15.flatMap((g) => [
+    { groupId: g, productTaxCode: "1", spec: "g" },
+    // Books carry a point-of-sale rebate of the provincial portion in the HST
+    // provinces, so they land at the federal 5%. Modelled as GST here, which
+    // is the right ANSWER by a route a tax accountant would want to check.
+    { groupId: g, productTaxCode: "B", spec: "a" },
+    { groupId: g, productTaxCode: "2", spec: "" },
+    { groupId: g, productTaxCode: "3", spec: "z" },
+  ]),
+  { groupId: "tg-ns", productTaxCode: "1", spec: "h" },
+  { groupId: "tg-ns", productTaxCode: "B", spec: "a" },
+  { groupId: "tg-ns", productTaxCode: "2", spec: "" },
+  { groupId: "tg-ns", productTaxCode: "3", spec: "z" },
+  { groupId: "tg-on", productTaxCode: "1", spec: "f" },
+  { groupId: "tg-on", productTaxCode: "B", spec: "a" },
+  { groupId: "tg-on", productTaxCode: "2", spec: "" },
+  { groupId: "tg-on", productTaxCode: "3", spec: "z" },
+  // GST + a provincial tax, side by side on the subtotal.
+  { groupId: "tg-bc", productTaxCode: "1", spec: "ac" },
+  { groupId: "tg-bc", productTaxCode: "B", spec: "a" },
+  { groupId: "tg-bc", productTaxCode: "2", spec: "" },
+  { groupId: "tg-bc", productTaxCode: "3", spec: "z" },
+  { groupId: "tg-sk", productTaxCode: "1", spec: "ad" },
+  { groupId: "tg-sk", productTaxCode: "B", spec: "a" },
+  { groupId: "tg-sk", productTaxCode: "2", spec: "" },
+  { groupId: "tg-sk", productTaxCode: "3", spec: "z" },
+  { groupId: "tg-mb", productTaxCode: "1", spec: "ae" },
+  { groupId: "tg-mb", productTaxCode: "B", spec: "a" },
+  { groupId: "tg-mb", productTaxCode: "2", spec: "" },
+  { groupId: "tg-mb", productTaxCode: "3", spec: "z" },
   { groupId: "tg-qc", productTaxCode: "1", spec: "ab" },
   { groupId: "tg-qc", productTaxCode: "B", spec: "a" },
   { groupId: "tg-qc", productTaxCode: "2", spec: "" },
   { groupId: "tg-qc", productTaxCode: "3", spec: "z" },
-  { groupId: "tg-on", productTaxCode: "1", spec: "a" },
-  { groupId: "tg-on", productTaxCode: "B", spec: "a" },
-  { groupId: "tg-on", productTaxCode: "2", spec: "" },
-  { groupId: "tg-on", productTaxCode: "3", spec: "z" },
+  // Every cell blank: out of scope, not zero-rated (d15).
   { groupId: "tg-whl", productTaxCode: "1", spec: "" },
   { groupId: "tg-whl", productTaxCode: "B", spec: "" },
   { groupId: "tg-whl", productTaxCode: "2", spec: "" },
