@@ -115,6 +115,37 @@ export function FindSelection({
               k="Genre / Section"
               v={`${genreNameFor(app.genres, record.genreId)} · ${sectionLabelFor(app.genres, app.sections, record.genreId)}`}
             />
+            {/* A-61 — the tags this Record was ADOPTED under, the matched
+                one marked. What makes "why did it land here" answerable,
+                which is the whole reason the snapshot exists. Marked by the
+                MAP's match rather than the operator's choice, so where the
+                map resolved nothing nothing is credited. Display only —
+                never read by the money path, which goes through the genre. */}
+            <Fact
+              k="Provider tags"
+              v={
+                record.providerTags?.length ? (
+                  <>
+                    {record.providerTags.map((t) => (
+                      <span
+                        key={t.tag}
+                        className={t.matched ? "badge warn" : "badge"}
+                        style={{ marginRight: 4 }}
+                        title={
+                          t.matched
+                            ? "The tag the genre map matched (A-61)"
+                            : "Carried by the release; not what decided the genre"
+                        }
+                      >
+                        {t.tag} · {t.votes}
+                      </span>
+                    ))}
+                  </>
+                ) : (
+                  "— (none carried at adoption)"
+                )
+              }
+            />
             <Fact
               k="Manufacturer UPC"
               v={<span className="mono">{record.manufacturerUpc ?? "— (none on sleeve)"}</span>}

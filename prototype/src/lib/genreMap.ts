@@ -1,4 +1,4 @@
-import type { GenreMapRow, ProviderTag } from "../data/types";
+import type { AdoptedTag, GenreMapRow, ProviderTag } from "../data/types";
 
 // M-06 d6, d32 — the genre map translates the catalog provider's taxonomy onto
 // the shop's genre list. It assigns a **genre and nothing else**: the Section
@@ -87,4 +87,57 @@ export function checkMapRowAdd(
 // returns should ever map onto `Gift cards`.
 export function mappableGenreIds(genres: { id: string; internal?: boolean; active: boolean }[]): Set<string> {
   return new Set(genres.filter((g) => g.active && !g.internal).map((g) => g.id));
+}
+
+// architecture A-59 — THE COMPENSATING MECHANISM, and the reason taking the
+// gate off the map is safe rather than merely convenient.
+//
+// "Tags carried by our Records with no map row" is an ANTI-JOIN against
+// `genre_map`, reported with counts and where those Records landed. Derived,
+// never stored (§5.1's rule, as A-37 and A-51 apply it): an entry disappears
+// the moment the row is written, there is nothing to acknowledge or clear, and
+// nothing that can drift out of step with the map.
+//
+// It is deliberately NOT a flag or a queue. A flag has to be raised by
+// somebody and cleared by somebody; this is a question asked of the data.
+export interface UnmappedTagReport {
+  /** As the provider spelled it, taking the spelling most Records carry. */
+  tag: string;
+  /** How many adopted Records carry this tag. */
+  records: number;
+  /** Where those Records actually ended up, commonest first. */
+  landedIn: { genreId: string; count: number }[];
+}
+
+export function unmappedTagReport(
+  records: { genreId: string; providerTags?: AdoptedTag[] }[],
+  map: GenreMapRow[],
+): UnmappedTagReport[] {
+  const known = new Set(map.map((r) => normaliseTag(r.tag)));
+  const acc = new Map<string, { spellings: Map<string, number>; genres: Map<string, number> }>();
+
+  for (const rec of records) {
+    for (const t of rec.providerTags ?? []) {
+      const key = normaliseTag(t.tag);
+      if (known.has(key)) continue;
+      let entry = acc.get(key);
+      if (!entry) {
+        entry = { spellings: new Map(), genres: new Map() };
+        acc.set(key, entry);
+      }
+      entry.spellings.set(t.tag, (entry.spellings.get(t.tag) ?? 0) + 1);
+      entry.genres.set(rec.genreId, (entry.genres.get(rec.genreId) ?? 0) + 1);
+    }
+  }
+
+  const commonest = (m: Map<string, number>) =>
+    [...m.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
+
+  return [...acc.entries()]
+    .map(([, entry]) => ({
+      tag: commonest(entry.spellings)[0][0],
+      records: [...entry.genres.values()].reduce((n, c) => n + c, 0),
+      landedIn: commonest(entry.genres).map(([genreId, count]) => ({ genreId, count })),
+    }))
+    .sort((a, b) => b.records - a.records || a.tag.localeCompare(b.tag));
 }

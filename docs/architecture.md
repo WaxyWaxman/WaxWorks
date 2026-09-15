@@ -508,6 +508,7 @@ Each of these has been appended to the document it affects.
 | [E-03](flows/E-03-search-inventory.md) | Step 7 no longer prompts for **Section** at adoption — it is derived from the genre's required parent ([M-06](flows/M-06-settings.md) d31, d32), unpropagated since those landed |
 | [M-02](flows/M-02-reorder-inventory.md) | d38 records that every order line names an adopted Record and that ordering never adopts — so the genre prompt ([M-06](flows/M-06-settings.md) d53) has no fourth home |
 | [architecture](architecture.md) §5 | Tax types leave the active-flag list; a tax is live iff a cell names it, and liveness is derived rather than stored (A-63) |
+| [E-03](flows/E-03-search-inventory.md) | d17 corrects d11's derivation: *never stocked* comes from holding no copies and having no history, not from being a catalog-only match ([M-06](flows/M-06-settings.md) d53) |
 
 ---
 

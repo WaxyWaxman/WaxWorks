@@ -10,7 +10,8 @@ import type {
   SectionRow,
   TenderRow,
 } from "../data/types";
-import { sectionLabelFor } from "../lib/taxonomy";
+import { genreNameFor, sectionLabelFor } from "../lib/taxonomy";
+import { unmappedTagReport } from "../lib/genreMap";
 import { useApp, type SettingsWriteResult } from "../store/AppStore";
 import { taxTypeUseCount, resolveLineTax } from "../lib/tax";
 import { money } from "../lib/money";
@@ -456,6 +457,7 @@ function GenresEditor({ by, onRun }: { by: string; onRun: (r: SettingsWriteResul
 function GenreMapEditor({ by, onRun }: { by: string; onRun: (r: SettingsWriteResult) => boolean }) {
   const app = useApp();
   const mappable = app.genres.filter((g) => g.active && !g.internal);
+  const unmapped = unmappedTagReport(app.records, app.genreMap);
 
   return (
     <>
@@ -526,6 +528,60 @@ function GenreMapEditor({ by, onRun }: { by: string; onRun: (r: SettingsWriteRes
         genre they were adopted with (d53). Shop-internal genres carry no rows at all (d17): nothing
         the provider returns should ever map onto <strong>Gift cards</strong>.
       </p>
+      {/* A-59 — THE COMPENSATING MECHANISM. Taking the gate off the map is
+          safe because this exists: an anti-join naming the tags our Records
+          carry that no row covers, with counts and where those Records landed.
+          Derived, never stored — an entry disappears the moment the row is
+          written, and there is nothing to acknowledge, clear, or let drift.
+          Deliberately not a flag: a flag is raised by somebody and cleared by
+          somebody, where this is a question asked of the data. */}
+      <div className="hr" />
+      <p className="small muted">
+        <strong>Tags our Records carry that nothing maps.</strong> Derived from the catalog, so a
+        row written here makes the entry disappear on its own <em>(A-59)</em>.
+      </p>
+      {unmapped.length === 0 ? (
+        <p className="small muted">
+          Nothing unmapped — every tag our Records carry has a row.
+        </p>
+      ) : (
+        <table className="data">
+          <thead>
+            <tr>
+              <th>Unmapped tag</th>
+              <th>Records</th>
+              <th>Landed in</th>
+              <th>Map it to…</th>
+            </tr>
+          </thead>
+          <tbody>
+            {unmapped.map((u) => (
+              <tr key={u.tag}>
+                <td className="mono">{u.tag}</td>
+                <td className="num">{u.records}</td>
+                <td className="small muted">
+                  {u.landedIn
+                    .map((l) => `${genreNameFor(app.genres, l.genreId)} (${l.count})`)
+                    .join(" · ")}
+                </td>
+                <td>
+                  <select
+                    value=""
+                    onChange={(e) => e.target.value && onRun(app.addMapRow(u.tag, e.target.value, by))}
+                  >
+                    <option value="">Choose a genre…</option>
+                    {mappable.map((g) => (
+                      <option key={g.id} value={g.id}>
+                        {g.name}
+                      </option>
+                    ))}
+                  </select>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
     </>
   );
 }
