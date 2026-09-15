@@ -281,11 +281,12 @@ export function Suppliers() {
               </button>
               <button
                 className="btn danger"
-                onClick={() => {
+                onClick={() =>
+                  withActor("Delete supplier", () => {
                   app.deleteSupplier(selected.id);
                   setDeleting(false);
                   nav("/suppliers", { replace: true });
-                }}
+                })}
               >
                 Delete
               </button>

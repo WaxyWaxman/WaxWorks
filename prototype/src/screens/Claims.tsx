@@ -15,6 +15,7 @@ import {
 } from "../lib/claims";
 import { money } from "../lib/money";
 import { useApp } from "../store/AppStore";
+import { useActor } from "../components/Identify";
 
 // Supplier Claims on three tracks — E-04 §"Supplier claims", decisions 9-12
 // and 20-27. Claiming credit from a supplier for stock that arrived short,
@@ -28,6 +29,7 @@ import { useApp } from "../store/AppStore";
 // columns that have to line up.
 export function Claims() {
   const app = useApp();
+  const withActor = useActor();
   const today = useMemo(() => new Date(), []);
   const [slabOpen, setSlabOpen] = useState(true);
   const [query, setQuery] = useState("");
@@ -226,13 +228,14 @@ export function Claims() {
             claim={picked}
             email={supplier?.email ?? ""}
             nextNumber={app.nextClaimNumber}
-            onSend={(num) => {
+            onSend={(num) =>
+              withActor("Send claim", () => {
               const r = app.sendClaim(picked.id, num);
               if (r) {
                 setMsg(`Claim ${r.claimNumber} sent to ${supplier?.email}. The clock starts now (d23).`);
                 setPick("");
               }
-            }}
+            })}
           />
         ) : act === "credit" ? (
           <CreditAct

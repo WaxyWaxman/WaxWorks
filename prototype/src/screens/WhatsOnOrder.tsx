@@ -13,6 +13,7 @@ import { isPlacedOrderLine, orderLineState, outstandingQty } from "../lib/orderL
 import { readStored, writeStored } from "../lib/tillMemory";
 import { daysAgo, followUpDueAt, isFollowUpOverdue } from "../lib/totals";
 import { useApp } from "../store/AppStore";
+import { useActor } from "../components/Identify";
 
 // What's on Order (M-02 Phase 3), laid out as the till's three tracks — the
 // same frame as Sell, Find, Receive, Customers and Suppliers (E-05 d29 by way
@@ -32,6 +33,7 @@ const DRAFT_KEY = "waxworks.onorder.draft";
 
 export function WhatsOnOrder() {
   const app = useApp();
+  const withActor = useActor();
 
   const [slabOpen, setSlabOpen] = useState(() => readStored(SLAB_KEY, true));
   const [query, setQuery] = useState("");
@@ -208,7 +210,9 @@ export function WhatsOnOrder() {
     setSheetOpen(true);
   };
 
-  const commit = () => {
+  // Tier 2 (d5).
+  const commit = () =>
+    withActor("Record order", () => {
     if (!draft) return;
     if (draft.dest === "placed") {
       const res = app.recordPlacedOrder({
@@ -242,7 +246,7 @@ export function WhatsOnOrder() {
     saveDraft(null);
     setSheetOpen(false);
     setSelectedId(null);
-  };
+  });;
 
   const waiting = scoped
     .filter((o) => o.customerId)

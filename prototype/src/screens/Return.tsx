@@ -8,6 +8,7 @@ import { money } from "../lib/money";
 import { resolveScan } from "../lib/resolve";
 import { balanceDue, saleTotals } from "../lib/totals";
 import { useApp } from "../store/AppStore";
+import { useActor } from "../components/Identify";
 
 // Entered exclusively from the till rail's + New return (mirrors how
 // /sell/:saleId is never itself a nav item). A Return is a Sale with isReturn
@@ -693,6 +694,7 @@ function RouteStock({
   onClose: () => void;
 }) {
   const app = useApp();
+  const withActor = useActor();
   const item = app.itemFor(itemId)!;
   const [mode, setMode] = useState<"sellable" | "regrade" | "writeoff">("sellable");
   const [grade, setGrade] = useState<Grade>(item.grade);
@@ -709,7 +711,8 @@ function RouteStock({
           </button>
           <button
             className="btn primary"
-            onClick={() => {
+            onClick={() =>
+              withActor("Route returned copy", () => {
               app.routeReturnLine(
                 saleId,
                 lineId,
@@ -719,7 +722,8 @@ function RouteStock({
                 mode === "regrade" ? Number(price) || 0 : undefined,
               );
               onClose();
-            }}
+            })
+            }
           >
             Apply
           </button>

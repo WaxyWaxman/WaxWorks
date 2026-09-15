@@ -401,6 +401,7 @@ function AccountNumberField({
 
 function DeleteCustomer({ customer }: { customer: Customer }) {
   const app = useApp();
+  const withActor = useScopedActor(customer.id);
   const [confirming, setConfirming] = useState(false);
 
   if (!confirming) {
@@ -416,7 +417,10 @@ function DeleteCustomer({ customer }: { customer: Customer }) {
       <button className="btn ghost sm" onClick={() => setConfirming(false)}>
         Cancel
       </button>
-      <button className="btn danger sm" onClick={() => app.deleteCustomer(customer.id)}>
+      <button
+        className="btn danger sm"
+        onClick={() => withActor("Delete customer", () => app.deleteCustomer(customer.id))}
+      >
         Delete
       </button>
     </span>

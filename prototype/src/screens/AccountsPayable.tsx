@@ -16,6 +16,7 @@ import { money } from "../lib/money";
 import { readStored, writeStored } from "../lib/tillMemory";
 import { round2, supplierBalance } from "../lib/totals";
 import { useApp } from "../store/AppStore";
+import { useActor } from "../components/Identify";
 
 // Accounts payable (M-05), laid out as the till's three tracks — the same
 // frame as Sell, Find, Receive, Customers, Suppliers and On Order (E-05 d29
@@ -45,6 +46,7 @@ const SLAB_KEY = "waxworks.payable.slab";
 
 export function AccountsPayable() {
   const app = useApp();
+  const withActor = useActor();
   const [slabOpen, setSlabOpen] = useState(() => readStored(SLAB_KEY, true));
   const [scope, setScope] = useState<string>("");
   const [query, setQuery] = useState("");
@@ -139,7 +141,9 @@ export function AccountsPayable() {
 
   const giftTotal = round2(app.giftCards.reduce((n, g) => n + g.balance, 0));
 
-  const doSettle = () => {
+  // Tier 2 (d5). Manager-only under A-28a, which records BOTH names — this is the acting half.
+  const doSettle = () =>
+    withActor("Record payment", () => {
     if (!supplier) return;
     const auto = autoPlacement(plan);
     app.settlePayables(
@@ -168,7 +172,7 @@ export function AccountsPayable() {
           : "."),
     );
     setSel({});
-  };
+  });;
 
   const doClear = () => {
     const before = supplier ? balanceOf(supplier.id) : 0;
@@ -354,7 +358,8 @@ export function AccountsPayable() {
         expectedMethod={expectedMethod}
         onForm={(patch) => setForm((f) => ({ ...f, ...patch }))}
         onCancelCreate={() => setCreating(false)}
-        onCreate={(input) => {
+        onCreate={(input) =>
+          withActor("New ledger entry", () => {
           if (!supplier) return;
           app.addPayableEntry({ ...input, supplierId: supplier.id });
           setCreating(false);
@@ -362,7 +367,7 @@ export function AccountsPayable() {
             `${input.type} of ${money(round2(input.subtotal + input.tax + input.freight + input.misc))} added` +
               (input.type === "Claim" ? " — not counted until cleared (d14)." : "."),
           );
-        }}
+        })}
         onSettle={doSettle}
         onClear={doClear}
         onCancelSelection={() => setSel({})}

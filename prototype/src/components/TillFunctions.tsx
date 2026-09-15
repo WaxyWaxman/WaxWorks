@@ -2,13 +2,13 @@ import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { BarcodeInput } from "./BarcodeInput";
 import { Modal } from "./Modal";
-import { CURRENT_USER } from "../data/seed";
 import type { Sale } from "../data/types";
 import type { DayBreakdown } from "../lib/dayBreakdown";
 import { money } from "../lib/money";
 import { resolveScan } from "../lib/resolve";
 import { saleTotals } from "../lib/totals";
 import { useApp } from "../store/AppStore";
+import { useActor } from "./Identify";
 
 // The things nobody touches with a customer waiting: past Sales, the holds
 // list, and the day close (M-03). They belong to the TILL rather than to the
@@ -299,6 +299,7 @@ export function SearchModal({ onClose }: { onClose: () => void }) {
 
 export function OtherFunctionsModal({ onClose }: { onClose: () => void }) {
   const app = useApp();
+  const withActor = useActor();
   const [breakdown, setBreakdown] = useState<{ closing: boolean; data: DayBreakdown } | null>(null);
   const openBatches = app.closeBatches.filter((b) => !b.undoneAt);
 
@@ -325,10 +326,14 @@ export function OtherFunctionsModal({ onClose }: { onClose: () => void }) {
             </button>
             <button
               className="btn primary"
-              onClick={() => {
-                const { breakdown: data } = app.totalTodaysSales(CURRENT_USER);
-                setBreakdown({ closing: true, data });
-              }}
+              // Tier 2 (E-01 d5). M-03 records the closing User on the
+              // CloseBatch, so this cannot ride a constant.
+              onClick={() =>
+                withActor("Total Today's Sales", (actor) => {
+                  const { breakdown: data } = app.totalTodaysSales(actor);
+                  setBreakdown({ closing: true, data });
+                })
+              }
             >
               Total Today's Sales
             </button>
@@ -349,7 +354,12 @@ export function OtherFunctionsModal({ onClose }: { onClose: () => void }) {
                   Batch <span className="mono">{b.id}</span> — {b.saleIds.length} Sale
                   {b.saleIds.length === 1 ? "" : "s"} — {b.at} by {b.by}
                 </span>
-                <button className="btn sm danger" onClick={() => app.undoEndOfDay(b.id, CURRENT_USER)}>
+                <button
+                  className="btn sm danger"
+                  onClick={() =>
+                    withActor("Undo End of Day", (actor) => app.undoEndOfDay(b.id, actor))
+                  }
+                >
                   Undo
                 </button>
               </div>

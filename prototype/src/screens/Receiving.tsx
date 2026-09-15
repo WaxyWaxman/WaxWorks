@@ -423,6 +423,7 @@ function InvoiceEditor({
   // path into the staging card, so picking and scanning cannot drift apart.
   const [stagedOrder, setStagedOrder] = useState<PendingOrderLine | null>(null);
   const app = useApp();
+  const withActor = useActor();
   const invoice = app.invoiceFor(invoiceId)!;
   const supplier = app.supplierFor(invoice.supplierId)!;
 
@@ -469,11 +470,13 @@ function InvoiceEditor({
     return () => window.clearTimeout(t);
   }, [toast]);
 
-  const doFinalize = () => {
+  // Tier 2 (d5). Finalizing turns a draft into what the store owes, so it is attributed even though the scanning before it was covered by the session (d12).
+  const doFinalize = () =>
+    withActor("Finalize invoice", () => {
     if (delta !== 0) app.setInvoiceTotalOverride(invoiceId, enteredTotal);
     const res = app.finalizeInvoice(invoiceId);
     if (res) setFinalizedCount(res.itemCount);
-  };
+  });;
 
   const doSaveUpdates = () => {
     if (delta !== 0) app.setInvoiceTotalOverride(invoiceId, enteredTotal);
