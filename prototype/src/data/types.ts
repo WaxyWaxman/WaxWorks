@@ -4,7 +4,11 @@
 export type Grade = "M" | "NM" | "VG+" | "VG" | "G+" | "G" | "F" | "P";
 export const GRADES: Grade[] = ["M", "NM", "VG+", "VG", "G+", "G", "F", "P"];
 
-export type Section = "VINYL" | "MERCH";
+// M-06 d28 — Sections are an EDITABLE TABLE, not a fixed list, so the type is
+// the code rather than a closed union. The attributes live on SectionRow
+// below; a Record carries only the code, because d31 says a catalog entry
+// stores nothing its configuration already implies.
+export type Section = string;
 
 export interface RecordEntry {
   id: string;
@@ -688,4 +692,106 @@ export interface User {
   // Before-and-after, per A-55: without it, who promoted whom exists nowhere
   // after the second change, and this is the privilege boundary.
   log: { at: string; text: string }[];
+}
+
+// ---------------------------------------------------------------------------
+// M-06 settings — the configuration other flows resolve against
+//
+// Two of these open up types that used to be closed unions. The union values
+// were never wrong; they were the *behaviour*, and M-06 separates behaviour
+// from the row a shop configures:
+//
+//   - d22/d23: many tenders may share one behaviour — `Visa` and `Mastercard`
+//     both settle as a card — so the behaviour stays an enum and the tender
+//     becomes a row.
+//   - d28: a Section is an editable table with real attributes, so the code
+//     stays a string and the attributes move to a row.
+//
+// Nothing on the money path changes shape as a result, which is the point.
+// ---------------------------------------------------------------------------
+
+export interface SectionRow {
+  code: string; // two characters (d28)
+  name: string;
+  // d20 — whether a Section enters revenue reporting is a property of the
+  // Section. Freight is not revenue; a gift card load is a liability.
+  countsAsRevenue: boolean;
+  // d29 — the Section supplies the DEFAULT; whether a thing tracks stock
+  // stays a property of the catalog entry.
+  tracksStockDefault: boolean;
+  // d30 — both default true, both false on the gift card Section. Not gates:
+  // a property of what is being sold, not of who is selling it.
+  discountable: boolean;
+  returnable: boolean;
+  // d40 — a Section may override the store's dead-stock threshold.
+  deadStockDays?: number;
+  // d9 — referenced settings are deactivated, never deleted.
+  active: boolean;
+  // Pre-loaded and not removable: d20 gives freight and gift cards one each.
+  systemOwned?: boolean;
+}
+
+export interface TenderRow {
+  id: string;
+  name: string; // d4 — the display name is configurable
+  behavior: TenderType; // d4 — the behaviour is not
+  active: boolean;
+  glCode?: string; // d23 — reserved for a future general ledger
+  // `rounding` is written by the system, never offered (d26).
+  systemOwned?: boolean;
+}
+
+export interface CurrencyRow {
+  code: string; // ISO — CAD, USD
+  name: string;
+  // d38 — ONE rate per currency, and it is a PLANNING rate the shop sets
+  // conservatively. There is no separate buffer (it supersedes d36's).
+  rate: number;
+  // d33 — each rate carries the date it was last set, because the staleness
+  // risk is answered by showing the date rather than by hiding it.
+  rateSetOn: string;
+  active: boolean;
+}
+
+export type DrawerPolicy = "every" | "cash" | "never"; // d25
+export type ReceiptWidth = "80mm" | "58mm" | "letter"; // d50
+
+// The scalars. Every one of these is a figure another flow reads, which is
+// why they are a store setting rather than a constant (A-5 scopes to a Store).
+export interface StoreSettings {
+  sessionLapseSeconds: number; // d45, A-50 — default 300, no maximum (E-01 d13)
+  priceEndingMinor: number; // d44, A-49 — 99, 95 or 0, an integer of minor units
+  deadStockDays: number; // d40 — default 180, a Section may override
+  streamAgingDays: number; // d41 — default 14
+  drawerPolicy: DrawerPolicy; // d25 — does nothing in v1; the hardware is not there
+  receiptWidth: ReceiptWidth; // d50
+}
+
+export interface StoreDetails {
+  legalName: string; // the entity, on outbound customer invoices
+  tradingName: string; // the name on the door, on receipts
+  address: PostalAddress;
+  phone: string;
+  email: string;
+  website: string;
+  receiptFooter: string;
+  receiptFooterOn: boolean; // d46 — free text with its own on/off flag
+  logoPath?: string; // d51, A-56 — an uploaded image, never a URL
+  // d47 — assigned, never editable, and writable by nobody who works in the
+  // shop. M-04 d11 settled who assigns them: we do, at setup.
+  readonly storeId: string; // seven digits
+  readonly position: number;
+}
+
+// A-52 — every settings write is logged with its actor and the values BEFORE
+// and AFTER, because the question asked afterwards is always "what did this
+// used to be", and d8's never-retroactive rule makes the old value the only
+// record of what yesterday's Sales were computed against.
+export interface SettingsLogEntry {
+  at: string;
+  actor: string;
+  group: string;
+  key: string;
+  before: string;
+  after: string;
 }
