@@ -111,7 +111,8 @@ that is a separate question nobody has answered yet._
   Manager authorisation (decisions 11, 13) — initials only, like every other gate here, with no
   real auth behind it. Merge and Delete are labeled, not enforced. There is no separate Margin
   field — Discount does double duty, describing what the Supplier charges **and** driving
-  suggested retail at receiving (E-02 decision 31). A Discount change reprices future receiving
+  suggested retail at receiving (E-02 decision 49 — the decision 31 this
+  line used to cite is the invoice-number lookup). A Discount change reprices future receiving
   only (never existing stock); minimum order qty/amount and cancel-by are captured but not yet
   consumed by anything (M-02 isn't built);
   multi-store scope and floor/ceiling constraints are still open questions.

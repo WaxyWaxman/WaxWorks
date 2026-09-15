@@ -68,6 +68,15 @@ Pay-outs are the one cash movement that is captured, because money leaving the t
 
 - Minimum on hand is informational and surfaces here rather than raising orders.
 
+**From [M-06](M-06-settings.md):**
+
+- **Tax is reported per tax *type*** — GST, QST — rather than per tax line ([M-06](M-06-settings.md) d11). Where a line carried two taxes, each is reported against its own type: the split is what gets remitted, and two composition orders that agree on the customer's total can disagree on it (M-06 d16).
+- **The *By tender* breakdown reports configured tenders, not behaviors** ([M-06](M-06-settings.md) d22). `Visa`, `Mastercard` and `Amex` are three rows, not one `card` row, because they usually settle as three separate bank deposits and a merged figure cannot be tied back to a statement.
+- **Cash rounding is its own tender** ([M-06](M-06-settings.md) d26, amending d21), behavior `rounding`, written by the system and never selectable. It carries `−$0.02` when a cash tender rounds up and `+$0.02` when it rounds down, so a Sale's tenders sum to its total and the rounding tallies through the *By tender* breakdown with no line invented for it — decision 14's reasoning reaching its natural end. It is also what makes decision 8's refusal to reconcile the drawer a choice rather than an oversight.
+- **Sections carry a sort order** ([M-06](M-06-settings.md) d28) which the *By Section* breakdown follows, and are an editable table rather than a fixed pair of values.
+- **Whether a Section enters the *By Section* breakdown is a flag on the Section** ([M-06](M-06-settings.md) d20), not a hard-coded exclusion. Freight and services are revenue and appear; the gift-card Section is a liability and does not — which is decision 14 restated as configuration rather than as a special case in this flow.
+- **Gift card loads resolve through a system-owned catalog entry** ([M-06](M-06-settings.md) d18) which, like every sellable thing, carries a genre and therefore a Section. **That Section is excluded from the *By Section* breakdown** — decision 14 is unchanged and governs: a load is money in but not a sale, so it stays out of gross and out of Section, and is reported as an *of which* line against the tender that took the money.
+
 ---
 
 ## Resolved decisions

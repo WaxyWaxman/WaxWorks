@@ -2,7 +2,7 @@
 
 **Actor:** Manager
 **Status:** In clarification
-**Related:** [E-01 Authenticate](E-01-authenticate.md)
+**Related:** [E-01 Authenticate](E-01-authenticate.md) · [M-06 Configure the store](M-06-settings.md)
 
 **Job:** As a manager, I need to control who has access to the system and at what level.
 
@@ -48,7 +48,6 @@ Everything in this table is something an Employee **cannot do at all**. It is di
 | Flagged action | Flow |
 |---|---|
 | A **shelf price** below cost | [E-02](E-02-receive-inventory.md) d35, [E-04](E-04-manage-inventory.md) |
-| An Invoice total adjusted beyond **±2%** | [E-02](E-02-receive-inventory.md) d35 |
 | A derived-vs-stated **subtotal discrepancy** accepted | [E-02](E-02-receive-inventory.md) d18 |
 | A Sale driving stock **negative** | [E-05](E-05-sell-a-record.md) |
 | A **sale lock** broken on a stranded terminal | [E-05](E-05-sell-a-record.md) d23 |
@@ -110,6 +109,7 @@ The in-place mechanism survives for the manager-only table (decision 9). A Manag
 | 7 | In v1 there are no credentials to issue, so adding a User has no invite step |
 | 8 | **The manager override is replaced by a review queue.** Previously gated actions proceed and raise a flag a Manager reviews afterward. **Amends decisions 3 and 4** for override-gated actions, and closes the audit-surface open question ([architecture](../architecture.md) A-28) |
 | 9 | **Manager-only actions are unchanged** and keep the in-place authorization of decisions 3 and 4 — the Manager enters their own initials, both names are recorded. Only the *override* is replaced (A-28a) |
+| 10 | **An Invoice total adjusted beyond ±2% leaves the review queue and becomes impossible instead.** [E-02](E-02-receive-inventory.md) d50 makes the tolerance a hard bound at receiving, so there is no longer an action to flag — the row is removed from the table above rather than left describing something that cannot happen. **This is not the manager override returning.** Decision 8 replaced gates that *waited for a Manager*; a bound waits for nobody and no authorization lifts it. The correction paths are to fix the lines or to raise an Adjustment in [M-05](M-05-accounts-payable.md), both of which already exist. Every other flagged action is unchanged, and decision 8 stands for all of them |
 
 ---
 

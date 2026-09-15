@@ -13,9 +13,10 @@
 0. A terminal is **enrolled** to a Store once, using a one-time code, and holds that enrollment thereafter (decision 9). Enrollment is what scopes everything the terminal can see to its Store; it is not a staff sign-in.
 1. A **terminal** presents the till with no active session.
 2. Employee enters their **initials** to open a session on that terminal.
-3. The session stays active on that terminal for **15 minutes** of inactivity, then lapses. An **Open Sale suppresses the lapse** on that terminal (decision 10).
+3. The session stays active on that terminal for a configured period of inactivity — **defaulting to 5 minutes** ([M-06](M-06-settings.md) d45, replacing decision 4's flat 15) — then lapses. An **Open Sale suppresses the lapse** on that terminal (decision 10).
 4. While a session is active, every action taken on that terminal is attributed to that Employee.
 5. When no session is active, any action requiring attribution prompts for initials inline and proceeds without opening a full session.
+5a. **Some actions prompt every time, session or not** (decision 12): opening a new Sale, starting a Return, recording a pay-out, adjusting on hand, and voiding. Receiving, order processing and the rest of the back office are covered by the session, because the same person works those for an hour at a stretch.
 6. A Manager authorizing a **manager-only** action enters their own initials at the point of the action; this does not replace the Employee's session. Actions that formerly needed a *manager override* now proceed and raise a review flag instead ([M-04](M-04-manage-users.md) d8).
 
 ---
@@ -56,6 +57,10 @@ The model is built so that adding real credentials later does not change the sha
 
 - A **manager-only authorization** must be performable at a terminal that currently has an Employee session open, without ending that session. (This was written for the manager override, which [M-04](M-04-manage-users.md) d8 has since replaced with a review queue; the requirement survives for the manager-only list.)
 
+**From [M-06](M-06-settings.md):**
+
+- **The session lapse is a store setting defaulting to 5 minutes**, not the 15 of decision 4 ([M-06](M-06-settings.md) d45). The rule is unchanged — it measures *inactivity*, so an hour of continuous work never prompts and a six-minute absence does. Configurable because in v1 it is ergonomics rather than security: there are no passwords, so what it prevents is accidental misattribution. **It changes character the day credentials arrive**, and must be revisited rather than inherited.
+
 ---
 
 ## Resolved decisions
@@ -73,6 +78,7 @@ The model is built so that adding real credentials later does not change the sha
 | 9 | **A terminal enrolls to a Store once** and holds a real authenticated session carrying that Store. Row-level security scopes on the terminal's Store; initials are attribution on top ([architecture](../architecture.md) A-3) |
 | 10 | **An Open Sale suppresses the 15-minute lapse** on its terminal. Closes the open question below (A-19a) |
 | 11 | **A Manager authorizing a manager-only action enters their own initials at the point of the action, without replacing the Employee's session; both names are recorded. Supersedes decision 6**, which named the retired *manager override*. [M-04](M-04-manage-users.md) d8 retired that term and the actions it gated now raise a **ReviewFlag** instead — but d8 amends M-04 d3 and d4 **for override-gated actions only**, leaving the in-place mechanism unchanged for the manager-only set [architecture](../architecture.md) A-28a still gates. Step 6 of the Flow above already reads this way |
+| 12 | **Some actions prompt for initials every time, even inside an active session.** Extends step 5, which prompts only when *no* session is active. The split is by **whether the actor plausibly changed since the last action**: at the counter the person ringing changes constantly, while someone sitting down to receive a carton or place a morning's orders is the same person for an hour, and prompting them per action would train them to type initials without reading the screen. **Always prompts:** opening a new Sale, starting a Return, and recording a pay-out. **Covered by the session:** receiving and finalizing an Invoice, order processing, and everything in the back office. An **inventory adjustment** and a **void** always prompt too, being consequential and occasional rather than rhythmic. *Accepted consequence:* the till asks for initials more often than it used to, which is the cost of a Sale's attribution being worth something — and it makes decision 10's open-Sale lapse suppression less load-bearing, since the next Sale re-establishes who is there regardless |
 
 ---
 

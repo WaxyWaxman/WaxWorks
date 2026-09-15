@@ -58,6 +58,10 @@ A scanned barcode short-circuits to resolution rather than keyword search: a man
 - Catalog lookup is **local-first with the provider as fallback** (E-02 decision 5). Metadata is bulk-prefetched at PurchaseOrder time ([M-02](M-02-reorder-inventory.md)), so most lookups hit locally.
 - Where the catalog provider returns multiple matches, the Employee is presented a **picker** rather than an automatic choice.
 
+**From [M-06](M-06-settings.md):**
+
+- **The dead-stock threshold is a store setting defaulting to 180 days, and a Section may override it** ([M-06](M-06-settings.md) d40). This completes decision 16, which named the setting and left *"and plausibly by Section"* undecided. It is resolved live rather than copied onto a Record (M-06 d31), so changing it re-reads every Record beneath it at once.
+
 ---
 
 ## Resolved decisions

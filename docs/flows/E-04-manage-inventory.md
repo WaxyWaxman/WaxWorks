@@ -118,6 +118,13 @@ An optional cross-reference links the two, so a payout can be traced to the copi
 - **Negative inventory is reconciled here.** The till lets stock go below zero rather than blocking a Sale.
 - **Reserve creates a Held Sale**, with a quantity chosen at reservation time.
 
+**From [M-06](M-06-settings.md):**
+
+- **Genre is mandatory on every catalog entry**, non-tracked ones included ([M-06](M-06-settings.md) d17), and it carries the **product tax code** that decides what tax the line attracts (d12).
+- **A catalog entry's *tracks stock* setting defaults from its Section but belongs to the entry** ([M-06](M-06-settings.md) d29). Changing a Section's default never reaches entries already created under it.
+- **A Record stores its genre; its Section is derived from that genre's required parent, not stored beside it** ([M-06](M-06-settings.md) d31, d32). Overriding a Record's genre therefore moves its Section too — the two cannot be set independently. Tax code, *counts as revenue*, *discountable* and *returnable* are resolved when they apply rather than copied onto the Record, so correcting a genre or a Section corrects everything beneath it. Completed Sale lines are unaffected — they keep what they resolved ([E-05](E-05-sell-a-record.md), M-06 d8).
+- **Editing a Record's genre stays an Employee action and is not gated** ([M-06](M-06-settings.md) d19). The shop-internal genres — `Shipping`, `Services`, `Gift cards` — are omitted from the genre picker rather than gated, so they cannot be selected for a music Record.
+
 ---
 
 ## Resolved decisions
@@ -163,5 +170,5 @@ An optional cross-reference links the two, so a payout can be traced to the copi
 - **Batch stock-take.** Reason-coded single adjustments are specified; counting a whole Section against the shelf and reconciling in one pass is not. It needs a session concept — count in progress, variances, then commit.
 - **Claim resolution beyond Credited.** ~~A supplier may **partially credit**~~ — **resolved by decision 20**: the memo's amount is captured and governs, so a part credit is an ordinary Credited claim at the memo's figure. ~~Still open: a supplier who **denies** a claim outright~~ — **resolved by decision 24**: a denial is one of three reasons a claim is **Abandoned**, which is the terminal disposition v1 previously lacked. ~~Still open: a supplier who issues a credit note **against a different Invoice** than the one claimed~~ — **resolved by decision 28**: they may, so long as it is an Invoice the store actually received stock on from them. The reference is evidence of what is being argued, never where the credit lands — that stays [M-05](M-05-accounts-payable.md) d27's selection. **This open question is now closed in full.**
 - **Re-grading a copy after it is sellable.** Editing a copy's grade is permitted, but a copy that was sold at a grade it no longer carries is a data question the snapshot rule sidesteps rather than answers.
-- **Who may delete a Record with stock on hand?** Currently manager-only with no guard against deleting a Record that still has sellable copies.
+- ~~**Who may delete a Record with stock on hand?**~~ — **Resolved by [architecture](../architecture.md) A-54**: nobody, at any role. Deletion is refused while a live reference exists — sellable or held copies on hand, or outstanding PurchaseOrder lines — and the Manager gate on Delete Record applies only once none does. Past Sales are never touched; line values are snapshotted (E-05 d13) and the reference is nulled.
 - **Bin location** — see [E-03](E-03-search-inventory.md).
