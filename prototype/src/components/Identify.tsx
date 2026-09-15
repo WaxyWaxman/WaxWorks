@@ -17,16 +17,16 @@ import { useApp } from "../store/AppStore";
 // adjusting on hand and voiding prompt EVERY time, session or not (d12, d15),
 // so this runs many times an hour and has to cost a keystroke or two.
 //
-//   - No Enter, no OK button. The moment what is typed can only be one active
-//     person, the action proceeds.
+//   - No Enter, no OK button. The moment what is typed IS an active person's
+//     initials, the action proceeds. Full initials, not a prefix — see
+//     lib/identify.ts for why the keystroke saved was not worth it.
 //   - Escape cancels THE ACTION, not just the dialog. Nothing half-happens.
-//   - An ambiguous prefix waits for another character rather than guessing, so
-//     the failure mode is a keystroke and never a misattribution.
+//   - Anything short of a full match resolves to nobody and waits, so the
+//     failure mode is a keystroke and never a misattribution.
 //
 // A deliberate non-feature: there is no list of names to click. A picker would
 // put every prompt behind a read-and-aim, and would show the whole staff list
-// to whoever is standing at the counter. Ambiguity shows the competing
-// INITIALS, not the people.
+// to whoever is standing at the counter.
 
 type Request = {
   reason: string;
@@ -117,7 +117,9 @@ function IdentifyPrompt({
         <div className="idy-reason">{req.reason}</div>
         <input
           ref={inputRef}
-          className={"idy-input" + (res.kind === "none" ? " bad" : "")}
+          // A partial is somebody mid-keystroke, not a mistake, so it is not
+          // drawn as one.
+          className={"idy-input" + (res.kind === "none" && !res.partial ? " bad" : "")}
           value={typed}
           maxLength={4}
           autoComplete="off"

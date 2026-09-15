@@ -6,17 +6,20 @@ import { normalizeInitials } from "./users";
 // The counter is the constraint. Identifying yourself happens many times an
 // hour — E-01 d12 and d15 make opening a Sale, recording a pay-out, adjusting
 // on hand and voiding prompt EVERY time, session or not — so the interaction
-// has to cost a keystroke or two and no more. There is no Enter and no OK
-// button: the moment what has been typed can only be one active person, that
-// is who it is.
+// has to be quick. There is no Enter and no OK button: the moment what has
+// been typed IS an active person's initials, that is who it is.
 //
-// Prefix, not exact match. "R" is enough where R. Delacroix is the only active
-// person whose initials start with R; "RD" is needed once R. Mbeki is hired.
-// That is the whole trade and it is worth stating plainly: the keystroke that
-// worked yesterday can stop working tomorrow, because who else is on the staff
-// list changed. It fails SAFE — an ambiguous prefix resolves to nobody and
-// waits for another character, so the cost is a keystroke, never a
-// misattribution.
+// EXACT match, not prefix. Typing `R` does nothing even when R. Delacroix is
+// the only active R — the initials have to be typed in full. Resolution is
+// still as-you-type: the instant what is typed IS somebody's initials, that is
+// who it is, with no Enter.
+//
+// Prefix resolution was tried and rejected. It saved a keystroke and made the
+// keystroke unstable: `R` worked until somebody whose initials also start with
+// R was hired, at which point a colleague's muscle memory silently stopped
+// working, for a reason nothing put in front of the Manager who caused it.
+// Initials are two to four characters; the saving was never worth a login that
+// changes under you.
 //
 // Only ACTIVE users can be resolved. A deactivated user's initials are
 // released to a new hire (M-04 d16), and a deactivated person must not be able
@@ -24,22 +27,19 @@ import { normalizeInitials } from "./users";
 
 export type Resolution =
   | { kind: "empty" }
-  | { kind: "none"; typed: string }
-  | { kind: "one"; user: User }
-  | { kind: "many"; candidates: User[]; typed: string };
+  // Nothing matches yet. `partial` is true when what has been typed is the
+  // start of somebody's initials — still worth typing — as against a string
+  // that can never become anyone.
+  | { kind: "none"; typed: string; partial: boolean }
+  | { kind: "one"; user: User };
 
 export function resolveInitials(users: User[], typed: string): Resolution {
   const want = normalizeInitials(typed);
   if (!want) return { kind: "empty" };
-  const candidates = users.filter((u) => u.active && u.initials.startsWith(want));
-  if (candidates.length === 0) return { kind: "none", typed: want };
-  if (candidates.length === 1) return { kind: "one", user: candidates[0] };
-  // An exact hit still wins outright when it is also a prefix of somebody
-  // else's. Initials are at least two characters (M-04 d13), so this is the
-  // "RD typed, RDX also on staff" case rather than a single letter.
-  const exact = candidates.find((u) => u.initials === want);
+  const exact = users.find((u) => u.active && u.initials === want);
   if (exact) return { kind: "one", user: exact };
-  return { kind: "many", candidates, typed: want };
+  const partial = users.some((u) => u.active && u.initials.startsWith(want));
+  return { kind: "none", typed: want, partial };
 }
 
 // What the prompt says under the field. Kept here rather than in the component
@@ -49,9 +49,9 @@ export function resolutionHint(r: Resolution): string {
     case "empty":
       return "Type your initials.";
     case "none":
-      return `No active user with initials starting ${r.typed}.`;
-    case "many":
-      return `${r.candidates.map((u) => u.initials).join(", ")} — keep typing.`;
+      // A partial is not an error — it is somebody halfway through typing, so
+      // it must not be dressed as a failure.
+      return r.partial ? "Keep typing." : `No active user with initials ${r.typed}.`;
     case "one":
       return r.user.name;
   }
