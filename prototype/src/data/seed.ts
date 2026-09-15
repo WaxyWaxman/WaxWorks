@@ -166,6 +166,12 @@ export const RECORDS: RecordEntry[] = [
     year: 1971,
     country: "US",
     genreId: "gn-folk-rock",
+    // A-61 — the tags this Record was adopted under, the one the MAP
+    // matched marked. A snapshot, never re-resolved.
+    providerTags: [
+      { tag: "Folk", votes: 71, matched: true },
+      { tag: "Singer-Songwriter", votes: 34 },
+    ],
     art: "🔵",
     manufacturerUpc: "081227971609",
     discogsId: "155632",
@@ -197,6 +203,13 @@ export const RECORDS: RecordEntry[] = [
     year: 1959,
     country: "US",
     genreId: "gn-modal-jazz",
+    // A-61 — the tags this Record was adopted under, the one the MAP
+    // matched marked. A snapshot, never re-resolved.
+    providerTags: [
+      { tag: "Jazz", votes: 96, matched: true },
+      { tag: "Modal Jazz", votes: 41 },
+      { tag: "Hard Bop", votes: 22 },
+    ],
     art: "🎺",
     manufacturerUpc: "888751545519",
     discogsId: "281822",
@@ -228,6 +241,12 @@ export const RECORDS: RecordEntry[] = [
     year: 1994,
     country: "US",
     genreId: "gn-hip-hop",
+    // A-61 — the tags this Record was adopted under, the one the MAP
+    // matched marked. A snapshot, never re-resolved.
+    providerTags: [
+      { tag: "Hip Hop", votes: 88, matched: true },
+      { tag: "Boom Bap", votes: 29 },
+    ],
     art: "🏙️",
     manufacturerUpc: "889854250515",
     discogsId: "63643",
@@ -261,6 +280,12 @@ export const RECORDS: RecordEntry[] = [
     year: 2004,
     country: "US",
     genreId: "gn-hip-hop",
+    // A-61 — the tags this Record was adopted under, the one the MAP
+    // matched marked. A snapshot, never re-resolved.
+    providerTags: [
+      { tag: "Hip Hop", votes: 64, matched: true },
+      { tag: "Boom Bap", votes: 18 },
+    ],
     art: "🎭",
     manufacturerUpc: "659457206512",
     discogsId: "213144",
@@ -296,6 +321,11 @@ export const RECORDS: RecordEntry[] = [
     year: 1975,
     country: "US",
     genreId: "gn-art-punk",
+    // A-61 — the tags this Record was adopted under, the one the MAP
+    // matched marked. A snapshot, never re-resolved.
+    providerTags: [
+      { tag: "Art Punk", votes: 52, matched: true },
+    ],
     art: "🐎",
     manufacturerUpc: "060758004321",
     discogsId: "377464",

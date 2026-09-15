@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { ClaimModal } from "../components/ClaimModal";
 import { PriceEditModal, PrintLabelModal } from "../components/CopyModals";
 import { ManagerAuthorize } from "../components/ManagerAuthorize";
@@ -111,6 +111,37 @@ export function TitlecardPanel({
                       <Row
                         k="Genre / Section"
                         v={`${genreNameFor(app.genres, record.genreId)} · ${sectionLabelFor(app.genres, app.sections, record.genreId)}`}
+                      />
+                      {/* A-61 — the tags this Record was ADOPTED under, the
+                          matched one marked. This is what makes "why did it
+                          land here" answerable, which is the whole reason the
+                          snapshot exists. Marked by the MAP's match, not the
+                          operator's choice — so where the map resolved nothing,
+                          nothing is credited. Never read by the money path. */}
+                      <Row
+                        k="Provider tags"
+                        v={
+                          record.providerTags?.length ? (
+                            <>
+                              {record.providerTags.map((t) => (
+                                <span
+                                  key={t.tag}
+                                  className={t.matched ? "badge warn" : "badge"}
+                                  style={{ marginRight: 4 }}
+                                  title={
+                                    t.matched
+                                      ? "This is the tag the genre map matched (A-61)"
+                                      : "Carried by the release, not what decided the genre"
+                                  }
+                                >
+                                  {t.tag} · {t.votes}
+                                </span>
+                              ))}
+                            </>
+                          ) : (
+                            "— (none carried at adoption)"
+                          )
+                        }
                       />
                       <Row k="Manufacturer UPC" v={record.manufacturerUpc ?? "— (none on sleeve)"} />
                       <Row k="Catalog ID / sticky" v={`${record.discogsId ?? "—"} · ${record.stickyPrice ? money(record.stickyPrice) + " (New)" : "no sticky price"}`} />
@@ -378,7 +409,7 @@ export function TitlecardPanel({
   );
 }
 
-function Row({ k, v }: { k: string; v: string }) {
+function Row({ k, v }: { k: string; v: ReactNode }) {
   return (
     <tr>
       <td className="muted" style={{ width: 150 }}>
