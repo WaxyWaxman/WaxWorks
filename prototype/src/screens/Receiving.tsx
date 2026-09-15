@@ -1540,7 +1540,6 @@ function FindOrCreateRecordModal({
                 <tr key={r.id}>
                   <td>
                     {r.artist} — {r.title}
-                    {r.catalogOnly && <span className="badge warn" style={{ marginLeft: 6 }}>Catalog match</span>}
                   </td>
                   <td className="small muted">
                     {r.label} · {r.catalogNo}

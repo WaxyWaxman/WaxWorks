@@ -73,7 +73,6 @@ export function FindSelection({
             {record.stickyPrice && (
               <span className="badge warn">sticky {money(record.stickyPrice)} (New)</span>
             )}
-            {record.catalogOnly && <span className="badge">catalog only</span>}
             {/* A pinned selection that has fallen out of the results leaves the
                 slab with no highlighted row. Say so rather than let the list
                 look broken. */}
@@ -94,13 +93,6 @@ export function FindSelection({
       </div>
 
       <div className="find-scroll">
-        {record.catalogOnly && (
-          <div className="callout">
-            This is a <strong>catalog match we don’t hold</strong>. Acting on it — ordering,
-            stocking, editing — pulls it into the local catalog and prompts for store-specific
-            fields (supplier, Section). <em>(E-03 decision 6.)</em>
-          </div>
-        )}
 
         <section className="find-sect">
           <div className="head">

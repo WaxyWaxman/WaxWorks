@@ -223,7 +223,7 @@ interface AppState {
   nextInvoiceRef: number;
   nextCustomerPrimaryId: number;
   /** E-03 decision 8 — toggle to demo graceful degradation when the catalog provider (MusicBrainz) is down */
-  discogsUp: boolean;
+  providerUp: boolean;
 }
 
 const seed: AppState = {
@@ -719,7 +719,7 @@ const seed: AppState = {
   nextInternalBarcode: 9000,
   nextInvoiceRef: 1,
   nextCustomerPrimaryId: CUSTOMERS.length + 1,
-  discogsUp: true,
+  providerUp: true,
 };
 
 interface AppContextValue extends AppState {
@@ -757,7 +757,7 @@ interface AppContextValue extends AppState {
   setStoreDetail: (key: keyof Omit<StoreDetails, "storeId" | "position">, value: string | boolean | PostalAddress, by: string) => void;
   upsertSection: (row: SectionRow, by: string) => SettingsWriteResult;
   upsertGenre: (row: Genre, by: string) => SettingsWriteResult;
-  adoptRelease: (releaseId: string, genreId: string) => RecordEntry | null;
+  adoptRelease: (releaseId: string, genreId: string, price?: number) => RecordEntry | null;
   resolveAdoptionGenre: (releaseId: string) => {
     release: ReleaseCacheEntry | undefined;
     match: GenreMatch | undefined;
@@ -865,7 +865,7 @@ interface AppContextValue extends AppState {
     grade?: Grade,
     price?: number,
   ) => void;
-  toggleDiscogs: () => void;
+  toggleProvider: () => void;
 
   invoiceFor: (id?: string) => Invoice | undefined;
   startInvoice: (input: {
@@ -1540,7 +1540,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
   // and a later map edit never reaches back (d53, and the map's own "editable
   // without touching Records already imported under it").
 
-  const adoptRelease: AppContextValue["adoptRelease"] = (releaseId, genreId) => {
+  const adoptRelease: AppContextValue["adoptRelease"] = (releaseId, genreId, price) => {
     const rel = s.releaseCache.find((r) => r.id === releaseId);
     if (!rel) return null;
     const id = uid("rec");
@@ -1558,6 +1558,10 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
       art: rel.art,
       manufacturerUpc: rel.manufacturerUpc,
       minOnHand: 0,
+      // E-03 d20 — an optional selling price set at adoption becomes the
+      // sticky price. E-02 d12's first New-mode receipt overwrites it (a
+      // real receipt beats a guess) and d11 ignores it for second-hand.
+      ...(price ? { stickyPrice: price } : {}),
       // A-61 — the tags AS OF ADOPTION, with the one that matched marked.
       // A snapshot, never re-resolved: the cache is shared and refreshable, so
       // it holds what the provider says NOW where this has to hold what it
@@ -2645,7 +2649,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
     }));
   };
 
-  const toggleDiscogs = () => setS((prev) => ({ ...prev, discogsUp: !prev.discogsUp }));
+  const toggleProvider = () => setS((prev) => ({ ...prev, providerUp: !prev.providerUp }));
 
   const invoiceFor = (id?: string) => s.invoices.find((iv) => iv.id === id);
 
@@ -3753,7 +3757,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
       reserve,
       setCopyPrice,
       routeReturnLine,
-      toggleDiscogs,
+      toggleProvider,
       invoiceFor,
       startInvoice,
       createRecordManual,
