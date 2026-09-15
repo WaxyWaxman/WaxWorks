@@ -1,6 +1,14 @@
 import { describe, expect, it } from "vitest";
-import { GENRES, SECTIONS } from "../data/seed";
-import { genreNameFor, sectionCodeFor, sectionLabelFor, selectableGenres } from "./taxonomy";
+import { GENRES, PRODUCT_TAX_CODES, SECTIONS } from "../data/seed";
+import type { Genre } from "../data/types";
+import {
+  checkGenreDelete,
+  checkGenreWrite,
+  genreNameFor,
+  sectionCodeFor,
+  sectionLabelFor,
+  selectableGenres,
+} from "./taxonomy";
 
 // M-06 d31, d32 — a Record stores its genre and derives its Section from that
 // genre's required parent. These tests exist because the derivation is the
@@ -60,5 +68,73 @@ describe("genre identity is the id, never the name", () => {
     expect(offered).not.toContain("gn-services");
     expect(offered).not.toContain("gn-gift-card");
     expect(offered).toContain("gn-modal-jazz");
+  });
+});
+
+describe("the rules a genre write has to satisfy (d12, d32, A-54)", () => {
+  const ctx = { genres: GENRES, sections: SECTIONS, productTaxCodes: PRODUCT_TAX_CODES };
+  const draft = (over: Partial<Genre> = {}): Genre => ({
+    id: "gn-new",
+    name: "Dub",
+    section: "VI",
+    productTaxCode: "1",
+    active: true,
+    ...over,
+  });
+
+  it("accepts a genre with a real parent Section and a real tax code", () => {
+    expect(checkGenreWrite(draft(), ctx)).toEqual({ ok: true });
+  });
+
+  it("refuses a genre with no parent Section (d32)", () => {
+    // A Genre without one leaves every Record beneath it with no Section at
+    // all, which nothing downstream can report on.
+    expect(checkGenreWrite(draft({ section: "" }), ctx)).toMatchObject({ ok: false });
+    expect(checkGenreWrite(draft({ section: "ZZ" }), ctx)).toMatchObject({ ok: false });
+  });
+
+  it("refuses a genre with no product tax code (d12, d17)", () => {
+    expect(checkGenreWrite(draft({ productTaxCode: "" }), ctx)).toMatchObject({ ok: false });
+    expect(checkGenreWrite(draft({ productTaxCode: "9" }), ctx)).toMatchObject({ ok: false });
+  });
+
+  it("refuses a duplicate name but lets a genre keep its own", () => {
+    expect(checkGenreWrite(draft({ name: "modal jazz" }), ctx)).toMatchObject({ ok: false });
+    const existing = GENRES.find((g) => g.id === "gn-modal-jazz")!;
+    expect(checkGenreWrite({ ...existing, section: "ME" }, ctx)).toEqual({ ok: true });
+  });
+
+  it("refuses deleting a genre that catalog entries carry, and says why (A-54)", () => {
+    // Deletion is gated by STATE, not by role, and the refusal has to name its
+    // cause — M-04 d13 and A-54 both require that.
+    const g = GENRES.find((x) => x.id === "gn-folk-rock")!;
+    const refused = checkGenreDelete(g, 3);
+    expect(refused.ok).toBe(false);
+    expect(refused.ok === false && refused.reason).toContain("3 catalog entries");
+    expect(checkGenreDelete(g, 0)).toEqual({ ok: true });
+    expect(checkGenreDelete(undefined, 0)).toMatchObject({ ok: false });
+  });
+});
+
+describe("the gift card genre is system-owned (d18)", () => {
+  const ctx = { genres: GENRES, sections: SECTIONS, productTaxCodes: PRODUCT_TAX_CODES };
+  const giftCard = GENRES.find((g) => g.id === "gn-gift-card")!;
+
+  it("cannot be deleted, even though no catalog entry carries it", () => {
+    // This is the trap: the money path references it directly, so the use
+    // count A-54 works from is zero and the editor would have offered Delete.
+    // Deleting it sends product tax code resolution back to the "1" fallback
+    // and silently starts taxing gift card loads again.
+    expect(giftCard.systemOwned).toBe(true);
+    expect(checkGenreDelete(giftCard, 0)).toMatchObject({ ok: false });
+  });
+
+  it("keeps its product tax code, which is what keeps a load out of scope", () => {
+    expect(giftCard.productTaxCode).toBe("2");
+    expect(checkGenreWrite({ ...giftCard, productTaxCode: "1" }, ctx)).toMatchObject({ ok: false });
+  });
+
+  it("can still be renamed and reparented, which move no money", () => {
+    expect(checkGenreWrite({ ...giftCard, name: "Gift cards" }, ctx)).toEqual({ ok: true });
   });
 });

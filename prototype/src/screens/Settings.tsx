@@ -5,6 +5,7 @@ import { SpecNote } from "../components/SpecNote";
 import type {
   CurrencyRow,
   DrawerPolicy,
+  Genre,
   ReceiptWidth,
   SectionRow,
   TenderRow,
@@ -35,13 +36,14 @@ import { money } from "../lib/money";
 // M-06's own, and it recomputes live — so the screen and the till can be seen
 // to agree rather than asserted to.
 
-type GroupKey = "sections" | "tenders" | "currencies" | "store" | "details" | "tax";
+type GroupKey = "sections" | "genres" | "tenders" | "currencies" | "store" | "details" | "tax";
 
 // The tile is not decoration: .hit is a three-column skeleton (tile, two
 // lines of name, optional figure) shared with Find, Customers and Suppliers,
 // and a row without one collapses its own label.
 const GROUPS: { key: GroupKey; tile: string; label: string; blurb: string }[] = [
   { key: "sections", tile: "SE", label: "Sections", blurb: "Reporting categories and what they imply" },
+  { key: "genres", tile: "GE", label: "Genres", blurb: "The shelf axis, and what tax it attracts" },
   { key: "tenders", tile: "TE", label: "Tenders", blurb: "What the till can take money as" },
   { key: "currencies", tile: "CU", label: "Currencies", blurb: "Codes and the planning rate" },
   { key: "store", tile: "ST", label: "Store settings", blurb: "The figures other flows read" },
@@ -112,6 +114,7 @@ export function Settings() {
           <div className="stack">
             {refusal && <div className="callout danger">{refusal}</div>}
             {active === "sections" && <SectionsEditor by={authorisedBy} onRun={run} />}
+            {active === "genres" && <GenresEditor by={authorisedBy} onRun={run} />}
             {active === "tenders" && <TendersEditor by={authorisedBy} onRun={run} />}
             {active === "currencies" && <CurrenciesEditor by={authorisedBy} onRun={run} />}
             {active === "store" && <StoreSettingsEditor by={authorisedBy} />}
@@ -242,6 +245,175 @@ function Flag({ on, onChange }: { on: boolean; onChange: (v: boolean) => void })
     <td>
       <input type="checkbox" checked={on} onChange={(e) => onChange(e.target.checked)} />
     </td>
+  );
+}
+
+// ---------------------------------------------------------------------------
+
+// ---------------------------------------------------------------------------
+
+// M-06 d12, d19, d32 — the shop's own taxonomy. Finer than a Section, and the
+// thing a Record actually stores: its Section is derived from the parent here
+// (d31), and its product tax code is read from here at the scan (d12).
+function GenresEditor({ by, onRun }: { by: string; onRun: (r: SettingsWriteResult) => boolean }) {
+  const app = useApp();
+  const [draft, setDraft] = useState<Genre | null>(null);
+
+  const save = (row: Genre) => onRun(app.upsertGenre(row, by));
+
+  return (
+    <>
+      <p className="small muted">
+        Finer than a Section, and the axis a Record is actually filed on (d5, d12).{" "}
+        <SpecNote cite="M-06 d12, d19, d32; A-59, A-60">
+          <strong>The parent Section is required</strong> (d32), which is what lets a Record derive
+          its Section instead of storing one (d31) — so changing it here moves every Record under
+          this genre in <strong>M-03</strong>&rsquo;s <em>By Section</em> at once. The{" "}
+          <strong>product tax code</strong> is carried here (d12), so it decides the tax on every
+          line beneath it. <strong>Creating a genre is manager-only</strong> even though adding a
+          genre-map row will not be (A-59): a genre carries policy, a map row carries none.
+        </SpecNote>
+      </p>
+      <table className="data">
+        <thead>
+          <tr>
+            <th>Name</th>
+            <th>Parent Section</th>
+            <th>Tax code</th>
+            <th>In use</th>
+            <th>Active</th>
+            <th />
+          </tr>
+        </thead>
+        <tbody>
+          {app.genres.map((g) => {
+            const used = app.genreUseCount(g.id);
+            return (
+              <tr key={g.id}>
+                <td>
+                  <input
+                    defaultValue={g.name}
+                    onBlur={(e) => save({ ...g, name: e.target.value })}
+                  />
+                  {/* d17, d19 — omitted from the pickers rather than gated, so a
+                      music Record cannot be filed under Freight at all. */}
+                  {g.internal && <span className="badge"> shop-internal</span>}
+                  {g.systemOwned && <span className="badge"> system</span>}
+                </td>
+                <td>
+                  <select value={g.section} onChange={(e) => save({ ...g, section: e.target.value })}>
+                    {app.sections.map((sec) => (
+                      <option key={sec.code} value={sec.code}>
+                        {sec.code} · {sec.name}
+                      </option>
+                    ))}
+                  </select>
+                </td>
+                <td>
+                  <select
+                    value={g.productTaxCode}
+                    onChange={(e) => save({ ...g, productTaxCode: e.target.value })}
+                  >
+                    {app.productTaxCodes.map((c) => (
+                      <option key={c.code} value={c.code}>
+                        {c.code} — {c.description}
+                      </option>
+                    ))}
+                  </select>
+                </td>
+                {/* Derived, not stored — it is what makes the delete refusal
+                    legible rather than a flat no. */}
+                <td className="small muted">{used > 0 ? `${used} entr${used === 1 ? "y" : "ies"}` : "unused"}</td>
+                <Flag on={g.active} onChange={(v) => save({ ...g, active: v })} />
+                <td>
+                  <button
+                    className="btn sm"
+                    onClick={() => onRun(app.deleteGenre(g.id, by))}
+                    disabled={used > 0 || !!g.systemOwned}
+                    title={
+                      g.systemOwned
+                        ? "Written by the system — the gift card load resolves through it (d18)"
+                        : used > 0
+                          ? "Carried by catalog entries — deactivate instead (A-54)"
+                          : "Delete"
+                    }
+                  >
+                    Delete
+                  </button>
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+      <p className="small muted">
+        A genre carried by any catalog entry <strong>cannot be deleted</strong> — deletion is
+        gated by state, not by role (A-54). Switch it off instead and it stops being offered without
+        moving anything (d9). <strong>Merge</strong>, which empties a genre by repointing everything
+        under it, arrives with the genre map (A-60), because it has to repoint the map rows too.
+      </p>
+      {draft ? (
+        <div className="stack callout">
+          <label className="field">
+            <span>Name</span>
+            <input value={draft.name} onChange={(e) => setDraft({ ...draft, name: e.target.value })} />
+          </label>
+          <label className="field">
+            <span>Parent Section — required (d32)</span>
+            <select value={draft.section} onChange={(e) => setDraft({ ...draft, section: e.target.value })}>
+              {app.sections.map((sec) => (
+                <option key={sec.code} value={sec.code}>
+                  {sec.code} · {sec.name}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="field">
+            <span>Product tax code — required (d12)</span>
+            <select
+              value={draft.productTaxCode}
+              onChange={(e) => setDraft({ ...draft, productTaxCode: e.target.value })}
+            >
+              {app.productTaxCodes.map((c) => (
+                <option key={c.code} value={c.code}>
+                  {c.code} — {c.description}
+                </option>
+              ))}
+            </select>
+          </label>
+          <div className="row">
+            <button
+              className="btn primary sm"
+              onClick={() => {
+                if (save(draft)) setDraft(null);
+              }}
+            >
+              Add genre
+            </button>
+            <button className="btn sm" onClick={() => setDraft(null)}>
+              Cancel
+            </button>
+          </div>
+        </div>
+      ) : (
+        <button
+          className="btn sm"
+          onClick={() =>
+            setDraft({
+              // The id is the stable key a Record points at; the name is only
+              // a label, so renaming later moves nothing beneath it.
+              id: `gn-${Date.now().toString(36)}`,
+              name: "",
+              section: app.sections[0]?.code ?? "",
+              productTaxCode: app.productTaxCodes[0]?.code ?? "",
+              active: true,
+            })
+          }
+        >
+          + New genre
+        </button>
+      )}
+    </>
   );
 }
 

@@ -686,5 +686,13 @@ export const GENRES: Genre[] = [
   // gated, so a Record can never be set to one by accident.
   { id: "gn-freight", name: "Freight", section: "FR", productTaxCode: "1", active: true, internal: true },
   { id: "gn-services", name: "Services", section: "FR", productTaxCode: "1", active: true, internal: true },
-  { id: "gn-gift-card", name: "Gift card", section: "GC", productTaxCode: "2", active: true, internal: true },
+  {
+    id: "gn-gift-card",
+    name: "Gift card",
+    section: "GC",
+    productTaxCode: "2",
+    active: true,
+    internal: true,
+    systemOwned: true,
+  },
 ];

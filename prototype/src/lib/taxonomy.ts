@@ -1,4 +1,4 @@
-import type { Genre, SectionRow } from "../data/types";
+import type { Genre, ProductTaxCode, SectionRow } from "../data/types";
 
 // M-06 d31, d32 — a catalog entry stores its GENRE and nothing its genre
 // already implies. A Record's Section is derived through the genre's required
@@ -89,4 +89,75 @@ export function sectionSearchTerms(
 ): string {
   const row = sectionRowFor(genres, sections, genreId);
   return row ? `${row.code} ${row.name}` : "";
+}
+
+// ---------------------------------------------------------------------------
+// The rules a genre write has to satisfy, as pure functions so they can be
+// exercised without a screen. architecture §6 makes the same argument for the
+// pricing helpers: the rules are the highest-value thing to test.
+// ---------------------------------------------------------------------------
+
+export type GenreWriteCheck = { ok: true } | { ok: false; reason: string };
+
+export function checkGenreWrite(
+  row: Genre,
+  ctx: { genres: Genre[]; sections: SectionRow[]; productTaxCodes: ProductTaxCode[] },
+): GenreWriteCheck {
+  const name = row.name.trim();
+  if (!name) return { ok: false, reason: "A name is required." };
+
+  // d32 — the parent Section is REQUIRED, and it is what lets a Record derive
+  // its Section rather than store one (d31). A Genre without one would leave
+  // every Record beneath it with no Section at all, which nothing downstream
+  // can report on.
+  if (!row.section) return { ok: false, reason: "A parent Section is required (d32)." };
+  if (!ctx.sections.some((x) => x.code === row.section))
+    return { ok: false, reason: `No Section with code ${row.section}.` };
+
+  // d12 — the product tax code is carried by the Genre, so it decides the tax
+  // on every line beneath it. d17 makes genre mandatory on every sellable
+  // thing, which makes this mandatory here.
+  if (!row.productTaxCode) return { ok: false, reason: "A product tax code is required (d12)." };
+  if (!ctx.productTaxCodes.some((x) => x.code === row.productTaxCode))
+    return { ok: false, reason: `No product tax code ${row.productTaxCode}.` };
+
+  // d18 — a system-owned genre keeps its product tax code. The gift card
+  // load resolves through it, and code `2` is what keeps a load out of scope
+  // (d15); editing it here would start taxing loads with nothing to say so.
+  const before = ctx.genres.find((x) => x.id === row.id);
+  if (before?.systemOwned && before.productTaxCode !== row.productTaxCode)
+    return {
+      ok: false,
+      reason: `${before.name} is written by the system (d18) — its product tax code cannot be changed.`,
+    };
+
+  const clash = ctx.genres.find(
+    (x) => x.id !== row.id && x.name.toLowerCase() === name.toLowerCase(),
+  );
+  if (clash) return { ok: false, reason: `${clash.name} already uses that name.` };
+
+  return { ok: true };
+}
+
+// A-54 — deletion is gated by STATE, not by role: refused while live
+// references exist, and it never removes a historical row. d9's deactivation
+// is the alternative and is always available. The refusal names its cause,
+// because M-04 d13 and A-54 both require a refusal to say what blocked it.
+export function checkGenreDelete(
+  genre: Genre | undefined,
+  useCount: number,
+): GenreWriteCheck {
+  if (!genre) return { ok: false, reason: "No such genre." };
+  // Referenced by the money path rather than by the catalog, so the count
+  // below cannot see it (d18).
+  if (genre.systemOwned)
+    return { ok: false, reason: `${genre.name} is written by the system (d18) — it cannot be deleted.` };
+  if (useCount > 0)
+    return {
+      ok: false,
+      reason: `${genre.name} is carried by ${useCount} catalog ${
+        useCount === 1 ? "entry" : "entries"
+      } (A-54). Deactivate it instead, or merge it into another genre.`,
+    };
+  return { ok: true };
 }

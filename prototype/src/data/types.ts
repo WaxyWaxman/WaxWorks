@@ -922,4 +922,10 @@ export interface Genre {
   // d17 — shop-internal genres are omitted from the picker rather than gated,
   // so setting a Record's genre to Freight is unrepresentable (d19).
   internal?: boolean;
+  // d18 — the gift card load resolves through THIS genre, from the money
+  // path rather than from a catalog entry, so nothing in the catalog holds a
+  // reference A-54 could see. System-owned on d9's terms: not deletable, and
+  // its product tax code is not editable, because changing either silently
+  // starts taxing money the shop has merely received.
+  systemOwned?: boolean;
 }

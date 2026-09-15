@@ -6,6 +6,7 @@ import {
   type ReactNode,
 } from "react";
 import { computeDayBreakdown, type DayBreakdown } from "../lib/dayBreakdown";
+import { checkGenreDelete, checkGenreWrite } from "../lib/taxonomy";
 import { invoiceForItem, supplierIdForItem } from "../lib/provenance";
 import { money } from "../lib/money";
 import { parseCell } from "../lib/tax";
@@ -737,6 +738,9 @@ interface AppContextValue extends AppState {
   setStoreSetting: <K extends keyof StoreSettings>(key: K, value: StoreSettings[K], by: string) => void;
   setStoreDetail: (key: keyof Omit<StoreDetails, "storeId" | "position">, value: string | boolean | PostalAddress, by: string) => void;
   upsertSection: (row: SectionRow, by: string) => SettingsWriteResult;
+  upsertGenre: (row: Genre, by: string) => SettingsWriteResult;
+  deleteGenre: (genreId: string, by: string) => SettingsWriteResult;
+  genreUseCount: (genreId: string) => number;
   upsertTender: (row: TenderRow, by: string) => SettingsWriteResult;
   upsertCurrency: (row: CurrencyRow, by: string) => SettingsWriteResult;
   setHomeCurrency: (code: string, by: string) => void;
@@ -1393,6 +1397,57 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
     if (before === value) return;
     setS((prev) => ({ ...prev, storeDetails: { ...prev.storeDetails, [key]: value } }));
     logSetting("Store details", String(key), before, value, by);
+  };
+
+  // -------------------------------------------------------------------------
+  // Genres (M-06 d12, d19, d32; architecture A-59)
+  // -------------------------------------------------------------------------
+  //
+  // Manager-only, like every settings write (A-28a), and logged with the
+  // actor and the values before and after (A-52). CREATING a Genre stays
+  // manager-only even though adding a genre-map row will not (A-59): a Genre
+  // carries a parent Section and a product tax code, both policy, where a map
+  // row carries neither.
+
+  // What references a genre. Derived rather than stored, so it cannot
+  // disagree with the catalog, and it is what makes the delete refusal legible
+  // rather than a flat "no".
+  const genreUseCount: AppContextValue["genreUseCount"] = (genreId) =>
+    s.records.filter((r) => r.genreId === genreId).length +
+    s.nonTracked.filter((n) => n.genreId === genreId).length;
+
+  const upsertGenre: AppContextValue["upsertGenre"] = (row, by) => {
+    // The rules live in lib/taxonomy so they can be exercised without a screen.
+    const check = checkGenreWrite(row, {
+      genres: s.genres,
+      sections: s.sections,
+      productTaxCodes: s.productTaxCodes,
+    });
+    if (!check.ok) return check;
+
+    const existing = s.genres.find((x) => x.id === row.id);
+    const next: Genre = { ...row, name: row.name.trim() };
+    setS((prev) => ({
+      ...prev,
+      genres: existing ? prev.genres.map((x) => (x.id === row.id ? next : x)) : [...prev.genres, next],
+    }));
+    logSetting("Genres", row.id, existing ?? "(none)", next, by);
+    return { ok: true };
+  };
+
+  // A-54 - deletion is gated by STATE, not by role: refused while live
+  // references exist, and it never removes a historical row. d9's deactivation
+  // is the alternative, and it is always available.
+  //
+  // The refusal names its cause, because M-04 d13 and A-54 both require that -
+  // a refusal that does not say what blocked it sends someone hunting.
+  const deleteGenre: AppContextValue["deleteGenre"] = (genreId, by) => {
+    const genre = s.genres.find((x) => x.id === genreId);
+    const check = checkGenreDelete(genre, genreUseCount(genreId));
+    if (!check.ok) return check;
+    setS((prev) => ({ ...prev, genres: prev.genres.filter((x) => x.id !== genreId) }));
+    logSetting("Genres", genreId, genre!, "(deleted)", by);
+    return { ok: true };
   };
 
   const upsertSection: AppContextValue["upsertSection"] = (row, by) => {
@@ -3595,6 +3650,9 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
       setStoreSetting,
       setStoreDetail,
       upsertSection,
+      upsertGenre,
+      deleteGenre,
+      genreUseCount,
       upsertTender,
       upsertCurrency,
       setHomeCurrency,
