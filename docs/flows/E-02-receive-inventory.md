@@ -106,6 +106,11 @@ Consequence to accept knowingly: per-item margin reporting reflects only supplie
 
 ## Inherited from other flows
 
+**From [M-06](M-06-settings.md):**
+
+- **A scan that adopts a new Record prompts for its genre, and Escape discards the scan** ([M-06](M-06-settings.md) d53, d55). The genre map resolves first ([architecture](../architecture.md) A-61); only an unmapped tag, or a release carrying no tags at all, reaches the operator, and it asks **once per distinct tag** rather than once per copy. Escape abandons the adoption per [E-01](E-01-authenticate.md) d19 — no Record, no line, and any automatic attachment to a PurchaseOrder line ([M-02](M-02-reorder-inventory.md) d20) is undone with it. The line itself survives untouched (M-02 d21) and the copy is rescanned when the operator is ready.
+- **Genre cannot be skipped and cannot be free text** ([M-06](M-06-settings.md) d17, d56). Step 9's manual entry fallback picks from the configured genres like every other path, with each genre's product tax code description shown beside it.
+
 **From [M-02](M-02-reorder-inventory.md):**
 
 - Receiving a **customer-attached** PurchaseOrder line automatically creates a **Held** Sale for that customer ([E-05](E-05-sell-a-record.md)), so the copy cannot be sold off the floor before they collect it. The hold's timeline starts at receipt.
