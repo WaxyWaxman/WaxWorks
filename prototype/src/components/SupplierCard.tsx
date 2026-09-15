@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { ManagerOverride } from "./ManagerOverride";
+import { ManagerAuthorize } from "./ManagerAuthorize";
 import { PAYMENT_METHODS, PAYMENT_TERMS } from "../data/types";
 import type {
   PaymentMethod,
@@ -333,8 +333,7 @@ export function SupplierCard({ supplier }: { supplier: Supplier }) {
       </div>
 
       {askingManager && (
-        <ManagerOverride
-          // manager-ONLY, not the retired manager override (M-04 d8, lexicon).
+        <ManagerAuthorize
           title="Manager authorisation — setting a margin"
           reason={
             `Setting a Supplier's Discount is manager-only (M-01 d11, E-02 d44, architecture ` +

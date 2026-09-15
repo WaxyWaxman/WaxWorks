@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { ManagerOverride } from "../components/ManagerOverride";
+import { ManagerAuthorize } from "../components/ManagerAuthorize";
 import { Modal } from "../components/Modal";
 import { SeparatorSelect } from "../components/SeparatorSelect";
 import {
@@ -1156,7 +1156,7 @@ function VoidPoModal({
 
   if (authorising) {
     return (
-      <ManagerOverride
+      <ManagerAuthorize
         reason={`Void ${poNumber} — ${counts.returned + counts.split} line${counts.returned + counts.split === 1 ? "" : "s"} affected`}
         onConfirm={doVoid}
         onCancel={() => setAuthorising(false)}

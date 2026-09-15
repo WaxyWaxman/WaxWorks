@@ -16,7 +16,7 @@ import { readStored, writeStored } from "../lib/tillMemory";
 import { round2, supplierBalance } from "../lib/totals";
 import { useApp } from "../store/AppStore";
 import { useNavigate } from "react-router-dom";
-import { ManagerOverride } from "../components/ManagerOverride";
+import { ManagerAuthorize } from "../components/ManagerAuthorize";
 
 // Accounts payable (M-05), laid out as the till's three tracks — the same
 // frame as Sell, Find, Receive, Customers, Suppliers and On Order (E-05 d29
@@ -215,7 +215,7 @@ export function AccountsPayable() {
 
   if (!authorisedBy)
     return (
-      <ManagerOverride
+      <ManagerAuthorize
         title="Accounts payable — manager only"
         reason="Accounts payable is manager-only in its entirety (M-05 d2, architecture A-28a). A Manager authorises in place; their name is recorded on every payment, clearing and ledger entry made here."
         onConfirm={(by) => setAuthorisedBy(by)}

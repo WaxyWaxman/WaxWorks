@@ -4,7 +4,7 @@ import { SpecNote } from "../components/SpecNote";
 import type { User, UserRole } from "../data/types";
 import { readStored, writeStored } from "../lib/tillMemory";
 import { useApp, type UserWriteResult } from "../store/AppStore";
-import { ManagerOverride } from "../components/ManagerOverride";
+import { ManagerAuthorize } from "../components/ManagerAuthorize";
 
 // M-04 Users, on the till's three tracks like every other back-office screen:
 // the slab you look in, the person you opened, and their log.
@@ -125,7 +125,7 @@ export function Users() {
 
   if (!authorisedBy)
     return (
-      <ManagerOverride
+      <ManagerAuthorize
         title="Users — manager only"
         reason="Adding, re-roling, deactivating and setting a password are manager-only (M-04 d11, architecture A-55). A Manager authorises in place; their name is recorded against everything done here."
         onConfirm={(by) => setAuthorisedBy(by)}

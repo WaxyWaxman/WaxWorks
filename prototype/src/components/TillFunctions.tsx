@@ -8,7 +8,7 @@ import { money } from "../lib/money";
 import { resolveScan } from "../lib/resolve";
 import { saleTotals } from "../lib/totals";
 import { useApp } from "../store/AppStore";
-import { ManagerOverride } from "./ManagerOverride";
+import { ManagerAuthorize } from "./ManagerAuthorize";
 import { useActor } from "./Identify";
 
 // The things nobody touches with a customer waiting: past Sales, the holds
@@ -308,7 +308,7 @@ export function OtherFunctionsModal({ onClose }: { onClose: () => void }) {
   if (breakdown) {
     if (undoing)
     return (
-      <ManagerOverride
+      <ManagerAuthorize
         title="Undo End of Day — manager only"
         reason="Reopens settled takings: the batch's Sales return to Current (M-03 d4). Manager-only under architecture A-28a."
         onConfirm={(by) => {

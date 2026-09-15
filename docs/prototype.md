@@ -99,7 +99,7 @@ that is a separate question nobody has answered yet._
 
 - Mock data only; no persistence, no live catalog provider, no printing.
 - Tax is a flat rate per named line; real multi-jurisdiction handling (M-06) is not modelled.
-- Manager override is initials-only with no real auth.
+- **Manager-only authorisation resolves a real, active Manager** and asks for their password where they have one ([E-01](flows/E-01-authenticate.md) d21) — it is no longer *"initials-only with no real auth"*, which it was, and which meant the gate was satisfied by initials belonging to nobody. What it still is not, is authentication: a shop may set a one-letter password, and a Manager without one is through on their initials alone. The component is `ManagerAuthorize`, named after §6's `manager_authorize`; it was `ManagerOverride`, after a term the [lexicon](lexicon.md) retired.
 - Open questions in the flow docs are surfaced in the UI but not resolved.
 - **The Suppliers ledger's two figures do not visibly differ under seed data.** Received is cost
   of goods and the A/P figure is Invoice totals (A-29, E-02 d34), but every seeded Invoice carries

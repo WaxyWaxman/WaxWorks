@@ -17,15 +17,19 @@ import { passwordAccepted, PASSWORD_MAX } from "../lib/users";
 // unattended till and the manager-only space. Crossing the line is cheap to
 // ask for and expensive to assume.
 //
-// NOTE ON THE NAME: this component is called ManagerOverride, but *manager
-// override* is a RETIRED term (M-04 d8, lexicon) — the actions it used to
-// gate now proceed and raise a ReviewFlag. What survives is **manager-only**:
-// an action an Employee cannot perform at all. `title` lets a caller say so
-// correctly without renaming the component out from under seven screens.
+// NAMED FOR THE FUNCTION IT STANDS IN FOR. Architecture §6 calls this
+// `manager_authorize`, and M-04's section heading is "Manager-only
+// authorization", so the component now matches both.
 //
-// It used to accept any two characters typed into it, so the prototype's
+// It was called ManagerAuthorize until this rename, after a term the lexicon
+// RETIRED (M-04 d8): the actions a *manager override* used to gate now
+// proceed and raise a ReviewFlag instead, and what survives is
+// **manager-only** — an action an Employee cannot perform at all. The two are
+// separate concepts and the old name named the wrong one.
+//
+// It also used to accept any two characters typed into it, so the prototype's
 // manager-only gate was satisfied by initials belonging to nobody.
-export function ManagerOverride({
+export function ManagerAuthorize({
   reason,
   title = "Manager only",
   onConfirm,
