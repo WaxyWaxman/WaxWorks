@@ -525,4 +525,4 @@ Two things are decided but measured rather than assumed, and live in §10 as ris
 - **MusicBrainz coverage of vinyl** — M2 reports a hit rate against real shelf stock, with a defined trigger for switching.
 - **Backup restore** — verified in M6.
 
-Deferred with their milestones: arbitrary date-range reporting and cross-store consolidation ([M-03](flows/M-03-daily-summary.md)), the consignment program itself (A-26), print agent packaging (§4), and accounts receivable with aging ([PRD](PRD.md) §6).
+Deferred with their milestones: arbitrary date-range reporting and cross-store consolidation ([M-03](flows/M-03-daily-summary.md)), the consignment program itself (A-26), print agent packaging (§4), and accounts receivable with aging ([PRD](PRD.md) §6). **Deferred to a later version, and not open questions:** per-User **credentials** — [E-01](flows/E-01-authenticate.md) d18 carries the six things that must be revisited rather than inherited when they arrive, A-50's session lapse among them — and **multi-store membership** ([E-01](flows/E-01-authenticate.md) d8, [M-04](flows/M-04-manage-users.md)), which reopens per-Store initials uniqueness and the last-Manager floor.
