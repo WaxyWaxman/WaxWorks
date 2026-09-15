@@ -1,29 +1,33 @@
-import { useState } from "react";
-import { Modal } from "./Modal";
+import { useEffect, useRef, useState } from "react";
 import { useApp } from "../store/AppStore";
-import { resolveInitials } from "../lib/identify";
+import { resolveInitials, resolutionHint } from "../lib/identify";
 import { passwordAccepted, PASSWORD_MAX } from "../lib/users";
 
-// In-place authorisation by a Manager entering their own initials, without
-// displacing the Employee's session; both names are recorded (M-04 d3, d4).
+// Entering a manager-locked area or authorising a manager-only action.
 //
-// NOTE ON THE NAME: this component is called ManagerOverride and titles itself
-// "Manager override required", but *manager override* is a RETIRED term
-// (M-04 d8, lexicon §2) — the actions it used to gate now proceed and raise a
-// ReviewFlag instead. What survives, and what this mechanism actually serves,
-// is **manager-only**: an action an Employee cannot perform at all. The
-// existing call sites are all manager-only actions, so the component is doing
-// the right thing under the wrong name. `title` lets a caller say so correctly
-// without renaming the component out from under four other screens.
+// It looks and behaves like the ordinary initials prompt (E-01 d19) rather
+// than a separate ceremony, because it is the same act: say who you are. The
+// only differences are that it refuses anybody who is not an active Manager,
+// and that it always asks.
 //
-// It used to accept any two characters typed into it, which meant the
-// prototype's manager-only gate was satisfied by initials belonging to nobody.
-// It now resolves against a real, ACTIVE Manager — architecture A-55 requires
-// manager_authorize to do exactly that at the moment of the call — and asks
-// for the password where that Manager has one (E-01 d21).
+// IT ALWAYS ASKS — E-01 d23. A session, even a Manager's own, does not carry
+// you into a manager-locked area. The lapse is five minutes for a password
+// holder and longer for everyone else, which is fine for staying inside an
+// area you already opened, and not fine as the only thing between an
+// unattended till and the manager-only space. Crossing the line is cheap to
+// ask for and expensive to assume.
+//
+// NOTE ON THE NAME: this component is called ManagerOverride, but *manager
+// override* is a RETIRED term (M-04 d8, lexicon) — the actions it used to
+// gate now proceed and raise a ReviewFlag. What survives is **manager-only**:
+// an action an Employee cannot perform at all. `title` lets a caller say so
+// correctly without renaming the component out from under seven screens.
+//
+// It used to accept any two characters typed into it, so the prototype's
+// manager-only gate was satisfied by initials belonging to nobody.
 export function ManagerOverride({
   reason,
-  title = "Manager override required",
+  title = "Manager only",
   onConfirm,
   onCancel,
 }: {
@@ -33,88 +37,119 @@ export function ManagerOverride({
   onCancel: () => void;
 }) {
   const app = useApp();
-  const [initials, setInitials] = useState("");
+  const [typed, setTyped] = useState("");
   const [pw, setPw] = useState("");
   const [pwBad, setPwBad] = useState(false);
+  const [pending, setPending] = useState<string | null>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const pwRef = useRef<HTMLInputElement>(null);
 
-  const res = resolveInitials(app.users, initials);
+  const res = resolveInitials(app.users, typed);
   const who = res.kind === "one" ? res.user : null;
-  // Resolution alone is not authorisation: an Employee's initials resolve
-  // perfectly well and must still be refused here.
+  // Resolving is not authorising: an Employee's initials resolve perfectly
+  // well and must still be refused, by name rather than by a blank "no".
   const isManager = who?.role === "Manager";
-  const needsPw = Boolean(who?.password);
-  const ready = Boolean(isManager) && (!needsPw || pw.length > 0);
+  const person = pending ? app.users.find((u) => u.id === pending) ?? null : null;
 
-  const submit = () => {
-    if (!who || !isManager) return;
-    if (needsPw && !passwordAccepted(who, pw)) {
+  useEffect(() => inputRef.current?.focus(), []);
+  useEffect(() => {
+    if (person) pwRef.current?.focus();
+  }, [person]);
+
+  // Resolve on the last keystroke like the ordinary prompt, pausing long
+  // enough that the name is read before the dialog goes.
+  useEffect(() => {
+    if (!who || !isManager || person) return;
+    const t = setTimeout(() => {
+      if (who.password) setPending(who.id);
+      else onConfirm(`${who.name} (Manager)`);
+    }, 140);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [who?.id, isManager, person]);
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        e.preventDefault();
+        onCancel();
+      }
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [onCancel]);
+
+  const submitPw = () => {
+    if (!person) return;
+    if (passwordAccepted(person, pw)) onConfirm(`${person.name} (Manager)`);
+    else {
       setPwBad(true);
       setPw("");
-      return;
     }
-    onConfirm(`${who.name} (Manager)`);
   };
 
+  // An Employee who resolves is refused by name. Everything else falls
+  // through to the ordinary hint, so "keep typing" still reads as progress.
   const hint = () => {
-    if (res.kind === "empty") return "Manager initials.";
-    if (res.kind === "none") return res.partial ? "Keep typing." : "No active user with those initials.";
-    if (!isManager) return `${who!.name} is an Employee — this needs a Manager.`;
-    return who!.name;
+    if (who && !isManager) return `${who.name} is an Employee — this needs a Manager.`;
+    return resolutionHint(res);
   };
+  const denied = Boolean(who && !isManager);
 
   return (
-    <Modal
-      title={title}
-      onClose={onCancel}
-      foot={
-        <>
-          <button className="btn ghost" onClick={onCancel}>
-            Cancel
-          </button>
-          <button className="btn primary" disabled={!ready} onClick={submit}>
-            Authorise
-          </button>
-        </>
-      }
-    >
-      <div className="stack">
-        <div className="callout">{reason}</div>
-        <p className="small muted">
-          The Employee's session is not displaced. Both the Employee and the authorising
-          Manager are recorded against this action.
-        </p>
-        <label className="field">
-          <span>Manager initials</span>
-          <input
-            type="text"
-            autoFocus
-            value={initials}
-            maxLength={4}
-            placeholder="e.g. RD"
-            onChange={(e) => setInitials(e.target.value)}
-          />
-          <span className={"hint" + (res.kind === "one" && !isManager ? " bad" : "")}>{hint()}</span>
-        </label>
-        {needsPw && (
-          <label className="field">
-            <span>Password</span>
+    <div className="idy-scrim" onPointerDown={onCancel}>
+      <div
+        className="idy"
+        role="dialog"
+        aria-label={title}
+        onPointerDown={(e) => e.stopPropagation()}
+      >
+        <div className="idy-reason">{title}</div>
+        {person ? (
+          <>
+            <div className="idy-who">{person.name}</div>
             <input
+              ref={pwRef}
+              className={"idy-input" + (pwBad ? " bad" : "")}
               type="password"
               value={pw}
               maxLength={PASSWORD_MAX}
               autoComplete="off"
+              aria-label="Password"
               onChange={(e) => {
                 setPw(e.target.value);
                 setPwBad(false);
               }}
-              onKeyDown={(e) => e.key === "Enter" && ready && submit()}
+              onKeyDown={(e) => e.key === "Enter" && submitPw()}
             />
-            <span className={"hint" + (pwBad ? " bad" : "")}>
-              {pwBad ? "Not that password." : "A barrier, not a login (E-01 d21)."}
-            </span>
-          </label>
+            <div className={"idy-hint" + (pwBad ? " bad" : "")}>
+              {pwBad ? "Not that password." : "Password, then Enter."}
+            </div>
+          </>
+        ) : (
+          <>
+            <input
+              ref={inputRef}
+              className={"idy-input" + (denied || (res.kind === "none" && !res.partial) ? " bad" : "")}
+              value={typed}
+              maxLength={4}
+              autoComplete="off"
+              spellCheck={false}
+              aria-label="Manager initials"
+              onChange={(e) => setTyped(e.target.value)}
+            />
+            <div className={"idy-hint" + (denied ? " bad" : who ? " ok" : "")}>{hint()}</div>
+          </>
         )}
+        <div className="idy-sub">{reason}</div>
+        <div className="idy-foot">
+          <span>
+            Asked every time this line is crossed, session or not (E-01 d23). The Employee's
+            session is not displaced; both names are recorded.
+          </span>
+          <span className="idy-esc">Esc cancels</span>
+        </div>
       </div>
-    </Modal>
+    </div>
   );
 }

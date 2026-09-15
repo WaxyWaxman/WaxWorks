@@ -2792,3 +2792,7 @@ table.claims-ln td { padding: 5px 8px 5px 0; border-bottom: 1px solid var(--c-bo
 .sess-note { font-size: var(--fs-xs); color: var(--c-muted); }
 .idy-who { text-align: center; font-weight: 700; }
 .idy-hint.bad { color: var(--c-danger); font-weight: 700; }
+.idy-sub {
+  font-size: var(--fs-sm); color: var(--c-muted);
+  border-top: 1px solid var(--c-border); padding-top: var(--sp-2);
+}

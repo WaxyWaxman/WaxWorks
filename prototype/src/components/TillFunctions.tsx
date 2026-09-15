@@ -8,6 +8,7 @@ import { money } from "../lib/money";
 import { resolveScan } from "../lib/resolve";
 import { saleTotals } from "../lib/totals";
 import { useApp } from "../store/AppStore";
+import { ManagerOverride } from "./ManagerOverride";
 import { useActor } from "./Identify";
 
 // The things nobody touches with a customer waiting: past Sales, the holds
@@ -299,12 +300,26 @@ export function SearchModal({ onClose }: { onClose: () => void }) {
 
 export function OtherFunctionsModal({ onClose }: { onClose: () => void }) {
   const app = useApp();
+  const [undoing, setUndoing] = useState<string | null>(null);
   const withActor = useActor();
   const [breakdown, setBreakdown] = useState<{ closing: boolean; data: DayBreakdown } | null>(null);
   const openBatches = app.closeBatches.filter((b) => !b.undoneAt);
 
   if (breakdown) {
+    if (undoing)
     return (
+      <ManagerOverride
+        title="Undo End of Day — manager only"
+        reason="Reopens settled takings: the batch's Sales return to Current (M-03 d4). Manager-only under architecture A-28a."
+        onConfirm={(by) => {
+          app.undoEndOfDay(undoing, by);
+          setUndoing(null);
+        }}
+        onCancel={() => setUndoing(null)}
+      />
+    );
+
+  return (
       <Modal title={breakdown.closing ? "Today's Sales — Totalled" : "Subtotal"} onClose={onClose}>
         <BreakdownView data={breakdown.data} />
         {breakdown.closing && (
@@ -356,9 +371,9 @@ export function OtherFunctionsModal({ onClose }: { onClose: () => void }) {
                 </span>
                 <button
                   className="btn sm danger"
-                  onClick={() =>
-                    withActor("Undo End of Day", (actor) => app.undoEndOfDay(b.id, actor))
-                  }
+                  // Manager-only (A-28a, M-03 d4) and the last one in the
+                  // prototype with no gate — it reopens settled takings.
+                  onClick={() => setUndoing(b.id)}
                 >
                   Undo
                 </button>
