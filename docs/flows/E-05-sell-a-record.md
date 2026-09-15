@@ -130,7 +130,7 @@ Handing a Sale over is deliberate: the holder puts it on **Hold**, which release
 
 A lock stranded by a closed browser is broken by `sale_force_unlock`, which proceeds and raises a review flag ([M-04](M-04-manage-users.md) d8).
 
-An Open Sale **suppresses the 15-minute session lapse** on its terminal ([E-01](E-01-authenticate.md) d10) — otherwise a lapse would strand a locked Sale mid-ring.
+An Open Sale **suppresses the session lapse** on its terminal ([E-01](E-01-authenticate.md) d10) — otherwise a lapse would strand a locked Sale mid-ring. The lapse is a store setting defaulting to **5 minutes** ([M-06](M-06-settings.md) d45, [architecture](../architecture.md) A-50) with no maximum ([E-01](E-01-authenticate.md) d13); suppression holds whatever it is set to.
 
 ### Deposits
 
@@ -160,6 +160,11 @@ Held copies count against **available** stock but remain on hand.
 ---
 
 ## Inherited from other flows
+
+**From [M-04](M-04-manage-users.md):**
+
+- **A Sale's header displays the Employee's name, not their initials** ([M-04](M-04-manage-users.md) d16). Initials are released when a User is deactivated and may be reissued, so they no longer identify one person on their own. Attribution itself is unchanged — the Sale points at the User row.
+- **Deactivating the Employee who holds a Sale's lock does not break it** ([M-04](M-04-manage-users.md) d15). Their session ends at once on every terminal, but an **Open** Sale stays Open and finishable, so deactivation never forces a `sale_force_unlock` and never raises the flag that would come with it (decision 23, [architecture](../architecture.md) A-28). Nothing new can be started under those initials anywhere.
 
 **From [E-02](E-02-receive-inventory.md):**
 

@@ -70,7 +70,7 @@ Each flow is its own document. Status is tracked per flow so parallel work doesn
 
 | ID | Flow | Status |
 |---|---|---|
-| E-01 | [Authenticate to the platform](flows/E-01-authenticate.md) | In clarification |
+| E-01 | [Authenticate to the platform](flows/E-01-authenticate.md) | **Specified** |
 | E-02 | [Receive inventory](flows/E-02-receive-inventory.md) | **Specified** |
 | E-03 | [Search the inventory](flows/E-03-search-inventory.md) | **Specified** |
 | E-04 | [Manage the inventory](flows/E-04-manage-inventory.md) | **Specified** |
@@ -85,7 +85,7 @@ Each flow is its own document. Status is tracked per flow so parallel work doesn
 | M-01 | [Suppliers](flows/M-01-supplier-margin.md) | **Specified** |
 | M-02 | [Re-order inventory](flows/M-02-reorder-inventory.md) | **Specified** |
 | M-03 | [Daily summary of sales and inventory](flows/M-03-daily-summary.md) | **Specified** |
-| M-04 | [Add/remove employees or managers](flows/M-04-manage-users.md) | In clarification |
+| M-04 | [Add/remove employees or managers](flows/M-04-manage-users.md) | **Specified** |
 | M-05 | [Accounts payable](flows/M-05-accounts-payable.md) | **Specified** |
 | M-06 | [Configure the store](flows/M-06-settings.md) | **Specified** |
 

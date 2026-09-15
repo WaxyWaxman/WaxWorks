@@ -1,7 +1,7 @@
 # E-01 — Authenticate to the platform
 
 **Actor:** Employee
-**Status:** In clarification
+**Status:** Specified
 **Related:** [M-04 Manage users](M-04-manage-users.md)
 
 **Job:** As an employee, I need to identify myself to the system so my actions are attributed to me and I can access the till.
@@ -16,7 +16,7 @@
 3. The session stays active on that terminal for a configured period of inactivity — **defaulting to 5 minutes** ([M-06](M-06-settings.md) d45, replacing decision 4's flat 15) — then lapses. An **Open Sale suppresses the lapse** on that terminal (decision 10).
 4. While a session is active, every action taken on that terminal is attributed to that Employee.
 5. When no session is active, any action requiring attribution prompts for initials inline and proceeds without opening a full session.
-5a. **Some actions prompt every time, session or not** (decision 12): opening a new Sale, starting a Return, recording a pay-out, adjusting on hand, and voiding. Receiving, order processing and the rest of the back office are covered by the session, because the same person works those for an hour at a stretch.
+5a. **Some actions prompt every time, session or not** (decisions 12 and 15): opening a new Sale, recording a pay-out, adjusting on hand, and voiding. Starting a Return is not a fourth case — a Return *is* a Sale with negative lines ([E-06](E-06-process-a-return.md) steps 1-2), so it prompts as a new Sale does (decision 15). Receiving, order processing and the rest of the back office are covered by the session, because the same person works those for an hour at a stretch.
 6. A Manager authorizing a **manager-only** action enters their own initials at the point of the action; this does not replace the Employee's session. Actions that formerly needed a *manager override* now proceed and raise a review flag instead ([M-04](M-04-manage-users.md) d8).
 
 ---
@@ -44,6 +44,8 @@ The model is built so that adding real credentials later does not change the sha
 - **Draft Invoices must survive a session lapse mid-scan** (see Inherited). Receiving is a long operation and a timeout must not discard work.
 - Users are scoped to a Store. In v1 a User belongs to exactly one Store.
 - Historical attribution survives a User being deactivated — see [M-04](M-04-manage-users.md).
+- Initials are unique among a Store's active Users (decision 14), and released when a User is deactivated (decision 16).
+- A deactivation ends the User's sessions at once; only an already-Open Sale outlives it ([M-04](M-04-manage-users.md) d15).
 
 ---
 
@@ -57,9 +59,16 @@ The model is built so that adding real credentials later does not change the sha
 
 - A **manager-only authorization** must be performable at a terminal that currently has an Employee session open, without ending that session. (This was written for the manager override, which [M-04](M-04-manage-users.md) d8 has since replaced with a review queue; the requirement survives for the manager-only list.)
 
+**From [M-04](M-04-manage-users.md):**
+
+- **Deactivating a User ends their sessions immediately on every terminal** ([M-04](M-04-manage-users.md) d15) — not at the next lapse. This is the one thing that ends a session other than inactivity, and it exists because decision 13 leaves the lapse unbounded, so waiting for it could leave a deactivated User attributing work for an hour.
+- **An Open Sale survives the deactivation** and stays finishable, rather than being force-unlocked and raising a flag ([E-05](E-05-sell-a-record.md) d23, [architecture](../architecture.md) A-28). The session is gone; the Sale in front of the customer is not.
+- **A deactivated User's initials are released** ([M-04](M-04-manage-users.md) d16), which is why decision 14's uniqueness holds among active Users only.
+- **A Store always has at least one active Manager** ([M-04](M-04-manage-users.md) d14), so there is always somebody who can authorize a manager-only action at a terminal.
+
 **From [M-06](M-06-settings.md):**
 
-- **The session lapse is a store setting defaulting to 5 minutes**, not the 15 of decision 4 ([M-06](M-06-settings.md) d45). The rule is unchanged — it measures *inactivity*, so an hour of continuous work never prompts and a six-minute absence does. Configurable because in v1 it is ergonomics rather than security: there are no passwords, so what it prevents is accidental misattribution. **It changes character the day credentials arrive**, and must be revisited rather than inherited.
+- **The session lapse is a store setting defaulting to 5 minutes**, not the 15 of decision 4 ([M-06](M-06-settings.md) d45). The rule is unchanged — it measures *inactivity*, so an hour of continuous work never prompts and a six-minute absence does. Configurable because in v1 it is ergonomics rather than security: there are no passwords, so what it prevents is accidental misattribution. **It changes character the day credentials arrive**, and must be revisited rather than inherited. **The setting takes no maximum** (decision 13), which declines A-50's standing recommendation and makes that revisit the only thing bounding a long lapse.
 
 ---
 
@@ -70,7 +79,7 @@ The model is built so that adding real credentials later does not change the sha
 | 1 | Terminals are shared; sessions are per-User, opened on a terminal |
 | 2 | A terminal is a browser session on a device — two browsers on one machine are two terminals |
 | 3 | v1 identification is **initials only**; no passwords, PINs, or fobs |
-| 4 | Sessions lapse after **15 minutes** of inactivity |
+| 4 | ~~Sessions lapse after **15 minutes** of inactivity~~ — **amended by [M-06](M-06-settings.md) d45 and [architecture](../architecture.md) A-50**: the period is a store setting and the default is **5 minutes**. The *rule* is untouched — it still measures inactivity. Decision 13 additionally declines a maximum |
 | 5 | With no active session, actions requiring attribution prompt for initials inline rather than forcing a full sign-in |
 | 6 | ~~A manager override is entered at the point of override and does not replace the active Employee session~~ — **superseded by 11**: the *override* is retired ([M-04](M-04-manage-users.md) d8), but authorizing in place survives for **manager-only** actions |
 | 7 | Draft Invoices survive a session lapse |
@@ -79,6 +88,10 @@ The model is built so that adding real credentials later does not change the sha
 | 10 | **An Open Sale suppresses the 15-minute lapse** on its terminal. Closes the open question below (A-19a) |
 | 11 | **A Manager authorizing a manager-only action enters their own initials at the point of the action, without replacing the Employee's session; both names are recorded. Supersedes decision 6**, which named the retired *manager override*. [M-04](M-04-manage-users.md) d8 retired that term and the actions it gated now raise a **ReviewFlag** instead — but d8 amends M-04 d3 and d4 **for override-gated actions only**, leaving the in-place mechanism unchanged for the manager-only set [architecture](../architecture.md) A-28a still gates. Step 6 of the Flow above already reads this way |
 | 12 | **Some actions prompt for initials every time, even inside an active session.** Extends step 5, which prompts only when *no* session is active. The split is by **whether the actor plausibly changed since the last action**: at the counter the person ringing changes constantly, while someone sitting down to receive a carton or place a morning's orders is the same person for an hour, and prompting them per action would train them to type initials without reading the screen. **Always prompts:** opening a new Sale, starting a Return, and recording a pay-out. **Covered by the session:** receiving and finalizing an Invoice, order processing, and everything in the back office. An **inventory adjustment** and a **void** always prompt too, being consequential and occasional rather than rhythmic. *Accepted consequence:* the till asks for initials more often than it used to, which is the cost of a Sale's attribution being worth something — and it makes decision 10's open-Sale lapse suppression less load-bearing, since the next Sale re-establishes who is there regardless |
+| 13 | **The session-lapse setting takes no maximum.** [architecture](../architecture.md) A-50 **recommended one and this decision declines it**, so the recommendation is closed rather than left standing: a shop tunes the lapse to whatever its counter and back office actually need, and nothing refuses a long value. The reasoning A-50 gives for a maximum is accepted and outweighed — while [E-01](E-01-authenticate.md) has no credentials the lapse protects **attribution, not access** (decision 3, decision 9), so a long value widens the window in which one Employee's initials sit on another's work and widens nothing about what the terminal can reach. A ceiling on a comfort dial is a rule that has to be justified to every shop that hits it, in exchange for a risk that does not exist yet. *Accepted consequence, and it is A-50's warning taken on deliberately:* the day credentials arrive, **every existing value has to be re-consented rather than inherited** — a shop sitting at an hour will have set a future access control to an hour without ever being asked, and there is now no maximum limiting how far that goes. A-50 already requires the whole row to be revisited at that point; this decision makes the revisit compulsory rather than merely advisable, because it is the only remaining thing standing between a long lapse and a real one |
+| 14 | **Initials are unique within a Store, enforced when a User is created.** Closes the *initials collisions* open question. [M-04](M-04-manage-users.md)'s Add refuses a duplicate and the Manager resolves it at that moment — three letters, or a digit: `JD`, `JDB`, `JD2`. **Enforced at creation rather than disambiguated at use**, because the alternative puts a picker on the till's most-repeated keystroke and makes every prompt a two-step; and because attribution that needs a tiebreak at read time is attribution that can be argued with. Uniqueness is **per Store**, following decision 8 — a User belongs to exactly one Store, so there is nothing to collide with elsewhere, and this is one of the things multi-store membership will have to reopen. *Accepted consequence:* the Manager does the disambiguating at hiring, for a person who is not in the room, and somebody ends up with initials that are not their initials |
+| 15 | **A Return is removed from decision 12's always-prompts list, having never been a separate case. Amends decision 12.** A Return is not a document type: the Employee **starts a Sale in the normal way** ([E-06](E-06-process-a-return.md) step 1) and adds the returned item as a negative-quantity line (step 2), and E-06's *Inherited from E-05* says so outright: *"Returns are lines on a Sale, not a separate document type"*. So the prompt a Return gets is the **new Sale** prompt it already had, and listing it separately described a second prompt that nothing in the flow ever reaches. The always-prompts list is therefore **opening a new Sale, recording a pay-out, adjusting on hand, and voiding**. **A pay-out stays on the list and is genuinely distinct**, even though it too lives inside a Sale: it is a *tender* ([E-05](E-05-sell-a-record.md) d16), so its prompt lands at tender time rather than at open — minutes later, and plausibly a different person at the counter. *Accepted consequence:* two of the four — an on-hand adjustment and a void — are **manager-only** under [architecture](../architecture.md) A-28a, so they now take **two** sets of initials: the acting Employee's, prompted fresh rather than read from the session, and the authorizing Manager's (decision 11). That is deliberate for actions this consequential, and it is the heaviest interaction in the flow; a Sale void takes one, being absent from [M-04](M-04-manage-users.md)'s manager-only table and therefore ungated by decision 2 — it is specified at [E-05](E-05-sell-a-record.md) d31, which bounds *when* it is allowed rather than *who* may do it |
+| 16 | **A deactivated User's initials are released for reuse, so decision 14's uniqueness is among *active* Users. Amends decision 14.** Receives [M-04](M-04-manage-users.md) d16, which owns the rule because Deactivate is M-04's action. Nothing in the data stores initials as identity — every attributed row points at the User — so the correct name always resolves on screen; what becomes ambiguous is **paper**, and the mitigation is that every audit surface displays the User's **name** rather than stopping at the initials. See M-04 d16 for the consequence being accepted |
 
 ---
 
@@ -86,5 +99,5 @@ The model is built so that adding real credentials later does not change the sha
 
 - **When do real credentials arrive, and what kind?** Initials-only is explicitly a v1 trade. Password, PIN, or badge — and whether Managers get stronger credentials than Employees ahead of everyone else.
 - **Multi-store membership.** The system is multi-store, but v1 scopes a User to one Store. Whether a User can later belong to several, and how they switch, is deferred to [M-04](M-04-manage-users.md).
-- **Initials collisions.** Two Employees with the same initials need disambiguation, and initials are not unique in the general case.
+- ~~**Initials collisions.**~~ — **Resolved** by decision 14: initials are unique within a Store, enforced when [M-04](M-04-manage-users.md) creates the User. Whether **deactivated** Users hold their initials against reuse is part of that decision's detail and is recorded in M-04.
 - ~~**Does the 15-minute lapse apply during an open Sale?**~~ — **Resolved** by decision 10: it does not. A Sale left part-rung on the counter keeps its terminal alive, and the Sale stays locked to the Employee who opened it ([E-05](E-05-sell-a-record.md) d23).
