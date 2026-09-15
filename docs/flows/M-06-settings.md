@@ -215,6 +215,12 @@ QST are separate registrations (decision 48).
 
 ## Inherited from other flows
 
+**From [architecture](../architecture.md):**
+
+- **The genre map is written by Employees; the genre list is not** ([architecture](../architecture.md) A-59). Adding a map row for a provider tag that has none is an ungated Employee action, logged with the Employee as actor; **changing or removing** a row, and setting a row's **priority**, are manager-only. The functions live in the Catalog domain beside `record_upsert_from_provider`. **Creating a Genre stays manager-only** — a Genre carries a parent Section and a product tax code, both policy, where a map row carries neither. The compensating mechanism is a **view** of tags carried by our Records with no map row, derived rather than stored.
+- **Decision 9's *deactivate, never delete* does not extend to map rows** ([architecture](../architecture.md) A-59). A map row is referenced by no history and is read only at adoption, so removing one removes nothing. The enumeration under Requirements is unchanged for everything it names.
+- **A Genre is emptied by merge, not by deletion** ([architecture](../architecture.md) A-60, following [M-01](M-01-supplier-margin.md) d9 and d11). `settings_genre_merge` is manager-only and repoints every catalog entry carrying the genre **and every map row pointing at it** — a merge that leaves the map rows behind has the next adoption recreate the genre under the old tag. Deletion itself needs no new rule: A-54 refuses it while live references exist, so merge is what makes a Genre unreferenced.
+
 **From [E-03](E-03-search-inventory.md):**
 
 - **A dead-stock threshold, defaulting to 180 days** ([E-03](E-03-search-inventory.md) d16). A held Record whose oldest copy has been on hand longer than this, with no copy ever sold, reads *never sold* on the Find screen. It is configuration rather than code because what counts as dead differs by shop — and plausibly by Section, which this flow has not decided.
@@ -223,9 +229,13 @@ QST are separate registrations (decision 48).
 
 ## Requirements
 
-- Every setting here is **manager-only** ([architecture](../architecture.md) A-28a) — **except the
-  Store ID and Store position, which no one in the shop may write at all** (decision 47). That is
-  an exception to the role model, not to this screen, and M-04 owns it.
+- Every setting here is **manager-only** ([architecture](../architecture.md) A-28a) — with **two
+  exceptions**. The **Store ID and Store position** no one in the shop may write at all (decision
+  47); that is an exception to the role model, not to this screen, and M-04 owns it. And **adding a
+  genre map row** for a provider tag that has none is an ungated Employee action
+  ([architecture](../architecture.md) A-59) — an exception to the **gate** and not to the **log**,
+  since the write is still recorded with its actor. Changing or removing a row, setting a row's
+  priority, and creating a Genre all remain manager-only. See *Inherited from other flows*.
 - Changing a setting must not retroactively rewrite completed records. A tax type's rate changing does not restate yesterday's Sales, whose tax was snapshotted ([E-05](E-05-sell-a-record.md) d13).
 - A tax type, tax group, product tax code, Section, Genre, currency, or tender **in use** cannot be
   deleted, only deactivated (decision 9). An **unused** tender is switched off instead, which is a
