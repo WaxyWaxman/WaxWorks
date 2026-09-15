@@ -101,6 +101,12 @@ An optional cross-reference links the two, so a payout can be traced to the copi
 
 ## Inherited from other flows
 
+**From [M-06](M-06-settings.md):**
+
+- **Editing a Record's genre may offer to re-pull its tags from the catalog provider** ([M-06](M-06-settings.md) d54). The tags a Record was adopted under are a snapshot ([architecture](../architecture.md) A-61), so a correction made months later is otherwise read against what the provider said then. The re-pull is **offered, never automatic**, touches only this Record in this Store, and **does not re-run the map** — d53's resolve-once rule is unchanged, and the matched tag is never re-resolved. If the provider is unreachable the edit still saves and only the refresh fails, following [E-03](E-03-search-inventory.md) d8's rule for search.
+- **Genre is resolved at adoption and never re-resolved** ([M-06](M-06-settings.md) d53). Editing a Record that is already in the local catalog changes its genre because a person chose to, never because the map moved underneath it.
+- **The genre picker shows each genre's product tax code description, and every genre edit is logged** ([M-06](M-06-settings.md) d56, [architecture](../architecture.md) A-62). The field stays ungated (M-06 d19); what changes is that `records` now carries a `log` recording who changed a genre and what it was before.
+
 **From [M-04](M-04-manage-users.md):**
 
 - **Adjustment history displays the acting User's name, not their initials** ([M-04](M-04-manage-users.md) d16). A deactivated User's initials are released to a new hire, so the letters alone no longer identify a person. The stored attribution is unaffected — it points at the User row — but anything this flow *displays* or exports for audit has to resolve through to the name.

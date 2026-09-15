@@ -16,7 +16,7 @@
 4. Records we hold are sorted first — on hand, then on order, then everything else — with catalog-only matches below them.
 5. A provider match we do not hold is shown as a **catalog row**, visibly marked as not in stock, so the answer "no, but we can order it" is one glance rather than a second search.
 6. Employee selects a row to open the **titlecard** — the view of one Record with all its copies, quantities, and order state ([E-04](E-04-manage-inventory.md)).
-7. Acting on a catalog-only row — ordering it, stocking it, editing it — **pulls it into the local catalog**, auto-filling every field the catalog provider provides and prompting for the ones it cannot supply (supplier, Section, and anything else store-specific).
+7. Acting on a catalog-only row — ordering it, stocking it, editing it — **pulls it into the local catalog**, auto-filling every field the catalog provider provides and prompting for the ones it cannot supply (supplier, **genre**, and anything else store-specific). **Section is not among them** — it is derived from the genre's required parent ([M-06](M-06-settings.md) d31, d32), so it is never prompted for and never stored beside the genre.
 
 ---
 
@@ -52,6 +52,11 @@ A scanned barcode short-circuits to resolution rather than keyword search: a man
 ## Inherited from other flows
 
 - **The three-track frame is [E-05](E-05-sell-a-record.md) d29's**, adopted here by decision 14. The result slab retracts to a strip, the Record and its copies hold the middle, and the stock answer is a sticky right-hand track — the same shape [E-02](E-02-receive-inventory.md) d38, [E-06](E-06-process-a-return.md) d9, [E-07](E-07-manage-customers.md) d17 and [M-01](M-01-supplier-margin.md) d12 take. Find does not own it and should not diverge from it.
+
+**From [M-06](M-06-settings.md):**
+
+- **A catalog-only row shows its provider tags and no genre** ([M-06](M-06-settings.md) d53). There is no Record yet for a genre to sit on, so the genre map is not consulted for a pressing the shop has not adopted. **Genre presence is the tell** that a row is locally adopted rather than a provider match — no separate badge carries it.
+- **Step 7's "prompting for the ones it cannot supply" includes genre, and genre cannot be skipped** ([M-06](M-06-settings.md) d53, d17). At adoption the map resolves by priority then by the provider's vote count ([architecture](../architecture.md) A-61); a hit auto-fills, a miss prompts, and the prompt fires once per distinct unmapped tag rather than once per Record. This holds **even when the Record will never be stocked** — adoption without ordering is already permitted by decision 6's third verb, *editing it*.
 
 **From [E-02](E-02-receive-inventory.md):**
 

@@ -32,6 +32,7 @@
    - **Local miss** → call the **catalog provider** — MusicBrainz, behind an adapter ([architecture](../architecture.md) A-12). Metadata is normally pre-fetched at purchase-order time (M-02), so receiving should mostly hit locally.
    - **Multiple provider matches** → present a picker to the employee.
    - **No match** → manual entry fallback (artist, album title, genre, catalog number, label).
+   - **Any outcome that creates a Record resolves its genre before the line is added** ([M-06](M-06-settings.md) d53). The genre map runs first ([architecture](../architecture.md) A-61: highest-priority matching row, ties broken by the provider's vote count), and a hit auto-fills. An **unmapped tag** prompts the employee to choose, and so does a release the provider carries **no tags at all** — the same prompt, differing only in that there is nothing to key a map row on. It asks **once per distinct tag**, not once per copy, and **Escape discards the scan** (d55). Only the local hit skips this: an adopted Record keeps the genre it was adopted with.
 10. Employee reads the supplier's paperwork and **manually enters the cost** for this line. The system does not attempt to match a scanned barcode to an invoice SKU — barcodes and supplier SKUs cannot be reliably linked, so the employee performs the recognition. Cost is entered or confirmed on **every** receipt; a previously stored cost is never reused silently, because supplier prices move between shipments.
 11. System displays cost and a **suggested retail price** (see Pricing rules). If the catalog record carries a sticky retail price from a prior receipt, that pre-fills instead — always visible and editable, never applied silently.
 12. Employee accepts or overrides the price. Below-cost pricing **proceeds and raises a review flag** for the manager rather than blocking (decision 35). In **New mode** the accepted price becomes the catalog record's sticky price. **Second-hand** copies are priced individually and never set a sticky price.
@@ -105,6 +106,11 @@ Consequence to accept knowingly: per-item margin reporting reflects only supplie
 ---
 
 ## Inherited from other flows
+
+**From [M-06](M-06-settings.md):**
+
+- **A scan that adopts a new Record prompts for its genre, and Escape discards the scan** ([M-06](M-06-settings.md) d53, d55). The genre map resolves first ([architecture](../architecture.md) A-61); only an unmapped tag, or a release carrying no tags at all, reaches the operator, and it asks **once per distinct tag** rather than once per copy. Escape abandons the adoption per [E-01](E-01-authenticate.md) d19 — no Record, no line, and any automatic attachment to a PurchaseOrder line ([M-02](M-02-reorder-inventory.md) d20) is undone with it. The line itself survives untouched (M-02 d21) and the copy is rescanned when the operator is ready.
+- **Genre cannot be skipped and cannot be free text** ([M-06](M-06-settings.md) d17, d56). Step 9's manual entry fallback picks from the configured genres like every other path, with each genre's product tax code description shown beside it.
 
 **From [M-02](M-02-reorder-inventory.md):**
 
