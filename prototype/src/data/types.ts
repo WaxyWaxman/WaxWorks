@@ -921,6 +921,29 @@ export interface AdoptedTag extends ProviderTag {
   matched?: boolean;
 }
 
+// architecture A-6 — what the catalog provider knows about a pressing,
+// held in a cache that sits UNDERNEATH the per-Store catalog. This is NOT a
+// Record: there is no Record until adoption (d53), which is why a release
+// carries tags and no genre. A Store owns its Records; the cache is shared
+// across Stores, so nothing store-specific may ever be written into it.
+export interface ReleaseCacheEntry {
+  id: string;
+  artist: string;
+  title: string;
+  label: string;
+  catalogNo: string;
+  format: string;
+  year: number;
+  country: string;
+  art: string;
+  manufacturerUpc?: string;
+  musicbrainzId?: string;
+  // Undefined where the provider carries no genre tags at all — d53's
+  // second state, which prompts exactly like an unmapped tag and differs
+  // only in having nothing to key a map row on.
+  tags?: ProviderTag[];
+}
+
 // M-06 d6, d32 — the genre map: provider tag to genre and NOTHING ELSE. The
 // Section follows from the genre's required parent and is never guessed.
 export interface GenreMapRow {

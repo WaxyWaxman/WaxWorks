@@ -1,5 +1,6 @@
 import type {
   GenreMapRow,
+  ReleaseCacheEntry,
   Customer,
   GiftCard,
   InventoryItem,
@@ -348,6 +349,79 @@ export const INVENTORY: InventoryItem[] = [
 // d18 — the gift card load's catalog entry is SYSTEM-OWNED: its genre and
 // code are not editable and it is not deletable. Named here so the seed and
 // the money path cannot disagree about which genre a load resolves through.
+// A-6 — the provider cache. Seeded to carry the four cases d53 and A-61
+// describe, because a map nobody can watch resolve is furniture:
+//
+//   rc-satchidananda  every tag mapped   -> auto-fills, no prompt
+//   rc-loveless       rock + shoegaze    -> PRIORITY beats the heavier vote
+//   rc-neu            one unmapped tag   -> prompts, and CAN offer a map row
+//   rc-shaggs         no tags at all     -> prompts, and CANNOT offer one
+export const RELEASE_CACHE: ReleaseCacheEntry[] = [
+  {
+    id: "rc-satchidananda",
+    artist: "Alice Coltrane",
+    title: "Journey in Satchidananda",
+    label: "Impulse!",
+    catalogNo: "AS-9203",
+    format: "LP, Album",
+    year: 1971,
+    country: "US",
+    art: "🎷",
+    musicbrainzId: "mb-0001",
+    tags: [
+      { tag: "Jazz", votes: 62 },
+      { tag: "Modal Jazz", votes: 18 },
+    ],
+  },
+  {
+    id: "rc-loveless",
+    artist: "My Bloody Valentine",
+    title: "Loveless",
+    label: "Creation",
+    catalogNo: "CRELP 060",
+    format: "LP, Album",
+    year: 1991,
+    country: "UK",
+    art: "🌊",
+    musicbrainzId: "mb-0002",
+    // The worked case for A-61: `rock` is mapped and heavily voted,
+    // `shoegaze` is mapped and barely voted. Votes alone file this under
+    // Alt Rock; the priority on `shoegaze` is how a shop says otherwise.
+    tags: [
+      { tag: "Rock", votes: 140 },
+      { tag: "Shoegaze", votes: 11 },
+    ],
+  },
+  {
+    id: "rc-neu",
+    artist: "Neu!",
+    title: "Neu! 75",
+    label: "Brain",
+    catalogNo: "1060 063",
+    format: "LP, Album",
+    year: 1975,
+    country: "DE",
+    art: "🛤",
+    musicbrainzId: "mb-0003",
+    tags: [{ tag: "Krautrock", votes: 44 }],
+  },
+  {
+    id: "rc-shaggs",
+    artist: "The Shaggs",
+    title: "Philosophy of the World",
+    label: "Third World",
+    catalogNo: "TW-LP-001",
+    format: "LP, Album",
+    year: 1969,
+    country: "US",
+    art: "🎸",
+    musicbrainzId: "mb-0004",
+    // No tags at all. MusicBrainz genre tags are user-submitted and often
+    // absent on obscure pressings, which is precisely a record shop's stock
+    // (architecture §10 carries that coverage risk).
+  },
+];
+
 // M-06 d6, d32 / A-53 — the starter genre map, shipped in the seed because
 // A-53 lands `genre_map` with the migration. Without it a shop's first receive
 // is hundreds of prompts rather than a handful, which is the whole reason the
