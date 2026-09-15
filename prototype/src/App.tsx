@@ -12,6 +12,7 @@ import { OrderProcessing } from "./screens/OrderProcessing";
 import { WhatsOnOrder } from "./screens/WhatsOnOrder";
 import { Suppliers } from "./screens/Suppliers";
 import { AccountsPayable } from "./screens/AccountsPayable";
+import { Users } from "./screens/Users";
 import { ReviewQueueBadge } from "./components/ReviewQueue";
 
 // The top menu is one band of equal segments (design review — Signal), and it
@@ -56,6 +57,10 @@ const MORE_NAV: { group: string; items: { to: string; label: string; flow: strin
     ],
   },
   {
+    group: "Administration",
+    items: [{ to: "/users", label: "Users", flow: "M-04" }],
+  },
+  {
     group: "This prototype",
     items: [{ to: "/", label: "Flow map", flow: "review path", end: true }],
   },
@@ -98,7 +103,8 @@ export function App() {
     location.pathname.startsWith("/customers") ||
     location.pathname.startsWith("/suppliers") ||
     location.pathname.startsWith("/on-order") ||
-    location.pathname.startsWith("/orders");
+    location.pathname.startsWith("/orders") ||
+    location.pathname.startsWith("/users");
 
   return (
     <div className={"app" + (ownsWindow ? " app-fixed" : "")}>
@@ -142,6 +148,8 @@ export function App() {
           <Route path="/suppliers" element={<Suppliers />} />
           <Route path="/suppliers/:supplierId" element={<Suppliers />} />
           <Route path="/payable" element={<AccountsPayable />} />
+          <Route path="/users" element={<Users />} />
+          <Route path="/users/:userId" element={<Users />} />
         </Routes>
       </main>
     </div>

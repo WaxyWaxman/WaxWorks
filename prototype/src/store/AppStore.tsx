@@ -8,6 +8,7 @@ import {
 import { computeDayBreakdown, type DayBreakdown } from "../lib/dayBreakdown";
 import { invoiceForItem, supplierIdForItem } from "../lib/provenance";
 import { money } from "../lib/money";
+import * as usersLib from "../lib/users";
 import {
   customerBalanceDelta,
   invoiceIsPaid,
@@ -28,6 +29,7 @@ import {
   RECORDS,
   SUPPLIERS,
   TAX_LINES,
+  USERS,
 } from "../data/seed";
 import type {
   ClaimLineAgainst,
@@ -56,6 +58,8 @@ import type {
   SaleLine,
   Section,
   Supplier,
+  User,
+  UserRole,
   ClaimVoid,
   SupplierClaim,
   TaxLine,
@@ -131,6 +135,7 @@ interface AppState {
   records: RecordEntry[];
   inventory: InventoryItem[];
   customers: Customer[];
+  users: User[];
   suppliers: Supplier[];
   giftCards: GiftCard[];
   taxLines: TaxLine[];
@@ -165,6 +170,7 @@ const seed: AppState = {
   records: RECORDS,
   inventory: INVENTORY,
   customers: CUSTOMERS,
+  users: USERS,
   suppliers: SUPPLIERS,
   giftCards: GIFT_CARDS,
   taxLines: TAX_LINES,
@@ -640,6 +646,18 @@ const seed: AppState = {
 
 interface AppContextValue extends AppState {
   activeSale: Sale | null;
+  userFor: (id?: string) => User | undefined;
+  activeManagerCount: () => number;
+  // Every one of these is manager-only (A-55) and every one returns a reason
+  // rather than throwing, because M-04 d13 and A-54 both require the refusal
+  // to say WHICH thing blocked it - a refusal that does not name its cause
+  // reads as the system simply saying no.
+  addUser: (input: { name: string; initials: string; role: UserRole }, by: string) => UserWriteResult;
+  changeUserRole: (userId: string, role: UserRole, by: string) => UserWriteResult;
+  deactivateUser: (userId: string, by: string) => UserWriteResult;
+  reactivateUser: (userId: string, initials: string, by: string) => UserWriteResult;
+  correctUser: (userId: string, patch: { name?: string; initials?: string }, by: string) => UserWriteResult;
+
   recordFor: (id?: string) => RecordEntry | undefined;
   customerFor: (id?: string) => Customer | undefined;
   itemFor: (id?: string) => InventoryItem | undefined;
@@ -910,6 +928,11 @@ interface AppContextValue extends AppState {
   ) => { poNumber: string; lineCount: number; unitCount: number; emailed: boolean } | null;
 }
 
+// Every user write answers with a reason rather than a boolean: M-04 d13 has
+// the Manager resolve a clash on the spot, and A-54's rule that a refusal must
+// name what blocked it applies here too.
+export type UserWriteResult = { ok: true; id: string } | { ok: false; reason: string };
+
 const Ctx = createContext<AppContextValue | null>(null);
 
 export function AppStoreProvider({ children }: { children: ReactNode }) {
@@ -1069,6 +1092,42 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
 
   // E-07 — Search/New/Delete. Every other field is edited in place on the
   // open card, not through a separate Edit flow.
+  // -------------------------------------------------------------------------
+  // Users (M-04, architecture A-55)
+  //
+  // Thin wrapper only. The rules live in lib/users.ts as pure functions,
+  // because A-55 puts both invariants in the write path and a rule that can
+  // only be exercised by clicking a button is a rule nothing can test.
+  // -------------------------------------------------------------------------
+
+  const userFor: AppContextValue["userFor"] = (id) => s.users.find((u) => u.id === id);
+
+  const activeManagerCount: AppContextValue["activeManagerCount"] = () =>
+    usersLib.activeManagerCount(s.users);
+
+  // Each of these applies the pure reducer and commits only on success, so a
+  // refusal leaves state untouched and hands the caller the reason to show.
+  const commit = (r: usersLib.UserWrite): UserWriteResult => {
+    if (!r.ok) return r;
+    setS((prev) => ({ ...prev, users: r.users }));
+    return { ok: true, id: r.id };
+  };
+
+  const addUser: AppContextValue["addUser"] = (input, by) =>
+    commit(usersLib.addUser(s.users, input, by, { id: uid("user") }));
+
+  const changeUserRole: AppContextValue["changeUserRole"] = (userId, role, by) =>
+    commit(usersLib.changeUserRole(s.users, userId, role, by));
+
+  const deactivateUser: AppContextValue["deactivateUser"] = (userId, by) =>
+    commit(usersLib.deactivateUser(s.users, userId, by));
+
+  const reactivateUser: AppContextValue["reactivateUser"] = (userId, initials, by) =>
+    commit(usersLib.reactivateUser(s.users, userId, initials, by));
+
+  const correctUser: AppContextValue["correctUser"] = (userId, patch, by) =>
+    commit(usersLib.correctUser(s.users, userId, patch, by));
+
   const addCustomer: AppContextValue["addCustomer"] = (input) => {
     const id = uid("cust");
     const customer: Customer = { id, primaryId: s.nextCustomerPrimaryId, ...input, balance: 0 };
@@ -3114,6 +3173,13 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
       poNumberTaken,
       recordPlacedOrder,
       processOrderStream,
+      userFor,
+      activeManagerCount,
+      addUser,
+      changeUserRole,
+      deactivateUser,
+      reactivateUser,
+      correctUser,
     }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [s],
