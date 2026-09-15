@@ -10,7 +10,7 @@ import type {
   TenderRow,
 } from "../data/types";
 import { useApp, type SettingsWriteResult } from "../store/AppStore";
-import { resolveLineTax } from "../lib/tax";
+import { taxTypeUseCount, resolveLineTax } from "../lib/tax";
 import { money } from "../lib/money";
 
 // M-06 Settings, on the till's three tracks: the group you are in, the editor,
@@ -597,7 +597,7 @@ function TaxEditor({ by, onRun }: { by: string; onRun: (r: SettingsWriteResult) 
             <th>Pending %</th>
             <th>From</th>
             <th>Registration</th>
-            <th>Active</th>
+            <th>In use</th>
           </tr>
         </thead>
         <tbody>
@@ -652,7 +652,15 @@ function TaxEditor({ by, onRun }: { by: string; onRun: (r: SettingsWriteResult) 
                   }
                 />
               </td>
-              <Flag on={t.active} onChange={(v) => onRun(app.upsertTaxType({ ...t, active: v }, by))} />
+              {/* d57, A-63 — not a switch. A tax type is live where a cell
+                  names it, so this reports the cells rather than offering a
+                  second control that could disagree with them. Clearing the
+                  letter from the grid below is what stops a tax. */}
+              <td className="small muted">
+                {taxTypeUseCount(app.taxGroupCells, t.code) > 0
+                  ? `${taxTypeUseCount(app.taxGroupCells, t.code)} cell(s)`
+                  : "unused"}
+              </td>
             </tr>
           ))}
         </tbody>
@@ -797,7 +805,6 @@ function NewTaxType({ by, onRun }: { by: string; onRun: (r: SettingsWriteResult)
                   code: code.trim().toLowerCase(),
                   name: name.trim(),
                   ratePpm: Math.round(Number(rate) * 10000),
-                  active: true,
                 },
                 by,
               ),

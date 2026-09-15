@@ -6,6 +6,7 @@ import { TillRail } from "../components/TillRail";
 import { VoidSaleModal } from "../components/VoidSaleModal";
 import type { InventoryItem, RecordEntry, Sale, SaleLine, TenderType } from "../data/types";
 import { money } from "../lib/money";
+import { genreNameFor, sectionSearchTerms } from "../lib/taxonomy";
 import { resolveScan } from "../lib/resolve";
 import { availableOnHand, balanceDue, lineTaxComponents, saleTotals } from "../lib/totals";
 import { useApp } from "../store/AppStore";
@@ -91,7 +92,7 @@ function SaleEditor() {
 
   const [picker, setPicker] = useState<{ record: RecordEntry; items: InventoryItem[] } | null>(null);
   const [negPrompt, setNegPrompt] = useState<RecordEntry | null>(null);
-  const [ntPrompt, setNtPrompt] = useState<{ code: string; label: string; price: number } | null>(null);
+  const [ntPrompt, setNtPrompt] = useState<{ code: string; label: string; price: number; genreId: string } | null>(null);
   const [gcLoad, setGcLoad] = useState<string | null>(null);
   const [gcRedeem, setGcRedeem] = useState<{ code: string; balance: number } | null>(null);
   // The slab offers all six tender types directly, so opening the modal
@@ -127,7 +128,7 @@ function SaleEditor() {
         else setPicker({ record: res.record, items: res.items });
         break;
       case "nontracked":
-        if (res.item.price === 0) setNtPrompt({ code: res.item.code, label: res.item.label, price: 0 });
+        if (res.item.price === 0) setNtPrompt({ code: res.item.code, label: res.item.label, price: 0, genreId: res.item.genreId });
         else app.addNonTrackedLine(sale.id, res.item, res.item.price);
         break;
       case "giftcard":
@@ -537,7 +538,7 @@ function SaleEditor() {
           defaultValue={0}
           onCancel={() => setNtPrompt(null)}
           onConfirm={(p) => {
-            app.addNonTrackedLine(sale.id, { code: ntPrompt.code, label: ntPrompt.label, price: p, section: "MERCH" }, p);
+            app.addNonTrackedLine(sale.id, { code: ntPrompt.code, label: ntPrompt.label, price: p, genreId: ntPrompt.genreId }, p);
             setNtPrompt(null);
           }}
         />
@@ -759,11 +760,21 @@ function LookupModal({
   const results = useMemo(() => {
     if (!query) return [];
     const match = (r: RecordEntry) =>
-      [r.artist, r.title, r.label, r.catalogNo, r.genre, r.section, r.manufacturerUpc]
+      [
+        r.artist,
+        r.title,
+        r.label,
+        r.catalogNo,
+        genreNameFor(app.genres, r.genreId),
+        // d31 — Section is no longer a field on the Record, so searching
+        // by it means resolving through the genre. Code and name both.
+        sectionSearchTerms(app.genres, app.sections, r.genreId),
+        r.manufacturerUpc,
+      ]
         .filter(Boolean)
         .some((f) => String(f).toLowerCase().includes(query));
     return app.records.filter((r) => !r.catalogOnly && match(r));
-  }, [query, app.records]);
+  }, [query, app.records, app.genres, app.sections]);
 
   return (
     <Modal title="Lookup — add a line" onClose={onClose}>
@@ -786,7 +797,7 @@ function LookupModal({
                     <td colSpan={3}>
                       {r.artist} — {r.title}
                       <div className="xsmall muted">
-                        {r.label} · {r.catalogNo} · {r.genre}
+                        {r.label} · {r.catalogNo} · {genreNameFor(app.genres, r.genreId)}
                       </div>
                     </td>
                   </tr>

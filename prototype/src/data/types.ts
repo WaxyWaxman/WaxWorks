@@ -19,8 +19,12 @@ export interface RecordEntry {
   format: string;
   year: number;
   country: string;
-  genre: string;
-  section: Section;
+  // The genre's stable id, never its name (see Genre below).
+  genreId: string;
+  // M-06 d31, d32 — the Record stores its GENRE and NOT its Section. Section
+  // is derived through the genre's required parent (see lib/taxonomy.ts);
+  // storing both was the same fact at two removes, and it drifted the moment
+  // a genre was remapped.
   art: string; // emoji stand-in for cover art
   manufacturerUpc?: string;
   discogsId?: string;
@@ -112,11 +116,16 @@ export interface Supplier {
   log: { at: string; text: string }[];
 }
 
+// M-06 d17 — freight, services and bulk goods are REAL CATALOG ENTRIES
+// carrying a genre, not a separate type with a Section. That is what makes
+// tax resolution have no special case: every sellable thing reaches the
+// till through catalog entry → genre → product tax code → taxes, one path.
+// Section is derived from the genre's parent like anything else (d31).
 export interface NonTrackedItem {
   code: string; // e.g. FREIGHT
   label: string;
   price: number; // 0 => prompt at till
-  section: Section;
+  genreId: string;
 }
 
 export interface GiftCard {
@@ -193,6 +202,15 @@ export interface SaleLine {
   // the line when it is added, because that is a fact about what was sold and
   // is fixed the moment it goes in the basket (A-57).
   productTaxCode: string;
+  // The genre the line resolved through, kept as a POINTER rather than a
+  // copy. It is what M-03's *By Section* reads, and it must stay live:
+  // architecture A-60 has merging a genre re-bucket every Record under it
+  // at once, which a snapshotted Section could not do. Contrast
+  // `productTaxCode` directly above, which is deliberately a snapshot —
+  // what was charged is a fact, where which shelf it belongs on is not.
+  // Item lines carry it via `recordId`; non-tracked and gift-card lines
+  // carry it here, since they have no Record in this prototype.
+  genreId?: string;
   // A-57 — the tax SNAPSHOT: the tax types resolved and the rates applied,
   // never a reference to a configuration row. Taken at TENDER, not at line-add,
   // because what was collected is not a fact until something is collected.
@@ -846,7 +864,14 @@ export interface TaxType {
   // Reserved and not drawn — there is no chart of accounts yet. The field
   // exists so one needs no migration, the move A-14 makes for cover_art_path.
   glAccount?: string;
-  active: boolean;
+  // NO `active` FLAG, and its absence is the decision (M-06 d57,
+  // architecture A-63). A tax type is the one piece of configuration here
+  // with no assignments — nothing is filed under `b`, and a completed Sale
+  // line snapshots the rate rather than referencing the row (A-57) — so a
+  // cell naming it is the only reference, and liveness is DERIVED from the
+  // cells rather than stored beside them. `ab+` -> `a` is how `b` stops
+  // being charged. A stored flag let a housekeeping toggle silently charge
+  // less tax, which is the defect A-63 closes by making it unrepresentable.
 }
 
 export interface ProductTaxCode {
@@ -878,9 +903,22 @@ export interface TaxGroupCell {
 // non-tracked ones, which is what closes the "what tax does freight pay"
 // question without a special case.
 export interface Genre {
+  // A STABLE KEY, not the name. A Record points at this; the name is a label a
+  // Manager may correct. Joining by name meant renaming `Metal` orphaned every
+  // Record under it at once — Section fell to the em dash and, worse, the tax
+  // code fell back to the standard one silently (d12 puts the product tax code
+  // on the genre). It also made architecture A-60's merge unrepresentable:
+  // merge is specified as REPOINTING every dependent pointer, and a name join
+  // has no pointer to repoint. Architecture §5 models genres as rows with
+  // id-shaped references, so this is the prototype catching up.
+  id: string;
   name: string;
   section: string; // Section code — mandatory (d32)
   productTaxCode: string; // mandatory (d12, d17)
+  // d9 — a referenced Genre is deactivated, never deleted. Off stops it being
+  // OFFERED; it does not stop it RESOLVING, or a Record under a retired genre
+  // would silently change what tax it attracts.
+  active: boolean;
   // d17 — shop-internal genres are omitted from the picker rather than gated,
   // so setting a Record's genre to Freight is unrepresentable (d19).
   internal?: boolean;

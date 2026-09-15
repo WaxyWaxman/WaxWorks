@@ -7,6 +7,7 @@ import type { RecordEntry } from "../data/types";
 import { readStored, writeStored } from "../lib/tillMemory";
 import { resolveScan } from "../lib/resolve";
 import { money } from "../lib/money";
+import { genreNameFor, sectionSearchTerms } from "../lib/taxonomy";
 import { stockFacts, stockRank, type StockState } from "../lib/stockState";
 import { useApp } from "../store/AppStore";
 
@@ -57,7 +58,17 @@ export function Search() {
     const q = term.trim().toLowerCase();
     const match = (r: RecordEntry) => {
       if (!q) return true;
-      const fields = [r.artist, r.title, r.label, r.catalogNo, r.genre, r.section, r.manufacturerUpc];
+      // d31 — Section resolves through the genre rather than sitting on
+      // the Record. Matches the Section's code and its name.
+      const fields = [
+        r.artist,
+        r.title,
+        r.label,
+        r.catalogNo,
+        genreNameFor(app.genres, r.genreId),
+        sectionSearchTerms(app.genres, app.sections, r.genreId),
+        r.manufacturerUpc,
+      ];
       if (fields.filter(Boolean).some((f) => String(f).toLowerCase().includes(q))) return true;
       // E-03 d15 — internal barcode is a TYPED dimension too. d9 governs what
       // a scan does; a number read off a sleeve by hand has to reach the same

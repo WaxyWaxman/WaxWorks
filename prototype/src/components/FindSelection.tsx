@@ -6,6 +6,7 @@ import type { InventoryItem, RecordEntry } from "../data/types";
 import { money } from "../lib/money";
 import type { StockFacts } from "../lib/stockState";
 import { STOCK_LABEL } from "../lib/stockState";
+import { genreNameFor, sectionLabelFor } from "../lib/taxonomy";
 import { useApp } from "../store/AppStore";
 
 // Track 2 of Find: the Record you picked (E-04's titlecard, minus the stock
@@ -68,7 +69,7 @@ export function FindSelection({
             <span className="badge">
               {record.year} · {record.country}
             </span>
-            <span className="badge">{record.section}</span>
+            <span className="badge">{sectionLabelFor(app.genres, app.sections, record.genreId)}</span>
             {record.stickyPrice && (
               <span className="badge warn">sticky {money(record.stickyPrice)} (New)</span>
             )}
@@ -110,7 +111,10 @@ export function FindSelection({
             <Fact k="Label / cat. no." v={`${record.label} · ${record.catalogNo}`} />
             <Fact k="Format" v={record.format} />
             <Fact k="Year / country" v={`${record.year} · ${record.country}`} />
-            <Fact k="Genre / Section" v={`${record.genre} · ${record.section}`} />
+            <Fact
+              k="Genre / Section"
+              v={`${genreNameFor(app.genres, record.genreId)} · ${sectionLabelFor(app.genres, app.sections, record.genreId)}`}
+            />
             <Fact
               k="Manufacturer UPC"
               v={<span className="mono">{record.manufacturerUpc ?? "— (none on sleeve)"}</span>}

@@ -5,6 +5,7 @@ import { TillRail } from "../components/TillRail";
 import { VoidSaleModal } from "../components/VoidSaleModal";
 import { GRADES, type Grade, type RecordEntry } from "../data/types";
 import { money } from "../lib/money";
+import { genreNameFor } from "../lib/taxonomy";
 import { resolveScan } from "../lib/resolve";
 import { balanceDue, saleTotals } from "../lib/totals";
 import { useApp } from "../store/AppStore";
@@ -473,7 +474,7 @@ function AddReturnedItem({ saleId, onClose }: { saleId: string; onClose: () => v
   const results = useMemo(() => {
     if (!query) return [];
     const match = (r: RecordEntry) =>
-      [r.artist, r.title, r.label, r.catalogNo, r.genre, r.manufacturerUpc]
+      [r.artist, r.title, r.label, r.catalogNo, genreNameFor(app.genres, r.genreId), r.manufacturerUpc]
         .filter(Boolean)
         .some((f) => String(f).toLowerCase().includes(query));
     return app.records.filter(match).slice(0, 12);
@@ -576,7 +577,7 @@ function AddReturnedItem({ saleId, onClose }: { saleId: string; onClose: () => v
                           <td colSpan={4}>
                             {r.artist} — {r.title}
                             <div className="xsmall muted">
-                              {r.label} · {r.catalogNo} · {r.genre}
+                              {r.label} · {r.catalogNo} · {genreNameFor(app.genres, r.genreId)}
                             </div>
                           </td>
                         </tr>

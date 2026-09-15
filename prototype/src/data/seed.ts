@@ -163,8 +163,7 @@ export const RECORDS: RecordEntry[] = [
     format: "LP, Album",
     year: 1971,
     country: "US",
-    genre: "Folk Rock",
-    section: "VINYL",
+    genreId: "gn-folk-rock",
     art: "🔵",
     manufacturerUpc: "081227971609",
     discogsId: "155632",
@@ -179,8 +178,7 @@ export const RECORDS: RecordEntry[] = [
     format: "LP, Album, RE",
     year: 1977,
     country: "US",
-    genre: "Pop Rock",
-    section: "VINYL",
+    genreId: "gn-pop-rock",
     art: "🌗",
     manufacturerUpc: "075992751612",
     discogsId: "13756011",
@@ -196,8 +194,7 @@ export const RECORDS: RecordEntry[] = [
     format: "LP, Album, Mono",
     year: 1959,
     country: "US",
-    genre: "Modal Jazz",
-    section: "VINYL",
+    genreId: "gn-modal-jazz",
     art: "🎺",
     manufacturerUpc: "888751545519",
     discogsId: "281822",
@@ -212,8 +209,7 @@ export const RECORDS: RecordEntry[] = [
     format: "LP, Album",
     year: 1984,
     country: "US",
-    genre: "Funk / Pop",
-    section: "VINYL",
+    genreId: "gn-funk-pop",
     art: "🟣",
     manufacturerUpc: "075992511018",
     discogsId: "384169",
@@ -229,8 +225,7 @@ export const RECORDS: RecordEntry[] = [
     format: "LP, Album",
     year: 1994,
     country: "US",
-    genre: "Hip Hop",
-    section: "VINYL",
+    genreId: "gn-hip-hop",
     art: "🏙️",
     manufacturerUpc: "889854250515",
     discogsId: "63643",
@@ -245,8 +240,7 @@ export const RECORDS: RecordEntry[] = [
     format: "Canvas",
     year: 2026,
     country: "CA",
-    genre: "Merch",
-    section: "MERCH",
+    genreId: "gn-merch",
     art: "👜",
     manufacturerUpc: "200000000017",
     minOnHand: 5,
@@ -264,8 +258,7 @@ export const RECORDS: RecordEntry[] = [
     format: "LP, Album",
     year: 2004,
     country: "US",
-    genre: "Hip Hop",
-    section: "VINYL",
+    genreId: "gn-hip-hop",
     art: "🎭",
     manufacturerUpc: "659457206512",
     discogsId: "213144",
@@ -282,8 +275,7 @@ export const RECORDS: RecordEntry[] = [
     format: "LP, Album",
     year: 1968,
     country: "US",
-    genre: "Folk Rock",
-    section: "VINYL",
+    genreId: "gn-folk-rock",
     art: "🌌",
     manufacturerUpc: "075992745215",
     discogsId: "1425988",
@@ -301,8 +293,7 @@ export const RECORDS: RecordEntry[] = [
     format: "LP, Album",
     year: 1975,
     country: "US",
-    genre: "Art Punk",
-    section: "VINYL",
+    genreId: "gn-art-punk",
     art: "🐎",
     manufacturerUpc: "060758004321",
     discogsId: "377464",
@@ -318,8 +309,7 @@ export const RECORDS: RecordEntry[] = [
     format: "LP, Album",
     year: 1997,
     country: "UK",
-    genre: "Alt Rock",
-    section: "VINYL",
+    genreId: "gn-alt-rock",
     art: "💻",
     discogsId: "1092149",
     minOnHand: 0,
@@ -354,10 +344,18 @@ export const INVENTORY: InventoryItem[] = [
 ];
 
 // ---- Non-tracked catalog items (E-05) ----
+// d18 — the gift card load's catalog entry is SYSTEM-OWNED: its genre and
+// code are not editable and it is not deletable. Named here so the seed and
+// the money path cannot disagree about which genre a load resolves through.
+export const GIFT_CARD_GENRE_ID = "gn-gift-card";
+
 export const NON_TRACKED: NonTrackedItem[] = [
-  { code: "FREIGHT", label: "Shipping / freight", price: 0, section: "MERCH" },
-  { code: "STICKER", label: "Wax Works sticker", price: 2, section: "MERCH" },
-  { code: "SERVICE-CLEAN", label: "Record cleaning (per disc)", price: 5, section: "MERCH" },
+  // d17 — each carries a genre, and its Section follows from that genre's
+  // required parent (d32). Freight and services roll up into FREIGHT, which
+  // d20 makes a REVENUE Section; only gift cards are a liability.
+  { code: "FREIGHT", label: "Shipping / freight", price: 0, genreId: "gn-freight" },
+  { code: "STICKER", label: "Wax Works sticker", price: 2, genreId: "gn-merch" },
+  { code: "SERVICE-CLEAN", label: "Record cleaning (per disc)", price: 5, genreId: "gn-services" },
 ];
 
 // ---- Gift cards ----
@@ -494,14 +492,14 @@ export const MANAGER_NAME = `${seedManager.name} (${seedManager.role})`;
 // with no Sections and no tenders.
 
 export const SECTIONS: SectionRow[] = [
-  { code: "VI", name: "Vinyl", countsAsRevenue: true, tracksStockDefault: true, discountable: true, returnable: true, active: true },
-  { code: "ME", name: "Merch", countsAsRevenue: true, tracksStockDefault: true, discountable: true, returnable: true, active: true },
+  { code: "VI", name: "VINYL", countsAsRevenue: true, tracksStockDefault: true, discountable: true, returnable: true, active: true },
+  { code: "ME", name: "MERCH", countsAsRevenue: true, tracksStockDefault: true, discountable: true, returnable: true, active: true },
   // d20 — one Section each for freight and gift cards, split because one is
   // revenue and the other a liability. d30 makes the gift card Section
   // discountable:false and returnable:false — a load discounted 10% is a
   // straight loss, and one returned is a cash-out dressed as a refund.
-  { code: "FR", name: "Freight", countsAsRevenue: false, tracksStockDefault: false, discountable: true, returnable: false, active: true, systemOwned: true },
-  { code: "GC", name: "Gift cards", countsAsRevenue: false, tracksStockDefault: false, discountable: false, returnable: false, active: true, systemOwned: true },
+  { code: "FR", name: "FREIGHT", countsAsRevenue: true, tracksStockDefault: false, discountable: true, returnable: false, active: true, systemOwned: true },
+  { code: "GC", name: "GIFT CARDS", countsAsRevenue: false, tracksStockDefault: false, discountable: false, returnable: false, active: true, systemOwned: true },
 ];
 
 export const TENDERS: TenderRow[] = [
@@ -557,20 +555,20 @@ export const STORE_DETAILS: StoreDetails = {
 // (d48), and cannot be split by rate when a period spans a change (M-03 d15).
 
 export const TAX_TYPES: TaxType[] = [
-  { code: "a", name: "GST", ratePpm: 50_000, registrationNumber: "R123456789", glAccount: "2310", active: true },
-  { code: "b", name: "QST", ratePpm: 99_750, registrationNumber: "1234567890TQ0001", glAccount: "2320", active: true },
+  { code: "a", name: "GST", ratePpm: 50_000, registrationNumber: "R123456789", glAccount: "2310" },
+  { code: "b", name: "QST", ratePpm: 99_750, registrationNumber: "1234567890TQ0001", glAccount: "2320" },
   // Each HST rate is its OWN tax type, and that is the model working rather
   // than a workaround: a tax type is "one tax that exists" carrying one rate
   // (d11), and Ontario's 13% and New Brunswick's 15% are remitted separately
   // at different rates. One "HST" row could not hold both.
-  { code: "f", name: "HST (ON)", ratePpm: 130_000, glAccount: "2330", active: true },
-  { code: "g", name: "HST (NB/NL/PE)", ratePpm: 150_000, glAccount: "2331", active: true },
-  { code: "h", name: "HST (NS)", ratePpm: 140_000, glAccount: "2332", active: true },
-  { code: "c", name: "PST (BC)", ratePpm: 70_000, glAccount: "2340", active: true },
-  { code: "d", name: "PST (SK)", ratePpm: 60_000, glAccount: "2341", active: true },
-  { code: "e", name: "RST (MB)", ratePpm: 70_000, glAccount: "2342", active: true },
+  { code: "f", name: "HST (ON)", ratePpm: 130_000, glAccount: "2330" },
+  { code: "g", name: "HST (NB/NL/PE)", ratePpm: 150_000, glAccount: "2331" },
+  { code: "h", name: "HST (NS)", ratePpm: 140_000, glAccount: "2332" },
+  { code: "c", name: "PST (BC)", ratePpm: 70_000, glAccount: "2340" },
+  { code: "d", name: "PST (SK)", ratePpm: 60_000, glAccount: "2341" },
+  { code: "e", name: "RST (MB)", ratePpm: 70_000, glAccount: "2342" },
   // d15 — taxable at 0% and REPORTABLE, which a blank cell is not.
-  { code: "z", name: "Zero-rated", ratePpm: 0, active: true },
+  { code: "z", name: "Zero-rated", ratePpm: 0 },
 ];
 
 export const PRODUCT_TAX_CODES: ProductTaxCode[] = [
@@ -675,17 +673,18 @@ export const GENRES: Genre[] = [
   // are, and d6's genre map is what translates a provider's genre to a shop
   // one. The map itself is not modelled here (see docs/prototype.md); every
   // genre in the seed is simply a shop genre, so every Record resolves.
-  { name: "Alt Rock", section: "VI", productTaxCode: "1" },
-  { name: "Art Punk", section: "VI", productTaxCode: "1" },
-  { name: "Folk Rock", section: "VI", productTaxCode: "1" },
-  { name: "Funk / Pop", section: "VI", productTaxCode: "1" },
-  { name: "Hip Hop", section: "VI", productTaxCode: "1" },
-  { name: "Modal Jazz", section: "VI", productTaxCode: "1" },
-  { name: "Pop Rock", section: "VI", productTaxCode: "1" },
-  { name: "Merch", section: "ME", productTaxCode: "1" },
-  { name: "Books", section: "ME", productTaxCode: "B" },
+  { id: "gn-alt-rock", name: "Alt Rock", section: "VI", productTaxCode: "1", active: true },
+  { id: "gn-art-punk", name: "Art Punk", section: "VI", productTaxCode: "1", active: true },
+  { id: "gn-folk-rock", name: "Folk Rock", section: "VI", productTaxCode: "1", active: true },
+  { id: "gn-funk-pop", name: "Funk / Pop", section: "VI", productTaxCode: "1", active: true },
+  { id: "gn-hip-hop", name: "Hip Hop", section: "VI", productTaxCode: "1", active: true },
+  { id: "gn-modal-jazz", name: "Modal Jazz", section: "VI", productTaxCode: "1", active: true },
+  { id: "gn-pop-rock", name: "Pop Rock", section: "VI", productTaxCode: "1", active: true },
+  { id: "gn-merch", name: "Merch", section: "ME", productTaxCode: "1", active: true },
+  { id: "gn-books", name: "Books", section: "ME", productTaxCode: "B", active: true },
   // d17, d19 — shop-internal genres are omitted from the picker rather than
   // gated, so a Record can never be set to one by accident.
-  { name: "Freight", section: "FR", productTaxCode: "1", internal: true },
-  { name: "Gift card", section: "GC", productTaxCode: "2", internal: true },
+  { id: "gn-freight", name: "Freight", section: "FR", productTaxCode: "1", active: true, internal: true },
+  { id: "gn-services", name: "Services", section: "FR", productTaxCode: "1", active: true, internal: true },
+  { id: "gn-gift-card", name: "Gift card", section: "GC", productTaxCode: "2", active: true, internal: true },
 ];

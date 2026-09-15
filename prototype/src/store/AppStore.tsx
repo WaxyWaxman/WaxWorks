@@ -22,6 +22,7 @@ import {
 import {
   CURRENT_USER,
   CUSTOMERS,
+  GIFT_CARD_GENRE_ID,
   GIFT_CARDS,
   INVENTORY,
   MANAGER_NAME,
@@ -69,7 +70,6 @@ import type {
   ReviewFlagKind,
   Sale,
   SaleLine,
-  Section,
   Supplier,
   User,
   UserRole,
@@ -849,10 +849,9 @@ interface AppContextValue extends AppState {
   createRecordManual: (input: {
     artist: string;
     title: string;
-    genre: string;
+    genreId: string;
     catalogNo: string;
     label: string;
-    section: Section;
   }) => string;
   addSupplier: (input: Omit<Supplier, "id" | "log">) => string;
   updateSupplier: (supplierId: string, patch: Partial<Omit<Supplier, "id" | "log">>) => void;
@@ -1249,9 +1248,23 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
   // table resolves to the standard code rather than to nothing: an unmapped
   // genre is a data problem (d6's map is what fixes it), and silently
   // charging no tax would be the worse failure.
+  // d12, d17 — one resolver, because every sellable thing reaches tax the
+  // same way. An unresolvable genre falls back to the standard code rather
+  // than to nothing: charging no tax is a worse failure than charging the
+  // wrong tax, which is the opposite call from Section (see lib/taxonomy).
+  const productTaxCodeForGenre = (genreId: string | undefined): string => {
+    // No `active` filter: d9's deactivation stops a Genre being offered,
+    // not resolved.
+    return s.genres.find((x) => x.id === genreId)?.productTaxCode ?? "1";
+  };
+
   const productTaxCodeForRecord: AppContextValue["productTaxCodeForRecord"] = (recordId) => {
     const rec = s.records.find((r) => r.id === recordId);
-    const g = s.genres.find((x) => x.name === rec?.genre);
+    // By id, and with no `active` filter: d9's deactivation stops a Genre
+    // being offered, not being resolved. A Record under a retired genre
+    // must keep its product tax code, or retiring a genre silently changes
+    // what its stock is taxed at.
+    const g = s.genres.find((x) => x.id === rec?.genreId);
     return g?.productTaxCode ?? "1";
   };
 
@@ -1603,9 +1616,10 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
         kind: "nontracked",
         // d17 — genre is mandatory on every sellable thing INCLUDING
         // non-tracked ones, which is how freight and services resolve tax
-        // with no special case. The prototype's non-tracked catalog carries
-        // no genre yet, so these take the standard code.
-        productTaxCode: "1",
+        // with no special case. Resolved through the entry's genre like
+        // any other line; there is no longer a hardcoded code here.
+        productTaxCode: productTaxCodeForGenre(nt.genreId),
+        genreId: nt.genreId,
         title: `${nt.label} (${nt.code})`,
         qty: 1,
         price,
@@ -1637,7 +1651,13 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
           qty: 1,
           price: value,
           discountPct: 0,
-          productTaxCode: "1",
+          // d18 — a gift card load is a system-owned non-tracked catalog
+          // entry, so it resolves through the `Gift card` genre like every
+          // other line. That genre carries product tax code `2`, which is
+          // out of scope in every group (d15) — a load was being taxed at
+          // the standard rate while this said `1`.
+          productTaxCode: productTaxCodeForGenre(GIFT_CARD_GENRE_ID),
+          genreId: GIFT_CARD_GENRE_ID,
           note: "Loading a gift card is a line item (money in)",
         },
       ],
@@ -1967,13 +1987,13 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
   // M-03 — View Subtotal computes the same breakdown as a close without
   // touching anything; it's a pure read.
   const viewSubtotal: AppContextValue["viewSubtotal"] = () =>
-    computeDayBreakdown(s.sales, s.records, taxCtxFor(null), s.inventory);
+    computeDayBreakdown(s.sales, s.records, taxCtxFor(null), s.inventory, s.genres, s.sections);
 
   // Total Today's Sales — the close is a real state transition (M-03
   // decision 1): every Current Sale becomes Closed and stops being
   // editable, batched under one identifier so it can be undone as a unit.
   const totalTodaysSales: AppContextValue["totalTodaysSales"] = (by) => {
-    const breakdown = computeDayBreakdown(s.sales, s.records, taxCtxFor(null), s.inventory);
+    const breakdown = computeDayBreakdown(s.sales, s.records, taxCtxFor(null), s.inventory, s.genres, s.sections);
     const saleIds = s.sales.filter((sale) => sale.state === "Current" && !sale.isReturn).map((sale) => sale.id);
     const batchId = uid("batch");
     const batch: CloseBatch = { id: batchId, at: now(), by, saleIds };
@@ -2463,8 +2483,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
       format: "—",
       year: new Date().getFullYear(),
       country: "—",
-      genre: input.genre,
-      section: input.section,
+      genreId: input.genreId,
       art: "💿",
       minOnHand: 0,
     };

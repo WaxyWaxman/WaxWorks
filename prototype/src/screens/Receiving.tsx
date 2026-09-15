@@ -5,6 +5,7 @@ import { ReceiveReconcile } from "../components/ReceiveReconcile";
 import { OutstandingPanel } from "../components/OutstandingPanel";
 import { ReceiveSlab } from "../components/ReceiveSlab";
 import { TitlecardPanel } from "../components/TitlecardPanel";
+import { sectionLabelFor, selectableGenres } from "../lib/taxonomy";
 import {
   GRADES,
   type Grade,
@@ -13,7 +14,6 @@ import {
   type InvoiceLine,
   type PendingOrderLine,
   type RecordEntry,
-  type Section,
   type Supplier,
 } from "../data/types";
 import { readStored, writeStored } from "../lib/tillMemory";
@@ -1522,12 +1522,11 @@ function ManualEntryForm({ onCreate }: { onCreate: (rec: RecordEntry) => void })
   const app = useApp();
   const [artist, setArtist] = useState("");
   const [title, setTitle] = useState("");
-  const [genre, setGenre] = useState("");
+  const [genreId, setGenreId] = useState("");
   const [catalogNo, setCatalogNo] = useState("");
   const [label, setLabel] = useState("");
-  const [section, setSection] = useState<Section>("VINYL");
 
-  const ready = artist.trim() && title.trim() && genre.trim() && catalogNo.trim() && label.trim();
+  const ready = artist.trim() && title.trim() && genreId && catalogNo.trim() && label.trim();
 
   return (
     <div className="stack">
@@ -1552,15 +1551,21 @@ function ManualEntryForm({ onCreate }: { onCreate: (rec: RecordEntry) => void })
           <span>Catalog number</span>
           <input type="text" value={catalogNo} onChange={(e) => setCatalogNo(e.target.value)} />
         </label>
+        {/* E-04 — genre is constrained to configured values, never free text,
+            and M-06 d19 omits the shop-internal genres from the picker rather
+            than gating them, so `Freight` is unrepresentable here instead of
+            merely discouraged. There is no Section field: d31 and d32 derive
+            it from the genre's required parent, so choosing the genre has
+            already chosen the Section. */}
         <label className="field">
           <span>Genre</span>
-          <input type="text" value={genre} onChange={(e) => setGenre(e.target.value)} />
-        </label>
-        <label className="field">
-          <span>Section</span>
-          <select value={section} onChange={(e) => setSection(e.target.value as Section)}>
-            <option value="VINYL">VINYL</option>
-            <option value="MERCH">MERCH</option>
+          <select value={genreId} onChange={(e) => setGenreId(e.target.value)}>
+            <option value="">Choose a genre…</option>
+            {selectableGenres(app.genres).map((g) => (
+              <option key={g.id} value={g.id}>
+                {g.name} · {sectionLabelFor(app.genres, app.sections, g.id)}
+              </option>
+            ))}
           </select>
         </label>
       </div>
@@ -1571,10 +1576,9 @@ function ManualEntryForm({ onCreate }: { onCreate: (rec: RecordEntry) => void })
           const id = app.createRecordManual({
             artist: artist.trim(),
             title: title.trim(),
-            genre: genre.trim(),
+            genreId,
             catalogNo: catalogNo.trim(),
             label: label.trim(),
-            section,
           });
           onCreate(app.recordFor(id)!);
         }}
