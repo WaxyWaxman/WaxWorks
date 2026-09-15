@@ -1,7 +1,7 @@
 # M-06 — Configure the store
 
 **Actor:** Manager
-**Status:** In clarification
+**Status:** Specified
 **Related:** [E-05 Point of Sale](E-05-sell-a-record.md) · [M-03 Daily summary](M-03-daily-summary.md) · [M-04 Manage users](M-04-manage-users.md)
 
 **Job:** As a manager, I need to configure the things every other flow reads — tax, tenders, sections, and currency — so the till and the reports behave the way this shop actually works.
@@ -10,50 +10,205 @@
 
 ---
 
-## Tax table
+## Tax
 
-A list of named **tax lines**, each with a rate. Every sellable thing references a tax line rather than carrying a boolean.
+Tax is resolved from **two axes that never compete**: who the customer is, and what
+the product is. Neither overrides the other — they are the two coordinates of one
+lookup (decision 14).
+
+### Tax types
+
+One row per tax that exists, shared by every group that charges it, so a legislated
+rate change is edited in one place rather than in every jurisdiction that references it.
 
 | Field | Notes |
 |---|---|
-| Name | e.g. `GST + QST`, `GST only`, `Exempt` |
-| Rate(s) | One or more components, so stacked jurisdictional taxes are one line |
-| Default | The line applied to new catalog entries unless overridden |
+| Code | A single letter — `a`, `b`, `c` — used to compose the group cells below |
+| Name | `GST`, `QST`, `PST`, `HST` |
+| Rate | A percentage. **QST is 9.975%**, so a rate needs three decimal places of a percent — more than [architecture](../architecture.md) A-15's basis points could hold. **Settled by A-47**: a rate is an integer of parts per million (`99750` is QST), applied once per tax and rounded **half away from zero** |
+| GL account | **Reserved, not drawn.** There is no chart of accounts in this system yet. The field exists so that when one arrives it needs no migration — the same move A-14 makes for `cover_art_path`. Nothing reads it, and the settings screen does not show it |
 
-A **zero-rate line** is how exemption is expressed — there is no separate "no tax" flag. A Customer's default tax line ([E-07](E-07-manage-customers.md)) overrides the item's at the till.
+### Product tax codes
 
-This settles PRD §6 open question 4 for the *outbound* side: **multi-jurisdiction sales tax is in scope**, expressed as selectable tax lines. Tax on the *inbound* side stays as E-02 decision 17 has it.
+A short alphanumeric identifier — `1`, `2`, `B`, `3` — carried by **Genre**
+(decision 12), each with a description beside it, because a bare letter on a genre
+is tribal knowledge.
+
+| Code | Description |
+|---|---|
+| `1` | Standard — full tax |
+| `B` | Books and magazines — GST only |
+| `2` | Non-taxable — gift card loads |
+| `3` | Zero-rated — taxable at 0%, reportable |
+
+Illustrative, not prescriptive: the list is configuration, and five is what a record
+shop is expected to need rather than a ceiling the schema imposes (decision 13).
+
+### Tax groups
+
+One row per jurisdiction or customer class.
+
+| Field | Notes |
+|---|---|
+| Description | `Quebec`, `Ontario`, `Wholesale` |
+| ShortName | Up to four characters. **This is what appears on a Customer** ([E-07](E-07-manage-customers.md)) |
+| A cell per product tax code | The tax types to apply — see below |
+
+A cell names **one or two** tax type letters, or is blank. A trailing `+` makes the
+second tax compound on the first (decision 16).
+
+| Cell | Means |
+|---|---|
+| *(blank)* | Out of scope for this pair. No tax, nothing reportable |
+| `a` | Tax `a` only |
+| `ab` | Taxes `a` and `b`, both on the line subtotal |
+| `ab+` | Tax `a` on the subtotal, then tax `b` on subtotal **plus** `a` |
+
+### Worked example
+
+A `$29.99` record, Quebec group, product tax code `1`, where `a` is GST at 5% and
+`b` is QST at 9.975%. Each tax rounds to the cent as it is applied.
+
+| | Cell `ab` | Cell `ab+` |
+|---|---|---|
+| Subtotal | 29.99 | 29.99 |
+| Tax `a` — GST 5% | 1.50 | 1.50 |
+| Tax `b` — QST 9.975% | 2.99 *(on 29.99)* | 3.14 *(on 31.49)* |
+| **Total** | **34.48** | **34.63** |
+
+Fifteen cents on one line, which is why the evaluation order is the instruction and
+why nothing normalises it.
+
+### What this settles, and what it does not
+
+This settles PRD §6 open question 4 for the *outbound* side: **multi-jurisdiction
+sales tax is in scope**. Tax on the *inbound* side stays as [E-02](E-02-receive-inventory.md)
+decision 34 has it.
+
+It does **not** settle how a rate change over time is handled — see Open questions.
 
 ## Tender types
 
-The list of tenders offered at the till ([E-05](E-05-sell-a-record.md)), each with a display name and behavior:
+A **behavior** is code and the list of them is fixed (decision 4). A **tender** is a
+configured row naming one of them, and there may be several per behavior (decision 22).
 
-| Tender | Behavior |
+### Behaviors — fixed, not configurable
+
+| Behavior | What it does |
 |---|---|
-| Cash | Calculates change |
-| Credit Card | Recorded only — settled on a separate terminal, no processor integration |
-| Store Credit | Draws against a Customer's account balance |
-| Gift Card | Redeems a `GC` balance |
-| Pay-out | Cash out for an expense; requires a note |
-| Used Credit | Second-hand counter buy; creates a balance owing to the customer |
+| `cash` | Calculates change. **Rounds to the nearest five cents** when it is the last tender (decision 21) |
+| `card` | Recorded only — settled on a separate terminal, no processor integration |
+| `store_credit` | Draws against a Customer's account balance. Requires a Customer on the Sale |
+| `gift_card` | Redeems a `GC` balance |
+| `payout` | Cash out for an expense; requires a note |
+| `used_credit` | Second-hand counter buy; creates a balance owing to the customer |
+| `rounding` | **System-written, never a button.** Carries the nickel-rounding difference so a Sale's tenders sum to its total (decision 26) |
 
-Names are configurable; behaviors are not — a tender's behavior is code, and the setting only controls what the till calls it.
+### Tenders — configured
+
+| Field | Notes |
+|---|---|
+| Name | What the till calls it — `Visa`, `Amex`, `Square`, `Cash` |
+| Behavior | One of the six above. A new tender picks one; it never introduces a new one |
+| Active | Off keeps an unused tender off the till without retiring it (decision 23) |
+| Order | Where it sits in the till's tender list |
+| Code | **Reserved, not drawn** — for a general ledger that does not exist yet (decision 23) |
+
+Shipped pre-loaded so the screen looks populated, and extensible: `Visa`, `Mastercard`
+and `Amex` are three `card` tenders because they usually settle as three separate
+deposits, and a processor that deposits one lump is one `card` tender instead. Which
+shape is right is a fact about the shop's banking, not about the software.
+
+### The cash drawer
+
+Opens on finalize under a three-position setting — **every Sale**, **cash tenders
+only**, or **never** — plus a manual open button (decision 25).
+
+**None of it works in v1.** A browser cannot kick a drawer; the kick comes off a
+receipt printer's drawer port, and [architecture](../architecture.md) A-8 defers the
+local print agent, which §8 schedules after this flow. The setting is recorded and
+the prototype mocks it, so that the shape is settled before the hardware arrives.
 
 ## Sections and the genre map
 
-**Sections** are the top-level categories the daily summary breaks down by — `VINYL`, `MERCH`, and whatever else the shop sells. Every sellable thing has one, including non-tracked items like freight.
+**Sections** are the top-level categories the daily summary breaks down by — `VINYL`,
+`MERCH`, and whatever else the shop sells. Every sellable thing has one, including
+non-tracked items like freight. They are an **editable table** (decision 28):
 
-**Genre** is finer-grained and determines where a Record lives in the shop. Genres roll up into Sections: every music genre sits under `VINYL`, apparel under `MERCH`.
+| Field | Notes |
+|---|---|
+| Code | Two characters — `VI`, `ME`, `GC` |
+| Name | Uppercase (`VINYL`), per the [lexicon](../lexicon.md) |
+| Description | What it holds |
+| Sort order | Where it sits in [M-03](M-03-daily-summary.md)'s *By Section* breakdown |
+| Active | Off stops it being offered; nothing is ever deleted (decision 9) |
+| Counts as revenue | Off keeps it out of *By Section* — the gift card Section (decision 20) |
+| Tracks stock | The **default** for entries created here, not a rule over them (decision 29) |
+| Discountable | Off refuses a till discount on the line (decision 30) |
+| Returnable | Off refuses a Return of the line (decision 30) |
+| GL code | **Reserved, not drawn** (decision 11's terms) |
 
-The **genre map** translates the catalog provider's genre taxonomy into the shop's own. On import a Record is assigned a genre and Section by the map's best guess. When the guess is wrong, a Manager either corrects the map — fixing every future import — or an Employee overrides that one Record ([E-04](E-04-manage-inventory.md)).
+**Genre** is finer-grained and determines where a Record lives in the shop. **Every
+Genre has a parent Section and it is required** (decision 32), which is what lets a
+Record's Section be derived from its genre rather than stored beside it (decision 31).
+
+| Field | Notes |
+|---|---|
+| Name | `Rock`, `Jazz`, `Shipping` |
+| Parent Section | **Required.** What this genre rolls up into |
+| Product tax code | What tax a line in this genre attracts (decision 12) |
+| Active | Off stops it being offered; nothing is deleted (decision 9) |
+
+So the chain is:
+
+```
+provider tag  →  [genre map]  →  shop Genre  →  (parent) Section
+```
+
+The **genre map** translates the catalog provider's taxonomy onto the shop's genre
+list. It assigns a **genre and nothing else** — the Section follows from the genre and
+is never guessed. On import a Record takes the map's best guess; when the guess is
+wrong a Manager corrects the map, fixing every future import, or an Employee overrides
+that one Record ([E-04](E-04-manage-inventory.md)).
+
+Shop-internal genres carry **no map rows**: nothing a provider returns should map onto
+`Gift cards` (decision 17).
 
 ## Currency
 
-Currency shorthand codes with conversion rates, so supplier costs in a foreign currency convert to store currency for margin and payables ([M-05](M-05-accounts-payable.md)). The reference Invoice currency is CAD.
+A Store has one **home currency**, set at setup (decision 34). Every other currency is
+a row here, so a supplier's costs can be *shown* in store currency at receiving and in
+payables ([M-05](M-05-accounts-payable.md)).
+
+| Field | Notes |
+|---|---|
+| Code | `USD`, `GBP`, `EUR` |
+| Planning rate | **1 unit of this currency = *n* home currency.** Maintained by hand and set conservatively — a planning figure, not a market quote (decisions 33, 38) |
+| Last set | The date the rate was last touched — staleness made visible rather than silent |
+
+**A converted figure is shown, never stored** (decision 37). Currency itself is set on
+the **Supplier** (decision 35); [architecture](../architecture.md) A-36 has every money
+column carry its own currency code, so an Invoice records what it was received in.
 
 ## Store details
 
-Store name and the details that appear on receipts and outbound documents.
+What appears on receipts, outbound customer invoices ([E-07](E-07-manage-customers.md)),
+and purchase orders sent to suppliers (decision 46).
+
+| Field | Notes |
+|---|---|
+| Legal name | The entity — `1234567 Canada Inc.` Used on outbound customer invoices |
+| Trading name | The name on the door. Used on receipts |
+| Address | One. A ship-to split is not carried (decision 46) |
+| Phone · Email · Website | Contact block |
+| Logo | A **URL** (decision 49) |
+| Receipt footer | Free text, with its own on/off flag — the return policy lives here |
+| Receipt width | `80mm` (default), `58mm`, or letter (decision 50) |
+| **Store ID** | Seven digits, **assigned, never editable** (decision 47) |
+| **Store position** | Where this Store sits among its siblings. Assigned, never editable |
+
+Tax registration numbers are **not** here — each sits on its tax type, since GST and
+QST are separate registrations (decision 48).
 
 ---
 
@@ -67,9 +222,22 @@ Store name and the details that appear on receipts and outbound documents.
 
 ## Requirements
 
-- Every setting here is **manager-only**.
-- Changing a setting must not retroactively rewrite completed records. A tax line's rate changing does not restate yesterday's Sales, whose tax was snapshotted ([E-05](E-05-sell-a-record.md) d13).
-- A tax line or tender in use cannot be deleted, only deactivated.
+- Every setting here is **manager-only** ([architecture](../architecture.md) A-28a) — **except the
+  Store ID and Store position, which no one in the shop may write at all** (decision 47). That is
+  an exception to the role model, not to this screen, and M-04 owns it.
+- Changing a setting must not retroactively rewrite completed records. A tax type's rate changing does not restate yesterday's Sales, whose tax was snapshotted ([E-05](E-05-sell-a-record.md) d13).
+- A tax type, tax group, product tax code, Section, Genre, currency, or tender **in use** cannot be
+  deleted, only deactivated (decision 9). An **unused** tender is switched off instead, which is a
+  different thing (decision 23).
+- **Every Genre has a parent Section, and it is required** (decision 32). A Genre without one would
+  leave a Record without a Section, which nothing downstream can report on.
+- **A Sale's tenders sum to its total.** Nickel rounding does not break this — it is carried by a
+  system-written `rounding` tender rather than left as a discrepancy (decisions 21, 26).
+- **No converted currency figure is ever stored** (decision 37). A store-currency equivalent may be
+  shown anywhere it helps and written nowhere.
+- **Every sellable thing must resolve to exactly one product tax code.** There is no fallback
+  path and no special case: a Sale line the resolution cannot answer is a defect, not a blank
+  (decisions 17, 18).
 - The genre map must be editable without touching Records already imported under it.
 - Settings scope to a Store.
 
@@ -89,13 +257,56 @@ Store name and the details that appear on receipts and outbound documents.
 | 8 | Settings changes are never retroactive; completed records keep their snapshotted values |
 | 9 | Referenced settings are deactivated, never deleted |
 | 10 | Settings scope to a Store |
+| 11 | **Tax is resolved from two tables, not one.** **Supersedes decision 1.** A **tax type** is one tax that exists — code, name, rate, and a reserved GL account — shared by every group that charges it, so a legislated rate change is edited once. A **tax group** is a jurisdiction or customer class — `Quebec`, `Wholesale` — carrying a description, a ShortName of up to four characters, and one cell per product tax code naming the tax types to apply. Decision 1's single table could not express a rate shared across jurisdictions without repeating it, and repeated rates drift |
+| 12 | **The product tax code is carried by Genre, and the codes are a table of their own.** A code is a short alphanumeric identifier — `1`, `2`, `B`, `3` — with a description beside it (`B — books, GST only`), because a bare letter sitting on a genre is tribal knowledge and the next person to read it has nothing to go on. Genre rather than Section because it is the finer axis and is already set per Record. **Genre therefore becomes mandatory on every sellable thing** — decision 17 |
+| 13 | **Group × code pairs are stored as rows; the settings screen draws them as a five-column grid.** Storage shape and screen shape are decoupled deliberately. Five columns is what a record shop is expected to need — standard, GST-only, non-taxable, zero-rated, and a spare — and reads better than a list of pairs. Storing pairs means a sixth code is one row rather than a migration, a UI change, and every group row edited. Neither choice constrains the other |
+| 14 | **Resolution order: the Customer's tax group, else the store's default tax group; the Genre's product tax code; then the (group, code) cell.** **Supersedes [E-07](E-07-manage-customers.md) d7 and [E-05](E-05-sell-a-record.md) step 8**, where a Customer's tax line *overrode* the item's. The two were never in competition — who the customer is and what the product is are orthogonal facts, and an override forced them into one slot, so a GST-only book sold to a Quebec customer needed a tax line anticipating that exact pair. The store's **default tax group** replaces the old tax table's `Default` field; a Sale with no Customer — the common case — resolves through it |
+| 15 | **A blank cell and a zero-rate tax type mean different things, and both are kept.** **Completes decision 2** rather than superseding it. A **blank** cell is *out of scope for this pair*: no tax applies and none is reportable. A **zero-rate tax type** is *taxable at 0% and reportable*. The distinction is not cosmetic — Canadian zero-rated supplies carry input tax credits and exempt supplies do not, so a system expressing only one of them cannot produce a correct return |
+| 16 | **Two taxes maximum per cell, composed in written order, each rounded to the cent as it is applied.** A cell names one or two tax type letters, and a trailing `+` makes the second compound on the first (`ab+`: `b` charged on subtotal plus `a`). **`ba+` is a different instruction from `ab+`, not a typo** — the order is the instruction and nothing normalises it. The reason is **not** that the customer pays a different total: multiplication commutes, so on the worked example both orderings total `$34.63`. It is that **the split differs** — `ab+` gives GST `$1.50` and QST `$3.14`, `ba+` gives GST `$1.65` and QST `$2.99` — and those are remitted to different authorities. Which is also why a Sale line snapshots **per-tax figures** and not a tax total ([E-05](E-05-sell-a-record.md)). Each tax rounds as applied rather than at the end, because an unrounded intermediate makes the total depend on evaluation order in a way nobody can reconcile against a drawer. *Accepted consequence:* two is a real ceiling. A third stacked tax is a schema change, not a data entry |
+| 17 | **Genre is mandatory on every sellable thing, including non-tracked ones.** Freight, services, and bulk goods become real catalog entries carrying a genre — which is what [E-05](E-05-sell-a-record.md) already calls them ("catalog entries flagged non-tracked"), though the prototype models them as a separate type with a Section and no genre. Everything that reaches the till has a titlecard. *Accepted consequence:* the genre list gains shop-internal entries — `Shipping`, `Services`, `Gift cards` — which have no catalog-provider equivalent and which **the genre map (decision 6) must never offer as mapping targets**; the Section list grows past `VINYL` and `MERCH` to give them somewhere to roll up |
+| 18 | **A gift card load is a system-owned non-tracked catalog entry.** [E-05](E-05-sell-a-record.md) d10 makes loading a line item and redeeming a tender, but never says what that line item *is* — today it is a bare line kind with no catalog entry behind it. Giving it one means tax resolution has **no special case at all**: every Sale line resolves catalog entry → genre → code → taxes, one path, with nothing for the money code to forget. System-owned on decision 9's terms — not deletable, genre and code not editable. Like every sellable thing it carries a genre and therefore a Section — but **that Section is excluded from [M-03](M-03-daily-summary.md)'s *By Section* breakdown**, because d14 already rules that a load is money in but not a sale and stays out of gross and out of Section. The Section exists to carry the product tax code and, later, the GL account; it is not a revenue bucket |
+| 19 | **Changing a Record's genre stays an Employee action and is not gated.** Consistent with [M-04](M-04-manage-users.md) d2 — the gated list is deliberately short. In practice a genre edit moves a Record from Rock to Metal, which is shelf location, and both carry the same product tax code. The shop-internal genres of decision 17 are **omitted from the genre picker** rather than gated, so setting a Record's genre to `Freight` is unrepresentable instead of merely discouraged; Employees keep every genre they would actually reach for. *Accepted consequence, and it is the one to watch:* a wrong music genre is invisible to tax **only while every music genre shares one product tax code**. The day two music genres need different codes, an ungated field starts moving money |
+| 20 | **Freight and gift cards take one pre-loaded Section each, and whether a Section enters revenue reporting is a property of the Section.** Decision 17 put shop-internal genres in the list without saying where they roll up. They do **not** share one Section, because they are not one kind of thing: freight and services are **revenue**, and a gift card load is a **liability** — money received against a future obligation. [M-03](M-03-daily-summary.md) d14 already rules a load out of gross and out of Section, so a single shared Section would have put a liability inside the revenue breakdown. Making *counts as revenue* a **flag on the Section** rather than an exclusion hard-coded for gift cards means M-03's *By Section* breakdown reads the flag, and the same seam carries the GL account when a chart of accounts arrives (decision 11's reserved field) — revenue against liability is the split a ledger would draw anyway. Both Sections are pre-loaded, and further non-tracked catalog entries may be added to either: a pre-priced, scannable freight line is an ordinary non-tracked entry ([E-05](E-05-sell-a-record.md)), not new machinery. Decision 18's *system-owned* is a property of an entry, not of its Section |
+| 21 | **A cash tender rounds to the nearest five cents; every other tender settles exact, and the rounding is applied by the last tender on the Sale.** Canada withdrew the one-cent coin in 2013, so a cash amount ending in 1, 2, 6 or 7 cents cannot be made. The last tender is the one carrying the remainder and therefore the one that decides what the drawer takes: a `$34.48` Sale paid entirely in cash takes **`$34.50`**; the same Sale paid `$12.13` on debit with the balance in cash settles the cash leg at `$22.35` and rounds nothing; paid `$20.00` cash with `$14.48` on card, the card settles exact and nothing rounds. **Nothing else moves** — the Sale total, its lines and its tax are untouched, and A-47 still rounds those to the **cent**, not the nickel. Nickel rounding is a property of how the money was taken, not of what was sold. **The difference is reported as its own *cash rounding* figure** in [M-03](M-03-daily-summary.md), on d14's reasoning exactly: a movement of money that is not a sale gets named rather than absorbed, or the tender column silently stops reconciling against net sales. *Accepted consequence:* the drawer and net sales differ by up to two cents on every cash Sale, by design — which is why [M-03](M-03-daily-summary.md) d8's refusal to reconcile the drawer is a choice and not an oversight |
+| 22 | **Many tenders may share one behavior.** Extends decision 4, which made the name data and the behavior code but read as one row per behavior. `Visa`, `Mastercard` and `Amex` are three tenders all behaving as `card`, because in most arrangements they settle as **separate deposits** and a breakdown that merges them cannot be tied back to a bank statement. A single aggregating tender — `Square`, or any processor depositing one lump — is the same mechanism used the other way, and both shapes are configuration rather than code. **[M-03](M-03-daily-summary.md)'s By tender breakdown therefore reports *tenders*, not behaviors**, which is the whole point of separating them |
+| 23 | **Tenders are a table: pre-loaded with defaults, extensible, individually toggleable, and each carrying a code reserved for a future general ledger.** A new tender is a **name plus a choice from the existing behaviors** — decision 4 stands, so no tender introduces behavior that is not already code. **Active is a flag per tender**, distinct from decision 9's deactivation: d9 retires a setting that has been used and must survive for history, while this simply keeps an unused tender off the till. The **code** follows decision 11's reserved `gl_account` and A-14's pattern — nullable, unread, drawn nowhere yet, present so that a chart of accounts needs no migration. *Accepted consequence:* the till's tender list is now shop-specific, so a screenshot from one store is not a specification for another |
+| 24 | **A tender carries no reference field.** No cheque number, card authorization code, or transfer confirmation. Consistent with [E-02](E-02-receive-inventory.md) d26 and NG-4 — Wax Works records that a card tender happened and never captures card data or talks to a processor — and with the pay-out's **note**, which stays a behavior-specific requirement rather than becoming a general per-tender flag. If an integration with a payment provider ever lands, it is the one thing that would want references, and it is far enough out of scope that preparing for it now would be guessing |
+| 25 | **The cash drawer opens on finalize, governed by a three-position setting — every Sale, cash tenders only, or never — with a manual open alongside it.** *Cash tenders only* is the expected default: a drawer that springs open on a card sale teaches staff to ignore it. **The real trigger is blocked on hardware this system does not have.** [architecture](../architecture.md) A-8 rules out a local print agent in v1, and a browser cannot kick a drawer — it is driven off a receipt printer's drawer port, which arrives with the print agent that §8 schedules **last**, after settings and user administration. So the **setting is recorded now and the prototype mocks the kick**; nothing here is claimed to work before the agent lands, and the setting must not read as though it does. *Accepted consequence:* v1 ships a setting that does nothing, which is only worth it because the alternative is designing the setting and meeting the hardware in the same week |
+| 26 | **Cash rounding is its own tender, written by the system, not a reported figure.** **Amends decision 21**, which named the difference as a line in [M-03](M-03-daily-summary.md). A tender is better for a reason d21 missed: **a Sale's tenders have to sum to its total**, and a `$34.48` Sale whose drawer takes `$34.50` does not balance unless the two cents have somewhere to sit. The rounding tender carries **`−$0.02` when cash rounds up and `+$0.02` when it rounds down**, so the tenders close, and the day's or the year's rounding tallies for free through [M-03](M-03-daily-summary.md) d14's existing tender breakdown instead of through a line invented for it. **It needs a seventh behavior, `rounding`, extending decision 4's fixed list** — and it is the one tender **no Employee can select**: the system writes it when a cash tender rounds, it is never drawn as a button, and it is system-owned on decision 18's terms because the arithmetic depends on its existing. *Accepted consequence:* the list of tenders and the list of tender **buttons** stop being the same list, and every screen that reads tenders now has to know which it wants |
+| 27 | **A manual drawer open is an ordinary Employee action, logged rather than flagged.** Resolves the open question decision 25 raised. **Logged**, because the only question anyone can actually ask afterwards is *who opened it and when*. **Not** a [M-04](M-04-manage-users.md) review flag, because a flag exists to put a **figure** in front of a Manager and [M-03](M-03-daily-summary.md) d8 rules out drawer reconciliation — there is no counted-versus-expected number for a flag to carry, and a flag with nothing to check trains people to acknowledge flags without reading them. Consistent with M-04 d2: the gated list stays short and Employees keep agency. *Accepted consequence, named rather than left to be discovered:* the log records **that** the drawer opened and can never record **why**, so it is evidence of a pattern across a month and never evidence about a single incident |
+| 28 | **Sections are an editable table, not a fixed list. Resolves the *Section list* open question in both halves.** A Section carries a **two-character code**, an uppercase **name** (the [lexicon](../lexicon.md) keeps Sections uppercase), a **description**, a **sort order** for [M-03](M-03-daily-summary.md)'s *By Section* breakdown, an **active** flag, **counts as revenue** (decision 20), and a **GL code** reserved and undrawn on decision 11's terms. Code beside name follows [M-01](M-01-supplier-margin.md) d13's Supplier short code rather than inventing a shape for it. **A Section is never deleted** — decision 9 governs and the active flag is how one stops being offered — so the second half of the question, what becomes of Records in a removed Section, does not arise: there is no removal. *Accepted consequence:* `Section` stops being two known values and becomes data, so every screen currently switching on `VINYL` or `MERCH` has to stop doing that |
+| 29 | **Whether a thing tracks stock stays a property of the catalog entry; the Section supplies the default.** [E-05](E-05-sell-a-record.md) d17 already makes **non-tracked** an entry-level flag — no stock count, no on-hand math, no negative-inventory warning — and that is the right level, because `MERCH` holds both kinds at once: a t-shirt is counted and a sticker is not. Lifting the flag to the Section would either force every Section to be single-purpose or state the same fact in two places. The Section instead carries the **default applied to entries created in it**, so a `RENTAL` Section yields non-tracked entries with nobody remembering to tick anything, and an individual entry may still differ from its Section. *Accepted consequence:* a default is invisible once taken — an entry does not record whether it accepted its Section's default or was set deliberately, and changing the default never reaches entries already created under it. That is decision 8 holding rather than an oversight, but it means the Section's default answers *what happens next*, never *what happened* |
+| 30 | **A Section carries `discountable` and `returnable` flags, both defaulting true and both false on the gift card Section.** These are **not gates and they amend nothing**: [E-05](E-05-sell-a-record.md) d12 keeps below-cost till discounts ungated, [E-06](E-06-process-a-return.md) d3 keeps Returns ungated, and [M-04](M-04-manage-users.md)'s *deliberately not gated* list stands unchanged. The flags are a property of **what is being sold**, not of **who is selling it**, which is exactly why they live here and not in M-04. Both close a path where a deliberately permissive rule meets an instrument equivalent to cash: a gift card load discounted 10% is a straight loss with nothing to raise a flag about, and a gift card load *returned* under d3's no-receipt, no-time-limit, no-approval rule is a cash-out dressed as a refund. *Accepted consequence:* unwinding a gift card sold in error becomes a **void of the original Sale** ([E-05](E-05-sell-a-record.md) d31) rather than a Return — available while the Sale can still be voided and not afterwards, so a card sold last month and regretted needs a Manager and an [M-05](M-05-accounts-payable.md) adjustment |
+| 31 | **A catalog entry stores its genre and nothing its genre already implies; live configuration is resolved when it applies, never copied onto the entry.** **Section is derived through the genre map (decision 5), not stored.** The prototype's `Record` carries both `genre` and `section`, which is the same fact at two removes and drifts the moment a genre is remapped — refused for [architecture](../architecture.md) A-35's reason and A-45's. The **product tax code**, **counts as revenue**, **discountable** and **returnable** are read **at the moment they apply** — at the scan, at the discount, at the Return — so correcting a Section or a genre corrects everything beneath it at once, which is the whole point of configuration. **Two things do not move.** A **completed record keeps what it resolved**: decision 8 and [E-05](E-05-sell-a-record.md)'s snapshot rule are unchanged, and a Sale line holds the taxes and the rates applied to it forever, because restating a past Sale is not a correction but a falsification. And **`tracks stock` stays decision 29's default rather than becoming a lookup**, because it is structural rather than configuration: a Section flipped to non-tracked while entries beneath it hold stock rows and on-hand history describes a state that cannot exist. *Accepted consequence:* reading a Record's Section becomes a join through its genre, and the genre map turns load-bearing for **reporting** as well as for shelving — remapping a genre to a different Section moves every Record under it in [M-03](M-03-daily-summary.md)'s breakdown at once. That is correct, and it will still surprise someone the first time |
+| 32 | **A Genre carries a mandatory parent Section, and the genre map assigns a genre only — never a Section.** Makes explicit what decisions 5, 6 and 31 assumed without saying: the chain is **provider tag → [genre map] → shop Genre → (parent) Section**, and it is **two structures, not one**. The **genre list** is the shop's own taxonomy — each Genre has a name, a **required** parent Section, and a product tax code (decision 12); it is deactivated and never deleted, on decision 9's terms. The **genre map** is an import artifact translating a catalog provider's tags onto that list, and it touches **nothing but the genre**. **Corrects the prose under decision 6**, which read *"a Record is assigned a genre and Section by the map's best guess"* — the Section is never guessed. The map may land on `Rock` where `Metal` was meant, but whichever genre it lands on, that genre's Section is certain: **an import can put a Record on the wrong shelf and cannot put it in the wrong Section.** The required parent is what makes that true, and it is also why decision 17's shop-internal genres — `Shipping`, `Gift cards` — sit in the genre list with **no map rows at all**: nothing a catalog provider returns should ever reach them. *Accepted consequence:* a genre's Section is the only place that fact lives, so changing it moves every Record under that genre at once in [M-03](M-03-daily-summary.md) — decision 31's consequence reached from the other side — and a shop wanting one genre split across two Sections has to split the genre instead |
+| 33 | **Conversion rates are maintained by hand, one current rate per currency, and each rate carries the date it was last set.** **Resolves the *Currency rates* open question.** Manual, because the figure is a judgement the shop is accountable for rather than a fact a feed supplies, and a wrong number someone typed is easier to find than a wrong number that arrived on its own. The **last-set date is part of the row**, because the failure mode of a manual rate is never that it is wrong on the day — it is that months later nobody remembers it is old, and a date is the cheapest thing that makes staleness visible instead of silent. *Accepted consequence, and it is a genuine loss rather than a shrug:* **one current rate makes a past rate unrecoverable.** [M-05](M-05-accounts-payable.md)'s *currency movement* question — an Invoice raised at one rate and paid at another — becomes not merely unanswered but **unanswerable from stored data**. Dated rates are the answer whenever it is wanted, and adding them is a new table rather than a migration of existing rows, so this forecloses nothing except the history of every day before they arrive |
+| 34 | **A Store sets a home currency, once, and every figure is denominated against it.** A setting rather than a constant, so a second Store is not assumed to be Canadian — but a Store has exactly one and it does not change in practice: every amount already recorded is denominated in something, and re-basing a Store is a data migration rather than an edit. Set at setup and left alone. The reference Invoice under [reference/](../reference/) is CAD, which is a fact about that document and not about every Store ([lexicon](../lexicon.md)) |
+| 35 | **Currency is set on the Supplier, not carried by the Invoice, and a wrong one is corrected by voiding the receiving rather than by editing it.** **Deliberately not the shape [E-02](E-02-receive-inventory.md) d45 and d47 give payment terms and payment method**, which live on the Invoice and default from the Supplier — a supplier who bills in a different currency for one shipment is rare enough not to buy the field. [architecture](../architecture.md) A-36 already has every money column carry its own currency code, so an Invoice **records** the currency it was received in even though nothing offers to change it afterwards; changing a Supplier's currency therefore reaches **future receiving only**, exactly as [M-01](M-01-supplier-margin.md) d2 does for Discount and as decision 8 requires of every setting. *Accepted consequence, stated as the correction path because that is what anyone will need:* stock received under the wrong currency is **voided, the Supplier corrected, and the stock received again**. That is heavier than editing a field, and it is the price of not carrying one |
+| 36 | **A currency carries a receiving buffer — a percentage applied on top of the rate when estimating cost and margin at receiving, and nowhere else.** _Status: recommended, not yet ratified._ The rate and the buffer are **two fields because they serve two purposes one padded number cannot**: [M-05](M-05-accounts-payable.md) reports what is **owed**, which wants the rate as it stands, while receiving estimates what a copy will **cost**, which wants a conservative figure because the rate can move between ordering and paying. Padding the rate itself would satisfy the second and corrupt the first, and would leave nobody able to say later which part of `1.40` was the market and which was caution. Buffer defaults to zero, so a shop that does not want it never sees it. *Accepted consequence:* a margin shown at receiving is deliberately pessimistic for foreign stock and will not tie to the same copy's margin computed from the recorded cost, so any screen showing both has to say which it is showing |
+| 37 | **A converted figure is presentation and is never a stored amount.** Records the boundary rather than leaving it to be crossed by accident. Two recorded decisions rest on this and would both reopen the day it moves: [architecture](../architecture.md) **A-36** stores no rate at all, which is what makes **A-33a**'s *reverse as recorded* well defined, and **A-47** excluded currency conversion from the parts-per-million rate rule on precisely these grounds. So a store-currency equivalent may be **shown** anywhere it helps, and **written** nowhere. *Accepted consequence:* [M-05](M-05-accounts-payable.md) still cannot sum across currencies and still reports them separately, which is the honest answer and not a gap to be closed quietly; closing it means writing a converted amount, which means reopening A-36, A-47, and this decision together |
+| 38 | **One rate per currency, and it is a *planning* rate the shop sets conservatively — there is no separate buffer. Supersedes decision 36.** d36 argued that [M-05](M-05-accounts-payable.md) needs the rate as it stands while receiving needs a padded one, so the two could not be one number. That argument does not survive decision 37: the payables equivalent is **shown and never stored**, M-05 still refuses to sum across currencies, and no figure derived from this rate has any accounting weight anywhere in the system. A conservative equivalent on a payables screen is not a corruption of it — for a liability it is the prudent direction. And d36's other defence, that two fields keep market and caution distinguishable later, was already conceded by **decision 33**: one current rate keeps no history, so nothing about a past rate is recoverable whether it was padded or not. **What is left is naming it honestly.** A hand-maintained rate in a system that stores no converted amount is a planning figure, not a market quote, and the field says so rather than implying a precision it does not have. *Accepted consequence:* the payables equivalent carries the shop's caution baked in and is not comparable to a bank's figure for the same invoice — which was true of any manual rate and is now at least stated |
+| 39 | **Exchange gain or loss is not blocked on rate history; it is blocked on there being no general ledger — and it is deferred with one. Amends decision 33's accepted consequence.** d33 said dated rates were the answer to [M-05](M-05-accounts-payable.md)'s *currency movement* question. They are not the answer, they are one possible mechanism, and they are the wrong one here. **A gain or loss is a ledger posting.** This system has no chart of accounts — the GL fields on tax types, tenders and Sections (decisions 11, 23, 28) are all reserved and unread — so computing a gain would produce a number with nowhere to go and nobody to reconcile it against. **And when a ledger does arrive, the mechanism is not a rate history.** It is to record the rate **on the artifact that used it**, which is the shape this architecture already takes everywhere: [architecture](../architecture.md) A-36 has every money column carry its own currency code, and A-33a reverses amounts *as recorded* for exactly this reason — so that a rate change between payment and void cannot leak an unrecorded gain. A rate belongs beside the money it converted, not in a table of every rate that ever was. *Accepted consequence:* the question moves rather than closes, and it moves somewhere further away — it now waits on the chart of accounts rather than on a setting, which is honest about how far off it is |
+| 40 | **The dead-stock threshold is a store setting defaulting to 180 days, and a Section may override it.** Completes [E-03](E-03-search-inventory.md) d16, which named it a store setting and said *"what counts as dead differs by shop and by section"* without deciding the second half. Now that a Section is a table with its own flags (decision 28) the override is one more column, and it earns its place: a `$5` sticker sitting six months is not dead the way a `$40` record is. Resolved live rather than copied onto a Record, on decision 31's terms, so changing it re-reads every Record beneath it at once |
+| 41 | **The stream aging threshold is one store setting defaulting to 14 days.** Resolves [M-02](M-02-reorder-inventory.md)'s *aging threshold* open question, and resolves it at the simplest of the three shapes it offered because M-02 itself argues for that: *"the threshold is not a deadline, only a prompt to glance, which is why a wrong one is cheap rather than harmful."* Per-Supplier was the more accurate answer and is not worth a third cadence field beside [M-01](M-01-supplier-margin.md)'s *Order via* and cancel-by window to tune a prompt. It stays the open door if a shop ever finds one figure genuinely wrong for it |
+| 42 | **A Supplier carries an expected lead time in days, defaulting to 14, and it fills the follow-up flag when an order is placed.** Distinct from decision 41 and often confused with it: aging measures how long a **pending** stream sits short of its minimum, lead time measures how long after **placing** before the order is worth chasing. It fills a real gap rather than adding a figure — [M-02](M-02-reorder-inventory.md) d8 makes the follow-up flag a per-line day count and the raise step makes it **optional**, so a line nobody typed a number onto is a line that can never read overdue. Defaulting it from the Supplier means overdue detection works without anyone remembering, and the per-line value stays editable and re-flaggable exactly as d18 has it. Set on the Supplier ([M-01](M-01-supplier-margin.md)) rather than here, since it is a fact about that supplier; a change reaches future orders only, as Discount and currency do (M-01 d2, decision 35) |
+| 43 | **The ±2% tolerance stays in code, and it bounds nothing that anyone types.** Not configurable, because it is a **governance** threshold rather than a shop preference: [M-04](M-04-manage-users.md) d8's review queue exists so that things proceed and a Manager is told, and a tolerance on the settings screen is an oversight control a shop can quietly switch off. It also carries a cost nothing else here does — the [lexicon](../lexicon.md) makes **`±2%`** a canonical term, so making it data retires an entry and turns every citation into *"the tolerance, currently 2%."* **And it is a flag threshold, never a limit on data entry:** the figures printed on a supplier's paperwork are always enterable **as printed**, however far they sit from ours. What the tolerance measures is the gap between **our derived figure and the total entered**, and crossing it raises a flag and proceeds ([E-02](E-02-receive-inventory.md) d35). Nothing about it refuses a keystroke. *Accepted consequence:* a shop whose supplier paperwork is genuinely noisy sees flags it does not want, and the answer is to make the flag more useful rather than to raise the bar |
+| 44 | **A shelf price suggestion rounds to the nearest instance of one configured price ending — up or down — and only ever as a suggestion.** **Amends [architecture](../architecture.md) A-24 and its `round_up_shelf` helper**, which pre-filled two endings (`.50` and `.99`) and always rounded **up**. One ending, because a shop prices at `.99` or `.95` or `.00` and two endings is a habit rather than a rule; **nearest**, because always-up quietly marks every suggestion above where the margin actually landed. A-24's substance is unchanged and is the reason this is safe: the figure is a **pre-fill and never a constraint**, so a manually entered price is accepted as typed and nothing here gets in a staff member's way. *Accepted consequence:* rounding down can put a suggestion **below** the margin-derived figure, and on a thin margin below cost — where [E-02](E-02-receive-inventory.md) d35's below-cost review flag will fire on a number the system itself suggested. That is the flag behaving correctly, and it will look strange the first time |
+| 45 | **The session lapse is a store setting, defaulting to 5 minutes of inactivity.** [E-01](E-01-authenticate.md) d4's 15 minutes becomes a default and a shorter one. **The rule it governs is unchanged and is already what was wanted:** the lapse measures *inactivity*, so sitting for an hour placing orders never prompts, while stepping away for six minutes does. Configurable because in v1 it is **ergonomics rather than security** — E-01 has no passwords, anyone may type anyone's initials, and what the lapse actually prevents is accidental misattribution after someone walks away, which a busy counter and a quiet back office weigh differently. *Accepted consequence, and it must be revisited rather than inherited:* **the setting changes character the day credentials arrive** (E-01's open question). A comfort dial becomes a security control, and a shop that set it to an hour will have set a security control to an hour without ever being asked |
+| 46 | **Store details carry a legal name and a trading name as separate fields, one address, and a receipt footer that is free text with its own on/off flag.** Two names because the documents want different ones: an outbound customer invoice ([E-07](E-07-manage-customers.md)) is a business document and wants the legal entity, while a till receipt wants the name on the door — and a single field forces `1234567 Canada Inc. o/a Wax Works` onto both. **One address**, since a single shop has one; the billing/shipping split [M-01](M-01-supplier-margin.md) gives a Supplier exists as a shape to copy if a ship-to is ever wanted. The **footer** is free text with a flag, because [E-06](E-06-process-a-return.md) d3 makes Returns ungated with no receipt and no time limit — if that is the policy, the receipt is the only place it gets said, and a shop that would rather not print it turns it off rather than blanking the field. **Website is a field; social handles are not** — a website already belongs on a receipt, and nothing in this system consumes a social handle, so it would be a field added on speculation |
+| 47 | **A Store carries two identifiers it cannot edit: a seven-digit Store ID and a position in the multi-store sequence.** Both are assigned rather than chosen — the ID is the durable internal handle, the position is where this Store sits among its siblings. Displayed on the settings screen so that anyone reporting a problem can read it out, and writable by nobody who works in the shop. ***This is the first concrete case for [M-04](M-04-manage-users.md)'s open question*** — *is there a tier above Manager?* Settings are manager-only ([architecture](../architecture.md) A-28a), so "manager-only **except** these two fields" is a hole in the role model rather than a detail of this screen: there is currently no actor who can write them. Recorded as system-assigned, which is true and is not the same as saying who assigns them |
+| 48 | **A tax registration number belongs on the tax type, not in store details.** In Canada a receipt has to carry the **GST/HST** registration number for a customer to claim an input tax credit, and in Quebec the **QST** number as well — two registrations from two authorities. A tax type is already one row per authority (decision 11) and [architecture](../architecture.md) §4 already has the receipt show **tax per tax line**, so each line carries its own number with no extra machinery and nothing has to be formatted by hand. A single store-details field would have meant typing both into one string on a document that is meant to be a tax record. *Worth confirming with an accountant* — which is an open question compatible with `Specified`, not a blocker |
+| 49 | **The logo is a URL rather than an uploaded file**, following [architecture](../architecture.md) A-14's shape for cover art; the hosting cost is trivial at any store count this system will reach. *Accepted consequence, and it has a visible failure mode:* **email clients block remote images by default**, so an emailed receipt (A-8, [architecture](../architecture.md) §4) that merely links its logo will often arrive without one. The receipt email has to **embed** the image rather than reference it — an email-template concern rather than a settings one, recorded here because the setting is what makes it look already solved. Browser printing has no such problem |
+| 50 | **Receipt width is a store setting, defaulting to 80mm.** Not hard-coded, because it is a fact about the hardware on that counter and A-5 scopes everything to a Store regardless. **80mm** is the default: roughly 72mm printable, 42–48 characters at Font A, which fits a title, a quantity and a price on one line. The other positions are **58mm** — about 32 characters, where a description gets sixteen beside its price — and **letter**, which is what the browser-print fallback reaches on an office printer. **This settles the paper-size half of the *Receipt template* open question and no more of it:** what appears where, and in what order, is [architecture](../architecture.md) §4's content list turned into a layout, and remains its own piece of work, partly waiting on the print agent A-8 defers. *Accepted consequence:* a width set wrong prints a receipt that is wrong in a way nothing can detect — v1 has no print agent, so there is no channel by which a printer could report what it actually is |
 
 ---
 
 ## Open questions
 
-- **Per-store versus shared settings.** The system is multi-store. Tax lines are plainly per-store; the genre map and Section list would more usefully be shared. PRD §6 asks the same of suppliers, margins, and the catalog — this flow needs the same answer.
-- **Currency rates.** Manually maintained, or fetched? A stale rate quietly misstates every foreign payable.
-- **Receipt template.** Store details feed receipts, but the layout, what appears on it, and paper size are unspecified ([E-05](E-05-sell-a-record.md)).
-- **Tax line changes over time.** Rates change by legislation. Whether a tax line is versioned with effective dates, or a new line is created and the old deactivated, is undecided.
-- **Section list.** Fixed at setup or freely editable, and what happens to Records in a Section that is removed.
+- ~~**Per-store versus shared settings.**~~ — **Resolved elsewhere and never propagated back here.** [architecture](../architecture.md) A-5 and [PRD](../PRD.md) §6 *Multi-store consequences* answer it: **every entity is scoped to a Store, nothing is shared**, and A-5 names Sections and the genre map explicitly. Decision 10 already said as much. The question was speculating about sharing that had been ruled out.
+- ~~**Is a manual drawer open an ordinary Employee action?**~~ — **Resolved by decision 27**: yes, and it is logged rather than flagged, because M-03 d8 leaves no figure for a review flag to carry.
+- ~~**Currency rates.**~~ — **Resolved by decision 33**: maintained by hand, one current rate per currency, each carrying the date it was last set. The staleness risk is answered by showing the date, not by removing it.
+- **Receipt template.** **Paper size is settled** — a store setting defaulting to 80mm (decision 50) — and the data it draws on is settled (decisions 46, 48, 49). What remains is the **layout**: turning [architecture](../architecture.md) §4's content list into a rendered document, for three widths, partly waiting on the print agent A-8 defers.
+- **Tax rate changes over time.** Rates change by legislation. Whether a **tax type** is versioned with effective dates, or a new type is created and the old deactivated (decision 9's shape), is undecided — and the two-table model sharpens rather than softens the question, because a tax type is now referenced by every group that charges it, so editing its rate in place changes every jurisdiction at once. Decision 8 keeps completed records safe either way; what is open is what a *future-dated* rate change looks like to whoever has to enter it before it takes effect.
+- ~~**What Section do the shop-internal genres roll up into?**~~ — **Resolved by decision 20**: one Section each for freight and for gift cards, split because one is revenue and the other a liability, with *counts as revenue* recorded as a flag on the Section rather than a gift-card special case.
+- **The chart of accounts.** The GL account field on a tax type is reserved and unread (decision 11). Nothing in this system posts to a general ledger, and once tax does, sales, cost of goods and tenders follow immediately. Deliberately deferred to its own flow rather than grown out of settings — noted here so the reserved field has a reason attached to it, not to block anything.
+- ~~**Section list.**~~ — **Resolved by decision 28**: an editable table, and nothing is ever removed — decision 9's deactivation plus an active flag means a Section stops being offered without its history going anywhere.

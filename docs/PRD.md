@@ -87,7 +87,7 @@ Each flow is its own document. Status is tracked per flow so parallel work doesn
 | M-03 | [Daily summary of sales and inventory](flows/M-03-daily-summary.md) | **Specified** |
 | M-04 | [Add/remove employees or managers](flows/M-04-manage-users.md) | In clarification |
 | M-05 | [Accounts payable](flows/M-05-accounts-payable.md) | **Specified** |
-| M-06 | [Configure the store](flows/M-06-settings.md) | In clarification |
+| M-06 | [Configure the store](flows/M-06-settings.md) | **Specified** |
 
 ---
 
