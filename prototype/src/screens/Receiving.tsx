@@ -5,7 +5,8 @@ import { ReceiveReconcile } from "../components/ReceiveReconcile";
 import { OutstandingPanel } from "../components/OutstandingPanel";
 import { ReceiveSlab } from "../components/ReceiveSlab";
 import { TitlecardPanel } from "../components/TitlecardPanel";
-import { sectionLabelFor, selectableGenres } from "../lib/taxonomy";
+import { AdoptRelease } from "../components/AdoptRelease";
+import { genreNameFor, sectionLabelFor, selectableGenres } from "../lib/taxonomy";
 import {
   GRADES,
   type Grade,
@@ -13,6 +14,7 @@ import {
   type Invoice,
   type InvoiceLine,
   type PendingOrderLine,
+  type ReleaseCacheEntry,
   type RecordEntry,
   type Supplier,
 } from "../data/types";
@@ -1467,12 +1469,62 @@ function FindOrCreateRecordModal({
   const app = useApp();
   const [term, setTerm] = useState("");
   const [creating, setCreating] = useState(false);
+  const [adopting, setAdopting] = useState<ReleaseCacheEntry | null>(null);
   const q = term.trim().toLowerCase();
   const results = q
     ? app.records.filter((r) =>
         [r.artist, r.title, r.label, r.catalogNo].some((f) => f.toLowerCase().includes(q)),
       )
     : [];
+
+  // Only releases we have not adopted. Matching on the provider's own
+  // identifier rather than on artist/title, because two pressings of the
+  // same record are two releases and only one of them may be ours.
+  const adopted = new Set(app.records.map((r) => r.manufacturerUpc).filter(Boolean));
+  const providerHits = q
+    ? app.releaseCache.filter(
+        (rel) =>
+          !adopted.has(rel.manufacturerUpc) &&
+          !app.records.some((r) => r.artist === rel.artist && r.title === rel.title) &&
+          [rel.artist, rel.title, rel.label, rel.catalogNo].some((f) =>
+            f.toLowerCase().includes(q),
+          ),
+      )
+    : [];
+
+  // d53 — the map runs FIRST. A hit adopts straight through and never
+  // opens the prompt; only a miss asks, and a tag-less release asks the
+  // same way, differing only in having no map row to offer.
+  const startAdopt = (rel: ReleaseCacheEntry) => {
+    const { match } = app.resolveAdoptionGenre(rel.id);
+    if (match) {
+      const rec = app.adoptRelease(rel.id, match.genreId);
+      if (rec) onPick(rec);
+      return;
+    }
+    setAdopting(rel);
+  };
+
+  if (adopting) {
+    const { unmapped } = app.resolveAdoptionGenre(adopting.id);
+    return (
+      <AdoptRelease
+        release={adopting}
+        unmapped={unmapped}
+        by={app.sessionUser?.initials ?? ""}
+        onAdopted={(rec) => {
+          setAdopting(null);
+          onPick(rec);
+        }}
+        // d55 — Escape abandons the ADOPTION, not just the dialog: no
+        // Record, and the scan that brought us here is discarded.
+        onCancel={() => {
+          setAdopting(null);
+          onClose();
+        }}
+      />
+    );
+  }
 
   return (
     <Modal title="Find or add this title" wide onClose={onClose}>
@@ -1504,6 +1556,60 @@ function FindOrCreateRecordModal({
           </table>
         )}
         {q && results.length === 0 && <p className="small muted">No local match.</p>}
+
+        {/* E-02 step 9's local miss: the catalog provider. A release here is
+            NOT a Record — A-6 puts provider metadata in a cache underneath
+            the per-Store catalog, so it carries TAGS AND NO GENRE. There is no
+            Record for a genre to sit on until adoption (d53), which is also
+            why genre presence is the at-a-glance tell that a row is ours. */}
+        {providerHits.length > 0 && (
+          <>
+            <div className="hr" />
+            <p className="small muted">
+              From the <strong>catalog provider</strong> — not in our catalog yet. Adding one
+              resolves its genre through the map (A-61) and asks only when the map cannot
+              <em> (d53)</em>.
+            </p>
+            <table className="data">
+              <tbody>
+                {providerHits.map((rel) => {
+                  const { match } = app.resolveAdoptionGenre(rel.id);
+                  return (
+                    <tr key={rel.id}>
+                      <td>
+                        {rel.artist} — {rel.title}
+                        <div className="small muted">
+                          {rel.tags?.length
+                            ? rel.tags.map((t) => `${t.tag} (${t.votes})`).join(" \u00b7 ")
+                            : "no provider tags"}
+                        </div>
+                      </td>
+                      <td className="small muted">
+                        {match ? (
+                          <>
+                            {/* Resolved: the map fills it in and nothing is
+                                asked. The matched tag is shown because A-61
+                                snapshots it, so "why did it land here" stays
+                                answerable at the titlecard. */}
+                            {genreNameFor(app.genres, match.genreId)}
+                            <div>via {match.matchedTag}</div>
+                          </>
+                        ) : (
+                          <em>needs a genre</em>
+                        )}
+                      </td>
+                      <td className="num">
+                        <button className="btn sm primary" onClick={() => startAdopt(rel)}>
+                          Add to catalog
+                        </button>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </>
+        )}
 
         <div className="hr" />
         {!creating ? (

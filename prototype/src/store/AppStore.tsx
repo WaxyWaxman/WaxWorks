@@ -7,7 +7,13 @@ import {
 } from "react";
 import { computeDayBreakdown, type DayBreakdown } from "../lib/dayBreakdown";
 import { checkGenreDelete, checkGenreMerge, checkGenreWrite } from "../lib/taxonomy";
-import { checkMapRowAdd, normaliseTag } from "../lib/genreMap";
+import {
+  checkMapRowAdd,
+  normaliseTag,
+  resolveGenreFromTags,
+  unmappedTags,
+  type GenreMatch,
+} from "../lib/genreMap";
 import { invoiceForItem, supplierIdForItem } from "../lib/provenance";
 import { money } from "../lib/money";
 import { parseCell } from "../lib/tax";
@@ -25,6 +31,7 @@ import {
   CURRENT_USER,
   CUSTOMERS,
   GENRE_MAP,
+  RELEASE_CACHE,
   GIFT_CARD_GENRE_ID,
   GIFT_CARDS,
   INVENTORY,
@@ -89,6 +96,8 @@ import type {
   TaxGroupCell,
   Genre,
   GenreMapRow,
+  ProviderTag,
+  ReleaseCacheEntry,
   ClaimVoid,
   SupplierClaim,
   TaxLine,
@@ -178,6 +187,7 @@ interface AppState {
   taxGroupCells: TaxGroupCell[];
   genres: Genre[];
   genreMap: GenreMapRow[];
+  releaseCache: ReleaseCacheEntry[];
   defaultTaxGroup: string;
   // E-01. The session is CLIENT state and can be nothing else (A-3, A-50):
   // what the database trusts is the terminal's enrollment, initials are
@@ -234,6 +244,7 @@ const seed: AppState = {
   taxGroupCells: TAX_GROUP_CELLS,
   genres: GENRES,
   genreMap: GENRE_MAP,
+  releaseCache: RELEASE_CACHE,
   defaultTaxGroup: DEFAULT_TAX_GROUP,
   sessionUserId: null,
   sessionLastActivity: Date.now(),
@@ -734,6 +745,7 @@ interface AppContextValue extends AppState {
   taxGroupCells: TaxGroupCell[];
   genres: Genre[];
   genreMap: GenreMapRow[];
+  releaseCache: ReleaseCacheEntry[];
   defaultTaxGroup: string;
   taxCtxFor: (sale?: Sale | null) => TaxContext;
   productTaxCodeForRecord: (recordId?: string) => string;
@@ -745,6 +757,12 @@ interface AppContextValue extends AppState {
   setStoreDetail: (key: keyof Omit<StoreDetails, "storeId" | "position">, value: string | boolean | PostalAddress, by: string) => void;
   upsertSection: (row: SectionRow, by: string) => SettingsWriteResult;
   upsertGenre: (row: Genre, by: string) => SettingsWriteResult;
+  adoptRelease: (releaseId: string, genreId: string) => RecordEntry | null;
+  resolveAdoptionGenre: (releaseId: string) => {
+    release: ReleaseCacheEntry | undefined;
+    match: GenreMatch | undefined;
+    unmapped: ProviderTag[];
+  };
   addMapRow: (tag: string, genreId: string, by: string) => SettingsWriteResult;
   updateMapRow: (tag: string, patch: Partial<GenreMapRow>, by: string) => SettingsWriteResult;
   removeMapRow: (tag: string, by: string) => SettingsWriteResult;
@@ -1507,6 +1525,65 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
       by,
     );
     return { ok: true };
+  };
+
+  // -------------------------------------------------------------------------
+  // Adoption (M-06 d53; E-03 d6; architecture A-6, A-61)
+  // -------------------------------------------------------------------------
+  //
+  // Pulling a provider match into the LOCAL CATALOG. This is the moment a
+  // Record comes into existence, and therefore the moment its genre is
+  // resolved (d53) — before it there is no Record for a genre to sit on,
+  // which is why an unadopted release shows its tags and no genre.
+  //
+  // Resolved ONCE. A search that hits an adopted Record re-resolves nothing,
+  // and a later map edit never reaches back (d53, and the map's own "editable
+  // without touching Records already imported under it").
+
+  const adoptRelease: AppContextValue["adoptRelease"] = (releaseId, genreId) => {
+    const rel = s.releaseCache.find((r) => r.id === releaseId);
+    if (!rel) return null;
+    const id = uid("rec");
+    const match = resolveGenreFromTags(rel.tags, s.genreMap);
+    const rec: RecordEntry = {
+      id,
+      artist: rel.artist,
+      title: rel.title,
+      label: rel.label,
+      catalogNo: rel.catalogNo,
+      format: rel.format,
+      year: rel.year,
+      country: rel.country,
+      genreId,
+      art: rel.art,
+      manufacturerUpc: rel.manufacturerUpc,
+      minOnHand: 0,
+      // A-61 — the tags AS OF ADOPTION, with the one that matched marked.
+      // A snapshot, never re-resolved: the cache is shared and refreshable, so
+      // it holds what the provider says NOW where this has to hold what it
+      // said THEN. Undefined where the release carried none (d53).
+      //
+      // `matched` marks the tag the MAP used, not the operator's choice: where
+      // the map resolved nothing, nothing is marked, and the titlecard shows
+      // tags with none of them credited — which is the honest picture.
+      providerTags: rel.tags?.map((t) => ({
+        ...t,
+        ...(match && t.tag === match.matchedTag ? { matched: true } : {}),
+      })),
+    };
+    setS((prev) => ({ ...prev, records: [...prev.records, rec] }));
+    return rec;
+  };
+
+  // What the adoption prompt needs to decide whether to ask at all.
+  const resolveAdoptionGenre: AppContextValue["resolveAdoptionGenre"] = (releaseId) => {
+    const rel = s.releaseCache.find((r) => r.id === releaseId);
+    if (!rel) return { release: undefined, match: undefined, unmapped: [] };
+    return {
+      release: rel,
+      match: resolveGenreFromTags(rel.tags, s.genreMap),
+      unmapped: unmappedTags(rel.tags, s.genreMap),
+    };
   };
 
   const upsertGenre: AppContextValue["upsertGenre"] = (row, by) => {
@@ -3744,6 +3821,9 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
       setStoreDetail,
       upsertSection,
       upsertGenre,
+      releaseCache: s.releaseCache,
+      adoptRelease,
+      resolveAdoptionGenre,
       addMapRow,
       updateMapRow,
       removeMapRow,

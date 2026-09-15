@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { GENRE_MAP, GENRES } from "../data/seed";
+import { GENRE_MAP, GENRES, RELEASE_CACHE } from "../data/seed";
 import type { GenreMapRow, ProviderTag } from "../data/types";
 import {
   checkMapRowAdd,
@@ -103,5 +103,52 @@ describe("the seeded map (d17, d32, A-53)", () => {
     const seen = GENRE_MAP.map((r) => normaliseTag(r.tag));
     expect(new Set(seen).size).toBe(seen.length);
     expect(seen).toEqual(GENRE_MAP.map((r) => r.tag));
+  });
+});
+
+describe("the four adoption cases the cache is seeded to carry (d53, A-61)", () => {
+  const rel = (id: string) => RELEASE_CACHE.find((r) => r.id === id)!;
+  const resolve = (id: string) => resolveGenreFromTags(rel(id).tags, GENRE_MAP);
+  const unmapped = (id: string) => unmappedTags(rel(id).tags, GENRE_MAP);
+
+  it("auto-fills where every tag is mapped, and never prompts", () => {
+    // Jazz (62 votes) beats Modal Jazz (18); both map to the same genre, so
+    // the operator is asked nothing at all.
+    expect(resolve("rc-satchidananda")).toEqual({ genreId: "gn-modal-jazz", matchedTag: "Jazz" });
+    expect(unmapped("rc-satchidananda")).toEqual([]);
+  });
+
+  it("lets priority beat the heavier vote, which is the worked case", () => {
+    // Rock has 140 votes and Shoegaze has 11, and Shoegaze still wins because
+    // the shop gave its row a priority. Without that, every shoegaze release
+    // in the shop files under Alt Rock forever.
+    expect(resolve("rc-loveless")).toEqual({ genreId: "gn-art-punk", matchedTag: "Shoegaze" });
+  });
+
+  it("prompts on an unmapped tag, and CAN offer a map row", () => {
+    expect(resolve("rc-neu")).toBeUndefined();
+    expect(unmapped("rc-neu").map((t) => t.tag)).toEqual(["Krautrock"]);
+  });
+
+  it("prompts on a tag-less release, and CANNOT offer a map row", () => {
+    // d53's second state. The same prompt — the only difference is that there
+    // is nothing to key a row on, so the offer is simply absent.
+    expect(rel("rc-shaggs").tags).toBeUndefined();
+    expect(resolve("rc-shaggs")).toBeUndefined();
+    expect(unmapped("rc-shaggs")).toEqual([]);
+  });
+
+  it("marks the tag the MAP matched, not the operator's choice (A-61)", () => {
+    // What a Record snapshots is why it landed where it did. Where the map
+    // resolved nothing, nothing is marked — the titlecard then shows tags with
+    // none of them credited, which is the honest picture rather than a
+    // retrofitted one.
+    const match = resolve("rc-loveless");
+    const snapshot = rel("rc-loveless").tags!.map((t) => ({
+      ...t,
+      ...(match && t.tag === match.matchedTag ? { matched: true } : {}),
+    }));
+    expect(snapshot.find((t) => t.matched)?.tag).toBe("Shoegaze");
+    expect(snapshot.filter((t) => t.matched)).toHaveLength(1);
   });
 });
