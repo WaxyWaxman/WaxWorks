@@ -140,7 +140,7 @@ export function TillRail({ activeSaleId }: { activeSaleId?: string }) {
   // A sale number is only findable if you already know it; the name is what
   // staff actually remember. Walk-ins say so rather than leaving a gap.
   const whoFor = (s: Sale) => app.customerFor(s.customerId)?.name ?? "Walk-in";
-  const totalFor = (s: Sale) => saleTotals(s, app.taxLines).grand;
+  const totalFor = (s: Sale) => saleTotals(s, app.taxCtxFor(s)).grand;
 
   const pick = (s: Sale) => {
     nav(s.isReturn ? `/return/${s.id}` : `/sell/${s.id}`);

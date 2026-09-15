@@ -13,6 +13,11 @@ import type {
   CurrencyRow,
   StoreSettings,
   StoreDetails,
+  TaxType,
+  ProductTaxCode,
+  TaxGroup,
+  TaxGroupCell,
+  Genre,
 } from "./types";
 
 // ---- Tax table (M-06) ----
@@ -388,7 +393,9 @@ export const CUSTOMERS: Customer[] = [
     contactPreference: "Email",
     address: { line1: "44 Avenue du Parc", city: "Montreal", provinceState: "QC", country: "Canada" },
     globalDiscountPct: 0,
-    defaultTaxLineId: "tx-exempt",
+    // A wholesale account: its group has every cell blank, so nothing it
+    // buys is in scope (d15 — blank is out of scope, not zero-rated).
+    taxGroupId: "tg-whl",
     balance: -120.5,
     note: "Wholesale — exempt tax line. Settles on account, not at till.",
   },
@@ -542,3 +549,97 @@ export const STORE_DETAILS: StoreDetails = {
   storeId: "0041982",
   position: 1,
 };
+
+// ---- M-06 tax (d11-d17, d48, d52) ----
+// Real GST and QST as SEPARATE types, not the blended 14.975% the flat model
+// carried. The blend was the thing two tables exist to stop: it cannot be
+// reported per type (M-03 d13), cannot carry a registration number per type
+// (d48), and cannot be split by rate when a period spans a change (M-03 d15).
+
+export const TAX_TYPES: TaxType[] = [
+  {
+    code: "a",
+    name: "GST",
+    ratePpm: 50_000, // 5% — A-47's parts per million
+    registrationNumber: "R123456789",
+    glAccount: "2310",
+    active: true,
+    // d52 / A-58 — one pending change, entered when it was announced. Set in
+    // the past so the prototype shows a rate that has already taken effect
+    // and can be promoted; the Settings editor queues new ones.
+  },
+  {
+    code: "b",
+    name: "QST",
+    ratePpm: 99_750, // 9.975% — the rate basis points could not hold
+    registrationNumber: "1234567890TQ0001",
+    glAccount: "2320",
+    active: true,
+  },
+  {
+    code: "z",
+    name: "Zero-rated",
+    ratePpm: 0,
+    active: true,
+    // d15 — a zero-rate type is NOT a blank cell. This one is taxable at 0%
+    // and reportable; a blank cell is out of scope and reports nothing.
+  },
+];
+
+export const PRODUCT_TAX_CODES: ProductTaxCode[] = [
+  { code: "1", description: "Standard — full tax", active: true },
+  { code: "B", description: "Books and magazines — GST only", active: true },
+  { code: "2", description: "Non-taxable — gift card loads", active: true },
+  { code: "3", description: "Zero-rated — taxable at 0%, reportable", active: true },
+];
+
+export const TAX_GROUPS: TaxGroup[] = [
+  { id: "tg-qc", description: "Quebec", shortName: "QC", active: true },
+  { id: "tg-on", description: "Ontario", shortName: "ON", active: true },
+  { id: "tg-whl", description: "Wholesale", shortName: "WHL", active: true },
+];
+
+// d13 — stored as rows, drawn as a grid. Quebec composes GST then QST on the
+// subtotal (`ab`); Ontario charges HST-equivalent as a single tax here; and a
+// gift card load is out of scope everywhere, which is a BLANK cell and not a
+// zero rate (d15) — loading a card is not a taxable supply at all.
+export const TAX_GROUP_CELLS: TaxGroupCell[] = [
+  { groupId: "tg-qc", productTaxCode: "1", spec: "ab" },
+  { groupId: "tg-qc", productTaxCode: "B", spec: "a" },
+  { groupId: "tg-qc", productTaxCode: "2", spec: "" },
+  { groupId: "tg-qc", productTaxCode: "3", spec: "z" },
+  { groupId: "tg-on", productTaxCode: "1", spec: "a" },
+  { groupId: "tg-on", productTaxCode: "B", spec: "a" },
+  { groupId: "tg-on", productTaxCode: "2", spec: "" },
+  { groupId: "tg-on", productTaxCode: "3", spec: "z" },
+  { groupId: "tg-whl", productTaxCode: "1", spec: "" },
+  { groupId: "tg-whl", productTaxCode: "B", spec: "" },
+  { groupId: "tg-whl", productTaxCode: "2", spec: "" },
+  { groupId: "tg-whl", productTaxCode: "3", spec: "" },
+];
+
+export const DEFAULT_TAX_GROUP = "tg-qc"; // d14 — the store's default
+
+// d32 — a Genre carries a mandatory parent Section and a product tax code.
+// d17 makes genre mandatory on every sellable thing, which is how freight and
+// gift cards resolve tax with no special case at all.
+export const GENRES: Genre[] = [
+  // The genres the seeded Records actually carry. They read like catalog
+  // provider genres — "Modal Jazz", "Art Punk" — because that is what they
+  // are, and d6's genre map is what translates a provider's genre to a shop
+  // one. The map itself is not modelled here (see docs/prototype.md); every
+  // genre in the seed is simply a shop genre, so every Record resolves.
+  { name: "Alt Rock", section: "VI", productTaxCode: "1" },
+  { name: "Art Punk", section: "VI", productTaxCode: "1" },
+  { name: "Folk Rock", section: "VI", productTaxCode: "1" },
+  { name: "Funk / Pop", section: "VI", productTaxCode: "1" },
+  { name: "Hip Hop", section: "VI", productTaxCode: "1" },
+  { name: "Modal Jazz", section: "VI", productTaxCode: "1" },
+  { name: "Pop Rock", section: "VI", productTaxCode: "1" },
+  { name: "Merch", section: "ME", productTaxCode: "1" },
+  { name: "Books", section: "ME", productTaxCode: "B" },
+  // d17, d19 — shop-internal genres are omitted from the picker rather than
+  // gated, so a Record can never be set to one by accident.
+  { name: "Freight", section: "FR", productTaxCode: "1", internal: true },
+  { name: "Gift card", section: "GC", productTaxCode: "2", internal: true },
+];

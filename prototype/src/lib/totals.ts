@@ -1,3 +1,4 @@
+import { cellFor, resolveLineTax, roundHalfAwayFromZero, taxTotal } from "./tax";
 import { isOpenOrderLine } from "./orderLines";
 import type {
   ClaimVoid,
@@ -12,7 +13,9 @@ import type {
   SaleLine,
   Supplier,
   SupplierClaim,
-  TaxLine,
+  TaxComponent,
+  TaxType,
+  TaxGroupCell,
   Tender,
 } from "../data/types";
 
@@ -20,9 +23,31 @@ export const lineGross = (l: SaleLine): number => l.qty * l.price;
 export const lineNet = (l: SaleLine): number =>
   l.qty * l.price * (1 - l.discountPct / 100);
 
-export function lineTax(l: SaleLine, taxLines: TaxLine[]): number {
-  const tl = taxLines.find((t) => t.id === l.taxLineId);
-  return lineNet(l) * (tl ? tl.rate : 0);
+// M-06 d14's two coordinates, gathered so no caller invents its own lookup.
+// `groupId` is the Customer's tax group or the store's default; `at` is the
+// moment the money moves (A-57), which is what decides WHICH rate applies
+// (A-58) when a pending change is queued.
+export interface TaxContext {
+  types: TaxType[];
+  cells: TaxGroupCell[];
+  groupId: string;
+  at: string;
+}
+
+// The line's tax, per type.
+//
+// A SNAPSHOT WINS. A-57 takes the tax snapshot at tender, so a completed Sale
+// reports what it actually charged even after a rate changes — that is the
+// whole reason no rate-history table is needed. While the Sale is open there
+// is no snapshot and the screen computes live, which is correct rather than a
+// fallback: nothing has been collected yet.
+export function lineTaxComponents(l: SaleLine, ctx: TaxContext): TaxComponent[] {
+  if (l.tax) return l.tax;
+  return resolveLineTax(lineNet(l), cellFor(ctx.cells, ctx.groupId, l.productTaxCode), ctx.types, ctx.at);
+}
+
+export function lineTax(l: SaleLine, ctx: TaxContext): number {
+  return taxTotal(lineTaxComponents(l, ctx));
 }
 
 export interface SaleTotals {
@@ -30,16 +55,29 @@ export interface SaleTotals {
   discount: number; // total discount given
   tax: number;
   grand: number;
+  // Per type, because M-03 d13 reports per type and d15 splits by rate. A
+  // single figure is what the flat model could give and is the reason it had
+  // to go.
+  taxByType: { code: string; name: string; ratePpm: number; amount: number }[];
 }
 
-export function saleTotals(sale: Sale, taxLines: TaxLine[]): SaleTotals {
+export function saleTotals(sale: Sale, ctx: TaxContext): SaleTotals {
   let subtotal = 0;
   let discount = 0;
   let tax = 0;
+  // Keyed by type AND rate, so a period spanning a rate change splits itself
+  // (M-03 d15) instead of blending two rates into one line.
+  const byType = new Map<string, { code: string; name: string; ratePpm: number; amount: number }>();
   for (const l of sale.lines) {
     subtotal += lineNet(l);
     discount += lineGross(l) - lineNet(l);
-    tax += lineTax(l, taxLines);
+    for (const c of lineTaxComponents(l, ctx)) {
+      tax += c.amount;
+      const key = `${c.code}:${c.ratePpm}`;
+      const seen = byType.get(key);
+      if (seen) seen.amount = round2(seen.amount + c.amount);
+      else byType.set(key, { ...c });
+    }
   }
   const grand = subtotal + tax;
   return {
@@ -47,16 +85,20 @@ export function saleTotals(sale: Sale, taxLines: TaxLine[]): SaleTotals {
     discount: round2(discount),
     tax: round2(tax),
     grand: round2(grand),
+    taxByType: [...byType.values()],
   };
 }
 
 export const tenderedTotal = (sale: Sale): number =>
   round2(sale.tenders.reduce((s, t) => s + t.amount, 0));
 
-export const balanceDue = (sale: Sale, taxLines: TaxLine[]): number =>
-  round2(saleTotals(sale, taxLines).grand - tenderedTotal(sale));
+export const balanceDue = (sale: Sale, ctx: TaxContext): number =>
+  round2(saleTotals(sale, ctx).grand - tenderedTotal(sale));
 
-export const round2 = (n: number): number => Math.round(n * 100) / 100;
+// A-47 — half AWAY FROM ZERO, not Math.round's half-up, so a negative-quantity
+// Return line rounds symmetrically to the Sale that produced it (A-49 names
+// exactly this case). One rounding rule governs the whole money path.
+export const round2 = roundHalfAwayFromZero;
 
 /**
  * What one tender does to a Customer's A/R balance, signed the way E-07 d4

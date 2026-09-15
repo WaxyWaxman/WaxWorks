@@ -1,4 +1,4 @@
-import type { TaxType } from "../data/types";
+import type { TaxComponent, TaxType } from "../data/types";
 
 // M-06's tax model, as pure functions.
 //
@@ -60,13 +60,6 @@ export function parseCell(spec: string): ParsedCell {
   const compound = raw.endsWith("+");
   const codes = (compound ? raw.slice(0, -1) : raw).split("").filter((c) => c.trim());
   return { codes: codes.slice(0, 2), compound };
-}
-
-export interface TaxComponent {
-  code: string;
-  name: string;
-  ratePpm: number; // the rate ACTUALLY applied, snapshotted by the caller
-  amount: number;
 }
 
 // The line's tax, one entry per tax type applied.

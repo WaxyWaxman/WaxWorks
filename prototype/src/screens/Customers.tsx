@@ -65,7 +65,7 @@ export function Customers() {
       sales: app.sales,
       pendingOrders: app.pendingOrders,
       invoices: app.invoices,
-      taxLines: app.taxLines,
+      taxCtx: app.taxCtxFor(null),
       records: app.records,
     }),
     [app.sales, app.pendingOrders, app.invoices, app.taxLines, app.records],
@@ -83,9 +83,9 @@ export function Customers() {
       app.customers.map((c) => ({
         customer: c,
         waiting: waitingCount(c, app.sales),
-        thisYear: thisYearSpend(c, app.sales, app.taxLines),
+        thisYear: thisYearSpend(c, app.sales, app.taxCtxFor(null)),
       })),
-    [app.customers, app.sales, app.taxLines],
+    [app.customers, app.sales, app.taxTypes, app.taxGroupCells],
   );
 
   const searched = useMemo(
@@ -227,7 +227,7 @@ export function Customers() {
 function thisYearSpend(
   customer: Customer,
   sales: ReturnType<typeof useApp>["sales"],
-  taxLines: ReturnType<typeof useApp>["taxLines"],
+  taxCtx: Parameters<typeof saleTotals>[1],
 ): number {
   const year = new Date().getFullYear();
   return sales
@@ -239,5 +239,5 @@ function thisYearSpend(
         !s.isReturn &&
         Number(s.createdAt.slice(0, 4)) === year,
     )
-    .reduce((n, s) => n + saleTotals(s, taxLines).grand, 0);
+    .reduce((n, s) => n + saleTotals(s, taxCtx).grand, 0);
 }

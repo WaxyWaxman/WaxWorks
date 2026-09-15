@@ -164,7 +164,11 @@ export interface Customer {
   contactPreference: "Phone" | "Email";
   address?: CustomerAddress;
   globalDiscountPct: number;
-  defaultTaxLineId?: string;
+  // M-06 d14, E-07 — the Customer supplies ONE of the two coordinates: their
+  // tax group. It is the group's ShortName that appears on the card. Absent
+  // means the store's default group applies; it is not an override and never
+  // competes with the product's axis.
+  taxGroupId?: string;
   note?: string;
   balance: number; // A/R balance — + store owes customer (store credit); - customer owes store
 }
@@ -185,7 +189,15 @@ export interface SaleLine {
   qty: number; // negative => Return
   price: number;
   discountPct: number;
-  taxLineId: string;
+  // M-06 d12 — what the PRODUCT is: the Genre's product tax code, copied onto
+  // the line when it is added, because that is a fact about what was sold and
+  // is fixed the moment it goes in the basket (A-57).
+  productTaxCode: string;
+  // A-57 — the tax SNAPSHOT: the tax types resolved and the rates applied,
+  // never a reference to a configuration row. Taken at TENDER, not at line-add,
+  // because what was collected is not a fact until something is collected.
+  // Undefined while the Sale is open; the screen computes live until then.
+  tax?: TaxComponent[];
   note?: string;
   linkedSaleNumber?: number; // E-06 link to original Sale
   stockRouted?: boolean; // E-06 step 6 — returned copy has been dispositioned
@@ -211,6 +223,10 @@ export interface Sale {
   holdRef?: string;
   po?: string;
   customerId?: string;
+  // M-06 d14 — who the CUSTOMER is: their tax group, else the store's default.
+  // Snapshotted at tender alongside the line tax, so a Sale records the
+  // coordinate it actually resolved through rather than re-deriving it later.
+  taxGroupId?: string;
   lines: SaleLine[];
   tenders: Tender[];
   createdBy: string;
@@ -805,6 +821,15 @@ export interface SettingsLogEntry {
 // taxes. d1's single table could not express a rate shared across
 // jurisdictions without repeating it, and repeated rates drift.
 // ---------------------------------------------------------------------------
+
+// The shape lib/tax.ts produces. Declared here rather than imported so the
+// data model does not depend on the library that computes it.
+export interface TaxComponent {
+  code: string;
+  name: string;
+  ratePpm: number;
+  amount: number;
+}
 
 export interface TaxType {
   code: string; // a single letter — a, b, c — used to compose the cells
