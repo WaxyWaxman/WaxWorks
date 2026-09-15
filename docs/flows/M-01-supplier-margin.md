@@ -27,7 +27,7 @@
 | Order via | `Phone` \| `Email` \| `FTP` \| `Their Website` \| `Fax` \| `Rep` |
 | Minimum order qty | An order is "ready to place" once it hits this **quantity**. `0` means quantity doesn't gate it — readiness falls back to the minimum **amount** instead |
 | Minimum order amount / basis | Only consulted when qty is `0`. Priced at either `Retail` or `Net` — the basis is its own dropdown |
-| Discount | % off **this Supplier's own retail**. One figure, doing double duty: it's also the multiplier in the suggested-retail formula at receiving ([E-02](E-02-receive-inventory.md) decision 8): `suggested_retail = round_up(list_price x (1 + discount / 100))`. There is no separate Margin field |
+| Discount | % off **this Supplier's own retail**. One figure, doing double duty: it's also the multiplier in the suggested-retail formula at receiving ([E-02](E-02-receive-inventory.md) decision 8): `suggested_retail = round_to_ending(list_price x (1 + discount / 100), price_ending)` ([architecture](../architecture.md) A-49). There is no separate Margin field |
 | Cancel-by | Default days from order-placed to auto-cancel if unfulfilled. Blank means this Supplier doesn't support it. Overridable per individual order (M-02). **An ordering figure, not a payment one** — see Payment terms below |
 | Payment terms | When a bill from this Supplier falls due: `Net 15` \| `Net 30` \| `Net 45` \| `Net 60` \| `Net 90` \| `End of Month` \| `On receipt` \| `COD` \| `Prepaid` (decisions 19, 20). **End of Month** is the last day of the month the invoice is dated in. The **default** for Invoices received from them; the Invoice carries its own and wins ([E-02](E-02-receive-inventory.md) decision 45). This is the only field in the system that says when money is owed (decision 19) |
 | Default payment method | How this Supplier is normally paid: `Cheque` \| `Credit Card` \| `EFT` \| `e-Transfer` \| `Cash` \| `Other` (decision 20). A **default**, carried onto each Invoice at receiving ([E-02](E-02-receive-inventory.md) d47) and pre-filled into a settlement ([M-05](M-05-accounts-payable.md) d34) — never a rule about how a given bill must be paid |
@@ -61,7 +61,7 @@ A Record's **Preferred Supplier** (set from its titlecard, [E-04](E-04-manage-in
 
 **From [E-02](E-02-receive-inventory.md):**
 
-- Discount drives the suggested retail price at receiving: `suggested_retail = round_up(list_price x (1 + discount / 100))`, applied to the supplier's **pre-discount list price** (decisions 8, 31 — there is no separate Margin field).
+- Discount drives the suggested retail price at receiving: `suggested_retail = round_to_ending(list_price x (1 + discount / 100), price_ending)` ([architecture](../architecture.md) A-49), applied to the supplier's **pre-discount list price** (decisions 8, 31 — there is no separate Margin field).
 - A Supplier can be flagged **default for second-hand** (decision 27) — this is what Receiving pre-selects when Second-hand intake mode is chosen. There is no dedicated second-hand Supplier; this is a plain field on an ordinary Supplier record.
 - Setting a margin is **manager-only** ([E-02](E-02-receive-inventory.md) d44, [architecture](../architecture.md) A-28a). Creating a Supplier is not — an Employee may add one at the receiving desk and leave it unpriced. E-02 d3's carve-out was struck in error and has been restored.
 
