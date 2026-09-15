@@ -101,6 +101,11 @@ An optional cross-reference links the two, so a payout can be traced to the copi
 
 ## Inherited from other flows
 
+**From [M-04](M-04-manage-users.md):**
+
+- **Adjustment history displays the acting User's name, not their initials** ([M-04](M-04-manage-users.md) d16). A deactivated User's initials are released to a new hire, so the letters alone no longer identify a person. The stored attribution is unaffected — it points at the User row — but anything this flow *displays* or exports for audit has to resolve through to the name.
+- **Adjusting on hand prompts for the acting Employee's initials even inside an active session** ([E-01](E-01-authenticate.md) d12, d15), in addition to the authorizing Manager's ([architecture](../architecture.md) A-28a). Two sets of initials, deliberately.
+
 **From [E-02](E-02-receive-inventory.md):**
 
 - **Void or amend a finalized Invoice** — manager-only, appended as a separate artifact against the original record.
