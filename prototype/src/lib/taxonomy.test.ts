@@ -3,6 +3,7 @@ import { GENRES, PRODUCT_TAX_CODES, SECTIONS } from "../data/seed";
 import type { Genre } from "../data/types";
 import {
   checkGenreDelete,
+  checkGenreMerge,
   checkGenreWrite,
   genreNameFor,
   sectionCodeFor,
@@ -136,5 +137,28 @@ describe("the gift card genre is system-owned (d18)", () => {
 
   it("can still be renamed and reparented, which move no money", () => {
     expect(checkGenreWrite({ ...giftCard, name: "Gift cards" }, ctx)).toEqual({ ok: true });
+  });
+});
+
+describe("what a merge refuses (A-60, d18)", () => {
+  const folk = GENRES.find((g) => g.id === "gn-folk-rock")!;
+  const alt = GENRES.find((g) => g.id === "gn-alt-rock")!;
+  const giftCard = GENRES.find((g) => g.id === "gn-gift-card")!;
+
+  it("allows an ordinary merge", () => {
+    expect(checkGenreMerge(folk, alt)).toEqual({ ok: true });
+  });
+
+  it("refuses merging a genre into itself, and refuses a missing one", () => {
+    expect(checkGenreMerge(folk, folk)).toMatchObject({ ok: false });
+    expect(checkGenreMerge(folk, undefined)).toMatchObject({ ok: false });
+  });
+
+  it("refuses merging away the system-owned gift card genre (d18)", () => {
+    // Merging it away would send a gift card load's tax resolution to the
+    // standard-code fallback — the same defect as deleting it.
+    expect(checkGenreMerge(giftCard, alt)).toMatchObject({ ok: false });
+    // ...but it may be merged INTO, which moves nothing of its own.
+    expect(checkGenreMerge(alt, giftCard)).toEqual({ ok: true });
   });
 });

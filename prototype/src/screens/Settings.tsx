@@ -10,6 +10,7 @@ import type {
   SectionRow,
   TenderRow,
 } from "../data/types";
+import { sectionLabelFor } from "../lib/taxonomy";
 import { useApp, type SettingsWriteResult } from "../store/AppStore";
 import { taxTypeUseCount, resolveLineTax } from "../lib/tax";
 import { money } from "../lib/money";
@@ -36,7 +37,7 @@ import { money } from "../lib/money";
 // M-06's own, and it recomputes live — so the screen and the till can be seen
 // to agree rather than asserted to.
 
-type GroupKey = "sections" | "genres" | "tenders" | "currencies" | "store" | "details" | "tax";
+type GroupKey = "sections" | "genres" | "genremap" | "tenders" | "currencies" | "store" | "details" | "tax";
 
 // The tile is not decoration: .hit is a three-column skeleton (tile, two
 // lines of name, optional figure) shared with Find, Customers and Suppliers,
@@ -44,6 +45,7 @@ type GroupKey = "sections" | "genres" | "tenders" | "currencies" | "store" | "de
 const GROUPS: { key: GroupKey; tile: string; label: string; blurb: string }[] = [
   { key: "sections", tile: "SE", label: "Sections", blurb: "Reporting categories and what they imply" },
   { key: "genres", tile: "GE", label: "Genres", blurb: "The shelf axis, and what tax it attracts" },
+  { key: "genremap", tile: "GM", label: "Genre map", blurb: "Provider tags onto shop genres" },
   { key: "tenders", tile: "TE", label: "Tenders", blurb: "What the till can take money as" },
   { key: "currencies", tile: "CU", label: "Currencies", blurb: "Codes and the planning rate" },
   { key: "store", tile: "ST", label: "Store settings", blurb: "The figures other flows read" },
@@ -115,6 +117,7 @@ export function Settings() {
             {refusal && <div className="callout danger">{refusal}</div>}
             {active === "sections" && <SectionsEditor by={authorisedBy} onRun={run} />}
             {active === "genres" && <GenresEditor by={authorisedBy} onRun={run} />}
+            {active === "genremap" && <GenreMapEditor by={authorisedBy} onRun={run} />}
             {active === "tenders" && <TendersEditor by={authorisedBy} onRun={run} />}
             {active === "currencies" && <CurrenciesEditor by={authorisedBy} onRun={run} />}
             {active === "store" && <StoreSettingsEditor by={authorisedBy} />}
@@ -282,7 +285,7 @@ function GenresEditor({ by, onRun }: { by: string; onRun: (r: SettingsWriteResul
             <th>Tax code</th>
             <th>In use</th>
             <th>Active</th>
-            <th />
+            <th>Merge / delete</th>
           </tr>
         </thead>
         <tbody>
@@ -326,20 +329,45 @@ function GenresEditor({ by, onRun }: { by: string; onRun: (r: SettingsWriteResul
                 <td className="small muted">{used > 0 ? `${used} entr${used === 1 ? "y" : "ies"}` : "unused"}</td>
                 <Flag on={g.active} onChange={(v) => save({ ...g, active: v })} />
                 <td>
-                  <button
-                    className="btn sm"
-                    onClick={() => onRun(app.deleteGenre(g.id, by))}
-                    disabled={used > 0 || !!g.systemOwned}
-                    title={
-                      g.systemOwned
-                        ? "Written by the system — the gift card load resolves through it (d18)"
-                        : used > 0
-                          ? "Carried by catalog entries — deactivate instead (A-54)"
-                          : "Delete"
-                    }
-                  >
-                    Delete
-                  </button>
+                  <div className="row">
+                    {/* A-60 — merge repoints every catalog entry AND every map
+                        row. Leave the map rows and the next adoption recreates the
+                        genre under the old tag, which is the problem coming back by
+                        the door it came in. Manager-only, on M-01 d11's precedent. */}
+                    <select
+                      value=""
+                      disabled={!!g.systemOwned}
+                      onChange={(e) => e.target.value && onRun(app.mergeGenres(g.id, e.target.value, by))}
+                      title={
+                        g.systemOwned
+                          ? "Written by the system — it cannot be merged away (d18)"
+                          : "Repoints every catalog entry and every map row (A-60)"
+                      }
+                    >
+                      <option value="">Merge into…</option>
+                      {app.genres
+                        .filter((x) => x.id !== g.id && !x.internal)
+                        .map((x) => (
+                          <option key={x.id} value={x.id}>
+                            {x.name}
+                          </option>
+                        ))}
+                    </select>
+                    <button
+                      className="btn sm"
+                      onClick={() => onRun(app.deleteGenre(g.id, by))}
+                      disabled={used > 0 || !!g.systemOwned}
+                      title={
+                        g.systemOwned
+                          ? "Written by the system — the gift card load resolves through it (d18)"
+                          : used > 0
+                            ? "Carried by catalog entries — merge or deactivate instead (A-54)"
+                            : "Delete"
+                      }
+                    >
+                      Delete
+                    </button>
+                  </div>
                 </td>
               </tr>
             );
@@ -413,6 +441,91 @@ function GenresEditor({ by, onRun }: { by: string; onRun: (r: SettingsWriteResul
           + New genre
         </button>
       )}
+    </>
+  );
+}
+
+// ---------------------------------------------------------------------------
+
+// ---------------------------------------------------------------------------
+
+// M-06 d6, d32 — the genre map. Provider tag to genre and NOTHING else:
+// the Section follows from the genre's required parent and is never guessed,
+// which is what makes an import able to put a Record on the wrong shelf and
+// unable to put it in the wrong Section.
+function GenreMapEditor({ by, onRun }: { by: string; onRun: (r: SettingsWriteResult) => boolean }) {
+  const app = useApp();
+  const mappable = app.genres.filter((g) => g.active && !g.internal);
+
+  return (
+    <>
+      <p className="small muted">
+        How the catalog provider&rsquo;s tags land on this shop&rsquo;s genres (d6, d32).{" "}
+        <SpecNote cite="M-06 d6, d32, d53; A-59, A-61">
+          Resolution takes the matching row with the <strong>highest priority</strong>, breaking ties
+          by the provider&rsquo;s vote count (A-61). Priority exists because votes measure{" "}
+          <strong>consensus, not specificity</strong> — <code>rock</code> outvotes{" "}
+          <code>shoegaze</code> on nearly every shoegaze release, so without it the finer genres a
+          shop deliberately made would never auto-fill. <strong>This is the Manager&rsquo;s door:</strong>{" "}
+          adding a row for a tag that has none is an ungated <em>Employee</em> action taken at the
+          adoption prompt (A-59, d53), while changing one, removing one, or setting a priority is
+          manager-only — each re-routes every future adoption of that tag.
+        </SpecNote>
+      </p>
+      <table className="data">
+        <thead>
+          <tr>
+            <th>Provider tag</th>
+            <th>Shop genre</th>
+            <th>Section</th>
+            <th>Priority</th>
+            <th />
+          </tr>
+        </thead>
+        <tbody>
+          {app.genreMap.map((row) => (
+            <tr key={row.tag}>
+              <td className="mono">{row.tag}</td>
+              <td>
+                <select
+                  value={row.genreId}
+                  onChange={(e) => onRun(app.updateMapRow(row.tag, { genreId: e.target.value }, by))}
+                >
+                  {mappable.map((g) => (
+                    <option key={g.id} value={g.id}>
+                      {g.name}
+                    </option>
+                  ))}
+                </select>
+              </td>
+              {/* Never assigned by the map — it follows from the genre (d32). */}
+              <td className="small muted">{sectionLabelFor(app.genres, app.sections, row.genreId)}</td>
+              <td>
+                <input
+                  className="mini"
+                  type="number"
+                  defaultValue={row.priority}
+                  onBlur={(e) =>
+                    onRun(app.updateMapRow(row.tag, { priority: Number(e.target.value) || 0 }, by))
+                  }
+                />
+              </td>
+              <td>
+                <button className="btn sm" onClick={() => onRun(app.removeMapRow(row.tag, by))}>
+                  Remove
+                </button>
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      <p className="small muted">
+        A row may be removed outright: decision 9&rsquo;s <em>deactivate, never delete</em> does not
+        extend to map rows (A-59) — a row is referenced by no history and is read only at
+        adoption, so removing one removes nothing, and Records already adopted under it keep the
+        genre they were adopted with (d53). Shop-internal genres carry no rows at all (d17): nothing
+        the provider returns should ever map onto <strong>Gift cards</strong>.
+      </p>
     </>
   );
 }

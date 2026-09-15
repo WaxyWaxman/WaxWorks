@@ -161,3 +161,21 @@ export function checkGenreDelete(
     };
   return { ok: true };
 }
+
+// A-60 - what a merge refuses. Manager-only is enforced by the screen being
+// manager-only (A-28a); these are the rules that hold regardless of who asks.
+export function checkGenreMerge(
+  from: Genre | undefined,
+  to: Genre | undefined,
+): GenreWriteCheck {
+  if (!from || !to) return { ok: false, reason: "Both genres must exist." };
+  if (from.id === to.id) return { ok: false, reason: "A genre cannot be merged into itself." };
+  // d18 - the money path resolves a gift card load through this genre, so
+  // merging it away would send that resolution to the standard-code fallback.
+  if (from.systemOwned)
+    return {
+      ok: false,
+      reason: `${from.name} is written by the system (d18) — it cannot be merged away.`,
+    };
+  return { ok: true };
+}

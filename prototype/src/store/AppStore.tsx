@@ -6,7 +6,8 @@ import {
   type ReactNode,
 } from "react";
 import { computeDayBreakdown, type DayBreakdown } from "../lib/dayBreakdown";
-import { checkGenreDelete, checkGenreWrite } from "../lib/taxonomy";
+import { checkGenreDelete, checkGenreMerge, checkGenreWrite } from "../lib/taxonomy";
+import { checkMapRowAdd, normaliseTag } from "../lib/genreMap";
 import { invoiceForItem, supplierIdForItem } from "../lib/provenance";
 import { money } from "../lib/money";
 import { parseCell } from "../lib/tax";
@@ -23,6 +24,7 @@ import {
 import {
   CURRENT_USER,
   CUSTOMERS,
+  GENRE_MAP,
   GIFT_CARD_GENRE_ID,
   GIFT_CARDS,
   INVENTORY,
@@ -86,6 +88,7 @@ import type {
   TaxGroup,
   TaxGroupCell,
   Genre,
+  GenreMapRow,
   ClaimVoid,
   SupplierClaim,
   TaxLine,
@@ -174,6 +177,7 @@ interface AppState {
   taxGroups: TaxGroup[];
   taxGroupCells: TaxGroupCell[];
   genres: Genre[];
+  genreMap: GenreMapRow[];
   defaultTaxGroup: string;
   // E-01. The session is CLIENT state and can be nothing else (A-3, A-50):
   // what the database trusts is the terminal's enrollment, initials are
@@ -229,6 +233,7 @@ const seed: AppState = {
   taxGroups: TAX_GROUPS,
   taxGroupCells: TAX_GROUP_CELLS,
   genres: GENRES,
+  genreMap: GENRE_MAP,
   defaultTaxGroup: DEFAULT_TAX_GROUP,
   sessionUserId: null,
   sessionLastActivity: Date.now(),
@@ -728,6 +733,7 @@ interface AppContextValue extends AppState {
   taxGroups: TaxGroup[];
   taxGroupCells: TaxGroupCell[];
   genres: Genre[];
+  genreMap: GenreMapRow[];
   defaultTaxGroup: string;
   taxCtxFor: (sale?: Sale | null) => TaxContext;
   productTaxCodeForRecord: (recordId?: string) => string;
@@ -739,6 +745,10 @@ interface AppContextValue extends AppState {
   setStoreDetail: (key: keyof Omit<StoreDetails, "storeId" | "position">, value: string | boolean | PostalAddress, by: string) => void;
   upsertSection: (row: SectionRow, by: string) => SettingsWriteResult;
   upsertGenre: (row: Genre, by: string) => SettingsWriteResult;
+  addMapRow: (tag: string, genreId: string, by: string) => SettingsWriteResult;
+  updateMapRow: (tag: string, patch: Partial<GenreMapRow>, by: string) => SettingsWriteResult;
+  removeMapRow: (tag: string, by: string) => SettingsWriteResult;
+  mergeGenres: (fromId: string, toId: string, by: string) => SettingsWriteResult;
   deleteGenre: (genreId: string, by: string) => SettingsWriteResult;
   genreUseCount: (genreId: string) => number;
   upsertTender: (row: TenderRow, by: string) => SettingsWriteResult;
@@ -1415,6 +1425,89 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
   const genreUseCount: AppContextValue["genreUseCount"] = (genreId) =>
     s.records.filter((r) => r.genreId === genreId).length +
     s.nonTracked.filter((n) => n.genreId === genreId).length;
+
+  // -------------------------------------------------------------------------
+  // The genre map (M-06 d6, d32; architecture A-59, A-60, A-61)
+  // -------------------------------------------------------------------------
+  //
+  // A-59 splits this surface in two, and the split IS the decision. Adding a
+  // row for a tag that has none is an ungated EMPLOYEE action, logged with the
+  // Employee as actor: it is purely additive and cannot change where anything
+  // already goes. Changing a row, removing one, or setting its priority is
+  // manager-only, because each re-routes every future adoption of that tag.
+  //
+  // The editor below is the Manager's door. The Employee's door is the
+  // adoption prompt (d53), which calls addMapRow and nothing else.
+
+  const addMapRow: AppContextValue["addMapRow"] = (tag, genreId, by) => {
+    const check = checkMapRowAdd(tag, genreId, s.genreMap);
+    if (!check.ok) return check;
+    const row: GenreMapRow = { tag: normaliseTag(tag), genreId, priority: 0 };
+    setS((prev) => ({ ...prev, genreMap: [...prev.genreMap, row] }));
+    logSetting("Genre map", row.tag, "(none)", row, by);
+    return { ok: true };
+  };
+
+  const updateMapRow: AppContextValue["updateMapRow"] = (tag, patch, by) => {
+    const key = normaliseTag(tag);
+    const existing = s.genreMap.find((r) => normaliseTag(r.tag) === key);
+    if (!existing) return { ok: false, reason: `No map row for "${tag}".` };
+    const next = { ...existing, ...patch };
+    setS((prev) => ({
+      ...prev,
+      genreMap: prev.genreMap.map((r) => (normaliseTag(r.tag) === key ? next : r)),
+    }));
+    logSetting("Genre map", key, existing, next, by);
+    return { ok: true };
+  };
+
+  const removeMapRow: AppContextValue["removeMapRow"] = (tag, by) => {
+    const key = normaliseTag(tag);
+    const existing = s.genreMap.find((r) => normaliseTag(r.tag) === key);
+    if (!existing) return { ok: false, reason: `No map row for "${tag}".` };
+    // d9's deactivate-never-delete does NOT extend to map rows (A-59): a row
+    // is referenced by no history and is read only at adoption, so removing
+    // one removes nothing. Records already adopted under it keep their genre.
+    setS((prev) => ({ ...prev, genreMap: prev.genreMap.filter((r) => normaliseTag(r.tag) !== key) }));
+    logSetting("Genre map", key, existing, "(removed)", by);
+    return { ok: true };
+  };
+
+  // A-60 - merge repoints every dependent pointer rather than rewriting
+  // history, following M-01 d9's shape, and it is manager-only on d11's.
+  //
+  // THE MAP ROWS ARE THE HALF EASILY MISSED AND THE HALF THAT MATTERS: a merge
+  // that leaves them behind has the next adoption recreate the genre under the
+  // old tag, which is the problem returning by the door it came in.
+  const mergeGenres: AppContextValue["mergeGenres"] = (fromId, toId, by) => {
+    const from = s.genres.find((g) => g.id === fromId);
+    const to = s.genres.find((g) => g.id === toId);
+    const check = checkGenreMerge(from, to);
+    if (!check.ok) return check;
+
+    const records = s.records.filter((r) => r.genreId === fromId).length;
+    const nonTracked = s.nonTracked.filter((n) => n.genreId === fromId).length;
+    const mapRows = s.genreMap.filter((r) => r.genreId === fromId).length;
+
+    setS((prev) => ({
+      ...prev,
+      records: prev.records.map((r) => (r.genreId === fromId ? { ...r, genreId: toId } : r)),
+      nonTracked: prev.nonTracked.map((n) => (n.genreId === fromId ? { ...n, genreId: toId } : n)),
+      genreMap: prev.genreMap.map((r) => (r.genreId === fromId ? { ...r, genreId: toId } : r)),
+    }));
+
+    // One log row naming both genres and the COUNTS repointed, because the
+    // repointing is otherwise invisible and the count is the only thing that
+    // says how far the act reached (A-60).
+    logSetting(
+      "Genres",
+      `${from!.name} -> ${to!.name}`,
+      { genre: from!.name, records, nonTracked, mapRows },
+      { genre: to!.name, note: "merged; the emptied genre is now unreferenced and may be deleted" },
+      by,
+    );
+    return { ok: true };
+  };
 
   const upsertGenre: AppContextValue["upsertGenre"] = (row, by) => {
     // The rules live in lib/taxonomy so they can be exercised without a screen.
@@ -3651,6 +3744,10 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
       setStoreDetail,
       upsertSection,
       upsertGenre,
+      addMapRow,
+      updateMapRow,
+      removeMapRow,
+      mergeGenres,
       deleteGenre,
       genreUseCount,
       upsertTender,
