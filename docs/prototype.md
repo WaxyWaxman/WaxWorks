@@ -99,6 +99,14 @@ that is a separate question nobody has answered yet._
 
 - Mock data only; no persistence, no live catalog provider, no printing.
 - **Tax now follows M-06 d11** — two tables, resolved through a Genre’s product tax code. The Settings screen carries the types, the product codes and the group × code grid, and recomputes M-06’s own worked example live. **Still simplified:** d6’s genre map is not modelled (every seeded genre is a shop genre), non-tracked lines take the standard code rather than carrying their own genre (d17), and the GL account on a tax type is reserved and unread (d23, d11).
+- **A Record no longer stores a Section** ([M-06](flows/M-06-settings.md) d31, d32). It is derived
+  through the genre's required parent in `lib/taxonomy.ts`, so correcting a genre moves the
+  Record's shelf, its tax code and its *By Section* bucket in one act. Search matches a Section's
+  **code and its name** — `VI` and `VINYL` both find the nine vinyl Records. Manual catalog entry
+  picks a genre from the configured list instead of taking free text ([E-04](flows/E-04-manage-inventory.md)),
+  with the shop-internal genres omitted rather than gated (d19), and has no Section field at all.
+  **Still simplified:** non-tracked items carry a `section` rather than a genre (d17), which is why
+  the *By Section* bucket noted under Point of Sale below still exists.
 - **Manager-only authorisation resolves a real, active Manager** and asks for their password where they have one ([E-01](flows/E-01-authenticate.md) d21) — it is no longer *"initials-only with no real auth"*, which it was, and which meant the gate was satisfied by initials belonging to nobody. What it still is not, is authentication: a shop may set a one-letter password, and a Manager without one is through on their initials alone. The component is `ManagerAuthorize`, named after §6's `manager_authorize`; it was `ManagerOverride`, after a term the [lexicon](lexicon.md) retired.
 - Open questions in the flow docs are surfaced in the UI but not resolved.
 - **The Suppliers ledger's two figures do not visibly differ under seed data.** Received is cost

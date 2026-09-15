@@ -6,6 +6,7 @@ import { TillRail } from "../components/TillRail";
 import { VoidSaleModal } from "../components/VoidSaleModal";
 import type { InventoryItem, RecordEntry, Sale, SaleLine, TenderType } from "../data/types";
 import { money } from "../lib/money";
+import { sectionSearchTerms } from "../lib/taxonomy";
 import { resolveScan } from "../lib/resolve";
 import { availableOnHand, balanceDue, lineTaxComponents, saleTotals } from "../lib/totals";
 import { useApp } from "../store/AppStore";
@@ -759,11 +760,21 @@ function LookupModal({
   const results = useMemo(() => {
     if (!query) return [];
     const match = (r: RecordEntry) =>
-      [r.artist, r.title, r.label, r.catalogNo, r.genre, r.section, r.manufacturerUpc]
+      [
+        r.artist,
+        r.title,
+        r.label,
+        r.catalogNo,
+        r.genre,
+        // d31 — Section is no longer a field on the Record, so searching
+        // by it means resolving through the genre. Code and name both.
+        sectionSearchTerms(app.genres, app.sections, r.genre),
+        r.manufacturerUpc,
+      ]
         .filter(Boolean)
         .some((f) => String(f).toLowerCase().includes(query));
     return app.records.filter((r) => !r.catalogOnly && match(r));
-  }, [query, app.records]);
+  }, [query, app.records, app.genres, app.sections]);
 
   return (
     <Modal title="Lookup — add a line" onClose={onClose}>

@@ -20,7 +20,10 @@ export interface RecordEntry {
   year: number;
   country: string;
   genre: string;
-  section: Section;
+  // M-06 d31, d32 — the Record stores its GENRE and NOT its Section. Section
+  // is derived through the genre's required parent (see lib/taxonomy.ts);
+  // storing both was the same fact at two removes, and it drifted the moment
+  // a genre was remapped.
   art: string; // emoji stand-in for cover art
   manufacturerUpc?: string;
   discogsId?: string;

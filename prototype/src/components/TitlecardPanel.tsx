@@ -6,6 +6,7 @@ import { OrderModal } from "../components/OrderModal";
 import { ReserveModal } from "../components/ReserveModal";
 import type { InventoryItem } from "../data/types";
 import { money } from "../lib/money";
+import { sectionLabelFor } from "../lib/taxonomy";
 import { OversoldList } from "./OversoldList";
 import { stockFacts } from "../lib/stockState";
 import { availableOnHand, backroomCount, heldCount, oversoldCopies } from "../lib/totals";
@@ -107,7 +108,10 @@ export function TitlecardPanel({
                       <Row k="Label / cat. no." v={`${record.label} · ${record.catalogNo}`} />
                       <Row k="Format" v={record.format} />
                       <Row k="Year / country" v={`${record.year} · ${record.country}`} />
-                      <Row k="Genre / Section" v={`${record.genre} · ${record.section}`} />
+                      <Row
+                        k="Genre / Section"
+                        v={`${record.genre} · ${sectionLabelFor(app.genres, app.sections, record.genre)}`}
+                      />
                       <Row k="Manufacturer UPC" v={record.manufacturerUpc ?? "— (none on sleeve)"} />
                       <Row k="Catalog ID / sticky" v={`${record.discogsId ?? "—"} · ${record.stickyPrice ? money(record.stickyPrice) + " (New)" : "no sticky price"}`} />
                       <tr>

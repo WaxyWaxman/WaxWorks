@@ -5,6 +5,7 @@ import { ReceiveReconcile } from "../components/ReceiveReconcile";
 import { OutstandingPanel } from "../components/OutstandingPanel";
 import { ReceiveSlab } from "../components/ReceiveSlab";
 import { TitlecardPanel } from "../components/TitlecardPanel";
+import { sectionLabelFor } from "../lib/taxonomy";
 import {
   GRADES,
   type Grade,
@@ -13,7 +14,6 @@ import {
   type InvoiceLine,
   type PendingOrderLine,
   type RecordEntry,
-  type Section,
   type Supplier,
 } from "../data/types";
 import { readStored, writeStored } from "../lib/tillMemory";
@@ -1525,7 +1525,6 @@ function ManualEntryForm({ onCreate }: { onCreate: (rec: RecordEntry) => void })
   const [genre, setGenre] = useState("");
   const [catalogNo, setCatalogNo] = useState("");
   const [label, setLabel] = useState("");
-  const [section, setSection] = useState<Section>("VINYL");
 
   const ready = artist.trim() && title.trim() && genre.trim() && catalogNo.trim() && label.trim();
 
@@ -1552,15 +1551,23 @@ function ManualEntryForm({ onCreate }: { onCreate: (rec: RecordEntry) => void })
           <span>Catalog number</span>
           <input type="text" value={catalogNo} onChange={(e) => setCatalogNo(e.target.value)} />
         </label>
+        {/* E-04 — genre is constrained to configured values, never free text,
+            and M-06 d19 omits the shop-internal genres from the picker rather
+            than gating them, so `Freight` is unrepresentable here instead of
+            merely discouraged. There is no Section field: d31 and d32 derive
+            it from the genre's required parent, so choosing the genre has
+            already chosen the Section. */}
         <label className="field">
           <span>Genre</span>
-          <input type="text" value={genre} onChange={(e) => setGenre(e.target.value)} />
-        </label>
-        <label className="field">
-          <span>Section</span>
-          <select value={section} onChange={(e) => setSection(e.target.value as Section)}>
-            <option value="VINYL">VINYL</option>
-            <option value="MERCH">MERCH</option>
+          <select value={genre} onChange={(e) => setGenre(e.target.value)}>
+            <option value="">Choose a genre…</option>
+            {app.genres
+              .filter((g) => !g.internal)
+              .map((g) => (
+                <option key={g.name} value={g.name}>
+                  {g.name} · {sectionLabelFor(app.genres, app.sections, g.name)}
+                </option>
+              ))}
           </select>
         </label>
       </div>
@@ -1574,7 +1581,6 @@ function ManualEntryForm({ onCreate }: { onCreate: (rec: RecordEntry) => void })
             genre: genre.trim(),
             catalogNo: catalogNo.trim(),
             label: label.trim(),
-            section,
           });
           onCreate(app.recordFor(id)!);
         }}

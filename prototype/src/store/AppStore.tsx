@@ -69,7 +69,6 @@ import type {
   ReviewFlagKind,
   Sale,
   SaleLine,
-  Section,
   Supplier,
   User,
   UserRole,
@@ -852,7 +851,6 @@ interface AppContextValue extends AppState {
     genre: string;
     catalogNo: string;
     label: string;
-    section: Section;
   }) => string;
   addSupplier: (input: Omit<Supplier, "id" | "log">) => string;
   updateSupplier: (supplierId: string, patch: Partial<Omit<Supplier, "id" | "log">>) => void;
@@ -1967,13 +1965,13 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
   // M-03 — View Subtotal computes the same breakdown as a close without
   // touching anything; it's a pure read.
   const viewSubtotal: AppContextValue["viewSubtotal"] = () =>
-    computeDayBreakdown(s.sales, s.records, taxCtxFor(null), s.inventory);
+    computeDayBreakdown(s.sales, s.records, taxCtxFor(null), s.inventory, s.genres, s.sections);
 
   // Total Today's Sales — the close is a real state transition (M-03
   // decision 1): every Current Sale becomes Closed and stops being
   // editable, batched under one identifier so it can be undone as a unit.
   const totalTodaysSales: AppContextValue["totalTodaysSales"] = (by) => {
-    const breakdown = computeDayBreakdown(s.sales, s.records, taxCtxFor(null), s.inventory);
+    const breakdown = computeDayBreakdown(s.sales, s.records, taxCtxFor(null), s.inventory, s.genres, s.sections);
     const saleIds = s.sales.filter((sale) => sale.state === "Current" && !sale.isReturn).map((sale) => sale.id);
     const batchId = uid("batch");
     const batch: CloseBatch = { id: batchId, at: now(), by, saleIds };
@@ -2464,7 +2462,6 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
       year: new Date().getFullYear(),
       country: "—",
       genre: input.genre,
-      section: input.section,
       art: "💿",
       minOnHand: 0,
     };

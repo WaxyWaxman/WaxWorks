@@ -1,4 +1,5 @@
-import type { InventoryItem, RecordEntry, Sale } from "../data/types";
+import type { Genre, InventoryItem, RecordEntry, Sale, SectionRow } from "../data/types";
+import { sectionLabelFor } from "./taxonomy";
 import { lineNet, lineTaxComponents, onHand, round2, type TaxContext } from "./totals";
 
 // M-03 — the same breakdown backs both View Subtotal (read-only) and Total
@@ -35,6 +36,10 @@ export function computeDayBreakdown(
   records: RecordEntry[],
   taxCtx: TaxContext,
   inventory: InventoryItem[],
+  // M-06 d31 — a Record's Section is derived through its genre's required
+  // parent, so the breakdown needs the taxonomy rather than a field.
+  genres: Genre[],
+  sections: SectionRow[],
 ): DayBreakdown {
   // Returns belong in the close (M-03 d7, E-06 d8): a Return is a Current
   // transaction like any other, and excluding the document meant a $50 cash
@@ -65,7 +70,12 @@ export function computeDayBreakdown(
       const net = round2(lineNet(l));
       if (l.qty >= 0) grossSales += net;
       else returnsAmount += net;
-      const label = recordFor(l.recordId)?.section ?? "Non-tracked";
+      // d31 — derived, never stored. A genre that resolves to no Section
+      // buckets under the em dash rather than being filed somewhere
+      // plausible, so a taxonomy gap is visible in the one report that
+      // would otherwise hide it.
+      const rec = recordFor(l.recordId);
+      const label = rec ? sectionLabelFor(genres, sections, rec.genre) : "Non-tracked";
       sectionAmounts.set(label, round2((sectionAmounts.get(label) ?? 0) + net));
       // M-03 d13 reports per tax TYPE, and d15 splits by RATE where a period
       // spans a change — so the key is both. A normal period has one rate per

@@ -164,7 +164,6 @@ export const RECORDS: RecordEntry[] = [
     year: 1971,
     country: "US",
     genre: "Folk Rock",
-    section: "VINYL",
     art: "🔵",
     manufacturerUpc: "081227971609",
     discogsId: "155632",
@@ -180,7 +179,6 @@ export const RECORDS: RecordEntry[] = [
     year: 1977,
     country: "US",
     genre: "Pop Rock",
-    section: "VINYL",
     art: "🌗",
     manufacturerUpc: "075992751612",
     discogsId: "13756011",
@@ -197,7 +195,6 @@ export const RECORDS: RecordEntry[] = [
     year: 1959,
     country: "US",
     genre: "Modal Jazz",
-    section: "VINYL",
     art: "🎺",
     manufacturerUpc: "888751545519",
     discogsId: "281822",
@@ -213,7 +210,6 @@ export const RECORDS: RecordEntry[] = [
     year: 1984,
     country: "US",
     genre: "Funk / Pop",
-    section: "VINYL",
     art: "🟣",
     manufacturerUpc: "075992511018",
     discogsId: "384169",
@@ -230,7 +226,6 @@ export const RECORDS: RecordEntry[] = [
     year: 1994,
     country: "US",
     genre: "Hip Hop",
-    section: "VINYL",
     art: "🏙️",
     manufacturerUpc: "889854250515",
     discogsId: "63643",
@@ -246,7 +241,6 @@ export const RECORDS: RecordEntry[] = [
     year: 2026,
     country: "CA",
     genre: "Merch",
-    section: "MERCH",
     art: "👜",
     manufacturerUpc: "200000000017",
     minOnHand: 5,
@@ -265,7 +259,6 @@ export const RECORDS: RecordEntry[] = [
     year: 2004,
     country: "US",
     genre: "Hip Hop",
-    section: "VINYL",
     art: "🎭",
     manufacturerUpc: "659457206512",
     discogsId: "213144",
@@ -283,7 +276,6 @@ export const RECORDS: RecordEntry[] = [
     year: 1968,
     country: "US",
     genre: "Folk Rock",
-    section: "VINYL",
     art: "🌌",
     manufacturerUpc: "075992745215",
     discogsId: "1425988",
@@ -302,7 +294,6 @@ export const RECORDS: RecordEntry[] = [
     year: 1975,
     country: "US",
     genre: "Art Punk",
-    section: "VINYL",
     art: "🐎",
     manufacturerUpc: "060758004321",
     discogsId: "377464",
@@ -319,7 +310,6 @@ export const RECORDS: RecordEntry[] = [
     year: 1997,
     country: "UK",
     genre: "Alt Rock",
-    section: "VINYL",
     art: "💻",
     discogsId: "1092149",
     minOnHand: 0,
@@ -494,14 +484,14 @@ export const MANAGER_NAME = `${seedManager.name} (${seedManager.role})`;
 // with no Sections and no tenders.
 
 export const SECTIONS: SectionRow[] = [
-  { code: "VI", name: "Vinyl", countsAsRevenue: true, tracksStockDefault: true, discountable: true, returnable: true, active: true },
-  { code: "ME", name: "Merch", countsAsRevenue: true, tracksStockDefault: true, discountable: true, returnable: true, active: true },
+  { code: "VI", name: "VINYL", countsAsRevenue: true, tracksStockDefault: true, discountable: true, returnable: true, active: true },
+  { code: "ME", name: "MERCH", countsAsRevenue: true, tracksStockDefault: true, discountable: true, returnable: true, active: true },
   // d20 — one Section each for freight and gift cards, split because one is
   // revenue and the other a liability. d30 makes the gift card Section
   // discountable:false and returnable:false — a load discounted 10% is a
   // straight loss, and one returned is a cash-out dressed as a refund.
-  { code: "FR", name: "Freight", countsAsRevenue: false, tracksStockDefault: false, discountable: true, returnable: false, active: true, systemOwned: true },
-  { code: "GC", name: "Gift cards", countsAsRevenue: false, tracksStockDefault: false, discountable: false, returnable: false, active: true, systemOwned: true },
+  { code: "FR", name: "FREIGHT", countsAsRevenue: false, tracksStockDefault: false, discountable: true, returnable: false, active: true, systemOwned: true },
+  { code: "GC", name: "GIFT CARDS", countsAsRevenue: false, tracksStockDefault: false, discountable: false, returnable: false, active: true, systemOwned: true },
 ];
 
 export const TENDERS: TenderRow[] = [
