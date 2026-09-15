@@ -1,4 +1,5 @@
 import type {
+  GenreMapRow,
   Customer,
   GiftCard,
   InventoryItem,
@@ -347,6 +348,35 @@ export const INVENTORY: InventoryItem[] = [
 // d18 — the gift card load's catalog entry is SYSTEM-OWNED: its genre and
 // code are not editable and it is not deletable. Named here so the seed and
 // the money path cannot disagree about which genre a load resolves through.
+// M-06 d6, d32 / A-53 — the starter genre map, shipped in the seed because
+// A-53 lands `genre_map` with the migration. Without it a shop's first receive
+// is hundreds of prompts rather than a handful, which is the whole reason the
+// cost curve d53 assumes actually decays.
+//
+// Provider tag -> shop genre, and nothing else. Shop-internal genres carry NO
+// rows (d17): nothing MusicBrainz returns should ever map onto `Gift cards`.
+//
+// Priority is manager-only (A-59) and defaults to 0, which means "fall back to
+// the provider's vote order". `shoegaze` carries one deliberately, as the
+// worked case: a release tagged both `rock` (heavily voted, mapped to Alt
+// Rock) and `shoegaze` (barely voted) lands in Alt Rock on votes alone, and
+// priority is how a shop that shelves shoegaze separately says otherwise.
+export const GENRE_MAP: GenreMapRow[] = [
+  { tag: "rock", genreId: "gn-alt-rock", priority: 0 },
+  { tag: "alternative rock", genreId: "gn-alt-rock", priority: 0 },
+  { tag: "art punk", genreId: "gn-art-punk", priority: 0 },
+  { tag: "post-punk", genreId: "gn-art-punk", priority: 0 },
+  { tag: "folk rock", genreId: "gn-folk-rock", priority: 0 },
+  { tag: "folk", genreId: "gn-folk-rock", priority: 0 },
+  { tag: "funk", genreId: "gn-funk-pop", priority: 0 },
+  { tag: "pop", genreId: "gn-funk-pop", priority: 0 },
+  { tag: "hip hop", genreId: "gn-hip-hop", priority: 0 },
+  { tag: "jazz", genreId: "gn-modal-jazz", priority: 0 },
+  { tag: "modal jazz", genreId: "gn-modal-jazz", priority: 0 },
+  { tag: "pop rock", genreId: "gn-pop-rock", priority: 0 },
+  { tag: "shoegaze", genreId: "gn-art-punk", priority: 10 },
+];
+
 export const GIFT_CARD_GENRE_ID = "gn-gift-card";
 
 export const NON_TRACKED: NonTrackedItem[] = [
@@ -686,5 +716,13 @@ export const GENRES: Genre[] = [
   // gated, so a Record can never be set to one by accident.
   { id: "gn-freight", name: "Freight", section: "FR", productTaxCode: "1", active: true, internal: true },
   { id: "gn-services", name: "Services", section: "FR", productTaxCode: "1", active: true, internal: true },
-  { id: "gn-gift-card", name: "Gift card", section: "GC", productTaxCode: "2", active: true, internal: true },
+  {
+    id: "gn-gift-card",
+    name: "Gift card",
+    section: "GC",
+    productTaxCode: "2",
+    active: true,
+    internal: true,
+    systemOwned: true,
+  },
 ];
