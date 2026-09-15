@@ -7,7 +7,7 @@ import type { RecordEntry } from "../data/types";
 import { readStored, writeStored } from "../lib/tillMemory";
 import { resolveScan } from "../lib/resolve";
 import { money } from "../lib/money";
-import { sectionSearchTerms } from "../lib/taxonomy";
+import { genreNameFor, sectionSearchTerms } from "../lib/taxonomy";
 import { stockFacts, stockRank, type StockState } from "../lib/stockState";
 import { useApp } from "../store/AppStore";
 
@@ -65,8 +65,8 @@ export function Search() {
         r.title,
         r.label,
         r.catalogNo,
-        r.genre,
-        sectionSearchTerms(app.genres, app.sections, r.genre),
+        genreNameFor(app.genres, r.genreId),
+        sectionSearchTerms(app.genres, app.sections, r.genreId),
         r.manufacturerUpc,
       ];
       if (fields.filter(Boolean).some((f) => String(f).toLowerCase().includes(q))) return true;

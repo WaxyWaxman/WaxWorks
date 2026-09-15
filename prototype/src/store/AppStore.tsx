@@ -848,7 +848,7 @@ interface AppContextValue extends AppState {
   createRecordManual: (input: {
     artist: string;
     title: string;
-    genre: string;
+    genreId: string;
     catalogNo: string;
     label: string;
   }) => string;
@@ -1249,7 +1249,11 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
   // charging no tax would be the worse failure.
   const productTaxCodeForRecord: AppContextValue["productTaxCodeForRecord"] = (recordId) => {
     const rec = s.records.find((r) => r.id === recordId);
-    const g = s.genres.find((x) => x.name === rec?.genre);
+    // By id, and with no `active` filter: d9's deactivation stops a Genre
+    // being offered, not being resolved. A Record under a retired genre
+    // must keep its product tax code, or retiring a genre silently changes
+    // what its stock is taxed at.
+    const g = s.genres.find((x) => x.id === rec?.genreId);
     return g?.productTaxCode ?? "1";
   };
 
@@ -2461,7 +2465,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
       format: "—",
       year: new Date().getFullYear(),
       country: "—",
-      genre: input.genre,
+      genreId: input.genreId,
       art: "💿",
       minOnHand: 0,
     };

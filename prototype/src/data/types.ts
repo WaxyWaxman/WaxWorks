@@ -19,7 +19,8 @@ export interface RecordEntry {
   format: string;
   year: number;
   country: string;
-  genre: string;
+  // The genre's stable id, never its name (see Genre below).
+  genreId: string;
   // M-06 d31, d32 — the Record stores its GENRE and NOT its Section. Section
   // is derived through the genre's required parent (see lib/taxonomy.ts);
   // storing both was the same fact at two removes, and it drifted the moment
@@ -881,9 +882,22 @@ export interface TaxGroupCell {
 // non-tracked ones, which is what closes the "what tax does freight pay"
 // question without a special case.
 export interface Genre {
+  // A STABLE KEY, not the name. A Record points at this; the name is a label a
+  // Manager may correct. Joining by name meant renaming `Metal` orphaned every
+  // Record under it at once — Section fell to the em dash and, worse, the tax
+  // code fell back to the standard one silently (d12 puts the product tax code
+  // on the genre). It also made architecture A-60's merge unrepresentable:
+  // merge is specified as REPOINTING every dependent pointer, and a name join
+  // has no pointer to repoint. Architecture §5 models genres as rows with
+  // id-shaped references, so this is the prototype catching up.
+  id: string;
   name: string;
   section: string; // Section code — mandatory (d32)
   productTaxCode: string; // mandatory (d12, d17)
+  // d9 — a referenced Genre is deactivated, never deleted. Off stops it being
+  // OFFERED; it does not stop it RESOLVING, or a Record under a retired genre
+  // would silently change what tax it attracts.
+  active: boolean;
   // d17 — shop-internal genres are omitted from the picker rather than gated,
   // so setting a Record's genre to Freight is unrepresentable (d19).
   internal?: boolean;

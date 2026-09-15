@@ -16,9 +16,29 @@ import type { Genre, SectionRow } from "../data/types";
 // path — tax resolves through the genre's product tax code (d12), not through
 // the Section.
 
-export function genreFor(genres: Genre[], name: string | undefined): Genre | undefined {
-  if (!name) return undefined;
-  return genres.find((g) => g.name === name);
+// By ID. A Record points at the genre's stable key, never at its label, so a
+// Manager renaming `Metal` moves nothing beneath it.
+//
+// Deliberately does NOT filter on `active`. d9 deactivates a referenced Genre
+// rather than deleting it, and "off" means it stops being OFFERED — a Record
+// already under a retired genre must keep resolving, or its Section falls to
+// the em dash and its product tax code falls back to the standard one. The
+// pickers filter; the resolvers do not.
+export function genreFor(genres: Genre[], genreId: string | undefined): Genre | undefined {
+  if (!genreId) return undefined;
+  return genres.find((g) => g.id === genreId);
+}
+
+// The label a screen shows for a Record's genre.
+export function genreNameFor(genres: Genre[], genreId: string | undefined): string {
+  return genreFor(genres, genreId)?.name ?? "—";
+}
+
+// What a picker offers: active, and never the shop-internal genres, which d19
+// omits rather than gates so `Freight` is unrepresentable instead of merely
+// discouraged.
+export function selectableGenres(genres: Genre[]): Genre[] {
+  return genres.filter((g) => g.active && !g.internal);
 }
 
 // The Section code a genre rolls up into, or `undefined` when the genre is not
@@ -31,16 +51,16 @@ export function genreFor(genres: Genre[], name: string | undefined): Genre | und
 // genre there falls back to the standard code, because charging no tax is a
 // worse failure than charging the wrong one. Here there is no equivalent
 // danger, so the gap is shown.
-export function sectionCodeFor(genres: Genre[], genreName: string | undefined): string | undefined {
-  return genreFor(genres, genreName)?.section;
+export function sectionCodeFor(genres: Genre[], genreId: string | undefined): string | undefined {
+  return genreFor(genres, genreId)?.section;
 }
 
 export function sectionRowFor(
   genres: Genre[],
   sections: SectionRow[],
-  genreName: string | undefined,
+  genreId: string | undefined,
 ): SectionRow | undefined {
-  const code = sectionCodeFor(genres, genreName);
+  const code = sectionCodeFor(genres, genreId);
   return code ? sections.find((s) => s.code === code) : undefined;
 }
 
@@ -55,9 +75,9 @@ export function sectionRowFor(
 export function sectionLabelFor(
   genres: Genre[],
   sections: SectionRow[],
-  genreName: string | undefined,
+  genreId: string | undefined,
 ): string {
-  return sectionRowFor(genres, sections, genreName)?.name ?? "—";
+  return sectionRowFor(genres, sections, genreId)?.name ?? "—";
 }
 
 // What a Section search should match: the code and the name both, since one is
@@ -65,8 +85,8 @@ export function sectionLabelFor(
 export function sectionSearchTerms(
   genres: Genre[],
   sections: SectionRow[],
-  genreName: string | undefined,
+  genreId: string | undefined,
 ): string {
-  const row = sectionRowFor(genres, sections, genreName);
+  const row = sectionRowFor(genres, sections, genreId);
   return row ? `${row.code} ${row.name}` : "";
 }

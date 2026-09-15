@@ -105,6 +105,11 @@ that is a separate question nobody has answered yet._
   **code and its name** — `VI` and `VINYL` both find the nine vinyl Records. Manual catalog entry
   picks a genre from the configured list instead of taking free text ([E-04](flows/E-04-manage-inventory.md)),
   with the shop-internal genres omitted rather than gated (d19), and has no Section field at all.
+  Genres carry a **stable id** and an **active** flag (d9): a Record points at the genre rather
+  than at its label, so renaming one moves nothing beneath it, and architecture A-60's merge has a
+  real pointer to repoint rather than a string to sweep. The pickers filter on `active`; the
+  **resolvers deliberately do not** — deactivating a genre stops it being offered, and a Record
+  already under a retired genre must keep resolving or its product tax code silently changes.
   **Still simplified:** non-tracked items carry a `section` rather than a genre (d17), which is why
   the *By Section* bucket noted under Point of Sale below still exists.
 - **Manager-only authorisation resolves a real, active Manager** and asks for their password where they have one ([E-01](flows/E-01-authenticate.md) d21) — it is no longer *"initials-only with no real auth"*, which it was, and which meant the gate was satisfied by initials belonging to nobody. What it still is not, is authentication: a shop may set a one-letter password, and a Manager without one is through on their initials alone. The component is `ManagerAuthorize`, named after §6's `manager_authorize`; it was `ManagerOverride`, after a term the [lexicon](lexicon.md) retired.

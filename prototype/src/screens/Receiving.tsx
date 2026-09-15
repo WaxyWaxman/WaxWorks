@@ -5,7 +5,7 @@ import { ReceiveReconcile } from "../components/ReceiveReconcile";
 import { OutstandingPanel } from "../components/OutstandingPanel";
 import { ReceiveSlab } from "../components/ReceiveSlab";
 import { TitlecardPanel } from "../components/TitlecardPanel";
-import { sectionLabelFor } from "../lib/taxonomy";
+import { sectionLabelFor, selectableGenres } from "../lib/taxonomy";
 import {
   GRADES,
   type Grade,
@@ -1522,11 +1522,11 @@ function ManualEntryForm({ onCreate }: { onCreate: (rec: RecordEntry) => void })
   const app = useApp();
   const [artist, setArtist] = useState("");
   const [title, setTitle] = useState("");
-  const [genre, setGenre] = useState("");
+  const [genreId, setGenreId] = useState("");
   const [catalogNo, setCatalogNo] = useState("");
   const [label, setLabel] = useState("");
 
-  const ready = artist.trim() && title.trim() && genre.trim() && catalogNo.trim() && label.trim();
+  const ready = artist.trim() && title.trim() && genreId && catalogNo.trim() && label.trim();
 
   return (
     <div className="stack">
@@ -1559,15 +1559,13 @@ function ManualEntryForm({ onCreate }: { onCreate: (rec: RecordEntry) => void })
             already chosen the Section. */}
         <label className="field">
           <span>Genre</span>
-          <select value={genre} onChange={(e) => setGenre(e.target.value)}>
+          <select value={genreId} onChange={(e) => setGenreId(e.target.value)}>
             <option value="">Choose a genre…</option>
-            {app.genres
-              .filter((g) => !g.internal)
-              .map((g) => (
-                <option key={g.name} value={g.name}>
-                  {g.name} · {sectionLabelFor(app.genres, app.sections, g.name)}
-                </option>
-              ))}
+            {selectableGenres(app.genres).map((g) => (
+              <option key={g.id} value={g.id}>
+                {g.name} · {sectionLabelFor(app.genres, app.sections, g.id)}
+              </option>
+            ))}
           </select>
         </label>
       </div>
@@ -1578,7 +1576,7 @@ function ManualEntryForm({ onCreate }: { onCreate: (rec: RecordEntry) => void })
           const id = app.createRecordManual({
             artist: artist.trim(),
             title: title.trim(),
-            genre: genre.trim(),
+            genreId,
             catalogNo: catalogNo.trim(),
             label: label.trim(),
           });

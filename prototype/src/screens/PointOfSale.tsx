@@ -6,7 +6,7 @@ import { TillRail } from "../components/TillRail";
 import { VoidSaleModal } from "../components/VoidSaleModal";
 import type { InventoryItem, RecordEntry, Sale, SaleLine, TenderType } from "../data/types";
 import { money } from "../lib/money";
-import { sectionSearchTerms } from "../lib/taxonomy";
+import { genreNameFor, sectionSearchTerms } from "../lib/taxonomy";
 import { resolveScan } from "../lib/resolve";
 import { availableOnHand, balanceDue, lineTaxComponents, saleTotals } from "../lib/totals";
 import { useApp } from "../store/AppStore";
@@ -765,10 +765,10 @@ function LookupModal({
         r.title,
         r.label,
         r.catalogNo,
-        r.genre,
+        genreNameFor(app.genres, r.genreId),
         // d31 — Section is no longer a field on the Record, so searching
         // by it means resolving through the genre. Code and name both.
-        sectionSearchTerms(app.genres, app.sections, r.genre),
+        sectionSearchTerms(app.genres, app.sections, r.genreId),
         r.manufacturerUpc,
       ]
         .filter(Boolean)
@@ -797,7 +797,7 @@ function LookupModal({
                     <td colSpan={3}>
                       {r.artist} — {r.title}
                       <div className="xsmall muted">
-                        {r.label} · {r.catalogNo} · {r.genre}
+                        {r.label} · {r.catalogNo} · {genreNameFor(app.genres, r.genreId)}
                       </div>
                     </td>
                   </tr>

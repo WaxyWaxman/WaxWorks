@@ -75,7 +75,7 @@ export function computeDayBreakdown(
       // plausible, so a taxonomy gap is visible in the one report that
       // would otherwise hide it.
       const rec = recordFor(l.recordId);
-      const label = rec ? sectionLabelFor(genres, sections, rec.genre) : "Non-tracked";
+      const label = rec ? sectionLabelFor(genres, sections, rec.genreId) : "Non-tracked";
       sectionAmounts.set(label, round2((sectionAmounts.get(label) ?? 0) + net));
       // M-03 d13 reports per tax TYPE, and d15 splits by RATE where a period
       // spans a change — so the key is both. A normal period has one rate per
