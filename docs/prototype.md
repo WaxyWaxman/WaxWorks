@@ -23,6 +23,15 @@ npm --prefix prototype run dev      # http://localhost:5273
 
 Start on the **Flow map**; it carries a suggested review path.
 
+```bash
+npm --prefix prototype test       # vitest, pure functions only
+```
+
+The money path and the taxonomy are covered by tests rather than by clicking: the Section
+derivation and its gap behaviour, genre identity surviving a rename, a deactivated genre still
+**resolving** while no longer being **offered**, *By Section* for both line kinds, d20's revenue
+flag, and a gift card load resolving to an out-of-scope tax code.
+
 ## Flow ↔ screen map
 
 | Flow | Status in docs | Prototype screen | Notes |
@@ -98,7 +107,7 @@ that is a separate question nobody has answered yet._
 ## Known simplifications
 
 - Mock data only; no persistence, no live catalog provider, no printing.
-- **Tax now follows M-06 d11** — two tables, resolved through a Genre’s product tax code. The Settings screen carries the types, the product codes and the group × code grid, and recomputes M-06’s own worked example live. **Still simplified:** d6’s genre map is not modelled (every seeded genre is a shop genre), non-tracked lines take the standard code rather than carrying their own genre (d17), and the GL account on a tax type is reserved and unread (d23, d11).
+- **Tax now follows M-06 d11** — two tables, resolved through a Genre’s product tax code. The Settings screen carries the types, the product codes and the group × code grid, and recomputes M-06’s own worked example live. **Still simplified:** d6’s genre map is not modelled (every seeded genre is a shop genre) and the GL account on a tax type is reserved and unread (d23, d11). **Closed since:** non-tracked entries now carry a genre and resolve tax through it like everything else (d17), and a gift card load resolves through its own system-owned entry (d18) — it carried a hardcoded standard code and was being taxed at 14.975% in Quebec on money the shop had merely received.
 - **A Record no longer stores a Section** ([M-06](flows/M-06-settings.md) d31, d32). It is derived
   through the genre's required parent in `lib/taxonomy.ts`, so correcting a genre moves the
   Record's shelf, its tax code and its *By Section* bucket in one act. Search matches a Section's
@@ -135,9 +144,10 @@ that is a separate question nobody has answered yet._
   function — every field, account number included, is a live input on the open card; New and
   Delete are the only explicit actions. History lists sold items only, not Returns.
 - Point of Sale (E-05, renamed from "Sell") folds in M-03's close for the first time in this
-  build. The day-breakdown's "By Section" only resolves a Section for item lines with a matching
-  Record — non-tracked and gift-card lines land in a generic bucket rather than their real Section,
-  since a SaleLine doesn't carry one directly. Movements (voids/holds) are scoped to everything in
+  build. The day-breakdown's "By Section" resolves **every** line through a genre now — item lines via
+  their Record, non-tracked lines via the genre on the line — so the generic bucket is gone, and a
+  Section flagged `countsAsRevenue: false` is kept out of the breakdown (d20) rather than gift cards
+  being special-cased. Movements (voids/holds) are scoped to everything in
   memory, not "since the last close" — this prototype has no persistence across sessions to track
   that boundary. Copy never carries over the specific InventoryItem (the source's copy may still be
   sold); Edit on a Current Sale does, since voiding the original returns it to sellable first.

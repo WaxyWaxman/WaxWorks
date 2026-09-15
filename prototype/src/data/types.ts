@@ -116,11 +116,16 @@ export interface Supplier {
   log: { at: string; text: string }[];
 }
 
+// M-06 d17 — freight, services and bulk goods are REAL CATALOG ENTRIES
+// carrying a genre, not a separate type with a Section. That is what makes
+// tax resolution have no special case: every sellable thing reaches the
+// till through catalog entry → genre → product tax code → taxes, one path.
+// Section is derived from the genre's parent like anything else (d31).
 export interface NonTrackedItem {
   code: string; // e.g. FREIGHT
   label: string;
   price: number; // 0 => prompt at till
-  section: Section;
+  genreId: string;
 }
 
 export interface GiftCard {
@@ -197,6 +202,15 @@ export interface SaleLine {
   // the line when it is added, because that is a fact about what was sold and
   // is fixed the moment it goes in the basket (A-57).
   productTaxCode: string;
+  // The genre the line resolved through, kept as a POINTER rather than a
+  // copy. It is what M-03's *By Section* reads, and it must stay live:
+  // architecture A-60 has merging a genre re-bucket every Record under it
+  // at once, which a snapshotted Section could not do. Contrast
+  // `productTaxCode` directly above, which is deliberately a snapshot —
+  // what was charged is a fact, where which shelf it belongs on is not.
+  // Item lines carry it via `recordId`; non-tracked and gift-card lines
+  // carry it here, since they have no Record in this prototype.
+  genreId?: string;
   // A-57 — the tax SNAPSHOT: the tax types resolved and the rates applied,
   // never a reference to a configuration row. Taken at TENDER, not at line-add,
   // because what was collected is not a fact until something is collected.

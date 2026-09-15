@@ -344,10 +344,18 @@ export const INVENTORY: InventoryItem[] = [
 ];
 
 // ---- Non-tracked catalog items (E-05) ----
+// d18 — the gift card load's catalog entry is SYSTEM-OWNED: its genre and
+// code are not editable and it is not deletable. Named here so the seed and
+// the money path cannot disagree about which genre a load resolves through.
+export const GIFT_CARD_GENRE_ID = "gn-gift-card";
+
 export const NON_TRACKED: NonTrackedItem[] = [
-  { code: "FREIGHT", label: "Shipping / freight", price: 0, section: "MERCH" },
-  { code: "STICKER", label: "Wax Works sticker", price: 2, section: "MERCH" },
-  { code: "SERVICE-CLEAN", label: "Record cleaning (per disc)", price: 5, section: "MERCH" },
+  // d17 — each carries a genre, and its Section follows from that genre's
+  // required parent (d32). Freight and services roll up into FREIGHT, which
+  // d20 makes a REVENUE Section; only gift cards are a liability.
+  { code: "FREIGHT", label: "Shipping / freight", price: 0, genreId: "gn-freight" },
+  { code: "STICKER", label: "Wax Works sticker", price: 2, genreId: "gn-merch" },
+  { code: "SERVICE-CLEAN", label: "Record cleaning (per disc)", price: 5, genreId: "gn-services" },
 ];
 
 // ---- Gift cards ----
@@ -490,7 +498,7 @@ export const SECTIONS: SectionRow[] = [
   // revenue and the other a liability. d30 makes the gift card Section
   // discountable:false and returnable:false — a load discounted 10% is a
   // straight loss, and one returned is a cash-out dressed as a refund.
-  { code: "FR", name: "FREIGHT", countsAsRevenue: false, tracksStockDefault: false, discountable: true, returnable: false, active: true, systemOwned: true },
+  { code: "FR", name: "FREIGHT", countsAsRevenue: true, tracksStockDefault: false, discountable: true, returnable: false, active: true, systemOwned: true },
   { code: "GC", name: "GIFT CARDS", countsAsRevenue: false, tracksStockDefault: false, discountable: false, returnable: false, active: true, systemOwned: true },
 ];
 
@@ -677,5 +685,6 @@ export const GENRES: Genre[] = [
   // d17, d19 — shop-internal genres are omitted from the picker rather than
   // gated, so a Record can never be set to one by accident.
   { id: "gn-freight", name: "Freight", section: "FR", productTaxCode: "1", active: true, internal: true },
+  { id: "gn-services", name: "Services", section: "FR", productTaxCode: "1", active: true, internal: true },
   { id: "gn-gift-card", name: "Gift card", section: "GC", productTaxCode: "2", active: true, internal: true },
 ];

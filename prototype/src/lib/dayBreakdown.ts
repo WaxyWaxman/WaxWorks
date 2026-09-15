@@ -1,5 +1,5 @@
 import type { Genre, InventoryItem, RecordEntry, Sale, SectionRow } from "../data/types";
-import { sectionLabelFor } from "./taxonomy";
+import { sectionRowFor } from "./taxonomy";
 import { lineNet, lineTaxComponents, onHand, round2, type TaxContext } from "./totals";
 
 // M-03 — the same breakdown backs both View Subtotal (read-only) and Total
@@ -70,13 +70,21 @@ export function computeDayBreakdown(
       const net = round2(lineNet(l));
       if (l.qty >= 0) grossSales += net;
       else returnsAmount += net;
-      // d31 — derived, never stored. A genre that resolves to no Section
-      // buckets under the em dash rather than being filed somewhere
-      // plausible, so a taxonomy gap is visible in the one report that
-      // would otherwise hide it.
-      const rec = recordFor(l.recordId);
-      const label = rec ? sectionLabelFor(genres, sections, rec.genreId) : "Non-tracked";
-      sectionAmounts.set(label, round2((sectionAmounts.get(label) ?? 0) + net));
+      // d17, d31 — every sellable thing carries a genre, so both kinds of
+      // line resolve the same way and there is no generic bucket left: an
+      // item line through its Record, a non-tracked line through the genre
+      // on the line itself. A genre that resolves to no Section buckets
+      // under the em dash rather than being filed somewhere plausible, so a
+      // taxonomy gap stays visible in the one report that would hide it.
+      const genreId = l.kind === "item" ? recordFor(l.recordId)?.genreId : l.genreId;
+      const section = sectionRowFor(genres, sections, genreId);
+      // d20 — whether a Section enters revenue reporting is a property of
+      // the Section, not a special case hard-coded for gift cards. Off keeps
+      // it out of *By Section* entirely.
+      if (section?.countsAsRevenue !== false) {
+        const label = section?.name ?? "—";
+        sectionAmounts.set(label, round2((sectionAmounts.get(label) ?? 0) + net));
+      }
       // M-03 d13 reports per tax TYPE, and d15 splits by RATE where a period
       // spans a change — so the key is both. A normal period has one rate per
       // type and reads exactly as it did; the split appears only when more

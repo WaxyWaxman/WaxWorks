@@ -22,6 +22,7 @@ import {
 import {
   CURRENT_USER,
   CUSTOMERS,
+  GIFT_CARD_GENRE_ID,
   GIFT_CARDS,
   INVENTORY,
   MANAGER_NAME,
@@ -1247,6 +1248,16 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
   // table resolves to the standard code rather than to nothing: an unmapped
   // genre is a data problem (d6's map is what fixes it), and silently
   // charging no tax would be the worse failure.
+  // d12, d17 — one resolver, because every sellable thing reaches tax the
+  // same way. An unresolvable genre falls back to the standard code rather
+  // than to nothing: charging no tax is a worse failure than charging the
+  // wrong tax, which is the opposite call from Section (see lib/taxonomy).
+  const productTaxCodeForGenre = (genreId: string | undefined): string => {
+    // No `active` filter: d9's deactivation stops a Genre being offered,
+    // not resolved.
+    return s.genres.find((x) => x.id === genreId)?.productTaxCode ?? "1";
+  };
+
   const productTaxCodeForRecord: AppContextValue["productTaxCodeForRecord"] = (recordId) => {
     const rec = s.records.find((r) => r.id === recordId);
     // By id, and with no `active` filter: d9's deactivation stops a Genre
@@ -1605,9 +1616,10 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
         kind: "nontracked",
         // d17 — genre is mandatory on every sellable thing INCLUDING
         // non-tracked ones, which is how freight and services resolve tax
-        // with no special case. The prototype's non-tracked catalog carries
-        // no genre yet, so these take the standard code.
-        productTaxCode: "1",
+        // with no special case. Resolved through the entry's genre like
+        // any other line; there is no longer a hardcoded code here.
+        productTaxCode: productTaxCodeForGenre(nt.genreId),
+        genreId: nt.genreId,
         title: `${nt.label} (${nt.code})`,
         qty: 1,
         price,
@@ -1639,7 +1651,13 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
           qty: 1,
           price: value,
           discountPct: 0,
-          productTaxCode: "1",
+          // d18 — a gift card load is a system-owned non-tracked catalog
+          // entry, so it resolves through the `Gift card` genre like every
+          // other line. That genre carries product tax code `2`, which is
+          // out of scope in every group (d15) — a load was being taxed at
+          // the standard rate while this said `1`.
+          productTaxCode: productTaxCodeForGenre(GIFT_CARD_GENRE_ID),
+          genreId: GIFT_CARD_GENRE_ID,
           note: "Loading a gift card is a line item (money in)",
         },
       ],

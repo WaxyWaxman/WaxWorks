@@ -92,7 +92,7 @@ function SaleEditor() {
 
   const [picker, setPicker] = useState<{ record: RecordEntry; items: InventoryItem[] } | null>(null);
   const [negPrompt, setNegPrompt] = useState<RecordEntry | null>(null);
-  const [ntPrompt, setNtPrompt] = useState<{ code: string; label: string; price: number } | null>(null);
+  const [ntPrompt, setNtPrompt] = useState<{ code: string; label: string; price: number; genreId: string } | null>(null);
   const [gcLoad, setGcLoad] = useState<string | null>(null);
   const [gcRedeem, setGcRedeem] = useState<{ code: string; balance: number } | null>(null);
   // The slab offers all six tender types directly, so opening the modal
@@ -128,7 +128,7 @@ function SaleEditor() {
         else setPicker({ record: res.record, items: res.items });
         break;
       case "nontracked":
-        if (res.item.price === 0) setNtPrompt({ code: res.item.code, label: res.item.label, price: 0 });
+        if (res.item.price === 0) setNtPrompt({ code: res.item.code, label: res.item.label, price: 0, genreId: res.item.genreId });
         else app.addNonTrackedLine(sale.id, res.item, res.item.price);
         break;
       case "giftcard":
@@ -538,7 +538,7 @@ function SaleEditor() {
           defaultValue={0}
           onCancel={() => setNtPrompt(null)}
           onConfirm={(p) => {
-            app.addNonTrackedLine(sale.id, { code: ntPrompt.code, label: ntPrompt.label, price: p, section: "MERCH" }, p);
+            app.addNonTrackedLine(sale.id, { code: ntPrompt.code, label: ntPrompt.label, price: p, genreId: ntPrompt.genreId }, p);
             setNtPrompt(null);
           }}
         />
