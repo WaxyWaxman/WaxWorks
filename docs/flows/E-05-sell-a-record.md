@@ -177,6 +177,17 @@ Held copies count against **available** stock but remain on hand.
 
 - **A Held Sale is reachable from the Customer's card**, which shows its hold reference and age and offers to open it *ahead of* attaching the Customer to a Sale in flight ([E-07](E-07-manage-customers.md) d19, d20). The hold reference and the timeline's age are read there, so changing either changes what that screen can say.
 
+**From [M-06](M-06-settings.md):**
+
+- **Tax is resolved from two axes, not by an override.** The Customer's tax group (or, with no Customer, the store's default tax group), the Genre's product tax code, and then the (group, code) cell. **Supersedes step 8's "the Customer's default tax line overrides the item's"** ([M-06](M-06-settings.md) d14).
+- **What a Sale line snapshots changes shape.** Not a reference to a tax line, but the tax types resolved and the rates applied, so M-06 d8's never-retroactive rule survives a later rate change.
+- **A gift card load is a system-owned non-tracked catalog entry** ([M-06](M-06-settings.md) d18), not the bare line kind it is today. Decision 10 is unchanged — loading is a line item, redeeming is a tender — but the line item now has a catalog entry behind it, which is what gives it a genre and therefore a tax code.
+- **Non-tracked items carry a genre** like every other sellable thing ([M-06](M-06-settings.md) d17).
+- **A cash tender rounds to the nearest five cents, applied by the last tender on the Sale** ([M-06](M-06-settings.md) d21); every other tender settles exact. The Sale total, its lines and its tax are unchanged — the rounding is a property of how the money was taken. A `$34.48` Sale takes `$34.50` in cash, or `$12.13` on debit plus `$22.35` cash with nothing rounded. **The difference is carried by a system-written `rounding` tender** ([M-06](M-06-settings.md) d26) — `−$0.02` here — so the Sale's tenders still sum to its total. It is never a button and no Employee selects it, which means this flow's tender list and its tender *buttons* are no longer the same list.
+- **A line in a Section flagged `discountable = false` refuses a till discount** ([M-06](M-06-settings.md) d30). This is **not** a gate and does not amend decision 12 — Employees keep below-cost discounting everywhere else. It is a property of what is being sold: discounting a gift card load is a straight loss with nothing to flag.
+- **Sections are an editable table** ([M-06](M-06-settings.md) d28), so `VINYL` and `MERCH` are data rather than the whole list.
+- **The till's tender list is configured, and several tenders may share one behavior** ([M-06](M-06-settings.md) d22, d23) — `Visa` and `Amex` are two `card` tenders. A tender may be switched off, and carries no reference field (d24).
+
 ---
 
 ## Resolved decisions

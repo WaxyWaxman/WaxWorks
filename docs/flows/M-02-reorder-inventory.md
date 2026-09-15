@@ -120,6 +120,11 @@ Below the pending streams, previously placed PurchaseOrders are listed most-rece
 
 - **A customer-attached line's status is read on the Customer's card**, which lists their open lines with the status set here — Pending and Ordered derived from whether a PO number exists, Shipped with the supplier's expected date, Backordered, Cancelled (decisions 12, 22) — alongside anything already held for them ([E-07](E-07-manage-customers.md) d19). This is a second consumer of the traceability the requirements above already demand; it adds no new obligation, but it does mean a status renamed here is renamed on a counter screen.
 
+**From [M-06](M-06-settings.md):**
+
+- **The stream aging threshold is one store setting defaulting to 14 days** ([M-06](M-06-settings.md) d41), resolving this flow's *aging threshold* open question at the simplest of the three shapes it offered. Per-Supplier stays the open door.
+- **A line's follow-up flag defaults from the Supplier's expected lead time** ([M-06](M-06-settings.md) d42, field on [M-01](M-01-supplier-margin.md)). Decision 8's day count is optional at the raise step, so a line nobody typed a number onto could never read overdue; the default closes that. The per-line value stays editable and re-flaggable as decision 18 has it.
+
 ---
 
 ## Resolved decisions

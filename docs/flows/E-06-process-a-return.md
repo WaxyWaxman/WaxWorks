@@ -53,6 +53,10 @@ This is a policy choice, not a technical limitation — the system records who p
 - Returns are lines on a Sale, not a separate document type. All E-05 tender behavior, including split tender, applies.
 - Line values are snapshotted at time of sale, so a linked Return can show what the copy actually sold for even if the catalog has since changed.
 
+**From [M-06](M-06-settings.md):**
+
+- **A line in a Section flagged `returnable = false` cannot be returned** ([M-06](M-06-settings.md) d30). This is **not** a gate and does not amend decision 3 — Returns stay ungated, with no receipt, no time limit and no approval, for everything else. It is a property of what is being sold: a gift card load returned under decision 3's terms is a cash-out dressed as a refund. Unwinding one is a **void of the original Sale** ([E-05](E-05-sell-a-record.md) d31) while that is still possible, and a Manager and an [M-05](M-05-accounts-payable.md) adjustment afterwards.
+
 ---
 
 ## Resolved decisions

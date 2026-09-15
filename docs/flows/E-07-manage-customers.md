@@ -69,6 +69,7 @@ This is distinct from a supplier **Invoice** ([E-02](E-02-receive-inventory.md))
 
 - A Customer's identity must survive edits to their account number — history hangs off the permanent Primary ID.
 - Nothing here is gated; New/Delete and every field edit are plain Employee actions. Deleting must not orphan a past Sale; it just stops pointing at a Customer.
+- **Delete is refused while the Customer carries a live reference** — a non-zero account balance, a Held Sale, or open customer-attached order lines ([architecture](../architecture.md) A-54). Not a gate: it is refused at **every** role, because deleting a Customer who owes the store money erases the debt along with the debtor. Decision 12 is unchanged for a Customer with nothing outstanding.
 - A Customer's A/R balance is derived from the movements against it, not typed in directly.
 - Contact preference must be reachable from a hold, so the Employee chasing it knows how to make contact.
 
@@ -91,6 +92,10 @@ This is distinct from a supplier **Invoice** ([E-02](E-02-receive-inventory.md))
 
 - A Customer may be attached to an order line; on receipt this becomes a **Held** Sale in their name.
 - Open customer-attached lines are listed on the card carrying M-02's own status — Pending and Ordered derived from whether a PO number exists, Shipped (with the supplier's expected date), Backordered, and Cancelled as set ([M-02](M-02-reorder-inventory.md) d12, d22).
+
+**From [M-06](M-06-settings.md):**
+
+- **A Customer carries a default tax *group* — M-06's ShortName — not a default tax line, and it no longer overrides anything.** **Supersedes decision 7** ([M-06](M-06-settings.md) d14). The group and the product's tax code are orthogonal coordinates of one lookup; a Customer with no group set resolves through the store's default tax group, as a walk-in does.
 
 ---
 
