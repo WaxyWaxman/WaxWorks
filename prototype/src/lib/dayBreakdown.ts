@@ -1,5 +1,5 @@
-import type { InventoryItem, RecordEntry, Sale, TaxLine } from "../data/types";
-import { lineNet, lineTax, onHand, round2 } from "./totals";
+import type { InventoryItem, RecordEntry, Sale } from "../data/types";
+import { lineNet, lineTaxComponents, onHand, round2, type TaxContext } from "./totals";
 
 // M-03 — the same breakdown backs both View Subtotal (read-only) and Total
 // Today's Sales (which also closes the batch). Sales/tender/tax/section
@@ -33,7 +33,7 @@ export interface DayBreakdown {
 export function computeDayBreakdown(
   sales: Sale[],
   records: RecordEntry[],
-  taxLines: TaxLine[],
+  taxCtx: TaxContext,
   inventory: InventoryItem[],
 ): DayBreakdown {
   // Returns belong in the close (M-03 d7, E-06 d8): a Return is a Current
@@ -67,9 +67,15 @@ export function computeDayBreakdown(
       else returnsAmount += net;
       const label = recordFor(l.recordId)?.section ?? "Non-tracked";
       sectionAmounts.set(label, round2((sectionAmounts.get(label) ?? 0) + net));
-      const tl = taxLines.find((t) => t.id === l.taxLineId);
-      const tax = round2(lineTax(l, taxLines));
-      if (tax !== 0) taxAmounts.set(tl?.name ?? "Unknown", round2((taxAmounts.get(tl?.name ?? "Unknown") ?? 0) + tax));
+      // M-03 d13 reports per tax TYPE, and d15 splits by RATE where a period
+      // spans a change — so the key is both. A normal period has one rate per
+      // type and reads exactly as it did; the split appears only when more
+      // than one rate actually contributed, which is the day it matters.
+      for (const c of lineTaxComponents(l, taxCtx)) {
+        if (c.amount === 0 && !c.ratePpm) continue;
+        const label = c.ratePpm === 0 ? `${c.name} (0%)` : `${c.name} (${c.ratePpm / 10000}%)`;
+        taxAmounts.set(label, round2((taxAmounts.get(label) ?? 0) + c.amount));
+      }
     }
   }
 

@@ -7,7 +7,7 @@ import { VoidSaleModal } from "../components/VoidSaleModal";
 import type { InventoryItem, RecordEntry, Sale, SaleLine, TenderType } from "../data/types";
 import { money } from "../lib/money";
 import { resolveScan } from "../lib/resolve";
-import { availableOnHand, balanceDue, saleTotals } from "../lib/totals";
+import { availableOnHand, balanceDue, lineTaxComponents, saleTotals } from "../lib/totals";
 import { useApp } from "../store/AppStore";
 import { useIdentify, useActor } from "../components/Identify";
 
@@ -85,8 +85,8 @@ function SaleEditor() {
   const withActor = useActor();
   const nav = useNavigate();
   const sale = app.activeSale!;
-  const totals = saleTotals(sale, app.taxLines);
-  const due = balanceDue(sale, app.taxLines);
+  const totals = saleTotals(sale, app.taxCtxFor(sale));
+  const due = balanceDue(sale, app.taxCtxFor(sale));
   const customer = app.customerFor(sale.customerId);
 
   const [picker, setPicker] = useState<{ record: RecordEntry; items: InventoryItem[] } | null>(null);
@@ -250,9 +250,9 @@ function SaleEditor() {
           {customer && (
             <>
               <span className="badge">disc {customer.globalDiscountPct}%</span>
-              {customer.defaultTaxLineId && (
-                <span className="badge">
-                  tax → {app.taxLines.find((t) => t.id === customer.defaultTaxLineId)?.name}
+              {customer.taxGroupId && (
+                <span className="chip small">
+                  tax → {app.taxGroups.find((g) => g.id === customer.taxGroupId)?.shortName}
                 </span>
               )}
               <span className={"badge " + (customer.balance >= 0 ? "ok" : "warn")}>
@@ -896,18 +896,22 @@ function LineRow({ line, locked }: { line: SaleLine; locked: boolean }) {
                 }}
               />
             </label>
+            {/* M-06 d14 — tax is resolved from TWO AXES and never overridden
+                on the line: the Customer's tax group (or the store default)
+                and the Genre's product tax code meet at a cell that names the
+                taxes. The dropdown that used to be here let an Employee pick
+                a blended rate per line, which is d1's superseded model and is
+                exactly what two tables replaced. What resolved is shown
+                instead, read-only. */}
             <label>
               <span>Tax</span>
-              <select
-                value={line.taxLineId}
-                onChange={(e) => app.updateLine(sale.id, line.id, { taxLineId: e.target.value })}
-              >
-                {app.taxLines.map((t) => (
-                  <option key={t.id} value={t.id}>
-                    {t.name}
-                  </option>
-                ))}
-              </select>
+              <span className="small muted" style={{ alignSelf: "center" }}>
+                {(() => {
+                  const parts = lineTaxComponents(line, app.taxCtxFor(sale));
+                  if (!parts.length) return `out of scope · code ${line.productTaxCode}`;
+                  return parts.map((c) => `${c.name} ${c.ratePpm / 10000}%`).join(" + ");
+                })()}
+              </span>
             </label>
           </div>
         )}

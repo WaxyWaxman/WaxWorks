@@ -57,8 +57,8 @@ export function ReturnScreen() {
 function ReturnEditor({ saleId }: { saleId: string }) {
   const app = useApp();
   const sale = app.sales.find((s) => s.id === saleId)!;
-  const totals = saleTotals(sale, app.taxLines);
-  const due = balanceDue(sale, app.taxLines);
+  const totals = saleTotals(sale, app.taxCtxFor(sale));
+  const due = balanceDue(sale, app.taxCtxFor(sale));
   const customer = app.customerFor(sale.customerId);
 
   const [addItem, setAddItem] = useState(false);

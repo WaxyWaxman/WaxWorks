@@ -8,6 +8,8 @@ import {
 import { computeDayBreakdown, type DayBreakdown } from "../lib/dayBreakdown";
 import { invoiceForItem, supplierIdForItem } from "../lib/provenance";
 import { money } from "../lib/money";
+import { parseCell } from "../lib/tax";
+import { lineTaxComponents, type TaxContext } from "../lib/totals";
 import * as usersLib from "../lib/users";
 import {
   customerBalanceDelta,
@@ -20,7 +22,6 @@ import {
 import {
   CURRENT_USER,
   CUSTOMERS,
-  DEFAULT_TAX_LINE,
   GIFT_CARDS,
   INVENTORY,
   MANAGER_NAME,
@@ -36,6 +37,12 @@ import {
   HOME_CURRENCY,
   STORE_SETTINGS,
   STORE_DETAILS,
+  TAX_TYPES,
+  PRODUCT_TAX_CODES,
+  TAX_GROUPS,
+  TAX_GROUP_CELLS,
+  GENRES,
+  DEFAULT_TAX_GROUP,
 } from "../data/seed";
 import type {
   ClaimLineAgainst,
@@ -73,6 +80,11 @@ import type {
   StoreDetails,
   SettingsLogEntry,
   PostalAddress,
+  TaxType,
+  ProductTaxCode,
+  TaxGroup,
+  TaxGroupCell,
+  Genre,
   ClaimVoid,
   SupplierClaim,
   TaxLine,
@@ -156,6 +168,12 @@ interface AppState {
   storeSettings: StoreSettings;
   storeDetails: StoreDetails;
   settingsLog: SettingsLogEntry[];
+  taxTypes: TaxType[];
+  productTaxCodes: ProductTaxCode[];
+  taxGroups: TaxGroup[];
+  taxGroupCells: TaxGroupCell[];
+  genres: Genre[];
+  defaultTaxGroup: string;
   // E-01. The session is CLIENT state and can be nothing else (A-3, A-50):
   // what the database trusts is the terminal's enrollment, initials are
   // attribution on top. Modelled here for the same reason.
@@ -205,6 +223,12 @@ const seed: AppState = {
   storeSettings: STORE_SETTINGS,
   storeDetails: STORE_DETAILS,
   settingsLog: [],
+  taxTypes: TAX_TYPES,
+  productTaxCodes: PRODUCT_TAX_CODES,
+  taxGroups: TAX_GROUPS,
+  taxGroupCells: TAX_GROUP_CELLS,
+  genres: GENRES,
+  defaultTaxGroup: DEFAULT_TAX_GROUP,
   sessionUserId: null,
   sessionLastActivity: Date.now(),
   sessionLapseSeconds: 300,
@@ -234,7 +258,7 @@ const seed: AppState = {
           qty: 1,
           price: 24.0,
           discountPct: 10,
-          taxLineId: DEFAULT_TAX_LINE,
+          productTaxCode: "1",
         },
       ],
     },
@@ -261,7 +285,7 @@ const seed: AppState = {
           qty: 2,
           price: 32.99,
           discountPct: 0,
-          taxLineId: DEFAULT_TAX_LINE,
+          productTaxCode: "1",
         },
       ],
     },
@@ -283,7 +307,7 @@ const seed: AppState = {
           qty: 1,
           price: 27.5,
           discountPct: 0,
-          taxLineId: DEFAULT_TAX_LINE,
+          productTaxCode: "1",
         },
       ],
     },
@@ -311,7 +335,7 @@ const seed: AppState = {
           qty: 1,
           price: 34.99,
           discountPct: 10,
-          taxLineId: DEFAULT_TAX_LINE,
+          productTaxCode: "1",
         },
       ],
     },
@@ -696,6 +720,20 @@ interface AppContextValue extends AppState {
   // AFTER (A-52) — the value is what makes the log worth keeping, since d8's
   // never-retroactive rule means the old one is the only record of what
   // yesterday's Sales were computed against.
+  // M-06 d14 — the two coordinates for a given Sale, gathered in one place so
+  // no screen invents its own lookup order.
+  taxTypes: TaxType[];
+  productTaxCodes: ProductTaxCode[];
+  taxGroups: TaxGroup[];
+  taxGroupCells: TaxGroupCell[];
+  genres: Genre[];
+  defaultTaxGroup: string;
+  taxCtxFor: (sale?: Sale | null) => TaxContext;
+  productTaxCodeForRecord: (recordId?: string) => string;
+  upsertTaxType: (row: TaxType, by: string) => SettingsWriteResult;
+  setTaxCell: (groupId: string, productTaxCode: string, spec: string, by: string) => SettingsWriteResult;
+  upsertTaxGroup: (row: TaxGroup, by: string) => SettingsWriteResult;
+  setDefaultTaxGroup: (groupId: string, by: string) => void;
   setStoreSetting: <K extends keyof StoreSettings>(key: K, value: StoreSettings[K], by: string) => void;
   setStoreDetail: (key: keyof Omit<StoreDetails, "storeId" | "position">, value: string | boolean | PostalAddress, by: string) => void;
   upsertSection: (row: SectionRow, by: string) => SettingsWriteResult;
@@ -1080,15 +1118,17 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
   const itemFor = (id?: string) => s.inventory.find((i) => i.id === id);
   const supplierFor = (id?: string) => s.suppliers.find((sup) => sup.id === id);
 
+  // A Customer supplies a DISCOUNT per line and a TAX GROUP per Sale — never a
+  // tax line. M-06 d14 resolves tax from two axes that never compete, so a
+  // customer-level tax override is exactly the shape two tables replaced.
   const applyCustomerDefaults = (
     customerId: string | undefined,
-    base: { discountPct: number; taxLineId: string },
+    base: { discountPct: number },
   ) => {
     const c = s.customers.find((x) => x.id === customerId);
     if (!c) return base;
     return {
       discountPct: c.globalDiscountPct || base.discountPct,
-      taxLineId: c.defaultTaxLineId || base.taxLineId,
     };
   };
 
@@ -1185,7 +1225,6 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
             ? {
                 ...l,
                 discountPct: l.discountPct || cust.globalDiscountPct,
-                taxLineId: cust.defaultTaxLineId || l.taxLineId,
               }
             : l,
         ),
@@ -1201,6 +1240,105 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
 
   // E-07 — Search/New/Delete. Every other field is edited in place on the
   // open card, not through a separate Edit flow.
+  // -------------------------------------------------------------------------
+  // M-06 tax resolution (d11-d17)
+  // -------------------------------------------------------------------------
+
+  // d12, d17 — the product tax code comes from the Genre, and genre is
+  // mandatory on every sellable thing. A Record whose genre is not in the
+  // table resolves to the standard code rather than to nothing: an unmapped
+  // genre is a data problem (d6's map is what fixes it), and silently
+  // charging no tax would be the worse failure.
+  const productTaxCodeForRecord: AppContextValue["productTaxCodeForRecord"] = (recordId) => {
+    const rec = s.records.find((r) => r.id === recordId);
+    const g = s.genres.find((x) => x.name === rec?.genre);
+    return g?.productTaxCode ?? "1";
+  };
+
+  const taxCtxFor: AppContextValue["taxCtxFor"] = (sale) => ({
+    types: s.taxTypes,
+    cells: s.taxGroupCells,
+    // d14's order: the Sale's snapshot if it has one, else the Customer's
+    // group, else the store's default.
+    groupId:
+      sale?.taxGroupId ??
+      s.customers.find((c) => c.id === sale?.customerId)?.taxGroupId ??
+      s.defaultTaxGroup,
+    // A-57 — the rate in force when the money moves. A completed Sale carries
+    // its own snapshot, so `at` only decides anything for one still open.
+    at: new Date().toISOString().slice(0, 10),
+  });
+
+  const upsertTaxType: AppContextValue["upsertTaxType"] = (row, by) => {
+    const code = row.code.trim().toLowerCase();
+    if (code.length !== 1) return { ok: false, reason: "A tax type code is a single letter." };
+    if (!row.name.trim()) return { ok: false, reason: "A name is required." };
+    if (row.ratePpm < 0) return { ok: false, reason: "A rate cannot be negative." };
+    if ((row.pendingRatePpm === undefined) !== (row.pendingFrom === undefined))
+      return { ok: false, reason: "A pending change needs both a rate and the date it starts (d52)." };
+    const existing = s.taxTypes.find((x) => x.code === code);
+    // d52 — a pending change that has already taken effect is PROMOTED before
+    // a new one is accepted, so an elapsed change is never silently dropped.
+    const today = new Date().toISOString().slice(0, 10);
+    const promoted =
+      existing?.pendingFrom && existing.pendingRatePpm !== undefined && today >= existing.pendingFrom
+        ? { ...existing, ratePpm: existing.pendingRatePpm, pendingRatePpm: undefined, pendingFrom: undefined }
+        : existing;
+    const next: TaxType = { ...promoted, ...row, code, name: row.name.trim() };
+    setS((prev) => ({
+      ...prev,
+      taxTypes: existing ? prev.taxTypes.map((x) => (x.code === code ? next : x)) : [...prev.taxTypes, next],
+    }));
+    logSetting("Tax types", next.name, existing ?? "(none)", next, by);
+    return { ok: true };
+  };
+
+  const setTaxCell: AppContextValue["setTaxCell"] = (groupId, productTaxCode, spec, by) => {
+    const clean = spec.trim().toLowerCase();
+    const { codes } = parseCell(clean);
+    // d16 — two maximum, and every letter has to name a type that exists.
+    if (clean.replace("+", "").length > 2) return { ok: false, reason: "Two taxes maximum per cell (d16)." };
+    const unknown = codes.find((c) => !s.taxTypes.some((t) => t.code === c));
+    if (unknown) return { ok: false, reason: `There is no tax type "${unknown}".` };
+    if (clean.endsWith("+") && codes.length < 2)
+      return { ok: false, reason: "A trailing + compounds the SECOND tax on the first, so it needs two." };
+    const before = s.taxGroupCells.find((c) => c.groupId === groupId && c.productTaxCode === productTaxCode);
+    setS((prev) => ({
+      ...prev,
+      taxGroupCells: before
+        ? prev.taxGroupCells.map((c) =>
+            c.groupId === groupId && c.productTaxCode === productTaxCode ? { ...c, spec: clean } : c,
+          )
+        : [...prev.taxGroupCells, { groupId, productTaxCode, spec: clean }],
+    }));
+    const g = s.taxGroups.find((x) => x.id === groupId);
+    logSetting("Tax groups", `${g?.shortName ?? groupId} \u00d7 ${productTaxCode}`, before?.spec ?? "(blank)", clean || "(blank)", by);
+    return { ok: true };
+  };
+
+  const upsertTaxGroup: AppContextValue["upsertTaxGroup"] = (row, by) => {
+    if (!row.description.trim()) return { ok: false, reason: "A description is required." };
+    const shortName = row.shortName.trim().toUpperCase();
+    if (!shortName || shortName.length > 4)
+      return { ok: false, reason: "A ShortName is one to four characters \u2014 it is what appears on a Customer." };
+    const existing = s.taxGroups.find((x) => x.id === row.id);
+    const next = { ...row, shortName, description: row.description.trim() };
+    setS((prev) => ({
+      ...prev,
+      taxGroups: existing ? prev.taxGroups.map((x) => (x.id === row.id ? next : x)) : [...prev.taxGroups, next],
+    }));
+    logSetting("Tax groups", next.shortName, existing ?? "(none)", next, by);
+    return { ok: true };
+  };
+
+  const setDefaultTaxGroup: AppContextValue["setDefaultTaxGroup"] = (groupId, by) => {
+    if (groupId === s.defaultTaxGroup) return;
+    const before = s.taxGroups.find((g) => g.id === s.defaultTaxGroup)?.shortName ?? s.defaultTaxGroup;
+    const after = s.taxGroups.find((g) => g.id === groupId)?.shortName ?? groupId;
+    setS((prev) => ({ ...prev, defaultTaxGroup: groupId }));
+    logSetting("Tax groups", "store default", before, after, by);
+  };
+
   // -------------------------------------------------------------------------
   // M-06 settings
   //
@@ -1385,13 +1523,13 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
   const addItemLine: AppContextValue["addItemLine"] = (saleId, item) =>
     patchSale(saleId, (sale) => {
       const rec = s.records.find((r) => r.id === item.recordId)!;
-      const d = applyCustomerDefaults(sale.customerId, {
-        discountPct: 0,
-        taxLineId: DEFAULT_TAX_LINE,
-      });
+      const d = applyCustomerDefaults(sale.customerId, { discountPct: 0 });
       const line: SaleLine = {
         id: uid("line"),
         kind: "item",
+        // d12 — what the PRODUCT is, copied from the Record's genre at the
+        // moment it goes in the basket (A-57: that half is fixed at line-add).
+        productTaxCode: productTaxCodeForRecord(rec.id),
         recordId: rec.id,
         inventoryItemId: item.id,
         title: `${rec.artist} — ${rec.title}`,
@@ -1399,7 +1537,6 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
         qty: 1,
         price: item.price,
         discountPct: d.discountPct,
-        taxLineId: d.taxLineId,
       };
       return { ...sale, lines: [...sale.lines, line] };
     });
@@ -1431,20 +1568,17 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
       nextInternalBarcode: prev.nextInternalBarcode + 1,
     }));
     patchSale(saleId, (sale) => {
-      const d = applyCustomerDefaults(sale.customerId, {
-        discountPct: 0,
-        taxLineId: DEFAULT_TAX_LINE,
-      });
+      const d = applyCustomerDefaults(sale.customerId, { discountPct: 0 });
       const line: SaleLine = {
         id: uid("line"),
         kind: "item",
+        productTaxCode: productTaxCodeForRecord(record.id),
         recordId: record.id,
         inventoryItemId: itemId,
         title: `${record.artist} — ${record.title}`,
         qty: 1,
         price,
         discountPct: d.discountPct,
-        taxLineId: d.taxLineId,
         note: "No sellable copy on hand — sold against negative inventory",
       };
       return {
@@ -1464,18 +1598,18 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
 
   const addNonTrackedLine: AppContextValue["addNonTrackedLine"] = (saleId, nt, price) =>
     patchSale(saleId, (sale) => {
-      const d = applyCustomerDefaults(sale.customerId, {
-        discountPct: 0,
-        taxLineId: DEFAULT_TAX_LINE,
-      });
       const line: SaleLine = {
         id: uid("line"),
         kind: "nontracked",
+        // d17 — genre is mandatory on every sellable thing INCLUDING
+        // non-tracked ones, which is how freight and services resolve tax
+        // with no special case. The prototype's non-tracked catalog carries
+        // no genre yet, so these take the standard code.
+        productTaxCode: "1",
         title: `${nt.label} (${nt.code})`,
         qty: 1,
         price,
         discountPct: 0,
-        taxLineId: d.taxLineId,
         note: "Non-tracked — no stock count",
       };
       return { ...sale, lines: [...sale.lines, line] };
@@ -1503,7 +1637,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
           qty: 1,
           price: value,
           discountPct: 0,
-          taxLineId: "tx-exempt",
+          productTaxCode: "1",
           note: "Loading a gift card is a line item (money in)",
         },
       ],
@@ -1519,13 +1653,12 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
   ) =>
     patchSale(saleId, (sale) => {
       const rec = s.records.find((r) => r.id === item.recordId)!;
-      const d = applyCustomerDefaults(sale.customerId, {
-        discountPct: 0,
-        taxLineId: DEFAULT_TAX_LINE,
-      });
+      // No applyCustomerDefaults here on purpose: a refund does not take the
+      // Customer's global discount, which is why discountPct is 0 below.
       const line: SaleLine = {
         id: uid("line"),
         kind: "item",
+        productTaxCode: productTaxCodeForRecord(rec.id),
         recordId: rec.id,
         inventoryItemId: item.id,
         title: `${rec.artist} — ${rec.title}`,
@@ -1533,7 +1666,6 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
         qty: -1,
         price: refund,
         discountPct: 0,
-        taxLineId: d.taxLineId,
         linkedSaleNumber,
         note: linkedSaleNumber
           ? `Return — linked to Sale ${linkedSaleNumber}`
@@ -1659,6 +1791,21 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
                 ...x,
                 state: "Current",
                 saleNumber: num,
+                // A-57 — THE TAX SNAPSHOT IS TAKEN HERE, at tender, because
+                // tax describes what was COLLECTED and nothing is collected
+                // until something is collected. From this moment the Sale
+                // reports the types and rates it actually charged, whatever
+                // the configuration does afterwards — which is the whole
+                // reason no rate-history table is needed (A-58, M-06 d52).
+                //
+                // The group is snapshotted with it (d14): a Sale records the
+                // coordinate it resolved through rather than re-deriving it
+                // later from a Customer who may since have moved groups.
+                taxGroupId: taxCtxFor(x).groupId,
+                lines: x.lines.map((l) => ({
+                  ...l,
+                  tax: lineTaxComponents(l, taxCtxFor(x)),
+                })),
                 // The Sale is attributed to whoever holds the lock at tender —
                 // a Sale one Employee starts and another finishes belongs to
                 // the one who finished it (E-05 locking).
@@ -1820,13 +1967,13 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
   // M-03 — View Subtotal computes the same breakdown as a close without
   // touching anything; it's a pure read.
   const viewSubtotal: AppContextValue["viewSubtotal"] = () =>
-    computeDayBreakdown(s.sales, s.records, s.taxLines, s.inventory);
+    computeDayBreakdown(s.sales, s.records, taxCtxFor(null), s.inventory);
 
   // Total Today's Sales — the close is a real state transition (M-03
   // decision 1): every Current Sale becomes Closed and stops being
   // editable, batched under one identifier so it can be undone as a unit.
   const totalTodaysSales: AppContextValue["totalTodaysSales"] = (by) => {
-    const breakdown = computeDayBreakdown(s.sales, s.records, s.taxLines, s.inventory);
+    const breakdown = computeDayBreakdown(s.sales, s.records, taxCtxFor(null), s.inventory);
     const saleIds = s.sales.filter((sale) => sale.state === "Current" && !sale.isReturn).map((sale) => sale.id);
     const batchId = uid("batch");
     const batch: CloseBatch = { id: batchId, at: now(), by, saleIds };
@@ -2123,6 +2270,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
     const line: SaleLine = {
       id: uid("line"),
       kind: "item",
+      productTaxCode: productTaxCodeForRecord(recordId),
       recordId,
       inventoryItemId: itemId,
       title: `${rec.artist} — ${rec.title}`,
@@ -2130,7 +2278,6 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
       qty,
       price: item.price,
       discountPct: cust?.globalDiscountPct ?? 0,
-      taxLineId: cust?.defaultTaxLineId ?? DEFAULT_TAX_LINE,
     };
 
     // Repeat holds for the same customer under the same PO merge onto one Held
@@ -3414,6 +3561,18 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
       storeSettings: s.storeSettings,
       storeDetails: s.storeDetails,
       settingsLog: s.settingsLog,
+      taxTypes: s.taxTypes,
+      productTaxCodes: s.productTaxCodes,
+      taxGroups: s.taxGroups,
+      taxGroupCells: s.taxGroupCells,
+      genres: s.genres,
+      defaultTaxGroup: s.defaultTaxGroup,
+      taxCtxFor,
+      productTaxCodeForRecord,
+      upsertTaxType,
+      setTaxCell,
+      upsertTaxGroup,
+      setDefaultTaxGroup,
       setStoreSetting,
       setStoreDetail,
       upsertSection,

@@ -10,6 +10,8 @@ import type {
   TenderRow,
 } from "../data/types";
 import { useApp, type SettingsWriteResult } from "../store/AppStore";
+import { resolveLineTax } from "../lib/tax";
+import { money } from "../lib/money";
 
 // M-06 Settings, on the till's three tracks: the group you are in, the editor,
 // and the LOG.
@@ -26,11 +28,12 @@ import { useApp, type SettingsWriteResult } from "../store/AppStore";
 // it"), so the whole screen is gated on arrival like Users and Accounts
 // Payable, and the authorising Manager's name is what every log row carries.
 //
-// NOT HERE: tax. M-06 d11 resolves tax from two tables through a Genre's
-// product tax code, and the prototype still models d1's superseded flat line —
-// docs/prototype.md records that as a known simplification. Building a tax
-// settings screen over the retired shape would be worse than not building one,
-// so the group is listed and says why it is empty.
+// Tax is here, and it is the group that carries the most decisions: two
+// tables (d11), a grid of group x product-tax-code cells (d13), one or two
+// taxes per cell with optional compounding (d16), and a pending rate change
+// entered when it is announced (d52). The worked example at the foot is
+// M-06's own, and it recomputes live — so the screen and the till can be seen
+// to agree rather than asserted to.
 
 type GroupKey = "sections" | "tenders" | "currencies" | "store" | "details" | "tax";
 
@@ -43,7 +46,7 @@ const GROUPS: { key: GroupKey; tile: string; label: string; blurb: string }[] = 
   { key: "currencies", tile: "CU", label: "Currencies", blurb: "Codes and the planning rate" },
   { key: "store", tile: "ST", label: "Store settings", blurb: "The figures other flows read" },
   { key: "details", tile: "SD", label: "Store details", blurb: "What appears on a receipt" },
-  { key: "tax", tile: "TX", label: "Tax", blurb: "Not modelled yet — see the note" },
+  { key: "tax", tile: "TX", label: "Tax", blurb: "Types, product codes and the group grid" },
 ];
 
 export function Settings() {
@@ -113,7 +116,7 @@ export function Settings() {
             {active === "currencies" && <CurrenciesEditor by={authorisedBy} onRun={run} />}
             {active === "store" && <StoreSettingsEditor by={authorisedBy} />}
             {active === "details" && <StoreDetailsEditor by={authorisedBy} />}
-            {active === "tax" && <TaxNote />}
+            {active === "tax" && <TaxEditor by={authorisedBy} onRun={run} />}
           </div>
         </div>
       </section>
@@ -561,31 +564,377 @@ function StoreDetailsEditor({ by }: { by: string }) {
 
 // ---------------------------------------------------------------------------
 
-function TaxNote() {
+function TaxEditor({ by, onRun }: { by: string; onRun: (r: SettingsWriteResult) => boolean }) {
+  const app = useApp();
+
   return (
-    <div className="stack">
-      <div className="callout">
-        <strong>Tax is not modelled here yet, deliberately.</strong>
+    <>
+      <p className="small muted">
+        Tax resolves from <strong>two axes that never compete</strong> (d14): who the customer is —
+        their tax group, else the store's default — and what the product is — the Genre's product
+        tax code. Neither overrides the other; they are the two coordinates of one lookup.
+      </p>
+
+      <h3>Tax types</h3>
+      <p className="small muted">
+        One row per tax that <em>exists</em>, shared by every group that charges it, so a
+        legislated rate change is edited once (d11).{" "}
+        <SpecNote cite="M-06 d11, d48, d52, A-47, A-58">
+          A rate is an integer of <strong>parts per million</strong> — QST is 9.975%, which basis
+          points could not hold (A-47). The <strong>registration number sits on the type</strong>,
+          not in store details, because GST and QST are separate registrations and a receipt
+          carries each beside its own tax (d48). A type may carry <strong>one pending change</strong>
+          — the new rate and the date it starts — so a legislated change is entered when it is
+          announced and lands by the clock (d52, A-58).
+        </SpecNote>
+      </p>
+      <table className="data">
+        <thead>
+          <tr>
+            <th>Code</th>
+            <th>Name</th>
+            <th>Rate %</th>
+            <th>Pending %</th>
+            <th>From</th>
+            <th>Registration</th>
+            <th>Active</th>
+          </tr>
+        </thead>
+        <tbody>
+          {app.taxTypes.map((t) => (
+            <tr key={t.code}>
+              <td className="mono">{t.code}</td>
+              <td>{t.name}</td>
+              <td>
+                <input
+                  className="mini"
+                  defaultValue={t.ratePpm / 10000}
+                  onBlur={(e) =>
+                    onRun(app.upsertTaxType({ ...t, ratePpm: Math.round(Number(e.target.value) * 10000) }, by))
+                  }
+                />
+              </td>
+              <td>
+                <input
+                  className="mini"
+                  defaultValue={t.pendingRatePpm !== undefined ? t.pendingRatePpm / 10000 : ""}
+                  placeholder="—"
+                  onBlur={(e) =>
+                    onRun(
+                      app.upsertTaxType(
+                        {
+                          ...t,
+                          pendingRatePpm: e.target.value ? Math.round(Number(e.target.value) * 10000) : undefined,
+                          pendingFrom: e.target.value ? t.pendingFrom ?? "" : undefined,
+                        },
+                        by,
+                      ),
+                    )
+                  }
+                />
+              </td>
+              <td>
+                <input
+                  className="mini"
+                  defaultValue={t.pendingFrom ?? ""}
+                  placeholder="YYYY-MM-DD"
+                  onBlur={(e) =>
+                    onRun(app.upsertTaxType({ ...t, pendingFrom: e.target.value || undefined }, by))
+                  }
+                />
+              </td>
+              <td>
+                <input
+                  defaultValue={t.registrationNumber ?? ""}
+                  placeholder="—"
+                  onBlur={(e) =>
+                    onRun(app.upsertTaxType({ ...t, registrationNumber: e.target.value || undefined }, by))
+                  }
+                />
+              </td>
+              <Flag on={t.active} onChange={(v) => onRun(app.upsertTaxType({ ...t, active: v }, by))} />
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      <p className="small muted">
+        A pending change needs <strong>both</strong> a rate and the date it starts. Only one can be
+        queued: a second replaces it, and a pending change whose date has passed is promoted into
+        the current rate first, so an elapsed one is never silently dropped (d52).
+      </p>
+      <NewTaxType by={by} onRun={onRun} />
+
+      <h3>Product tax codes</h3>
+      <p className="small muted">
+        Carried by <strong>Genre</strong> (d12) — a bare letter sitting on a genre is tribal
+        knowledge, so each has a description beside it.
+      </p>
+      <table className="data">
+        <thead>
+          <tr>
+            <th>Code</th>
+            <th>Description</th>
+          </tr>
+        </thead>
+        <tbody>
+          {app.productTaxCodes.map((c) => (
+            <tr key={c.code}>
+              <td className="mono">{c.code}</td>
+              <td>{c.description}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+
+      <h3>Tax groups</h3>
+      <p className="small muted">
+        A jurisdiction or customer class, with one cell per product tax code.{" "}
+        <SpecNote cite="M-06 d13, d15, d16">
+          <strong>Stored as rows, drawn as a grid</strong> — storage shape and screen shape are
+          decoupled deliberately (d13). A cell names one or two tax type letters, or is blank. A
+          trailing <code>+</code> compounds the second on the first: <code>ab</code> charges both
+          on the subtotal, <code>ab+</code> charges b on subtotal plus a. <strong>Blank and
+          zero-rated are different and both are kept</strong> (d15) — blank is out of scope and
+          reports nothing; a zero-rate type is taxable at 0% and <em>is</em> reportable.
+        </SpecNote>
+      </p>
+      <table className="data">
+        <thead>
+          <tr>
+            <th>Group</th>
+            <th>Short</th>
+            {app.productTaxCodes.map((c) => (
+              <th key={c.code} title={c.description}>
+                {c.code}
+              </th>
+            ))}
+            <th>Default</th>
+          </tr>
+        </thead>
+        <tbody>
+          {app.taxGroups.map((g) => (
+            <tr key={g.id}>
+              <td>{g.description}</td>
+              <td className="mono">{g.shortName}</td>
+              {app.productTaxCodes.map((c) => {
+                const cell = app.taxGroupCells.find(
+                  (x) => x.groupId === g.id && x.productTaxCode === c.code,
+                );
+                return (
+                  <td key={c.code}>
+                    <input
+                      className="mini"
+                      defaultValue={cell?.spec ?? ""}
+                      placeholder="—"
+                      onBlur={(e) => onRun(app.setTaxCell(g.id, c.code, e.target.value, by))}
+                    />
+                  </td>
+                );
+              })}
+              <td>
+                <input
+                  type="radio"
+                  name="defaultGroup"
+                  checked={g.id === app.defaultTaxGroup}
+                  onChange={() => app.setDefaultTaxGroup(g.id, by)}
+                />
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      <p className="small muted">
+        The default group applies to a Sale with no Customer, or a Customer who has none of their
+        own (d14). A blank cell means out of scope — <code>{"\u2014"}</code> here, and no tax line at
+        all on the receipt.
+      </p>
+      <NewTaxGroup by={by} onRun={onRun} />
+
+      <WorkedExample />
+    </>
+  );
+}
+
+// Adding a tax type. Nothing is ever deleted (d9) — a type that stops
+// applying is deactivated, because cells and completed Sales reference it.
+function NewTaxType({ by, onRun }: { by: string; onRun: (r: SettingsWriteResult) => boolean }) {
+  const app = useApp();
+  const [open, setOpen] = useState(false);
+  const [code, setCode] = useState("");
+  const [name, setName] = useState("");
+  const [rate, setRate] = useState("");
+
+  if (!open)
+    return (
+      <button className="btn ghost sm" onClick={() => setOpen(true)}>
+        ＋ New tax type
+      </button>
+    );
+
+  return (
+    <div className="stack callout">
+      <div className="btn-row">
+        <label className="field">
+          <span>Code — one letter</span>
+          <input className="mini" value={code} maxLength={1} onChange={(e) => setCode(e.target.value)} />
+        </label>
+        <label className="field">
+          <span>Name</span>
+          <input value={name} placeholder="e.g. PST (BC)" onChange={(e) => setName(e.target.value)} />
+        </label>
+        <label className="field">
+          <span>Rate %</span>
+          <input className="mini" value={rate} placeholder="7" onChange={(e) => setRate(e.target.value)} />
+        </label>
       </div>
-      <p className="small muted">
-        M-06 d11 resolves tax from <strong>two</strong> tables — a <em>tax type</em> is one tax
-        that exists, shared by every group that charges it; a <em>tax group</em> is a jurisdiction
-        or customer class carrying one cell per product tax code (d13). A Sale resolves through the
-        Customer's group, the Genre's product tax code, then the cell (d14), which names one or two
-        tax types composed in written order (d16).
-      </p>
-      <p className="small muted">
-        The prototype still models <strong>d1's superseded shape</strong>: a flat table of named
-        tax lines, seeded with a blended <code>QC 14.975%</code>. That blend is the exact thing d11
-        replaced two tables to stop — it cannot report per tax type ([M-03] d13), cannot carry a
-        registration number per type (d48), and cannot do the by-rate split a period spanning a
-        rate change needs ([M-03] d15).
-      </p>
-      <p className="small muted">
-        Building a tax settings screen over the retired shape would be worse than not building one,
-        so the group is listed and empty. It is recorded under <em>Known simplifications</em> in{" "}
-        <code>docs/prototype.md</code>, and closing it means migrating the money path.
-      </p>
+      <div className="btn-row">
+        <button
+          className="btn primary sm"
+          onClick={() => {
+            const ok = onRun(
+              app.upsertTaxType(
+                {
+                  code: code.trim().toLowerCase(),
+                  name: name.trim(),
+                  ratePpm: Math.round(Number(rate) * 10000),
+                  active: true,
+                },
+                by,
+              ),
+            );
+            if (ok) {
+              setCode("");
+              setName("");
+              setRate("");
+              setOpen(false);
+            }
+          }}
+        >
+          Add tax type
+        </button>
+        <button className="btn ghost sm" onClick={() => setOpen(false)}>
+          Cancel
+        </button>
+      </div>
+      <div className="small muted">
+        The letter is what composes a cell — a new type is charged nowhere until a cell names it.
+        Existing cells and completed Sales are untouched (d8).
+      </div>
+    </div>
+  );
+}
+
+// Adding a tax group. A new group starts with EVERY CELL BLANK, which is out
+// of scope rather than zero-rated (d15) — a jurisdiction charges nothing until
+// somebody says what it charges, and blank is the honest starting state.
+function NewTaxGroup({ by, onRun }: { by: string; onRun: (r: SettingsWriteResult) => boolean }) {
+  const app = useApp();
+  const [open, setOpen] = useState(false);
+  const [description, setDescription] = useState("");
+  const [shortName, setShortName] = useState("");
+
+  if (!open)
+    return (
+      <button className="btn ghost sm" onClick={() => setOpen(true)}>
+        ＋ New tax group
+      </button>
+    );
+
+  return (
+    <div className="stack callout">
+      <div className="btn-row">
+        <label className="field">
+          <span>Description</span>
+          <input
+            value={description}
+            placeholder="e.g. Manitoba"
+            onChange={(e) => setDescription(e.target.value)}
+          />
+        </label>
+        <label className="field">
+          <span>
+            ShortName — up to 4{" "}
+            <SpecNote cite="M-06 d11, E-07">
+              This is what appears on a Customer's card, so it has to be readable at a glance
+              rather than a code somebody has to look up.
+            </SpecNote>
+          </span>
+          <input className="mini" value={shortName} maxLength={4} onChange={(e) => setShortName(e.target.value)} />
+        </label>
+      </div>
+      <div className="btn-row">
+        <button
+          className="btn primary sm"
+          onClick={() => {
+            const ok = onRun(
+              app.upsertTaxGroup(
+                { id: `tg-${shortName.trim().toLowerCase() || Date.now()}`, description, shortName, active: true },
+                by,
+              ),
+            );
+            if (ok) {
+              setDescription("");
+              setShortName("");
+              setOpen(false);
+            }
+          }}
+        >
+          Add tax group
+        </button>
+        <button className="btn ghost sm" onClick={() => setOpen(false)}>
+          Cancel
+        </button>
+      </div>
+      <div className="small muted">
+        It starts with every cell blank — out of scope, charging nothing, until you fill the grid
+        in. That is deliberate: a new jurisdiction that silently charged the standard rate would be
+        the worse default.
+      </div>
+    </div>
+  );
+}
+
+// M-06 states a worked example in the flow itself, and it is the clearest
+// possible check that this screen and the till agree: change the Quebec `1`
+// cell between `ab` and `ab+` and the figures below move to match the spec.
+function WorkedExample() {
+  const app = useApp();
+  const net = 29.99;
+  const spec = app.taxGroupCells.find((c) => c.groupId === "tg-qc" && c.productTaxCode === "1")?.spec ?? "";
+  const parts = resolveLineTax(net, spec, app.taxTypes, new Date().toISOString().slice(0, 10));
+  const total = parts.reduce((n, p) => n + p.amount, 0);
+  return (
+    <div className="callout">
+      <strong>Worked example — $29.99, Quebec, product tax code 1</strong>
+      <table className="data">
+        <tbody>
+          <tr>
+            <td>Subtotal</td>
+            <td className="mono">{money(net)}</td>
+          </tr>
+          {parts.map((p) => (
+            <tr key={p.code}>
+              <td>
+                {p.name} — {p.ratePpm / 10000}%
+              </td>
+              <td className="mono">{money(p.amount)}</td>
+            </tr>
+          ))}
+          <tr>
+            <td>
+              <strong>Total</strong>
+            </td>
+            <td className="mono">
+              <strong>{money(net + total)}</strong>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+      <div className="small muted">
+        Cell <code>{spec || "(blank)"}</code>. M-06 gives <code>ab</code> as 34.48 and{" "}
+        <code>ab+</code> as 34.63 — fifteen cents apart, because each tax rounds to the cent as it
+        is applied and the evaluation order is the instruction.
+      </div>
     </div>
   );
 }

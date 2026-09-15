@@ -164,7 +164,11 @@ export interface Customer {
   contactPreference: "Phone" | "Email";
   address?: CustomerAddress;
   globalDiscountPct: number;
-  defaultTaxLineId?: string;
+  // M-06 d14, E-07 — the Customer supplies ONE of the two coordinates: their
+  // tax group. It is the group's ShortName that appears on the card. Absent
+  // means the store's default group applies; it is not an override and never
+  // competes with the product's axis.
+  taxGroupId?: string;
   note?: string;
   balance: number; // A/R balance — + store owes customer (store credit); - customer owes store
 }
@@ -185,7 +189,15 @@ export interface SaleLine {
   qty: number; // negative => Return
   price: number;
   discountPct: number;
-  taxLineId: string;
+  // M-06 d12 — what the PRODUCT is: the Genre's product tax code, copied onto
+  // the line when it is added, because that is a fact about what was sold and
+  // is fixed the moment it goes in the basket (A-57).
+  productTaxCode: string;
+  // A-57 — the tax SNAPSHOT: the tax types resolved and the rates applied,
+  // never a reference to a configuration row. Taken at TENDER, not at line-add,
+  // because what was collected is not a fact until something is collected.
+  // Undefined while the Sale is open; the screen computes live until then.
+  tax?: TaxComponent[];
   note?: string;
   linkedSaleNumber?: number; // E-06 link to original Sale
   stockRouted?: boolean; // E-06 step 6 — returned copy has been dispositioned
@@ -211,6 +223,10 @@ export interface Sale {
   holdRef?: string;
   po?: string;
   customerId?: string;
+  // M-06 d14 — who the CUSTOMER is: their tax group, else the store's default.
+  // Snapshotted at tender alongside the line tax, so a Sale records the
+  // coordinate it actually resolved through rather than re-deriving it later.
+  taxGroupId?: string;
   lines: SaleLine[];
   tenders: Tender[];
   createdBy: string;
@@ -794,4 +810,78 @@ export interface SettingsLogEntry {
   key: string;
   before: string;
   after: string;
+}
+
+// ---------------------------------------------------------------------------
+// M-06 tax — two tables, not one (d11)
+//
+// A TAX TYPE is one tax that EXISTS, shared by every group that charges it, so
+// a legislated rate change is edited once. A TAX GROUP is a jurisdiction or
+// customer class, carrying one cell per product tax code. The cell names the
+// taxes. d1's single table could not express a rate shared across
+// jurisdictions without repeating it, and repeated rates drift.
+// ---------------------------------------------------------------------------
+
+// The shape lib/tax.ts produces. Declared here rather than imported so the
+// data model does not depend on the library that computes it.
+export interface TaxComponent {
+  code: string;
+  name: string;
+  ratePpm: number;
+  amount: number;
+}
+
+export interface TaxType {
+  code: string; // a single letter — a, b, c — used to compose the cells
+  name: string; // GST, QST, PST, HST
+  ratePpm: number; // A-47 — parts per million, because QST is 9.975%
+  // A-58 / d52 — ONE pending change: the new rate and the date it starts.
+  // Never read ratePpm directly; resolve through taxRateAt().
+  pendingRatePpm?: number;
+  pendingFrom?: string;
+  // d48 — the registration number belongs on the TYPE, not in store details:
+  // GST and QST are separate registrations and a receipt carries each beside
+  // its own tax.
+  registrationNumber?: string;
+  // Reserved and not drawn — there is no chart of accounts yet. The field
+  // exists so one needs no migration, the move A-14 makes for cover_art_path.
+  glAccount?: string;
+  active: boolean;
+}
+
+export interface ProductTaxCode {
+  code: string; // 1, 2, B, 3
+  // d12 — a description beside it, because a bare letter sitting on a genre is
+  // tribal knowledge and the next person to read it has nothing to go on.
+  description: string;
+  active: boolean;
+}
+
+export interface TaxGroup {
+  id: string;
+  description: string; // Quebec, Ontario, Wholesale
+  shortName: string; // up to four characters — this is what appears on a Customer
+  active: boolean;
+}
+
+// d13 — stored as ROWS, drawn as a grid. Storage shape and screen shape are
+// decoupled deliberately: the grid is how a person reads it, and rows are how
+// it stays addable-to without a migration per product tax code.
+export interface TaxGroupCell {
+  groupId: string;
+  productTaxCode: string;
+  spec: string; // "", "a", "ab", "ab+"
+}
+
+// d12, d32 — a Genre carries a MANDATORY parent Section and the product tax
+// code. d17 makes genre mandatory on every sellable thing, including
+// non-tracked ones, which is what closes the "what tax does freight pay"
+// question without a special case.
+export interface Genre {
+  name: string;
+  section: string; // Section code — mandatory (d32)
+  productTaxCode: string; // mandatory (d12, d17)
+  // d17 — shop-internal genres are omitted from the picker rather than gated,
+  // so setting a Record's genre to Freight is unrepresentable (d19).
+  internal?: boolean;
 }

@@ -17,7 +17,7 @@ export const blankCustomer: CustomerDraft = {
   contactPreference: "Email",
   address: {},
   globalDiscountPct: 0,
-  defaultTaxLineId: undefined,
+  taxGroupId: undefined,
   note: "",
 };
 

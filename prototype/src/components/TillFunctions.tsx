@@ -245,7 +245,7 @@ export function SearchModal({ onClose }: { onClose: () => void }) {
           <tbody>
             {rows.map((sale) => {
               const cust = app.customerFor(sale.customerId);
-              const totals = saleTotals(sale, app.taxLines);
+              const totals = saleTotals(sale, app.taxCtxFor(sale));
               return (
                 <tr key={sale.id}>
                   <td>
