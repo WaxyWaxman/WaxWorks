@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { ACCOUNT_TYPES } from "./CustomerSlab";
 import type { Customer, CustomerAddress } from "../data/types";
 import { useApp } from "../store/AppStore";
+import { useScopedActor } from "./Identify";
 
 const CONTACT_PREFS: Customer["contactPreference"][] = ["Email", "Phone"];
 
@@ -34,6 +35,7 @@ export function accountNumberTaken(customers: Customer[], value: string, exclude
 // fades — "no confirm step" and "no feedback" are not the same thing.
 export function CustomerCard({ customer }: { customer: Customer }) {
   const app = useApp();
+  const withActor = useScopedActor(customer.id);
   const [saved, pulse] = useSavedPulse();
 
   const history = useMemo(
@@ -50,10 +52,14 @@ export function CustomerCard({ customer }: { customer: Customer }) {
     [app.sales, customer.id],
   );
 
-  const patch = (p: Partial<Omit<Customer, "id" | "primaryId">>) => {
-    app.updateCustomer(customer.id, p);
-    pulse();
-  };
+  // E-01 d20 — the card is the unit of attribution, not the field. Silent
+  // while somebody is signed in; with no session the first edit asks once and
+  // covers the rest of this card.
+  const patch = (p: Partial<Omit<Customer, "id" | "primaryId">>) =>
+    withActor(`Edit ${customer.name || "customer"}`, () => {
+      app.updateCustomer(customer.id, p);
+      pulse();
+    });
 
   return (
     <section className="cust-main">

@@ -133,20 +133,68 @@ function SessionChip() {
       </span>
     );
 
+  // The name opens a small menu carrying Log out, rather than a button sitting
+  // permanently on the till's busiest strip. Ending a session on purpose has
+  // to be POSSIBLE — the lapse has no maximum (d13) and an Open Sale
+  // suppresses it outright (d10), so a till left signed in stays signed in —
+  // but it is not a per-minute action, and the width is worth more.
+  return <SessionMenu openSale={openSale} />;
+}
+
+function SessionMenu({ openSale }: { openSale: boolean }) {
+  const app = useApp();
+  const [open, setOpen] = useState(false);
+  const wrapRef = useRef<HTMLSpanElement>(null);
+
+  useEffectShell(() => {
+    if (!open) return;
+    const onPointer = (e: PointerEvent) => {
+      if (!wrapRef.current?.contains(e.target as Node)) setOpen(false);
+    };
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && setOpen(false);
+    document.addEventListener("pointerdown", onPointer);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("pointerdown", onPointer);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [open]);
+
+  if (!app.sessionUser) return null;
+
   return (
-    <span className="who">
-      <span className="sess-name">{app.sessionUser.name}</span>
+    <span className="who sess-wrap" ref={wrapRef}>
+      <button
+        className={"sess-name" + (open ? " on" : "")}
+        aria-haspopup="true"
+        aria-expanded={open}
+        onClick={() => setOpen((v) => !v)}
+      >
+        {app.sessionUser.name} <span aria-hidden="true">▾</span>
+      </button>
       <span className="muted">
         {" "}
         {app.sessionUser.role} · Till 1{openSale ? " · sale open, no lapse" : ""}
       </span>
-      {/* Explicit, because the alternative is waiting out a lapse that has no
-          maximum (d13) and that an Open Sale suppresses outright (d10). Walking
-          away from a till that stays signed in as you is the misattribution the
-          lapse exists to prevent, so there has to be a way to end it on purpose. */}
-      <button className="btn sm ghost sess-out" onClick={() => app.endSession()}>
-        Log out
-      </button>
+      {open && (
+        <span className="sess-menu" role="menu">
+          <button
+            className="sess-item"
+            role="menuitem"
+            onClick={() => {
+              setOpen(false);
+              app.endSession();
+            }}
+          >
+            Log out
+          </button>
+          <span className="sess-note">
+            {openSale
+              ? "A Sale is open, so the lapse is suppressed (d10) — this till stays signed in until you log out."
+              : `Lapses after ${Math.round(app.sessionLapseSeconds / 60)} min idle (M-06 d45).`}
+          </span>
+        </span>
+      )}
     </span>
   );
 }

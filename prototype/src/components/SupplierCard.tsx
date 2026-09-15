@@ -11,6 +11,7 @@ import type {
   SupplierType,
 } from "../data/types";
 import { useApp } from "../store/AppStore";
+import { useScopedActor } from "./Identify";
 
 const ORDER_VIA: SupplierOrderVia[] = ["Phone", "Email", "FTP", "Their Website", "Fax", "Rep"];
 const MIN_BASIS: SupplierMinBasis[] = ["Retail", "Net"];
@@ -67,6 +68,7 @@ const ADDRESS_FIELDS: { key: keyof PostalAddress; label: string; wide?: boolean;
 //    the audit trail M-01 d4 asks for into noise. One field touched is one row.
 export function SupplierCard({ supplier }: { supplier: Supplier }) {
   const app = useApp();
+  const withActor = useScopedActor(supplier.id);
   const [saved, setSaved] = useState(false);
   const [askingManager, setAskingManager] = useState(false);
   // Session-scoped, and dropped the moment another card is opened: authorising
@@ -83,10 +85,14 @@ export function SupplierCard({ supplier }: { supplier: Supplier }) {
     window.setTimeout(() => setSaved(false), 1400);
   };
 
-  const commit = (patch: Partial<SupplierDraft>) => {
-    app.updateSupplier(supplier.id, patch);
-    flash();
-  };
+  // E-01 d20 — one prompt per card, not per field. M-01 d13 already accepts
+  // that this card files a log row per field rather than per visit; asking for
+  // initials per field on top of that would be unusable.
+  const commit = (patch: Partial<SupplierDraft>) =>
+    withActor(`Edit ${supplier.name || "supplier"}`, () => {
+      app.updateSupplier(supplier.id, patch);
+      flash();
+    });
 
   return (
     <section className="cust-main sup-main">

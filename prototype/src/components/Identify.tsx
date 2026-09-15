@@ -45,6 +45,51 @@ export function useIdentify() {
   return v;
 }
 
+// Tier 2, card-scoped (E-01 d20).
+//
+// The Customer and Supplier cards have no Save button — every field commits on
+// blur (E-07 d13, M-01 d13). Read literally, d5 would prompt once per FIELD,
+// which is the behaviour d12 says trains people to type initials without
+// reading the screen.
+//
+// So the unit of attribution is THE CARD, not the keystroke: the first edit
+// asks, and that answer covers the rest of that card until you leave it.
+// Moving to a different card asks again, because it may well be a different
+// person. Still not a session — close the card and it is forgotten.
+export function useScopedActor(scopeKey: string) {
+  const { request } = useIdentify();
+  const app = useApp();
+  const [held, setHeld] = useState<{ key: string; actor: string } | null>(null);
+
+  // Leaving the card drops the actor. Without this the answer given for one
+  // Supplier would quietly attribute edits to the next one opened.
+  useEffect(() => {
+    setHeld((h) => (h && h.key === scopeKey ? h : null));
+  }, [scopeKey]);
+
+  return useCallback(
+    (reason: string, run: (actorName: string) => void) => {
+      if (app.sessionUser) {
+        run(`${app.sessionUser.name} (${app.sessionUser.role})`);
+        return;
+      }
+      if (held && held.key === scopeKey) {
+        run(held.actor);
+        return;
+      }
+      request({
+        reason,
+        onOk: (u) => {
+          const actor = `${u.name} (${u.role})`;
+          setHeld({ key: scopeKey, actor });
+          run(actor);
+        },
+      });
+    },
+    [app.sessionUser, held, scopeKey, request],
+  );
+}
+
 // Tier 2 — the ordinary case, and the one the prototype was missing.
 //
 // d5 and step 5: with NO session open, any action requiring attribution
