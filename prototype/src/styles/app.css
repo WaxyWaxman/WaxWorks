@@ -2766,3 +2766,5 @@ table.claims-ln td { padding: 5px 8px 5px 0; border-bottom: 1px solid var(--c-bo
 }
 .idy-esc { white-space: nowrap; }
 .idy-none { color: var(--c-muted); }
+.sess-name { font-weight: 700; }
+.sess-out { margin-left: var(--sp-2); }

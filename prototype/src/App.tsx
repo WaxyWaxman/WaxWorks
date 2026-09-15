@@ -135,13 +135,18 @@ function SessionChip() {
 
   return (
     <span className="who">
-      <button className="btn sm ghost" onClick={() => app.endSession()} title="End session">
-        {app.sessionUser.name}
-      </button>
+      <span className="sess-name">{app.sessionUser.name}</span>
       <span className="muted">
         {" "}
         {app.sessionUser.role} · Till 1{openSale ? " · sale open, no lapse" : ""}
       </span>
+      {/* Explicit, because the alternative is waiting out a lapse that has no
+          maximum (d13) and that an Open Sale suppresses outright (d10). Walking
+          away from a till that stays signed in as you is the misattribution the
+          lapse exists to prevent, so there has to be a way to end it on purpose. */}
+      <button className="btn sm ghost sess-out" onClick={() => app.endSession()}>
+        Log out
+      </button>
     </span>
   );
 }

@@ -45,6 +45,35 @@ export function useIdentify() {
   return v;
 }
 
+// Tier 2 — the ordinary case, and the one the prototype was missing.
+//
+// d5 and step 5: with NO session open, any action requiring attribution
+// prompts inline. With a session open it does not, because d12 deliberately
+// covers receiving, order processing and the back office by the session —
+// somebody sitting down to receive a carton is the same person for an hour,
+// and prompting them per action trains them to type initials without reading
+// the screen.
+//
+// So this is the helper every attributed back-office action goes through:
+// silent when somebody is signed in, a prompt when nobody is.
+//
+// It does NOT open a session on success. d5 says "proceeds without opening a
+// full session" in those words — signing in is something you do on purpose.
+export function useActor() {
+  const { request } = useIdentify();
+  const app = useApp();
+  return useCallback(
+    (reason: string, run: (actorName: string) => void) => {
+      if (app.sessionUser) {
+        run(`${app.sessionUser.name} (${app.sessionUser.role})`);
+        return;
+      }
+      request({ reason, onOk: (u) => run(`${u.name} (${u.role})`) });
+    },
+    [app.sessionUser, request],
+  );
+}
+
 export function IdentifyProvider({ children }: { children: ReactNode }) {
   const [req, setReq] = useState<Request | null>(null);
   const request = useCallback((r: Request) => setReq(r), []);
