@@ -21,6 +21,12 @@ export interface RecordEntry {
   country: string;
   // The genre's stable id, never its name (see Genre below).
   genreId: string;
+  // A-61 — the provider tags this Record was adopted under, the matched one
+  // marked. Undefined where the release carried none at all, which d53 keeps
+  // distinct from an unmapped tag: both prompt, but only one can write a map
+  // row. Display-only and never read by the money path, which resolves
+  // through the genre's product tax code (d12).
+  providerTags?: AdoptedTag[];
   // M-06 d31, d32 — the Record stores its GENRE and NOT its Section. Section
   // is derived through the genre's required parent (see lib/taxonomy.ts);
   // storing both was the same fact at two removes, and it drifted the moment
@@ -896,6 +902,34 @@ export interface TaxGroupCell {
   groupId: string;
   productTaxCode: string;
   spec: string; // "", "a", "ab", "ab+"
+}
+
+// A-61 — what the catalog provider says about a release. MusicBrainz genre
+// tags are user-submitted and carry a VOTE COUNT, which is the provider's own
+// answer to "this release has three tags, which one is meant".
+export interface ProviderTag {
+  tag: string;
+  votes: number;
+}
+
+// A-61 — the tags a Record was ADOPTED under, with the one the map matched
+// marked. A snapshot, never re-resolved: `release_cache` is shared and
+// refreshable (A-6), so it holds what the provider says NOW, where the
+// question a mis-shelved Record raises is what it said THEN. Same shape as
+// A-57's rates on a Sale line, for the same reason.
+export interface AdoptedTag extends ProviderTag {
+  matched?: boolean;
+}
+
+// M-06 d6, d32 — the genre map: provider tag to genre and NOTHING ELSE. The
+// Section follows from the genre's required parent and is never guessed.
+export interface GenreMapRow {
+  tag: string;
+  genreId: string;
+  // A-61 — manager-only (A-59), defaulting to zero so a shop that sets
+  // nothing gets the provider's vote order. It exists because votes measure
+  // consensus rather than specificity.
+  priority: number;
 }
 
 // d12, d32 — a Genre carries a MANDATORY parent Section and the product tax
