@@ -56,7 +56,7 @@ The Manager aims to empower their employees to help make good decisions and some
 
 The Manager inherits all Employee capabilities (superset).
 
-**Two mechanisms, not one.** A small set of actions is **manager-only** — an Employee cannot perform them at all, and a Manager authorizes in place by entering their own initials, with both names recorded. Everything else that used to be gated behind a *manager override* now **proceeds and raises a review flag** the Manager reviews afterward: below-cost shelf pricing, invoice adjustments beyond ±2%, selling into negative stock. Both mechanics are defined in [M-04](flows/M-04-manage-users.md) — see decisions 8 and 9, and [architecture](architecture.md) A-28.
+**Two mechanisms, not one.** A small set of actions is **manager-only** — an Employee cannot perform them at all, and a Manager authorizes in place by entering their own initials, with both names recorded. Everything else that used to be gated behind a *manager override* now **proceeds and raises a review flag** the Manager reviews afterward: below-cost shelf pricing, an accepted subtotal discrepancy, selling into negative stock. (*Invoice adjustments beyond ±2%* were on that list until [architecture](architecture.md) A-48 made them impossible instead.) Both mechanics are defined in [M-04](flows/M-04-manage-users.md) — see decisions 8 and 9, and [architecture](architecture.md) A-28.
 
 This extends the design intent that Employees have high agency: a Manager sees what happened rather than standing in the way of it.
 
@@ -105,7 +105,7 @@ _Partially derived from E-02. Refine as further flows land._
 | **Invoice** | Inbound receiving document. Draft, finalized, then paid; correctable until paid, immutable after ([E-02](flows/E-02-receive-inventory.md) d40). Keyed by `(supplier, invoice_number)`. Carries invoice-level freight / tax / misc. |
 | **InvoiceLine** | One received item on an invoice — links Record, cost (`Ext. Price`), accepted retail price, condition. |
 | ~~**InvoiceScan**~~ | **Removed** — there is no invoice photography and no document extraction ([E-02](flows/E-02-receive-inventory.md) d27). Invoice-level totals are entered manually. |
-| **CostAdjustment** | The ±2% reconciliation delta; flows into COGS. Beyond ±2% it proceeds and raises a ReviewFlag (E-02 d35). |
+| **CostAdjustment** | The reconciliation delta between the derived Invoice Total and the Total recorded; flows into COGS. **Bounded to ±2%** — beyond it the write path refuses the Total rather than flagging it ([architecture](architecture.md) A-48, E-02 d50, superseding d35's flag). |
 | **Backorder** | Units ordered but not shipped (the supplier's `Balance`). **Derived, not stored** — ordered minus received against that PurchaseOrder line across every Invoice (E-02 d30). |
 | **PurchaseOrder** | Manager-created reorder (M-02). Triggers catalog metadata prefetch. One Invoice may span several POs, so the link lives on the InvoiceLine ([E-02](flows/E-02-receive-inventory.md) d28). |
 | **Sale / Transaction** | A checkout (E-05). Carries a Sale number unique **per store** (E-05 d22) and one of five states: **Open**, Current, Held, Closed, Void. An Open Sale is pre-tender, unnumbered, and locked to the Employee ringing it (E-05 d21, d23). |
@@ -114,11 +114,11 @@ _Partially derived from E-02. Refine as further flows land._
 | **Return** | Reversal of a sale (E-06). A negative-quantity SaleLine, not a separate document. |
 | **Hold** | A Sale in the **Held** state — stock committed to a customer, by reservation (E-04) or on receipt of a customer-attached order (M-02). |
 | **Customer** | A person or business the store deals with. Optional on any Sale. Carries a signed account balance, a global discount, and a default tax line (E-07). |
-| **GiftCard** | A `GC`-prefixed code carrying a balance. Loaded as a SaleLine, redeemed as a Tender (E-05). |
+| **GiftCard** | A `GC`-prefixed code and a movement history; the balance is the **sum of its movements**, stored nowhere ([architecture](architecture.md) A-51). Loaded as a SaleLine, redeemed as a Tender (E-05), reversed by a void or edit. An over-redemption is refused, never clamped. |
 | **SupplierClaim** | A claim for credit against a supplier Invoice for short, damaged, or unshipped stock (E-04). Pending or Credited. |
 | **PaymentBatch** | One settlement act, recorded once however many things it settled — method, reference, date, recorded-by, and **targets** naming what was settled and whether each was money or claim credit ([M-05](flows/M-05-accounts-payable.md) d16, d19). Voided whole, never edited (d22). Supersedes **APPayment**, which named one payment against one Invoice. |
 | **InventoryAdjustment** | A manager-only correction to stock, carrying a reason code, before/after counts, and attribution (E-04). |
-| **ReviewFlag** | A record that an Employee took an action worth a Manager's later attention — below-cost pricing, an adjustment beyond ±2%, a Sale driving stock negative. Carries the actor, the subject, and the figures that raised it. Acknowledged, never deleted ([M-04](flows/M-04-manage-users.md) d8). |
+| **ReviewFlag** | A record that an Employee took an action worth a Manager's later attention — below-cost pricing, an accepted derived-versus-stated subtotal discrepancy, a Sale driving stock negative, a broken sale lock. (*An adjustment beyond ±2%* was on this list until [architecture](architecture.md) A-48 made it impossible rather than flagged.) Acknowledged by a Manager (M-04 d17). Carries the actor, the subject, and the figures that raised it. Acknowledged, never deleted ([M-04](flows/M-04-manage-users.md) d8). |
 | **Section** | Top-level reporting category (`VINYL`, `MERCH`). Genres roll up into Sections (M-06). |
 | **TaxLine** | A named, rated tax entry. Sellable things reference one rather than carrying a boolean (M-06). |
 | **CloseBatch** | One end-of-day close — its identifier, timestamp, closing User, and the Sales it moved to Closed (M-03). |

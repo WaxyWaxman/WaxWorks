@@ -72,7 +72,7 @@
 **Suggested retail** is computed from the **pre-discount list price**, marked up by the Supplier's own **Discount** field ([M-01](M-01-supplier-margin.md) — not the per-line Disc% below, the Supplier record's own figure):
 
 ```
-suggested_retail = round_up(list_price x (1 + supplier.discountPct / 100))
+suggested_retail = round_to_ending(list_price x (1 + supplier.discountPct / 100), price_ending)
 ```
 
 Two different "discounts" are in play on one line and it's worth keeping them straight: the **line's own Disc%** (step 10, read off this invoice's paperwork) drives cost — `extPrice = list_price x (1 - line_discount)`. The **Supplier's Discount field** (M-01, one figure per Supplier, not per invoice) drives suggested retail instead. Pricing the retail side off list rather than net means a supplier discount on THIS invoice's paperwork is captured as margin rather than passed through as a lower shelf price — the two figures don't need to match, and usually won't.
