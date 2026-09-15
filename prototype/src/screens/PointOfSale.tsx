@@ -10,11 +10,13 @@ import { money } from "../lib/money";
 import { resolveScan } from "../lib/resolve";
 import { availableOnHand, balanceDue, saleTotals } from "../lib/totals";
 import { useApp } from "../store/AppStore";
+import { useIdentify } from "../components/Identify";
 
 const TENDERS: TenderType[] = ["Cash", "Credit Card", "Account Balance", "Gift Card", "Pay-out", "Used Credit"];
 
 export function PointOfSale() {
   const app = useApp();
+  const identify = useIdentify();
   const nav = useNavigate();
   const { saleId } = useParams();
 
@@ -57,7 +59,19 @@ export function PointOfSale() {
           <div className="stack">
             <div className="lab">No sale open</div>
             <p className="muted">Start one here, or pick something up from the rail.</p>
-            <button className="btn primary" onClick={() => nav(`/sell/${app.newSale()}`)}>
+            <button
+              className="btn primary"
+              onClick={() =>
+                identify.request({
+                  reason: "New sale",
+                  always: true,
+                  onOk: (u) => {
+                    app.identify(u.id);
+                    nav(`/sell/${app.newSale()}`);
+                  },
+                })
+              }
+            >
               + New sale
             </button>
           </div>

@@ -1,0 +1,143 @@
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
+import type { User } from "../data/types";
+import { resolveInitials, resolutionHint } from "../lib/identify";
+import { useApp } from "../store/AppStore";
+
+// E-01 identification, built for the counter.
+//
+// The whole design brief is speed. Opening a Sale, recording a pay-out,
+// adjusting on hand and voiding prompt EVERY time, session or not (d12, d15),
+// so this runs many times an hour and has to cost a keystroke or two.
+//
+//   - No Enter, no OK button. The moment what is typed can only be one active
+//     person, the action proceeds.
+//   - Escape cancels THE ACTION, not just the dialog. Nothing half-happens.
+//   - An ambiguous prefix waits for another character rather than guessing, so
+//     the failure mode is a keystroke and never a misattribution.
+//
+// A deliberate non-feature: there is no list of names to click. A picker would
+// put every prompt behind a read-and-aim, and would show the whole staff list
+// to whoever is standing at the counter. Ambiguity shows the competing
+// INITIALS, not the people.
+
+type Request = {
+  reason: string;
+  // Why the prompt appeared even though a session is open, where that applies
+  // — so the person typing can see it is not a bug.
+  always?: boolean;
+  onOk: (user: User) => void;
+  onCancel?: () => void;
+};
+
+const IdentifyCtx = createContext<{ request: (r: Request) => void } | null>(null);
+
+export function useIdentify() {
+  const v = useContext(IdentifyCtx);
+  if (!v) throw new Error("useIdentify must be used inside IdentifyProvider");
+  return v;
+}
+
+export function IdentifyProvider({ children }: { children: ReactNode }) {
+  const [req, setReq] = useState<Request | null>(null);
+  const request = useCallback((r: Request) => setReq(r), []);
+  return (
+    <IdentifyCtx.Provider value={{ request }}>
+      {children}
+      {req && (
+        <IdentifyPrompt
+          req={req}
+          onDone={(user) => {
+            setReq(null);
+            req.onOk(user);
+          }}
+          onCancel={() => {
+            setReq(null);
+            req.onCancel?.();
+          }}
+        />
+      )}
+    </IdentifyCtx.Provider>
+  );
+}
+
+function IdentifyPrompt({
+  req,
+  onDone,
+  onCancel,
+}: {
+  req: Request;
+  onDone: (u: User) => void;
+  onCancel: () => void;
+}) {
+  const app = useApp();
+  const [typed, setTyped] = useState("");
+  const inputRef = useRef<HTMLInputElement>(null);
+  const res = resolveInitials(app.users, typed);
+
+  useEffect(() => inputRef.current?.focus(), []);
+
+  // Resolve in an effect rather than in the change handler so the resolved
+  // name is painted before the dialog closes. Typing the last character of
+  // your initials and seeing the screen change with no idea what it resolved
+  // to is how people stop reading prompts.
+  useEffect(() => {
+    if (res.kind !== "one") return;
+    const t = setTimeout(() => onDone(res.user), 140);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [res.kind, res.kind === "one" ? res.user.id : null]);
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        e.preventDefault();
+        onCancel();
+      }
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [onCancel]);
+
+  return (
+    <div className="idy-scrim" onPointerDown={onCancel}>
+      <div
+        className="idy"
+        role="dialog"
+        aria-label="Enter your initials"
+        onPointerDown={(e) => e.stopPropagation()}
+      >
+        <div className="idy-reason">{req.reason}</div>
+        <input
+          ref={inputRef}
+          className={"idy-input" + (res.kind === "none" ? " bad" : "")}
+          value={typed}
+          maxLength={4}
+          autoComplete="off"
+          spellCheck={false}
+          aria-label="Initials"
+          onChange={(e) => setTyped(e.target.value)}
+        />
+        <div className={"idy-hint" + (res.kind === "one" ? " ok" : "")}>{resolutionHint(res)}</div>
+        <div className="idy-foot">
+          {req.always ? (
+            <span>
+              Asked every time, session or not — this action is worth attributing on its own
+              (E-01 d12, d15).
+            </span>
+          ) : (
+            <span>Opens your session on this terminal.</span>
+          )}
+          <span className="idy-esc">Esc cancels</span>
+        </div>
+      </div>
+    </div>
+  );
+}

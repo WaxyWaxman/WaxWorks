@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { NavLink, Route, Routes, useLocation } from "react-router-dom";
-import { CURRENT_USER } from "./data/seed";
+import { IdentifyProvider, useIdentify } from "./components/Identify";
+import { useApp } from "./store/AppStore";
 import { Home } from "./screens/Home";
 import { Search } from "./screens/Search";
 import { PointOfSale } from "./screens/PointOfSale";
@@ -14,6 +15,7 @@ import { Suppliers } from "./screens/Suppliers";
 import { AccountsPayable } from "./screens/AccountsPayable";
 import { Users } from "./screens/Users";
 import { ReviewQueueBadge } from "./components/ReviewQueue";
+import { useEffect as useEffectShell } from "react";
 
 // The top menu is one band of equal segments (design review — Signal), and it
 // carries exactly the three jobs done with a customer at the counter. Everything
@@ -69,6 +71,82 @@ const MORE_NAV: { group: string; items: { to: string; label: string; flow: strin
 const MORE_PATHS = MORE_NAV.flatMap((g) => g.items.map((i) => i.to));
 
 export function App() {
+  return (
+    <IdentifyProvider>
+      <AppShell />
+    </IdentifyProvider>
+  );
+}
+
+// E-01's session, drawn where the till can see it.
+//
+// It is an actor and a timer in the browser and nothing else (A-3, A-50), so
+// the whole of it lives in the shell: who is in session, and a lapse that
+// measures INACTIVITY rather than elapsed time — an hour of continuous work
+// never prompts, six minutes away does (M-06 d45).
+function SessionChip() {
+  const app = useApp();
+  const identify = useIdentify();
+
+  // d10 / A-19a — an Open Sale suppresses the lapse on its terminal, whatever
+  // the setting says, so a lapse can never strand a locked Sale mid-ring.
+  const openSale = app.sales.some((x) => x.state === "Open");
+
+  useEffectShell(() => {
+    if (!app.sessionUser || openSale) return;
+    const tick = setInterval(() => {
+      const idleFor = (Date.now() - app.sessionLastActivity) / 1000;
+      if (idleFor >= app.sessionLapseSeconds) app.endSession();
+    }, 1000);
+    return () => clearInterval(tick);
+  }, [app, openSale]);
+
+  // Any interaction is activity. Cheap and global rather than sprinkled
+  // through every screen, because the rule is about the terminal, not any
+  // particular control.
+  useEffectShell(() => {
+    if (!app.sessionUser) return;
+    const touch = () => app.touchSession();
+    document.addEventListener("pointerdown", touch);
+    document.addEventListener("keydown", touch);
+    return () => {
+      document.removeEventListener("pointerdown", touch);
+      document.removeEventListener("keydown", touch);
+    };
+  }, [app]);
+
+  if (!app.sessionUser)
+    return (
+      <span className="who">
+        <button
+          className="btn sm primary"
+          onClick={() =>
+            identify.request({
+              reason: "Open a session on this terminal",
+              onOk: (u) => app.identify(u.id),
+            })
+          }
+        >
+          Enter initials
+        </button>
+        <span className="idy-none"> no session · Till 1</span>
+      </span>
+    );
+
+  return (
+    <span className="who">
+      <button className="btn sm ghost" onClick={() => app.endSession()} title="End session">
+        {app.sessionUser.name}
+      </button>
+      <span className="muted">
+        {" "}
+        {app.sessionUser.role} · Till 1{openSale ? " · sale open, no lapse" : ""}
+      </span>
+    </span>
+  );
+}
+
+function AppShell() {
   const location = useLocation();
   // /return/:saleId has no nav entry of its own — a Return is entered from
   // (and belongs to) Point of Sale, so its editor keeps "Sell" lit rather than
@@ -128,7 +206,7 @@ export function App() {
         <span className="review-slot">
           <ReviewQueueBadge />
         </span>
-        <span className="who">{CURRENT_USER} · Till 1 · Prototype</span>
+        <SessionChip />
       </header>
       <main className={"main" + (ownsWindow ? " main-fixed" : "")}>
         <Routes>
