@@ -374,6 +374,10 @@ function UserCard({
             />
           </label>
 
+          {user.active && (
+            <PasswordField key={user.id} user={user} onRun={onRun} />
+          )}
+
           {user.active ? (
             <>
               <div className="field">
@@ -451,6 +455,86 @@ function UserCard({
 }
 
 // ---------------------------------------------------------------------------
+
+// E-01 d21 — optional, for anyone, up to 8 characters. Deliberately plain
+// about what it is: the screen says "barrier", not "security", because a shop
+// setting it to one letter should not think it has done more than it has.
+function PasswordField({ user, onRun }: { user: User; onRun: (r: UserWriteResult) => boolean }) {
+  const app = useApp();
+  const [value, setValue] = useState("");
+  const [open, setOpen] = useState(false);
+
+  if (!open)
+    return (
+      <div className="field">
+        <span>Password</span>
+        <div className="btn-row">
+          <span className="small muted" style={{ flex: 1 }}>
+            {user.password
+              ? "Set — asked when this person opens a session or authorises a manager-only action."
+              : "None. Optional for anyone, Manager or Employee."}
+          </span>
+          <button className="btn ghost sm" onClick={() => setOpen(true)}>
+            {user.password ? "Change" : "Set"}
+          </button>
+          {user.password && (
+            <button
+              className="btn ghost sm"
+              onClick={() => onRun(app.setUserPassword(user.id, "", MANAGER_NAME))}
+            >
+              Clear
+            </button>
+          )}
+        </div>
+      </div>
+    );
+
+  return (
+    <div className="field">
+      <span>
+        Password{" "}
+        <SpecNote cite="E-01 d21">
+          A <strong>barrier, not authentication</strong>. Up to 8 characters, optional for anyone,
+          and a single letter is a legitimate choice — it exists so that typing a Manager's
+          initials at an unattended till is not by itself enough to reach the manager-only space.
+          The log records that it changed and <strong>never what it was</strong>. A password
+          holder's session is capped at the 5-minute default however long the shop set its lapse
+          to.
+        </SpecNote>
+      </span>
+      <div className="btn-row">
+        <input
+          type="password"
+          autoFocus
+          value={value}
+          maxLength={8}
+          autoComplete="off"
+          onChange={(e) => setValue(e.target.value)}
+        />
+        <button
+          className="btn primary sm"
+          onClick={() => {
+            if (onRun(app.setUserPassword(user.id, value, MANAGER_NAME))) {
+              setValue("");
+              setOpen(false);
+            }
+          }}
+        >
+          Save
+        </button>
+        <button
+          className="btn ghost sm"
+          onClick={() => {
+            setValue("");
+            setOpen(false);
+          }}
+        >
+          Cancel
+        </button>
+      </div>
+    </div>
+  );
+}
 
 function UserLog({ user, managers }: { user: User | null; managers: number }) {
   return (

@@ -96,7 +96,9 @@ function SessionChip() {
     if (!app.sessionUser || openSale) return;
     const tick = setInterval(() => {
       const idleFor = (Date.now() - app.sessionLastActivity) / 1000;
-      if (idleFor >= app.sessionLapseSeconds) app.endSession();
+      // d21: a password holder's session is capped at the 5-minute default
+      // however long the shop set its own lapse to.
+      if (idleFor >= app.effectiveLapseSeconds) app.endSession();
     }, 1000);
     return () => clearInterval(tick);
   }, [app, openSale]);
@@ -123,6 +125,9 @@ function SessionChip() {
           onClick={() =>
             identify.request({
               reason: "Open a session on this terminal",
+              // E-01 d21 — opening a session is one of the two moments a
+              // password is asked for. Users without one are unaffected.
+              requirePassword: true,
               onOk: (u) => app.identify(u.id),
             })
           }
@@ -191,7 +196,9 @@ function SessionMenu({ openSale }: { openSale: boolean }) {
           <span className="sess-note">
             {openSale
               ? "A Sale is open, so the lapse is suppressed (d10) — this till stays signed in until you log out."
-              : `Lapses after ${Math.round(app.sessionLapseSeconds / 60)} min idle (M-06 d45).`}
+              : app.effectiveLapseSeconds < app.sessionLapseSeconds
+                ? `Lapses after ${Math.round(app.effectiveLapseSeconds / 60)} min idle — capped because you have a password (d21), not the shop's ${Math.round(app.sessionLapseSeconds / 60)} min.`
+                : `Lapses after ${Math.round(app.effectiveLapseSeconds / 60)} min idle (M-06 d45).`}
           </span>
         </span>
       )}

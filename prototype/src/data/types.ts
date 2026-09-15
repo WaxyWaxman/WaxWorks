@@ -678,6 +678,13 @@ export interface User {
   // outlive their leaving. Uniqueness of initials is among ACTIVE users only
   // (d13 as amended by d16) - a departed user's initials are released.
   active: boolean;
+  // E-01 d21. OPTIONAL, for anyone, up to 8 characters. It is a barrier and
+  // not authentication — a shop may well use a single letter — so nothing in
+  // the model treats it as proof of identity. Absent means no second step.
+  //
+  // Plain text here because this is an in-memory mock with no server; the
+  // real thing hashes it and never logs the value (see the decision).
+  password?: string;
   // Before-and-after, per A-55: without it, who promoted whom exists nowhere
   // after the second change, and this is the privilege boundary.
   log: { at: string; text: string }[];

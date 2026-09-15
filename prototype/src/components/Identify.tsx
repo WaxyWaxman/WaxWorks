@@ -9,6 +9,7 @@ import {
 } from "react";
 import type { User } from "../data/types";
 import { resolveInitials, resolutionHint } from "../lib/identify";
+import { passwordAccepted, PASSWORD_MAX } from "../lib/users";
 import { useApp } from "../store/AppStore";
 
 // E-01 identification, built for the counter.
@@ -30,6 +31,11 @@ import { useApp } from "../store/AppStore";
 
 type Request = {
   reason: string;
+  // E-01 d21 — ask for the password where the user has one. Only the two
+  // moments that matter: opening a session, and authorising a manager-only
+  // action. NOT the counter's rhythmic prompts (d12), or a Manager working
+  // the till would type it on every Sale.
+  requirePassword?: boolean;
   // Why the prompt appeared even though a session is open, where that applies
   // — so the person typing can see it is not a bug.
   always?: boolean;
@@ -153,21 +159,44 @@ function IdentifyPrompt({
 }) {
   const app = useApp();
   const [typed, setTyped] = useState("");
+  // Step two. Null means we are still on initials.
+  const [pending, setPending] = useState<User | null>(null);
+  const [pw, setPw] = useState("");
+  const [pwBad, setPwBad] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
+  const pwRef = useRef<HTMLInputElement>(null);
   const res = resolveInitials(app.users, typed);
 
   useEffect(() => inputRef.current?.focus(), []);
+  useEffect(() => {
+    if (pending) pwRef.current?.focus();
+  }, [pending]);
 
   // Resolve in an effect rather than in the change handler so the resolved
   // name is painted before the dialog closes. Typing the last character of
   // your initials and seeing the screen change with no idea what it resolved
   // to is how people stop reading prompts.
   useEffect(() => {
-    if (res.kind !== "one") return;
-    const t = setTimeout(() => onDone(res.user), 140);
+    if (res.kind !== "one" || pending) return;
+    const user = res.user;
+    const needsPw = Boolean(req.requirePassword && user.password);
+    const t = setTimeout(() => (needsPw ? setPending(user) : onDone(user)), 140);
     return () => clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [res.kind, res.kind === "one" ? res.user.id : null]);
+  }, [res.kind, res.kind === "one" ? res.user.id : null, pending]);
+
+  // The password is checked on Enter, not as you type. A one-character
+  // password would otherwise resolve on the first keystroke and make the
+  // barrier invisible — and unlike initials, there is no "keep typing" state
+  // to tell the difference between wrong and unfinished.
+  const submitPw = () => {
+    if (!pending) return;
+    if (passwordAccepted(pending, pw)) onDone(pending);
+    else {
+      setPwBad(true);
+      setPw("");
+    }
+  };
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -189,6 +218,33 @@ function IdentifyPrompt({
         onPointerDown={(e) => e.stopPropagation()}
       >
         <div className="idy-reason">{req.reason}</div>
+        {pending ? (
+          <>
+            <div className="idy-who">{pending.name}</div>
+            <input
+              ref={pwRef}
+              className={"idy-input" + (pwBad ? " bad" : "")}
+              type="password"
+              value={pw}
+              maxLength={PASSWORD_MAX}
+              autoComplete="off"
+              aria-label="Password"
+              onChange={(e) => {
+                setPw(e.target.value);
+                setPwBad(false);
+              }}
+              onKeyDown={(e) => e.key === "Enter" && submitPw()}
+            />
+            <div className={"idy-hint" + (pwBad ? " bad" : "")}>
+              {pwBad ? "Not that password." : "Password, then Enter."}
+            </div>
+            <div className="idy-foot">
+              <span>A barrier on the manager-only space, not a login (E-01 d21).</span>
+              <span className="idy-esc">Esc cancels</span>
+            </div>
+          </>
+        ) : (
+        <>
         <input
           ref={inputRef}
           // A partial is somebody mid-keystroke, not a mistake, so it is not
@@ -213,6 +269,8 @@ function IdentifyPrompt({
           )}
           <span className="idy-esc">Esc cancels</span>
         </div>
+        </>
+        )}
       </div>
     </div>
   );

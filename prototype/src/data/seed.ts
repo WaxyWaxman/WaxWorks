@@ -420,6 +420,9 @@ export const USERS: User[] = [
     initials: "RD",
     role: "Manager",
     active: true,
+    // Seeded so the barrier is reachable in review. One letter, deliberately:
+    // E-01 d21 is explicit that this is a speed bump, not a secret.
+    password: "p",
     log: [{ at: "2025-11-03T09:00:00", text: "Added as Manager by seed migration" }],
   },
   {

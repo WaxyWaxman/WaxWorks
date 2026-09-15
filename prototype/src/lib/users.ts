@@ -222,3 +222,63 @@ export function correctUser(
     ),
   };
 }
+
+// E-01 d21 — an optional password, for anyone, up to 8 characters.
+//
+// A barrier, not authentication. It exists so that walking up to an unattended
+// till and typing a Manager's initials is not enough to reach the manager-only
+// space; a shop may reasonably set it to one letter. Nothing here treats it as
+// proof of identity, and nothing else in the model gets stronger because it
+// exists.
+export const PASSWORD_MAX = 8;
+
+// Setting one, clearing one, and changing one are all the same write. Logged
+// like any other user change (A-55) — but the LOG NEVER CARRIES THE VALUE, and
+// neither does the before-and-after that a role change gets, because "what did
+// it used to be" is the one question a password log must not answer.
+export function setUserPassword(
+  users: User[],
+  userId: string,
+  password: string,
+  by: string,
+  now: () => string = defaultNow,
+): UserWrite {
+  const u = users.find((x) => x.id === userId);
+  if (!u) return { ok: false, reason: "No such user." };
+  const next = password.trim();
+  if (next.length > PASSWORD_MAX)
+    return { ok: false, reason: `A password is at most ${PASSWORD_MAX} characters.` };
+  const had = Boolean(u.password);
+  const has = Boolean(next);
+  if (!had && !has) return { ok: true, users, id: userId };
+  const what = !has ? "Password cleared" : had ? "Password changed" : "Password set";
+  return {
+    ok: true,
+    id: userId,
+    users: users.map((x) =>
+      x.id === userId
+        ? { ...x, password: has ? next : undefined, log: [...x.log, stamp(`${what} by ${by}`, now)] }
+        : x,
+    ),
+  };
+}
+
+// The check. Separate from resolution on purpose: initials say WHO, this says
+// they got past the barrier, and the two are asked at different moments
+// (d21 — session opening and manager-only authorisation, not every prompt).
+export function passwordAccepted(user: User, typed: string): boolean {
+  if (!user.password) return true;
+  return typed === user.password;
+}
+
+// d21's second half. A user carrying a password has something worth reaching,
+// so their session must not sit open for however long the shop set the lapse
+// to: it is capped at the 5-minute DEFAULT (M-06 d45), which is the figure
+// already judged right for a counter rather than a new one invented here.
+// A shop that shortened the lapse keeps its own, shorter, value.
+export const PASSWORD_LAPSE_CAP_SECONDS = 300;
+
+export function effectiveLapseSeconds(user: User | null, storeSetting: number): number {
+  if (!user?.password) return storeSetting;
+  return Math.min(storeSetting, PASSWORD_LAPSE_CAP_SECONDS);
+}

@@ -675,6 +675,10 @@ interface AppContextValue extends AppState {
   deactivateUser: (userId: string, by: string) => UserWriteResult;
   reactivateUser: (userId: string, initials: string, by: string) => UserWriteResult;
   correctUser: (userId: string, patch: { name?: string; initials?: string }, by: string) => UserWriteResult;
+  setUserPassword: (userId: string, password: string, by: string) => UserWriteResult;
+  // E-01 d21 — a password holder's session is capped at the 5-minute default
+  // however long the shop set the lapse to.
+  effectiveLapseSeconds: number;
 
   recordFor: (id?: string) => RecordEntry | undefined;
   customerFor: (id?: string) => Customer | undefined;
@@ -971,6 +975,8 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
   // reach the store have all prompted for initials first (d5, d12, d15), so
   // this is the fallback for the ones that have not been wired through the
   // prompt yet rather than a state anyone should reach.
+  const effectiveLapseSeconds = usersLib.effectiveLapseSeconds(sessionUser, s.sessionLapseSeconds);
+
   const actorName: string = sessionUser ? `${sessionUser.name} (${sessionUser.role})` : CURRENT_USER;
 
   const identify: AppContextValue["identify"] = (userId) =>
@@ -1183,6 +1189,9 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
 
   const correctUser: AppContextValue["correctUser"] = (userId, patch, by) =>
     commit(usersLib.correctUser(s.users, userId, patch, by));
+
+  const setUserPassword: AppContextValue["setUserPassword"] = (userId, password, by) =>
+    commit(usersLib.setUserPassword(s.users, userId, password, by));
 
   const addCustomer: AppContextValue["addCustomer"] = (input) => {
     const id = uid("cust");
@@ -3244,6 +3253,8 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
       deactivateUser,
       reactivateUser,
       correctUser,
+      setUserPassword,
+      effectiveLapseSeconds,
     }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [s],
