@@ -123,6 +123,7 @@ An optional cross-reference links the two, so a payout can be traced to the copi
 
 - **Voiding a *payment* is not voiding an *Invoice*, and does not belong here.** A PaymentBatch recorded in error is voided in accounts payable ([M-05](M-05-accounts-payable.md) d22); this flow still owns voiding and amending the Invoice itself. The two are different artifacts with different reasons: a wrong cheque number is M-05's, a wrong shipment is this flow's.
 - **A voided payment can un-freeze an Invoice.** An Invoice taken back out of **Paid** returns to Finalized and is corrected back in [E-02](E-02-receive-inventory.md) directly, *not* by an amendment appended here — the amendment route exists because a paid Invoice is immutable, and it no longer is. Reach for an amendment only while the Invoice is still paid.
+- **Void and amend are refused while any live PaymentBatch targets the Invoice** ([M-05](M-05-accounts-payable.md) d37). This flow's void-and-amend route already excluded a **fully** paid Invoice ([architecture](../architecture.md) A-41); d37 extends the refusal to a **partly** paid one, so the order is forced — void the payment in [M-05](M-05-accounts-payable.md) first. The refusal names what is holding the Invoice, so it is discoverable rather than a dead end.
 
 **From [E-05](E-05-sell-a-record.md):**
 
