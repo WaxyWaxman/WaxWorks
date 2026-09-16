@@ -2,7 +2,7 @@
 
 **Actor:** Employee (some actions manager-only)
 **Status:** Specified
-**Related:** [E-02 Receive inventory](E-02-receive-inventory.md) · [E-03 Search the inventory](E-03-search-inventory.md) · [E-05 Point of Sale](E-05-sell-a-record.md) · [M-05 Accounts payable](M-05-accounts-payable.md)
+**Related:** [E-02 Receive inventory](E-02-receive-inventory.md) · [E-03 Search the inventory](E-03-search-inventory.md) · [E-05 Point of Sale](E-05-sell-a-record.md) · [M-05 Accounts payable](M-05-accounts-payable.md) · [M-07 Chart of accounts](M-07-chart-of-accounts.md)
 
 **Job:** As an employee, I need to look after stock once it exists — correct it, price it, reserve it, hold it back, and raise a claim when a supplier got it wrong.
 
@@ -135,6 +135,10 @@ An optional cross-reference links the two, so a payout can be traced to the copi
 - **A catalog entry's *tracks stock* setting defaults from its Section but belongs to the entry** ([M-06](M-06-settings.md) d29). Changing a Section's default never reaches entries already created under it.
 - **A Record stores its genre; its Section is derived from that genre's required parent, not stored beside it** ([M-06](M-06-settings.md) d31, d32). Overriding a Record's genre therefore moves its Section too — the two cannot be set independently. Tax code, *counts as revenue*, *discountable* and *returnable* are resolved when they apply rather than copied onto the Record, so correcting a genre or a Section corrects everything beneath it. Completed Sale lines are unaffected — they keep what they resolved ([E-05](E-05-sell-a-record.md), M-06 d8).
 - **Editing a Record's genre stays an Employee action and is not gated** ([M-06](M-06-settings.md) d19). The shop-internal genres — `Shipping`, `Services`, `Gift cards` — are omitted from the genre picker rather than gated, so they cannot be selected for a music Record.
+
+**From [M-07](M-07-chart-of-accounts.md):**
+
+- **An on-hand adjustment writes its own journal entry when it is made** ([M-07](M-07-chart-of-accounts.md) d12), and **each reason code maps to its own account** ([M-07](M-07-chart-of-accounts.md) d6) — `Shrinkage`, `Damaged`, `Found`, `Miscount / correction`, `Written off` and `Other` are six accounts, not one, because the six exist precisely so a Manager has to choose between them. It does not wait for a close and there is no month-end routine.
 
 ---
 

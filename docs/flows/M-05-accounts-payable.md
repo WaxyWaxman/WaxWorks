@@ -128,6 +128,10 @@ Loading and redeeming happen at the till ([E-05](E-05-sell-a-record.md)); this i
 - **A claim a supplier declined or never answered is Abandoned in E-04 and never appears here** ([E-04](E-04-manage-inventory.md) d24). It is neither Pending nor Credited, so it surfaces under neither step 6 nor decision 12, and it never contributed to a balance in the first place (decision 26). Abandoning is a disposal, not a correction — there is nothing on this side to reverse. **A voided claim is likewise invisible here** ([E-04](E-04-manage-inventory.md) d27), and means something different: abandoned is *no money is coming*, voided is *this claim was wrong*.
 - **A Credited claim counts at the amount its credit memo grants, not at the amount claimed** ([E-04](E-04-manage-inventory.md) d20). The two commonly differ — a supplier deducts the cost of the return — and the memo governs. This is the figure decision 26 puts into the balance, decision 27 attaches to debits, and decision 28 consumes whole. The claim total stays visible as what was asked for; the shortfall is never posted as a cost here.
 
+**From [M-07](M-07-chart-of-accounts.md):**
+
+- **A PaymentBatch writes its own journal entry when it is recorded** ([M-07](M-07-chart-of-accounts.md) d12), and a **void posts forward** as a reversing entry dated when the void happened rather than rewriting the original ([M-07](M-07-chart-of-accounts.md) d8) — which is decision 22's own shape, and [architecture](../architecture.md) A-33a's *reverse as recorded*, applied to the ledger.
+
 ---
 
 ## Resolved decisions
