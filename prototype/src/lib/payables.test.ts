@@ -152,3 +152,38 @@ describe("A-69 / M-05 d42 — consumed is derived from the batch, not from a tar
     expect(creditIsConsumed("C1", [b], voided)).toBe(false);
   });
 });
+
+describe("M-05 d43 — credits draw down in tick order, not ledger order", () => {
+  const ticked = (row: LedgerRow, order: number): LedgerRow => ({ ...row, tickOrder: order });
+
+  it("overflows the credit ticked last, not the oldest one", () => {
+    // $30 owed. C1 and C2 are worth $40 and $30. Ledger order is oldest first,
+    // which is what d43 refuses — "d11's automatic distribution wearing a
+    // different hat". Ticking C2 first must make C2 the one drawn on.
+    const plan = settlementPlan([
+      debit("INV", 30),
+      ticked(credit("C1", 40), 2),
+      ticked(credit("C2", 30), 1),
+    ]);
+
+    expect(plan.credits.map((c) => c.key)).toEqual(["C2", "C1"]);
+    // C2 is drawn to exhaustion; C1 is never reached and stays as it is (d27).
+    expect(plan.drawdown).toEqual([
+      { id: "C2", drawn: 30, left: 0, touched: true },
+      { id: "C1", drawn: 0, left: 40, touched: false },
+    ]);
+    expect(plan.remainder).toBe(0);
+  });
+
+  it("re-ticking the other way round changes which credit overflows", () => {
+    const plan = settlementPlan([
+      debit("INV", 30),
+      ticked(credit("C1", 40), 1),
+      ticked(credit("C2", 30), 2),
+    ]);
+
+    // Now C1 straddles: consumed whole, $10 back as a remainder (d28).
+    expect(plan.drawdown[0]).toEqual({ id: "C1", drawn: 30, left: 10, touched: true });
+    expect(plan.remainder).toBe(10);
+  });
+});

@@ -477,6 +477,28 @@ function Selection({
               <span className="mono">−{money(plan.creditTotal)}</span>
             </div>
           )}
+          {/* d43 — where the ticked credits are worth more than is owed, the
+              summary has to name the credit being partly applied and the
+              remainder it will emit, BEFORE the Manager commits rather than
+              after. One aggregate figure cannot say which credit it came from,
+              and the drawdown order is only as visible as this makes it. */}
+          {plan.credits.length > 1 && (
+            <div className="ap-credit-order">
+              {plan.credits.map((c, i) => {
+                const d = plan.drawdown[i];
+                return (
+                  <div className="ap-split sub" key={c.key}>
+                    <span>
+                      {i + 1}. {c.reference}
+                      {!d.touched && " — not drawn on, stays as it is (d27)"}
+                      {d.touched && d.left > 0.005 && " — partly applied"}
+                    </span>
+                    <span className="mono">{d.drawn > 0.005 ? `−${money(d.drawn)}` : "—"}</span>
+                  </div>
+                );
+              })}
+            </div>
+          )}
           {plan.holds.length > 0 && (
             <div className="ap-split">
               <span>Claim placeholders — {plan.holds.length}</span>
@@ -495,8 +517,24 @@ function Selection({
           )}
           {plan.remainder > 0.005 && (
             <div className="wo-caveat warn">
-              {money(plan.remainder)} of credit cannot attach to anything ticked. It comes back as a{" "}
-              <strong>remainder Credit</strong> and stays in the store’s favour (d25, d28).
+              {(() => {
+                // d43 — name the credit that overflows. It is the last one the
+                // drawdown touched, since the ones before it were used up.
+                const over = [...plan.drawdown].reverse().find((d) => d.touched && d.left > 0.005);
+                const row = over ? plan.credits.find((c) => c.key === over.id) : undefined;
+                return row ? (
+                  <>
+                    {money(plan.remainder)} of <strong>{row.reference}</strong> cannot attach to anything ticked. It is
+                    consumed whole and the {money(plan.remainder)} comes back as a <strong>remainder Credit</strong>,
+                    staying in the store’s favour (d25, d28, d43).
+                  </>
+                ) : (
+                  <>
+                    {money(plan.remainder)} of credit cannot attach to anything ticked. It comes back as a{" "}
+                    <strong>remainder Credit</strong> and stays in the store’s favour (d25, d28).
+                  </>
+                );
+              })()}
             </div>
           )}
         </div>

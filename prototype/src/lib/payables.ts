@@ -82,6 +82,13 @@ export interface LedgerRow {
   method?: PaymentMethod;
   canOpenInReceiving?: boolean;
   isPaidInvoice?: boolean;
+  /**
+   * M-05 d43 — when this row was ticked. Set by the screen on a selected
+   * row, not by `ledgerRows`. Credits draw down in this order, so it is what
+   * decides which credit overflows into a remainder. Debits ignore it and
+   * keep ledger order, which is what d33 governs.
+   */
+  tickOrder?: number;
 }
 
 export interface PayablesData {
@@ -282,6 +289,12 @@ export interface SettlementPlan {
   money: number;
   /** d25/d28 — what cannot attach comes back as its own artifact. */
   remainder: number;
+  /**
+   * d43 — per credit, in tick order: what it applied and what is left. The
+   * one with `touched` and a non-zero `left` is the credit being partly
+   * applied, and the summary has to name it before the Manager commits.
+   */
+  drawdown: { id: string; drawn: number; left: number; touched: boolean }[];
   /** d27 — no debit means nothing to attach to: this is d15's clearing. */
   isClearing: boolean;
 }
@@ -315,12 +328,21 @@ export function creditDrawdown(
 
 export function settlementPlan(rows: LedgerRow[]): SettlementPlan {
   const debits = rows.filter((r) => r.role === "debit" && r.balance > 0.005);
-  const credits = rows.filter((r) => r.role === "credit");
+  // d43 — tick order, because the Manager already expressed it and can change
+  // it by re-ticking. Explicitly NOT oldest-first, which is what ledger order
+  // gives and which is d11's automatic distribution on a second axis (d18).
+  const credits = rows
+    .filter((r) => r.role === "credit")
+    .sort((a, b) => (a.tickOrder ?? 0) - (b.tickOrder ?? 0));
   const holds = rows.filter((r) => r.role === "placeholder");
   const counters = rows.filter((r) => r.role === "counter");
   const debitTotal = round2(debits.reduce((n, r) => n + r.balance, 0));
   const creditTotal = round2(credits.reduce((n, r) => n - r.balance, 0));
   const attach = round2(Math.min(creditTotal, debitTotal));
+  const drawdown = creditDrawdown(
+    credits.map((c) => ({ id: c.key, amount: -c.balance })),
+    attach,
+  );
   return {
     rows,
     debits,
@@ -334,14 +356,8 @@ export function settlementPlan(rows: LedgerRow[]): SettlementPlan {
     // d27 — only a credit the drawdown reached can leave a remainder behind.
     // `creditTotal - attach` counted untouched credits too, which is the figure
     // the store then emitted artifacts for.
-    remainder: round2(
-      creditDrawdown(
-        credits.map((c) => ({ id: c.key, amount: -c.balance })),
-        attach,
-      )
-        .filter((c) => c.touched)
-        .reduce((n, c) => n + c.left, 0),
-    ),
+    remainder: round2(drawdown.filter((c) => c.touched).reduce((n, c) => n + c.left, 0)),
+    drawdown,
     isClearing: debits.length === 0 && rows.length > 0,
   };
 }

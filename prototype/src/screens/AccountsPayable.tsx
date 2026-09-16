@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { PayableSlab, type PayableChip, type PayableSort } from "../components/PayableSlab";
 import { SettleTrack } from "../components/SettleTrack";
 import type { PayableEntryType, PaymentMethod } from "../data/types";
@@ -59,7 +59,12 @@ export function AccountsPayable() {
   const [query, setQuery] = useState("");
   const [chip, setChip] = useState<PayableChip>("all");
   const [sort, setSort] = useState<PayableSort>("name");
-  const [sel, setSel] = useState<Record<string, boolean>>({});
+  // d43 — the VALUE is the tick sequence, not a boolean. Credits draw down in
+  // the order the Manager ticked them, so the order has to survive being read
+  // back out; `rows.filter` would otherwise hand back ledger order, which is
+  // oldest-first and is exactly what d43 refuses.
+  const [sel, setSel] = useState<Record<string, number>>({});
+  const tickSeq = useRef(0);
   const [creating, setCreating] = useState(false);
   const [showSettled, setShowSettled] = useState(false);
   const [openBatch, setOpenBatch] = useState<string | null>(null);
@@ -107,7 +112,9 @@ export function AccountsPayable() {
     [supplier?.id, isCards, app.invoices, app.payableEntries, app.claims, app.paymentBatches, app.batchVoids],
   );
 
-  const selectedRows = rows.filter((r) => sel[r.key]);
+  const selectedRows = rows
+    .filter((r) => sel[r.key] != null)
+    .map((r) => (r.role === "credit" ? { ...r, tickOrder: sel[r.key] } : r));
   const plan = settlementPlan(selectedRows);
   // d34 — what the Invoices expected, which the Manager may override. What the
   // batch RECORDS is what actually happened, never this.
@@ -127,8 +134,8 @@ export function AccountsPayable() {
     setCreating(false);
     setSel((prev) => {
       const next = { ...prev };
-      if (next[row.key]) delete next[row.key];
-      else next[row.key] = true;
+      if (next[row.key] != null) delete next[row.key];
+      else next[row.key] = (tickSeq.current += 1); // d43 — when, not whether
       return next;
     });
   };
@@ -419,7 +426,7 @@ function Band({
   say: string;
   total: number;
   rows: LedgerRow[];
-  sel: Record<string, boolean>;
+  sel: Record<string, number>; // d43 — the tick sequence, not a flag
   onPick: (r: LedgerRow) => void;
   onOpenReceiving: (r: LedgerRow) => void;
   tone?: "uncounted";
@@ -446,7 +453,7 @@ function LedgerTable({
   batchesFor,
 }: {
   rows: LedgerRow[];
-  sel: Record<string, boolean>;
+  sel: Record<string, number>; // d43 — the tick sequence, not a flag
   onPick: (r: LedgerRow) => void;
   onOpenReceiving: (r: LedgerRow) => void;
   batchesFor?: (r: LedgerRow) => { id: string; date: string; method: string; reference: string }[];
@@ -477,7 +484,7 @@ function LedgerTable({
               key={r.key}
               className={
                 "ap-row" +
-                (sel[r.key] ? " on" : "") +
+                (sel[r.key] != null ? " on" : "") +
                 (settled ? " settled" : "") +
                 (over ? " over" : "") +
                 (r.source === "remainder" ? " remainder" : "")
@@ -486,7 +493,7 @@ function LedgerTable({
             >
               <td>
                 {!settled && (
-                  <input type="checkbox" checked={!!sel[r.key]} readOnly aria-label={`Select ${r.type} ${r.reference}`} />
+                  <input type="checkbox" checked={sel[r.key] != null} readOnly aria-label={`Select ${r.type} ${r.reference}`} />
                 )}
               </td>
               <td>
