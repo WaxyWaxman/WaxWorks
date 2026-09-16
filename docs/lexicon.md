@@ -1,7 +1,7 @@
 # Wax Works — Lexicon
 
 **Status:** Draft
-**Last updated:** 2026-09-09
+**Last updated:** 2026-09-16
 
 The controlled vocabulary for Wax Works. When a term below has a **canonical** form, use
 exactly that form in the PRD, flow documents, reference material, commit messages, issue
@@ -39,7 +39,7 @@ Sourced from [`PRD.md`](PRD.md), the [`flows/`](flows/) documents, and
 | **terminal enrollment** / **enroll** | Binding a terminal to a Store once, using a one-time code. It is what scopes everything the terminal can reach; it is **not** a staff sign-in ([E-01](flows/E-01-authenticate.md) d9). | "registration", "pairing", "activation", "login" |
 | **session** | A staff session on an enrolled terminal, opened with initials and lapsing after a configured period of **inactivity, defaulting to 5 minutes** ([M-06](flows/M-06-settings.md) d45, [architecture](architecture.md) A-50) and taking **no maximum** ([E-01](flows/E-01-authenticate.md) d13). An **Open** Sale suppresses the lapse whatever the setting says (E-01 d10). Distinct from the terminal's enrollment, which does not lapse. **There is no server-side session**: it is an actor and a timer in the browser ([architecture](architecture.md) A-3, A-50), so a deactivation ends it by the write path refusing the User, with the shell catching up at its next actor re-resolution ([M-04](flows/M-04-manage-users.md) d18, [architecture](architecture.md) A-55). | conflating it with enrollment; "15 minutes", which was E-01 d4's flat figure and is now neither flat nor the default |
 | ~~**manager override**~~ | **Retired** by [M-04](flows/M-04-manage-users.md) d8. The actions it used to gate now proceed and raise a **ReviewFlag**. Do not use the term for new work; it remains readable in superseded decisions. | using it for current behavior — say **ReviewFlag** or **manager-only** as appropriate |
-| **ReviewFlag** / **review flag** | A record that an Employee took an action worth a Manager's later attention — below-cost **shelf** pricing, an Invoice adjustment beyond ±2%, an accepted subtotal discrepancy, a Sale driving stock negative, a broken sale lock. Written in the same transaction as the action, so the two can never disagree. **Acknowledged by a Manager, never deleted** ([M-04](flows/M-04-manage-users.md) d17, [architecture](architecture.md) A-28a). Entity is PascalCase; "review flag" in running prose. | "warning", "alert", "exception", "override"; saying an Employee may clear their own |
+| **ReviewFlag** / **review flag** | A record of something worth a Manager's later attention. **Usually an Employee action, and since [architecture](architecture.md) A-68 not always:** `actor_user_id` is nullable, and a null actor means the **system** raised it — so far only a `journal_imbalance` ([M-07](flows/M-07-chart-of-accounts.md) d10), which has no actor because it is this system's own arithmetic failing. The Employee-action sense, which is what the five original kinds are — below-cost **shelf** pricing, an Invoice adjustment beyond ±2%, an accepted subtotal discrepancy, a Sale driving stock negative, a broken sale lock. Written in the same transaction as the action, so the two can never disagree. **Acknowledged by a Manager, never deleted** ([M-04](flows/M-04-manage-users.md) d17, [architecture](architecture.md) A-28a). Entity is PascalCase; "review flag" in running prose. | "warning", "alert", "exception", "override"; saying an Employee may clear their own |
 | **review queue** | The Manager's list of unacknowledged ReviewFlags. | "audit log" (broader), "approvals", "inbox" |
 | **manager-only** | An action an Employee cannot perform at all — a whole flow or function reserved to Managers (accounts payable, Undo End of Day, adjusting on hand, voiding a finalized Invoice). A Manager authorizes in place by entering their own initials; both names are recorded. Distinct from a **ReviewFlag**, which lets the Employee proceed and tells the Manager afterward. | using it interchangeably with "review flag"; "manager override" |
 
@@ -289,3 +289,37 @@ prefer the first form:
 5. **"Administrators"** appears in PRD goal G-2, where §2 of this lexicon says to avoid
    *admin* for the **Manager** role. Left as-is for now since it reads as a generic
    persona statement rather than the role, but worth a decision.
+
+---
+
+## 14. Accounting and the ledger (M-07)
+
+**Reserved vocabulary, not recorded behavior.** M-07 does not exist and nothing below
+is a decision — every term here is _Status: recommended, not yet ratified._ The section
+exists because four of the words this flow wants are **already taken** by other parts of
+the system, and the cheap moment to settle that is before anything cites them.
+
+Appended rather than inserted, so the existing section numbers stay stable.
+
+### The collisions this section exists to prevent
+
+| The obvious word | Already means | Use instead |
+|---|---|---|
+| **deposit** | A line-less Sale tendered to a Customer's account — layaway ([E-05](flows/E-05-sell-a-record.md) d25, [architecture](architecture.md) A-25) | **BankDeposit** |
+| **clearing** | Retiring a set of same-Supplier rows from attention without moving the balance (§4, [M-05](flows/M-05-accounts-payable.md) d15, d27) | **undeposited funds** |
+| **settlement** | The act that produces a PaymentBatch (§4, [M-05](flows/M-05-accounts-payable.md) d27). *Settle* is also NG-4's own word for the **excluded** capability ([PRD](PRD.md) §7) | **BankDeposit** for the artifact; say *banked*, never *settled* |
+| **manual ledger entry** | An accounts-payable row a Manager types by hand (§4, [M-05](flows/M-05-accounts-payable.md) d12). It moves a supplier balance, **not** a GL account | **journal entry** for the posting |
+
+### Terms
+
+**Entity forms follow §3's rule.** The modelled thing is PascalCase — `GLAccount`, `JournalBatch`, `BankDeposit` — and the everyday word is lowercase: *a GL account*, *a journal entry*, *a bank deposit*.
+
+| Canonical | Meaning | Avoid |
+|---|---|---|
+| **chart of accounts** | The store's list of GL accounts. **It does not exist** — [M-06](flows/M-06-settings.md) d11 carries it as an open question and [architecture](architecture.md) §10 as a risk. Three columns are reserved against it and unread: `tax_types.gl_account` ([M-06](flows/M-06-settings.md) d11), a tender's **Code** (d23), and a Section's **GL code** (d28). Per Store, like everything else ([architecture](architecture.md) A-5). | "COA"; "the ledger" (that is the postings, not the list); treating the three reserved columns as evidence one exists |
+| **GL account** | The canonical name for one row of the chart, and for any field pointing at one. **The three reserved columns currently spell it three ways** — `gl_account`, `Code`, `GL code` — which [architecture](architecture.md) §10 already flags for re-checking when the chart is written. One name from here on. | "GL code", "account code", "nominal code"; **Code** unqualified — a tender, a Section and a tax type each already carry a different `Code` |
+| **journal entry** / **posting** | A balanced set of debits and credits written against GL accounts. **Not** a **manual ledger entry** (§4), which is an accounts-payable row — §4 already lists *journal entry* as the wrong word for that one, and this is the artifact it was being kept clear of. [M-06](flows/M-06-settings.md) d39 uses **posting** for the act. | "manual ledger entry" for a posting, or the reverse; "transaction" (ambiguous — a Sale is one too); "GL entry" |
+| **BankDeposit** | The artifact recording **what actually reached the bank**, against the **undeposited funds** a close produced. Money side only: nothing instructs a bank, on the recording-not-executing line [M-05](flows/M-05-accounts-payable.md) draws for payments. PascalCase for the artifact; "bank deposit" in running prose. | "deposit" unqualified — taken by [E-05](flows/E-05-sell-a-record.md) d25; "settlement", "banking run"; "payout" (that is a till behavior, [M-06](flows/M-06-settings.md)) |
+| **undeposited funds** | What a tender has taken in that the bank has not yet paid out, carried at face value. **Per tender, not per behavior**, following [M-06](flows/M-06-settings.md) d22 — `Visa` and `Amex` settle as separate deposits and a merged figure cannot be tied back to a statement. The name is QuickBooks' own for this account, chosen so an export maps one-to-one instead of needing a translation. | "clearing account" — **clearing** is taken (§4); "float", which [M-03](flows/M-03-daily-summary.md) d8 rules out having at all; "cash in transit" as a second name for the same thing |
+| **card processing fee** | The difference between a card tender's **undeposited funds** and what the bank paid against them. **Derived from a BankDeposit, never configured** — no rate is stored anywhere, following [M-06](flows/M-06-settings.md) d37's shown-but-never-written boundary. Distinct from **payment processing** (§1), which is the excluded capability. | storing a rate per tender; "merchant discount rate" as something this system holds; conflating it with **payment processing** (NG-4) |
+| **Second-hand purchases** | Where the money side of a counter buy lands: the `Used Credit` tender ([E-05](flows/E-05-sell-a-record.md) d14) debits it, and the second-hand intake credits it at booked inventory cost. **Its balance is a period cost, not an error** — a lump paid for a crate and copies booked at a nominal figure differ on purpose. Same shape [E-02](flows/E-02-receive-inventory.md) d16 gives freight: a real cost of stock that is not allocated per copy. | calling it a clearing account; treating a non-zero balance as something to reconcile or age; "used purchases" (§4 prefers *second-hand*) |

@@ -2,7 +2,7 @@
 
 **Actor:** Employee (Undo End of Day is **manager-only** — [M-03](M-03-daily-summary.md) d4, [architecture](../architecture.md) A-28a)
 **Status:** Specified
-**Related:** [E-03 Search the inventory](E-03-search-inventory.md) · [E-06 Process a return](E-06-process-a-return.md) · [E-07 Manage customers](E-07-manage-customers.md) · [M-03 Daily summary](M-03-daily-summary.md) · [M-06 Settings](M-06-settings.md)
+**Related:** [E-03 Search the inventory](E-03-search-inventory.md) · [E-06 Process a return](E-06-process-a-return.md) · [E-07 Manage customers](E-07-manage-customers.md) · [M-03 Daily summary](M-03-daily-summary.md) · [M-06 Settings](M-06-settings.md) · [M-07 Chart of accounts](M-07-chart-of-accounts.md)
 
 **Job:** As an employee, I need to ring up a sale and take payment.
 
@@ -198,6 +198,12 @@ Held copies count against **available** stock but remain on hand.
 - **Sections are an editable table** ([M-06](M-06-settings.md) d28), so `VINYL` and `MERCH` are data rather than the whole list.
 - **The till's tender list is configured, and several tenders may share one behavior** ([M-06](M-06-settings.md) d22, d23) — `Visa` and `Amex` are two `card` tenders. A tender may be switched off, and carries no reference field (d24).
 
+**From [M-07](M-07-chart-of-accounts.md):**
+
+- **Inventory is perpetual, so tendering a Sale moves cost** ([M-07](M-07-chart-of-accounts.md) d2). Each copy sold moves **its own recorded cost** from Inventory into cost of goods at that moment — never an average and never a recomputed figure. Nothing changes at the till: this is a consequence of what `sale_tender` already does, not a new step in it.
+- **A Sale's business date is the date it was tendered** ([M-07](M-07-chart-of-accounts.md) d19), a **calendar** date ending at midnight, with no separate business-day boundary and no setting for one. That is the same moment [architecture](../architecture.md) A-57 resolves tax at, so the two never disagree — and it means a Sale rung at 00:30 after a late night files on the new day.
+- **The day's Sales become journal lines at the close** ([M-07](M-07-chart-of-accounts.md) d7, d14), grouped by `(business date, account)` so a close covering two days files each on its own. A mis-rung tender is therefore worth catching before close — decision 27's Current-Sales search is where, and decisions 31 and 32 are how.
+
 ---
 
 ## Resolved decisions
@@ -247,5 +253,7 @@ Held copies count against **available** stock but remain on hand.
 - ~~**Layaway / deposits**~~ — **Resolved** by decision 25: a line-less Sale tendered to the Customer's account.
 - **Receipt content and format.** Settled for v1 as an emailed template — logo, header, itemized lines, subtotal, tax per tax line, total, tender breakdown ([architecture](../architecture.md) §4). Paper size stays open until the thermal print agent lands.
 - ~~**Employee attribution vs. Sale ownership**~~ — **Resolved** by decision 23: the Sale belongs to whoever holds the lock at tender.
+- ~~**Correcting a mis-rung tender after the close.**~~ — **Closed as not a defect.** The two routes that exist are judged sufficient: decisions 31 and 32 correct it on the day with a reversing tender, and after the close [M-03](M-03-daily-summary.md) d4's Undo End of Day reopens the batch for a Manager who judges it worth doing. **No new mechanism is added and none is wanted** — a per-Sale correction after close would be a third way to move money that has already been counted, and the shop handles the residual operationally. Recorded rather than dropped, because [M-07](M-07-chart-of-accounts.md) d10 raised it and the answer should be findable from there. *The original question follows.*
+  *Original:* Decisions 31 and 32 give the mechanism — a reversing tender added to a **Current** Sale, netting it to zero — and decision 27 defaults Search to Current Sales so entry errors are caught before end of day. **Both stop at the close.** A **Closed** Sale is not editable ([architecture](../architecture.md) §5.1 enforces it by trigger), so a card tender rung as `Mastercard` when the customer paid cash has two routes the next morning: Undo End of Day, which is manager-only and reverses the **entire batch** to fix one Sale, or nothing. A Return is not the answer — no goods came back. **Raised by [M-07](M-07-chart-of-accounts.md) d10**, which changes what the mistake costs: today it is a wrong line in [M-03](M-03-daily-summary.md)'s tender breakdown; once a journal posts, it is a permanent discrepancy in an asset account that will never reconcile against a bank statement, and nothing detects it because the journal balances perfectly either way.
 - **Gift card expiry and escheatment.** Balances currently persist indefinitely; several jurisdictions regulate this.
 - **Merging a Sale in flight into a Held Sale.** Raised by [E-07](E-07-manage-customers.md) d20, and deliberately left open there. Folding an Open Sale's lines into an existing hold is a new operation, and it has to answer three things the current rows do not: which lock survives (decision 23 locks an Open Sale to whoever opened it), which identifier survives (decision 3 gives a Held Sale an `H`-reference replaced by a Sale number on tender), and what becomes of the absorbed Sale's log. Nothing is blocked meanwhile — opening the hold and ringing the extra copies onto it reaches the same end state.

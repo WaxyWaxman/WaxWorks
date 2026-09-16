@@ -2,7 +2,7 @@
 
 **Actor:** Employee
 **Status:** Specified
-**Related:** [E-05 Point of Sale](E-05-sell-a-record.md) · [E-07 Manage customers](E-07-manage-customers.md)
+**Related:** [E-05 Point of Sale](E-05-sell-a-record.md) · [E-07 Manage customers](E-07-manage-customers.md) · [M-07 Chart of accounts](M-07-chart-of-accounts.md)
 
 **Job:** As an employee, I need to take back a sold record and refund or exchange it.
 
@@ -60,6 +60,11 @@ This is a policy choice, not a technical limitation — the system records who p
 **From [M-06](M-06-settings.md):**
 
 - **A line in a Section flagged `returnable = false` cannot be returned** ([M-06](M-06-settings.md) d30). This is **not** a gate and does not amend decision 3 — Returns stay ungated, with no receipt, no time limit and no approval, for everything else. It is a property of what is being sold: a gift card load returned under decision 3's terms is a cash-out dressed as a refund. Unwinding one is a **void of the original Sale** ([E-05](E-05-sell-a-record.md) d31) while that is still possible, and a Manager and an [M-05](M-05-accounts-payable.md) adjustment afterwards.
+
+**From [M-07](M-07-chart-of-accounts.md):**
+
+- **A Return produces journal lines like any Sale**, through the close it lands in ([M-07](M-07-chart-of-accounts.md) d7). Because inventory is **perpetual** ([M-07](M-07-chart-of-accounts.md) d2), a returned copy moves its own cost back out of cost of goods and into Inventory — the reverse of what selling it did, at the figure that copy carried, never a recomputed one.
+- **A Section that has been deactivated still resolves** ([M-07](M-07-chart-of-accounts.md) d18), so a Return of a copy filed in a retired Section posts where it always did rather than failing.
 
 ---
 

@@ -2,7 +2,7 @@
 
 **Actor:** Employee
 **Status:** Specified
-**Related:** [M-01 Supplier margin](M-01-supplier-margin.md) · [M-02 Re-order](M-02-reorder-inventory.md) · [E-04 Manage inventory](E-04-manage-inventory.md) · [M-05 Accounts payable](M-05-accounts-payable.md) · [Supplier invoice reference](../reference/supplier-invoice-fab.md)
+**Related:** [M-01 Supplier margin](M-01-supplier-margin.md) · [M-02 Re-order](M-02-reorder-inventory.md) · [E-04 Manage inventory](E-04-manage-inventory.md) · [M-05 Accounts payable](M-05-accounts-payable.md) · [Supplier invoice reference](../reference/supplier-invoice-fab.md) · [M-07 Chart of accounts](M-07-chart-of-accounts.md)
 
 **Job:** As an employee, I need to intake a physical shipment from a supplier, identify each record, price it, and reconcile the batch against the supplier's invoice.
 
@@ -141,6 +141,10 @@ Consequence to accept knowingly: per-item margin reporting reflects only supplie
 
 - **Currency is set on the Supplier and a wrong one is corrected by voiding the receiving**, not by editing it ([M-06](M-06-settings.md) d35) — deliberately *not* the shape decisions 45 and 47 give payment terms and payment method. Changing a Supplier's currency reaches future receiving only ([M-01](M-01-supplier-margin.md) d2, M-06 d8), and [architecture](../architecture.md) A-36 means the Invoice records what it was received in.
 - **A store-currency equivalent may be shown at receiving and is never stored** ([M-06](M-06-settings.md) d37). It uses the currency's **planning rate** — hand-set and deliberately conservative (d38) — so a margin estimated here is pessimistic by design and will not tie to a bank's figure for the same Invoice.
+
+**From [M-07](M-07-chart-of-accounts.md):**
+
+- **Finalize writes a journal entry** ([M-07](M-07-chart-of-accounts.md) d13, d12). Inventory, Freight Inbound and tax paid per type against Accounts Payable, at **finalize** rather than at paid — finalize is when the stock becomes sellable and the debt exists. A later correction under decision 40 does **not** rewrite it: the correction posts forward as a reversing entry dated when it was made ([M-07](M-07-chart-of-accounts.md) d8). Inbound tax lands in the *tax paid* account, never in cost of goods, which is decision 34 unchanged.
 
 ---
 
