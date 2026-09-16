@@ -691,6 +691,18 @@ export interface PayableEntry {
   clearedWith?: string[]; // ids of the other PayableEntry rows cleared alongside this one
   clearedAt?: string;
   clearedBy?: string;
+  /**
+   * Set iff a SETTLEMENT retired this row — d27's Claim placeholder, which
+   * retires contributing nothing. Absent means a Manager cleared it by hand
+   * under d15.
+   *
+   * The two acts wrote identical `clearedAt`/`clearedBy` and nothing else,
+   * so they were indistinguishable. d39 makes a CLEARING reversible; it does
+   * not authorise reversing a settlement's disposal, which belongs to that
+   * batch's void (d22) and is an open question in M-05. Discriminating on
+   * the absence of `clearedWith` would have been the same implicit trap.
+   */
+  clearedInBatchId?: string;
   createdBy: string;
   createdAt: string;
   log: { at: string; text: string }[];

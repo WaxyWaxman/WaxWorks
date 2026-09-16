@@ -27,6 +27,7 @@ import {
   round2,
   tenderedTotal,
 } from "../lib/totals";
+import { unclearRefusal } from "../lib/payables";
 import {
   CURRENT_USER,
   CUSTOMERS,
@@ -971,6 +972,8 @@ interface AppContextValue extends AppState {
   // amounts sum to zero. Returns { cleared: false } and changes nothing
   // otherwise (mismatched sum, wrong supplier, already cleared, etc).
   clearPayableEntries: (entryIds: string[], by: string) => { cleared: boolean };
+  // M-05 d39 — a clearing is a REVERSIBLE MARK, not a terminal state.
+  unclearPayableEntries: (entryIds: string[], by: string) => { uncleared: boolean; reason?: string };
 
   pendingOrderFor: (id?: string) => PendingOrderLine | undefined;
   /** Logs the receipt on the line; the line SURVIVES (M-02 d21). `qty` is
@@ -3295,6 +3298,9 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
               ...e,
               clearedAt: at,
               clearedBy: by,
+              // The discriminator d39 needs: this was a SETTLEMENT's disposal,
+              // not a Manager's d15 clearing, so un-clear must not touch it.
+              clearedInBatchId: batch.id,
               log: [...e.log, { at, text: `Retired in a settlement by ${by} — contributed nothing (d27)` }],
             };
           }
@@ -3414,6 +3420,48 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
       ),
     }));
     return { cleared: true };
+  };
+
+  /**
+   * M-05 d39 — un-clear. A clearing moves no money and writes no journal lines
+   * ([M-07] d12 has nothing to post), so reversing one reverses nothing real:
+   * the mark comes off and both rows return to the outstanding list. No void
+   * artifact is built, and architecture A-36 already agreed — it gives
+   * `ap_payment_batch_voids` and `supplier_claim_voids` and no clearing
+   * equivalent.
+   *
+   * REFUSES on a row a SETTLEMENT retired (d27's placeholder disposal), which
+   * `clearedInBatchId` is what distinguishes. d39 makes a CLEARING reversible
+   * and says nothing about a settlement's disposal — reversing that is its
+   * batch's void (d22), and whether the void even does so is an open question
+   * in M-05. Un-clearing it here would answer that question by accident.
+   */
+  const unclearPayableEntries: AppContextValue["unclearPayableEntries"] = (entryIds, by) => {
+    const entries = entryIds
+      .map((id) => s.payableEntries.find((e) => e.id === id))
+      .filter((e): e is PayableEntry => !!e);
+    if (entries.length === 0 || entries.length !== entryIds.length) {
+      return { uncleared: false, reason: "Some of those entries no longer exist." };
+    }
+    const refusal = unclearRefusal(entries);
+    if (refusal) return { uncleared: false, reason: refusal };
+
+    const at = now();
+    setS((prev) => ({
+      ...prev,
+      payableEntries: prev.payableEntries.map((e) =>
+        entryIds.includes(e.id)
+          ? {
+              ...e,
+              clearedWith: undefined,
+              clearedAt: undefined,
+              clearedBy: undefined,
+              log: [...e.log, { at, text: `Un-cleared by ${by} — back on the outstanding list (d39)` }],
+            }
+          : e,
+      ),
+    }));
+    return { uncleared: true };
   };
 
   const pendingOrderFor = (id?: string) => s.pendingOrders.find((o) => o.id === id);
@@ -3802,6 +3850,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
       payableEntryFor,
       addPayableEntry,
       clearPayableEntries,
+      unclearPayableEntries,
       pendingOrderFor,
       receivePendingOrderLine,
       setPendingOrderLineStatus,

@@ -326,6 +326,27 @@ export function creditDrawdown(
   });
 }
 
+/**
+ * M-05 d39 — why a set of rows may not be un-cleared, or undefined if it may.
+ *
+ * The rule, not the write, so it can be held to a test. d39 makes a CLEARING
+ * reversible: it moves no money and writes no journal lines, so reversing one
+ * reverses nothing real. It says nothing about d27's placeholder disposal
+ * inside a settlement — that is its batch's void to reverse (d22), and whether
+ * the void even does so is an open question in M-05. `clearedInBatchId` is the
+ * discriminator; before it existed both acts wrote the same two fields and an
+ * un-clear would have silently reversed the wrong one.
+ */
+export function unclearRefusal(entries: PayableEntry[]): string | undefined {
+  if (entries.length === 0) return "Nothing selected.";
+  if (entries.some((e) => !e.clearedAt)) return "Nothing to un-clear — some of those are not cleared.";
+  const disposed = entries.find((e) => e.clearedInBatchId);
+  if (disposed) {
+    return `${disposed.reference} was retired by a settlement, not by a clearing. Void that settlement to reverse it (d22).`;
+  }
+  return undefined;
+}
+
 export function settlementPlan(rows: LedgerRow[]): SettlementPlan {
   const debits = rows.filter((r) => r.role === "debit" && r.balance > 0.005);
   // d43 — tick order, because the Manager already expressed it and can change

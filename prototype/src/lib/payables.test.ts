@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { creditDrawdown, settlementPlan, type LedgerRow } from "./payables";
+import { creditDrawdown, settlementPlan, unclearRefusal, type LedgerRow } from "./payables";
 import { creditIsConsumed } from "./totals";
-import type { PaymentBatch, PaymentBatchVoid } from "../data/types";
+import type { PayableEntry, PaymentBatch, PaymentBatchVoid } from "../data/types";
 
 /**
  * The first tests over payables. They exist because a scoping pass found a live
@@ -185,5 +185,60 @@ describe("M-05 d43 — credits draw down in tick order, not ledger order", () =>
     // Now C1 straddles: consumed whole, $10 back as a remainder (d28).
     expect(plan.drawdown[0]).toEqual({ id: "C1", drawn: 30, left: 10, touched: true });
     expect(plan.remainder).toBe(10);
+  });
+});
+
+describe("M-05 d39 — a clearing is reversible; a settlement's disposal is not", () => {
+  const entry = (id: string, over: Partial<PayableEntry> = {}): PayableEntry => ({
+    id,
+    supplierId: "sup",
+    type: "Credit",
+    reference: id,
+    date: "2026-09-01",
+    subtotal: 10,
+    tax: 0,
+    freight: 0,
+    misc: 0,
+    createdBy: "MT",
+    createdAt: "2026-09-01 10:00:00",
+    log: [],
+    ...over,
+  });
+
+  const cleared = (id: string) =>
+    entry(id, { clearedAt: "2026-09-16 10:00:00", clearedBy: "MT", clearedWith: ["other"] });
+
+  it("allows un-clearing a pair a Manager cleared by hand (d15)", () => {
+    expect(unclearRefusal([cleared("A"), cleared("B")])).toBeUndefined();
+  });
+
+  it("refuses a row a settlement retired, and says where to reverse it (d27, d22)", () => {
+    // d27's placeholder disposal. Before `clearedInBatchId` existed this row
+    // was indistinguishable from a d15 clearing, so an un-clear would have
+    // reversed it — answering an open question by accident.
+    const disposed = entry("PH", {
+      reference: "Claim #12",
+      clearedAt: "2026-09-16 10:00:00",
+      clearedBy: "MT",
+      clearedInBatchId: "batch-1",
+    });
+
+    expect(unclearRefusal([disposed])).toMatch(/retired by a settlement/);
+    expect(unclearRefusal([disposed])).toMatch(/Void that settlement/);
+  });
+
+  it("refuses a mixed selection on the strength of the one disposal in it", () => {
+    const disposed = entry("PH", {
+      reference: "Claim #12",
+      clearedAt: "2026-09-16 10:00:00",
+      clearedBy: "MT",
+      clearedInBatchId: "batch-1",
+    });
+
+    expect(unclearRefusal([cleared("A"), disposed])).toMatch(/retired by a settlement/);
+  });
+
+  it("refuses a row that is not cleared at all", () => {
+    expect(unclearRefusal([entry("A")])).toMatch(/not cleared/);
   });
 });
