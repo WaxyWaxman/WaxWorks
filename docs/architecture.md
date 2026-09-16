@@ -215,7 +215,7 @@ create policy tenant_isolation on <table>
 | Receiving | `suppliers`, `invoices`, `invoice_lines`, `purchase_orders`, `purchase_order_lines` |
 | Selling | `sales`, `sale_lines`, `tenders`, `sale_log`, `close_batches` |
 | Customers | `customers`, `customer_ledger`, `gift_cards`, `gift_card_movements` |
-| Payables | `supplier_claims`, `supplier_claim_voids` (A-44, A-46), `ap_ledger_entries`, `ap_credits`, `ap_payment_batches`, `ap_payment_batch_voids`, `ap_payment_targets`, `ap_clearings`, `ap_clearing_members` (A-36) |
+| Payables | `supplier_claims`, `supplier_claim_voids` (A-44, A-46), `ap_ledger_entries`, `ap_credits`, `ap_payment_batches`, `ap_payment_batch_voids`, `ap_payment_targets`, `ap_batch_credits` (A-69), `ap_clearings`, `ap_clearing_members` (A-36) |
 | Governance | `review_flags` |
 | Configuration | `tax_types`, `product_tax_codes`, `tax_groups`, `tax_group_cells`, `tender_types`, `currencies`. **None of them carries a GL column** — `tax_types.gl_account` and `tender_types.code` are retired with the Section's GL code by A-64 and [M-06](flows/M-06-settings.md) d58 |
 | Ledger | `gl_accounts`, `gl_account_mappings`, `journal_batches`, `journal_lines` (A-64, A-67). An account carries a **role** the software resolves it by, plus the number and name the **store** owns and edits ([M-07](flows/M-07-chart-of-accounts.md) d3); a **bank account is an account with a bank role**, not an entity (A-65). A mapping is `(seam kind, seam id) → account`, and a tax type maps **twice** ([M-07](flows/M-07-chart-of-accounts.md) d5). A journal line carries its own **business date**, so one batch can span two days ([M-07](flows/M-07-chart-of-accounts.md) d14) |
@@ -268,7 +268,7 @@ A claim credit enters that fourth term at **the amount its credit memo grants** 
 
 **Backorders are derived** (A-20a) — ordered minus received across every Invoice. No `backorders` table.
 
-**A credit's terminal states are derived** (A-37). **Consumed** is the existence of a claim-credit target in a non-voided batch; **cleared** is membership of a non-voided clearing. No `applied`, `remaining`, `consumed_at`, `cleared_at`, or state enum on a credit. The two are different kinds of fact — one moves money, the other is balance-neutral by [M-05](flows/M-05-accounts-payable.md) d15 — so they are never one column.
+**A credit's terminal states are derived** (A-37). **Consumed** is the existence of a **non-voided batch naming this credit** — ~~a claim-credit *target* naming it~~, restated by A-69, which moved the credit off the target and onto the batch. **Cleared** is membership of a ~~non-voided~~ clearing ([M-05](flows/M-05-accounts-payable.md) d39 — a clearing has no void). No `applied`, `remaining`, `consumed_at`, `cleared_at`, or state enum on a credit. The two are different kinds of fact — one moves money, the other is balance-neutral by [M-05](flows/M-05-accounts-payable.md) d15 — so they are never one column.
 
 **No running totals, anywhere on the payables path.** Four back doors, all tempting and all closed: `invoices.paid_to_date` (M-05 step 2 and d4 both say an Invoice "carries paid to date" — that is a column in the **view**, never in the table); `suppliers.balance` (M-01's own requirement already says the figure is derived); `voided_at` on a batch or a clearing (an update to a row A-33a forbids updating); and `cleared_*` columns on a ledger entry.
 
