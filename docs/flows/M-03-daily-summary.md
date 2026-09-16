@@ -78,6 +78,11 @@ Pay-outs are the one cash movement that is captured, because money leaving the t
 - **Merging a Genre moves every Record under it in the *By Section* breakdown at once** ([architecture](../architecture.md) A-60, [M-06](M-06-settings.md) d31, d32). A Record's Section is derived from its genre's required parent rather than stored, so a merge into a genre with a different parent re-buckets everything beneath it in one act. **Completed Sale lines are unaffected** — they keep what they snapshotted (M-06 d8), so a past day's summary does not restate.
 - **Gift card loads resolve through a system-owned catalog entry** ([M-06](M-06-settings.md) d18) which, like every sellable thing, carries a genre and therefore a Section. **That Section is excluded from the *By Section* breakdown** — decision 14 is unchanged and governs: a load is money in but not a sale, so it stays out of gross and out of Section, and is reported as an *of which* line against the tender that took the money.
 
+**From [M-07](M-07-chart-of-accounts.md):**
+
+- **The close writes a journal batch onto the CloseBatch, beside the summary decision 13 already stores there** ([M-07](M-07-chart-of-accounts.md) d7). Its lines group by **`(business date, account)`**, not by account alone ([M-07](M-07-chart-of-accounts.md) d14) — because step 2 closes **all** Current Sales rather than today's, so a close nobody ran on Monday would otherwise report Monday's revenue on Tuesday, which is harmless most weeks and wrong across a month boundary. If debits and credits disagree the difference posts to **Suspense** and a ReviewFlag is raised; **the close proceeds either way** ([M-07](M-07-chart-of-accounts.md) d10).
+- **Undo End of Day refuses while the batch has been banked. Amends decision 4** ([architecture](../architecture.md) A-66). A non-voided BankDeposit referencing the CloseBatch blocks `close_undo`; voiding that deposit releases it. A-33a's shape with a different trigger — **immutable while banked**, never immutable forever. Decision 4's restore-exactly guarantee is unchanged for every batch that has not been banked.
+
 ---
 
 ## Resolved decisions
