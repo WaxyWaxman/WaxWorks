@@ -3224,13 +3224,22 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
         targets,
       };
 
-      // d28 — every credit ticked is consumed WHOLE, claim or entry alike, so
-      // nothing carries a partial state. d25 — what could not attach comes back
-      // as its own artifact, ONE PER SOURCE CREDIT (A-36), carrying provenance.
+      // d28 — every credit CONSUMED BY a settlement is consumed whole, claim or
+      // entry alike, so nothing carries a partial state. d25 — what could not
+      // attach comes back as its own artifact, ONE PER SOURCE CREDIT (A-36),
+      // carrying provenance.
+      //
+      // d27 — "whatever cannot attach STAYS AS IT WAS". A credit the drawdown
+      // never reached is not consumed by this settlement and emits nothing. It
+      // used to emit a remainder for its full value while staying un-consumed,
+      // so the credit and its remainder both reduced the balance — a move with
+      // no money and no agreement behind it, which d26 forbids, and it left the
+      // credit on the list to be spent again at full value (A-37's hazard).
       const remainders: PayableEntry[] = [];
       for (const c of pool) {
         const left = c.left;
-        if (left > 0.005) {
+        const touched = left < round2(c.amount) - 0.005;
+        if (touched && left > 0.005) {
           remainders.push({
             id: uid("rem"),
             supplierId: input.supplierId,

@@ -285,6 +285,33 @@ export interface SettlementPlan {
   isClearing: boolean;
 }
 
+/**
+ * M-05 d27 — "credits in the selection attach to the debits in the selection;
+ * whatever cannot attach STAYS AS IT WAS." A credit the drawdown never reaches
+ * is therefore not part of the settlement at all: it is not consumed, and it
+ * emits no remainder.
+ *
+ * d28's "every credit consumed by a settlement is consumed whole" governs the
+ * credits the drawdown DID reach — in practice the one it straddles. Reading it
+ * as "every credit ticked" is what produced the double count this replaces: an
+ * untouched credit emitted a remainder for its full value while staying
+ * un-consumed, so the entry and its remainder both reduced the balance, moving
+ * it by money nobody paid and no agreement granted. d26 forbids exactly that.
+ *
+ * The order is the order given. d43 makes that tick order and is separate work.
+ */
+export function creditDrawdown(
+  credits: { id: string; amount: number }[],
+  attach: number,
+): { id: string; drawn: number; left: number; touched: boolean }[] {
+  let pool = round2(attach);
+  return credits.map((c) => {
+    const drawn = round2(Math.min(pool, round2(c.amount)));
+    pool = round2(pool - drawn);
+    return { id: c.id, drawn, left: round2(round2(c.amount) - drawn), touched: drawn > 0.005 };
+  });
+}
+
 export function settlementPlan(rows: LedgerRow[]): SettlementPlan {
   const debits = rows.filter((r) => r.role === "debit" && r.balance > 0.005);
   const credits = rows.filter((r) => r.role === "credit");
@@ -303,7 +330,17 @@ export function settlementPlan(rows: LedgerRow[]): SettlementPlan {
     creditTotal,
     attach,
     money: round2(debitTotal - attach),
-    remainder: round2(creditTotal - attach),
+    // d27 — only a credit the drawdown reached can leave a remainder behind.
+    // `creditTotal - attach` counted untouched credits too, which is the figure
+    // the store then emitted artifacts for.
+    remainder: round2(
+      creditDrawdown(
+        credits.map((c) => ({ id: c.key, amount: -c.balance })),
+        attach,
+      )
+        .filter((c) => c.touched)
+        .reduce((n, c) => n + c.left, 0),
+    ),
     isClearing: debits.length === 0 && rows.length > 0,
   };
 }
