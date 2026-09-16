@@ -31,7 +31,7 @@ Point-of-sale and inventory management for independent vinyl record stores.
 | M-04 | [Add/remove employees or managers](flows/M-04-manage-users.md) | Manager | **Specified** |
 | M-05 | [Accounts payable](flows/M-05-accounts-payable.md) | Manager | **Specified** |
 | M-06 | [Configure the store](flows/M-06-settings.md) | Manager | **Specified** |
-| M-07 | [Chart of accounts](flows/M-07-chart-of-accounts.md) | Manager | Stub |
+| M-07 | [Chart of accounts](flows/M-07-chart-of-accounts.md) | Manager | In clarification |
 
 ## Conventions
 
