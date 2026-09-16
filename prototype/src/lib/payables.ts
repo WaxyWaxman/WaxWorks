@@ -68,7 +68,8 @@ export interface LedgerRow {
   band: RowBand;
   role: RowRole;
   source?: PayableEntrySource;
-  /** Which credit this row IS, for attaching (A-37 derives consumption from targets). */
+  /** Which credit this row IS, for attaching. Not the retired pairing: A-37/A-69
+   *  derive consumption from the BATCH naming the credit, not from a target. */
   creditId?: string;
   /** Terms and the derived due date — only a bill has one. */
   terms?: PaymentTerms;

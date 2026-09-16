@@ -311,18 +311,21 @@ export const claimCreditAmount = (c: SupplierClaim): number =>
 export const claimIsAgreed = (c: SupplierClaim): boolean => c.status === "Credited";
 
 /**
- * A-37 — consumed is DERIVED from the existence of a credit target naming
- * this credit in a live batch. No `applied`, no `consumed_at`: d22's void
- * un-consumes it by the absence of that row, with nothing to flip.
+ * A-37, as restated by A-69 — consumed is DERIVED from a live BATCH naming
+ * this credit, not from a target naming it. No `applied`, no `consumed_at`:
+ * d22's void un-consumes it by the absence of that batch, with nothing to flip.
+ *
+ * Reading it off targets was the shape A-69 retires. It could not answer for a
+ * credit that was ticked but never drawn down — no target named it, so it read
+ * as un-consumed while a remainder had already been emitted for its full value,
+ * and the balance moved by money nobody paid (M-05 d26).
  */
 export const creditIsConsumed = (
   creditId: string,
   batches: PaymentBatch[],
   voids: PaymentBatchVoid[],
 ): boolean =>
-  liveBatches(batches, voids).some((b) =>
-    b.targets.some((t) => t.settleKind === "credit" && t.creditId === creditId),
-  );
+  liveBatches(batches, voids).some((b) => b.credits.some((c) => c.creditId === creditId));
 
 /**
  * What an entry contributes to the Supplier's balance right now.

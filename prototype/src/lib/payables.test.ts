@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { creditDrawdown, settlementPlan, type LedgerRow } from "./payables";
+import { creditIsConsumed } from "./totals";
+import type { PaymentBatch, PaymentBatchVoid } from "../data/types";
 
 /**
  * The first tests over payables. They exist because a scoping pass found a live
@@ -108,5 +110,45 @@ describe("M-05 d28 — a credit consumed by a settlement is consumed whole", () 
     expect(plan.attach).toBe(40);
     expect(plan.money).toBe(60);
     expect(plan.remainder).toBe(0);
+  });
+});
+
+const batch = (id: string, credits: { creditId: string; amount: number }[]): PaymentBatch => ({
+  id,
+  supplierId: "sup",
+  method: "Cheque",
+  reference: "Cheque 101",
+  date: "2026-09-16",
+  recordedBy: "MT",
+  createdAt: "2026-09-16 10:00:00",
+  targets: [{ kind: "invoice", id: "INV", amount: 30, settleKind: "credit" }],
+  credits,
+});
+
+describe("A-69 / M-05 d42 — consumed is derived from the batch, not from a target", () => {
+  it("counts a credit the batch names as consumed", () => {
+    const b = batch("b1", [{ creditId: "C1", amount: 30 }]);
+
+    expect(creditIsConsumed("C1", [b], [])).toBe(true);
+  });
+
+  it("does not count a credit the batch does not name (d27)", () => {
+    // C2 was ticked but the drawdown never reached it, so the batch does not
+    // name it. This is the case the retired target-based derivation could not
+    // answer, and the reason a remainder was emitted for a credit that still
+    // read as un-consumed.
+    const b = batch("b1", [{ creditId: "C1", amount: 30 }]);
+
+    expect(creditIsConsumed("C2", [b], [])).toBe(false);
+  });
+
+  it("un-consumes when the batch is voided, with nothing to flip (d22, A-33a)", () => {
+    const b = batch("b1", [{ creditId: "C1", amount: 30 }]);
+    const voided: PaymentBatchVoid[] = [
+      { id: "v1", batchId: "b1", voidedAt: "2026-09-17 09:00:00", voidedBy: "MT" },
+    ];
+
+    expect(creditIsConsumed("C1", [b], [])).toBe(true);
+    expect(creditIsConsumed("C1", [b], voided)).toBe(false);
   });
 });

@@ -704,6 +704,7 @@ const seed: AppState = {
       recordedBy: MANAGER_NAME,
       createdAt: "2026-08-20 14:00:00",
       targets: [{ kind: "invoice", id: "inv-seed-crate-paid", amount: 20.0, settleKind: "money" }],
+      credits: [], // A-69 — money only, so no credit funded it
     },
   ],
   batchVoids: [],
@@ -939,7 +940,9 @@ interface AppContextValue extends AppState {
       method: PaymentMethod;
       reference: string;
       date: string;
-      debits: { kind: PayableTargetKind; id: string; credit?: number; money?: number; creditId?: string }[];
+      // A-69 — a debit carries what it is being settled with, not which credit
+      // funded it. The credits are named on the batch.
+      debits: { kind: PayableTargetKind; id: string; credit?: number; money?: number }[];
       credits: { id: string; amount: number; label: string }[];
       placeholderIds: string[];
     },
@@ -3187,13 +3190,15 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
       const at = now();
       const targets: PaymentTarget[] = [];
 
-      // WHICH credit funds a given target is not something d18 governs — d18 is
-      // about which INVOICES a credit lands on, and that stays the Manager's.
-      // The drawdown here is deterministic, in the order they were ticked, and
-      // one target is written per (debit, credit) pair so provenance is exact:
-      // d22's void has to put each credit back, and a pool with no provenance
-      // cannot be reversed. (M-05 records the open question of whether the
-      // Manager should get to choose this too.)
+      // M-05 d42 / A-69 — a target names the Invoice, the amount and the kind,
+      // and NOT which credit funded it. The credits are named on the batch
+      // instead (`batch.credits`), which is where A-37's `consumed` now reads
+      // from. d18 is untouched: it was always about which INVOICES a credit
+      // lands on, which stays the Manager's.
+      //
+      // The drawdown is still ordered, because d43 needs one — whichever credit
+      // it straddles is the one that emits the remainder. The order used is the
+      // order given; making that TICK order is d43's own work.
       const pool = input.credits.map((c) => ({ ...c, left: round2(c.amount) }));
 
       for (const d of input.debits) {
@@ -3204,7 +3209,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
           const take = round2(Math.min(credit, src.left));
           src.left = round2(src.left - take);
           credit = round2(credit - take);
-          targets.push({ kind: d.kind, id: d.id, amount: take, settleKind: "credit", creditId: src.id });
+          targets.push({ kind: d.kind, id: d.id, amount: take, settleKind: "credit" });
         }
         const moneyPart = round2(d.money ?? 0);
         if (moneyPart > 0.005) {
@@ -3222,6 +3227,12 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
         recordedBy: by,
         createdAt: at,
         targets,
+        // A-69 — the credits that funded this batch, each with what it applied.
+        // d27: only a credit the drawdown reached is named, so one ticked but
+        // never drawn stays as it was and is not consumed by this settlement.
+        credits: pool
+          .filter((c) => round2(c.amount) - c.left > 0.005)
+          .map((c) => ({ creditId: c.id, amount: round2(round2(c.amount) - c.left) })),
       };
 
       // d28 — every credit CONSUMED BY a settlement is consumed whole, claim or

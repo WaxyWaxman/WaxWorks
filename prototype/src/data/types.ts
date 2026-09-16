@@ -551,9 +551,16 @@ export const PAYMENT_METHODS: PaymentMethod[] = ["Cheque", "Credit Card", "EFT",
 // the two live in different arrays.
 //
 // `settleKind` is M-05 d19: one batch carries both money and claim credit,
-// and a target records which it was. A credit target also names the credit
-// that funded it, because d22's void has to put it back exactly and a pool
-// with no provenance cannot be reversed.
+// and a target records which it was.
+//
+// A target does NOT name the credit that funded it (M-05 d42, architecture
+// A-69). It used to, on the grounds that d22's void "has to put it back
+// exactly and a pool with no provenance cannot be reversed" — but A-37
+// already attaches a credit to AT MOST ONE non-voided batch, so the void
+// un-consumes it from the BATCH and never needed the pair. Nothing read the
+// pairing: an Invoice's balance reads a target's amount and kind. What it did
+// do was make consumption underivable for a credit no target happened to
+// name, which is how a ticked-but-undrawn credit came to be counted twice.
 export type PayableTargetKind = "invoice" | "entry";
 export type SettleKind = "money" | "credit";
 export interface PaymentTarget {
@@ -561,7 +568,6 @@ export interface PaymentTarget {
   id: string;
   amount: number;
   settleKind: SettleKind;
-  creditId?: string; // set iff settleKind === "credit" — the claim or entry it came from
 }
 
 // M-05 d22 / architecture A-33a: a void is a NEW ARTIFACT appended against
@@ -589,6 +595,21 @@ export interface PaymentBatch {
   recordedBy: string;
   createdAt: string;
   targets: PaymentTarget[];
+  /**
+   * `ap_batch_credits` (architecture A-69, M-05 d42) — the credits that funded
+   * this batch, and how much of each was applied. This is the single source of
+   * A-37's `consumed`: a credit is consumed when a non-voided batch names it
+   * here, so voiding the batch un-consumes it with nothing to flip.
+   *
+   * d27 — only a credit the drawdown actually reached appears. One ticked but
+   * never drawn "stays as it was" and is not named.
+   */
+  credits: BatchCredit[];
+}
+
+export interface BatchCredit {
+  creditId: string; // the SupplierClaim or Credit PayableEntry it came from
+  amount: number; // how much of it this batch applied — d28's "consumed whole" less any remainder
 }
 
 export interface Invoice {
