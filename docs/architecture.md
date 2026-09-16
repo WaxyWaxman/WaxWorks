@@ -529,6 +529,9 @@ Each of these has been appended to the document it affects.
 | [architecture](architecture.md) §5.2 | `review_flags.actor_user_id` is nullable and `journal_imbalance` joins the `kind` enum — a flag may be system-raised (A-68) |
 | [architecture](architecture.md) §6 | `close_run` writes the journal in its own transaction; `close_undo` refuses while banked; a Ledger function group is added (A-66, A-67) |
 | [architecture](architecture.md) §10 | The *Reserved GL columns* risk retires as **resolved** — its stated response was taken (A-64) |
+| [PRD](PRD.md) §4 | `TaxLine` struck as superseded by [M-06](flows/M-06-settings.md) d11, and replaced by `TaxType` · `TaxGroup` · `ProductTaxCode` |
+| [PRD](PRD.md) §4 | `GLAccount`, `JournalBatch` and `BankDeposit` added; `CloseBatch` carries its journal and is refused an undo while banked (A-64 to A-67) |
+| [PRD](PRD.md) §4 | `ReviewFlag` is no longer defined as an Employee action — a null actor means the system raised it (A-68) |
 | [M-03](flows/M-03-daily-summary.md) d4 | Undo End of Day refuses while a non-voided BankDeposit references the CloseBatch (A-66) |
 | [M-05](flows/M-05-accounts-payable.md) | A PaymentBatch names the bank account it drew on, defaulted from the Method and overridable (A-65) |
 | [lexicon](lexicon.md) | *ReviewFlag* — a flag may be raised by the system, not only by an Employee (A-68) |

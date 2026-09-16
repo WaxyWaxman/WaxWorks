@@ -312,6 +312,8 @@ Appended rather than inserted, so the existing section numbers stay stable.
 
 ### Terms
 
+**Entity forms follow §3's rule.** The modelled thing is PascalCase — `GLAccount`, `JournalBatch`, `BankDeposit` — and the everyday word is lowercase: *a GL account*, *a journal entry*, *a bank deposit*.
+
 | Canonical | Meaning | Avoid |
 |---|---|---|
 | **chart of accounts** | The store's list of GL accounts. **It does not exist** — [M-06](flows/M-06-settings.md) d11 carries it as an open question and [architecture](architecture.md) §10 as a risk. Three columns are reserved against it and unread: `tax_types.gl_account` ([M-06](flows/M-06-settings.md) d11), a tender's **Code** (d23), and a Section's **GL code** (d28). Per Store, like everything else ([architecture](architecture.md) A-5). | "COA"; "the ledger" (that is the postings, not the list); treating the three reserved columns as evidence one exists |
