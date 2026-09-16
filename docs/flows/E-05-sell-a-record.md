@@ -198,6 +198,12 @@ Held copies count against **available** stock but remain on hand.
 - **Sections are an editable table** ([M-06](M-06-settings.md) d28), so `VINYL` and `MERCH` are data rather than the whole list.
 - **The till's tender list is configured, and several tenders may share one behavior** ([M-06](M-06-settings.md) d22, d23) — `Visa` and `Amex` are two `card` tenders. A tender may be switched off, and carries no reference field (d24).
 
+**From [M-07](M-07-chart-of-accounts.md):**
+
+- **Inventory is perpetual, so tendering a Sale moves cost** ([M-07](M-07-chart-of-accounts.md) d2). Each copy sold moves **its own recorded cost** from Inventory into cost of goods at that moment — never an average and never a recomputed figure. Nothing changes at the till: this is a consequence of what `sale_tender` already does, not a new step in it.
+- **A Sale's business date is the date it was tendered** ([M-07](M-07-chart-of-accounts.md) d19), a **calendar** date ending at midnight, with no separate business-day boundary and no setting for one. That is the same moment [architecture](../architecture.md) A-57 resolves tax at, so the two never disagree — and it means a Sale rung at 00:30 after a late night files on the new day.
+- **The day's Sales become journal lines at the close** ([M-07](M-07-chart-of-accounts.md) d7, d14), grouped by `(business date, account)` so a close covering two days files each on its own. A mis-rung tender is therefore worth catching before close — decision 27's Current-Sales search is where, and decisions 31 and 32 are how.
+
 ---
 
 ## Resolved decisions

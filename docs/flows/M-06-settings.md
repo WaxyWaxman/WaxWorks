@@ -234,6 +234,7 @@ QST are separate registrations (decision 48).
 
 **From [M-07](M-07-chart-of-accounts.md):**
 
+- **Decision 39's deferral is discharged, and no rate history was ever needed** ([M-07](M-07-chart-of-accounts.md) d17). d39 sent exchange gain or loss to the chart of accounts and warned the price of computing one would be [architecture](../architecture.md) A-36, A-47 and decision 37 reopened together. **M-07 places the gain instead of computing it** — a journal line carries its own currency code, nothing is converted, and the accountant's conversion difference *is* the gain. So d39's closing line, *"it now waits on the chart of accounts rather than on a setting"*, has been answered: the wait is over and **decisions 33, 37 and 38 are all unaffected**.
 - **No settings row carries a GL account.** [M-07](M-07-chart-of-accounts.md) d4 holds every account mapping in that flow, which retires the reserved fields on tax types (d11), tenders (d23) and Sections (d28) — recorded here as decision 58. A tax type maps to **two** accounts rather than one (M-07 d5), and revenue is one account per Section (M-07 d6), so adding a Section now also prompts for an account.
 
 ---

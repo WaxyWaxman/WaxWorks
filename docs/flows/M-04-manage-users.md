@@ -110,6 +110,10 @@ The in-place mechanism survives for the manager-only table (decision 9). A Manag
 - **Initials are unique within a Store, enforced when the User is created** ([E-01](E-01-authenticate.md) d14). Add is where that rule is enforced, so it is M-04's to implement and E-01's to have decided.
 - **Adjusting on hand and voiding prompt for the acting Employee's initials even inside an active session** ([E-01](E-01-authenticate.md) d12, d15). Both are manager-only, so both take two sets of initials — the Employee's and the authorizing Manager's.
 
+**From [architecture](../architecture.md):**
+
+- **A ReviewFlag may be raised by the system, not only by an Employee** ([architecture](../architecture.md) A-68). `actor_user_id` is **nullable** and a null actor means the system raised it — so the review queue this flow owns now renders rows with **no actor to name**, the first being `journal_imbalance` ([M-07](M-07-chart-of-accounts.md) d10). Decision 17 is unchanged: acknowledging stays manager-only and a flag is still never deleted. What changes is that the queue stops meaning *what the staff did* and starts meaning *what wants a look*, and an acknowledgement can mean *I have seen this bug*.
+
 ---
 
 ## Resolved decisions
