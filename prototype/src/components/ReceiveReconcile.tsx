@@ -446,39 +446,21 @@ function PaperworkFields({
           its ledger account: a tax row to that type's Input Tax Credit account
           (M-07 d5), Miscellaneous to the reserved misc account (d23).
 
-          The rows for the store's configured tax types are here already, so
-          copying an invoice is reading figures across rather than deciding
-          anything. A Quebec shop opens on GST and QST; an Alberta one on GST.
-          A charge the store has no type for goes under Miscellaneous, which is
-          what that slot was always for. */}
-      {invoice.charges.map((c) => (
+          The rows for the taxes the store pays are here already, seeded from
+          its default tax group — a Quebec shop opens on GST and QST, an Alberta
+          one on GST — so copying an invoice across is reading figures rather
+          than deciding anything.
+
+          **No picker and nothing to add.** Seeding the rows from the group left
+          nothing for a picker to choose — every tax the store pays already has
+          its own row, so naming one again would only make a second row summing
+          into the same account. What is left is the slot Miscellaneous always
+          was, so it sits below them, always there, for whatever a supplier
+          billed that has no row of its own — including a tax the store has no
+          type for. */}
+      {invoice.charges.filter((c) => c.kind === "tax").map((c) => (
         <label className="recv-entry" key={c.id}>
-          <span>
-            {c.kind === "tax" && taxTypes.some((t) => t.code === c.taxCode) ? (
-              labelFor(c)
-            ) : (
-              <select
-                aria-label="What this charge is"
-                disabled={locked}
-                value={c.kind === "tax" ? `tax:${c.taxCode}` : "misc"}
-                onChange={(e) =>
-                  setCharge(
-                    c.id,
-                    e.target.value === "misc"
-                      ? { kind: "misc", taxCode: undefined }
-                      : { kind: "tax", taxCode: e.target.value.slice(4) },
-                  )
-                }
-              >
-                <option value="misc">Miscellaneous</option>
-                {taxTypes.map((t) => (
-                  <option key={t.code} value={`tax:${t.code}`}>
-                    {t.name}
-                  </option>
-                ))}
-              </select>
-            )}
-          </span>
+          <span>{labelFor(c)}</span>
           <input
             {...figureField}
             disabled={locked}
@@ -498,21 +480,43 @@ function PaperworkFields({
         />
       </label>
 
-      {!locked && (
-        <button
-          className="btn ghost sm"
-          onClick={() =>
-            onPatch({
-              charges: [
-                ...invoice.charges,
-                { id: `chg-${Date.now()}-${invoice.charges.length}`, kind: "misc", amount: 0 },
-              ],
-            })
-          }
-        >
-          ＋ Add charge
-        </button>
+      {invoice.charges.filter((c) => c.kind === "misc").map((c) => (
+        <label className="recv-entry" key={c.id}>
+          <span>{labelFor(c)}</span>
+          <input
+            {...figureField}
+            disabled={locked}
+            value={c.amount}
+            onChange={(e) => setCharge(c.id, { amount: Number(numericOnly(e.target.value)) || 0 })}
+          />
+        </label>
+      ))}
+
+      {/* Always present, whether or not the invoice has ever carried one — so
+          the form reads the same on an invoice opened today and one opened
+          before charges were a list. The charge is created on first edit
+          rather than seeded at zero, which keeps `charges` a record of what the
+          supplier actually billed. */}
+      {!invoice.charges.some((c) => c.kind === "misc") && (
+        <label className="recv-entry">
+          <span>Miscellaneous</span>
+          <input
+            {...figureField}
+            disabled={locked}
+            value={0}
+            onChange={(e) =>
+              onPatch({
+                charges: [
+                  ...invoice.charges,
+                  { id: `chg-misc-${invoice.charges.length}`, kind: "misc", amount: Number(numericOnly(e.target.value)) || 0 },
+                ],
+              })
+            }
+          />
+        </label>
       )}
+
+
     </>
   );
 }
