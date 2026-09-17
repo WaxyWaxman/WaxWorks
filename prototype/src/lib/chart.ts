@@ -35,9 +35,11 @@ import { ADJUSTMENT_REASONS } from "../data/types";
  * (d5, E-02 d34) — and a tender is one subject and three, since `payout` is an
  * expense and `rounding` is income or expense (M-06).
  *
- * **3000s stays empty on purpose.** d1 runs no period close and holds no
- * equity, so an accountant seeing no 3000s knows at once that this file does
- * not carry it. Renumbering to hide the gap would hide the fact.
+ * **The 3000s carry equity (d31).** They were empty on purpose while d1 held
+ * no balances and ran no period close — d27 reverses that, and M-08 d17's
+ * year-end seal posts into them. What is still absent is *Net Profit* and
+ * *Current Profits*, which M-08 d24 derives when a statement is drawn and
+ * never posts, so neither is an account here.
  *
  * Suggestions only. d3 makes the number the store's the moment it opens the
  * screen, and nothing resolves an account by it — the reserved accounts resolve
@@ -50,8 +52,21 @@ const RESERVED: { role: GLRole; number: string; name: string }[] = [
   { role: "bank", number: "1010", name: "Chequing" },
   { role: "inventory", number: "1200", name: "Inventory" },
   { role: "accounts-payable", number: "2100", name: "Accounts payable" },
+  // d31 / M-08 d7 — the paper-era lump, and it must be a DIFFERENT account from
+  // the one above. `accounts-payable` IS M-05's balance, exactly and
+  // permanently, and that invariant is checkable on day one only because the
+  // debts the shop carried in from paper never touch it. Typed once at
+  // migration and drawn down by hand until it is empty, then dead weight.
+  { role: "accounts-payable-opening", number: "2110", name: "Accounts payable — opening" },
   { role: "gift-card-liability", number: "2200", name: "Gift card liability" },
   { role: "customer-credit", number: "2300", name: "Customer account credit" },
+  // d31 — the 3000s, no longer empty. d27 reversed d1's no-equity claim.
+  { role: "owners-equity", number: "3100", name: "Owner's equity" },
+  // M-08 d17's year-end seal posts here, and nothing else ever does. M-08 d26
+  // also lands the opening position's balancing figure in owner's equity above
+  // rather than in an account of its own, so the migration figure and every
+  // later draw share one line — d31's accepted consequence.
+  { role: "retained-earnings", number: "3200", name: "Retained earnings" },
   { role: "cogs", number: "5100", name: "Cost of goods" },
   { role: "freight-inbound", number: "5200", name: "Freight inbound" },
   // d23 — its own account rather than folded into freight. A-29 puts both in
@@ -77,6 +92,9 @@ export const ROLE_PURPOSE: Record<GLRole, string> = {
   inventory: "A copy's own cost, in until it sells (d2 — perpetual)",
   cogs: "That same cost, out at the moment it sells (d2)",
   "accounts-payable": "What is owed a supplier, from finalize (d13)",
+  "accounts-payable-opening": "The paper-era supplier debts, typed once and drawn down by hand (M-08 d7)",
+  "retained-earnings": "Where the year-end seal puts the year's result (M-08 d17). Nothing else posts here",
+  "owners-equity": "What the owner has put in or drawn out, and the opening position's balancing figure (M-08 d26)",
   "freight-inbound": "Invoice-level freight, never allocated per copy (E-02 d16)",
   "misc-inbound": "Invoice-level misc, never allocated per copy (E-02 d16, d23)",
   "second-hand-purchases": "The counter buy's money side; the intake credits it back",
@@ -155,6 +173,9 @@ const TYPE_FOR_ROLE: Record<GLRole, GLAccountType> = {
   "tax-paid": "asset",
   suspense: "asset",
   "accounts-payable": "liability",
+  "accounts-payable-opening": "liability",
+  "retained-earnings": "equity",
+  "owners-equity": "equity",
   "gift-card-liability": "liability",
   "customer-credit": "liability",
   "tax-collected": "liability",

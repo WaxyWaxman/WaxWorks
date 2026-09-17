@@ -42,8 +42,8 @@ const dollars = (c: number): number => c / 100;
 // ---------------------------------------------------------------------------
 
 /**
- * A reserved role resolves to exactly one account (the eleven in chart.ts's
- * RESERVED). The per-seam roles do not, and are never resolved this way —
+ * A reserved role resolves to exactly one account (the ones in chart.ts's
+ * RESERVED — fifteen since d31, and a count in prose is how it went stale). The per-seam roles do not, and are never resolved this way —
  * they go through `seamAccount` below.
  *
  * d18 — an account that has been DEACTIVATED still resolves. *Active* governs

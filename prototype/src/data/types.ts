@@ -1178,6 +1178,19 @@ export type GLRole =
   | "card-processing-fees"
   | "bank"
   | "suspense"
+  // d31 — three roles added for M-08, each passing d3's test that the SOFTWARE
+  // must resolve it. M-08 d17's year-end seal posts to retained earnings;
+  // M-08 d7 rests a permanent invariant on `accounts-payable-opening` being a
+  // DIFFERENT account from `accounts-payable`, which must equal M-05's balance
+  // exactly and forever; and an owner's draw needs a destination the software
+  // can offer rather than one the Manager has to think of.
+  //
+  // Names are still the store's (d3) — the reference model calls the last one
+  // Shareholder's Loan for a limited company and Owner's Equity otherwise,
+  // which is one role wearing the name the shop's incorporation calls for.
+  | "retained-earnings"
+  | "accounts-payable-opening"
+  | "owners-equity"
   // one per seam — resolved through a mapping.
   //
   // The five tender roles are d21: every tender keeps its own account, and each
