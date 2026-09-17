@@ -164,3 +164,77 @@ describe("the seeded non-tracked catalog (d17, d20)", () => {
     expect(resolveLineTax(25, "", TAX_TYPES, "2026-09-15")).toEqual([]);
   });
 });
+
+// ---------------------------------------------------------------------------
+
+/**
+ * M-03 d16 — a pay-out is cash leaving the drawer, so the tape reports it
+ * against cash rather than under a category of its own.
+ */
+describe("By tender — cash out is still cash (M-03 d16, E-05 d16)", () => {
+  const tendered = (tenders: Sale["tenders"], lines: SaleLine[] = []) =>
+    computeDayBreakdown(
+      [{ ...sale(lines), tenders } as Sale],
+      [],
+      taxCtx,
+      [],
+      GENRES,
+      SECTIONS,
+    );
+
+  const rows = (b: ReturnType<typeof tendered>) =>
+    Object.fromEntries(b.byTender.map((t) => [t.label, t.amount]));
+
+  it("gives a day of nothing but a pay-out a cash figure of -$20", () => {
+    // The case that prompted this. Under its own `Pay-out` label the tape
+    // carried NO cash line at all, so a day that ate $20 of the float read as
+    // a category nobody reconciles rather than as cash going out.
+    const b = tendered([{ id: "t", type: "Pay-out", amount: -20, note: "courier COD" }] as Sale["tenders"]);
+
+    expect(rows(b)["Cash — pay-outs"]).toBe(-20);
+    expect(b.cashNet).toBe(-20);
+    expect(rows(b)["Pay-out"]).toBeUndefined();
+  });
+
+  it("nets the pay-out against the day's cash without hiding either movement", () => {
+    // d14 — the tender column reports every movement, not a net figure. Both
+    // are still rows; the net sits beside them as a subtotal.
+    const b = tendered([
+      { id: "t1", type: "Cash", amount: 120 },
+      { id: "t2", type: "Pay-out", amount: -20, note: "window cleaner" },
+    ] as Sale["tenders"]);
+
+    expect(rows(b)["Cash"]).toBe(120);
+    expect(rows(b)["Cash — pay-outs"]).toBe(-20);
+    expect(b.cashNet).toBe(100);
+  });
+
+  it("was already right about a cash refund, and stays right", () => {
+    // A refund is tendered as a NEGATIVE `Cash` tender (E-06), so it always
+    // netted into the cash row. Asserted so the pay-out change cannot quietly
+    // move it somewhere else.
+    const b = tendered([
+      { id: "t1", type: "Cash", amount: 120 },
+      { id: "t2", type: "Cash", amount: -50, note: "Refund paid from till" },
+    ] as Sale["tenders"]);
+
+    expect(rows(b)["Cash"]).toBe(70);
+    expect(b.cashNet).toBe(70);
+  });
+
+  it("reports no cash figure at all on a card-only day", () => {
+    // Rather than a `$0.00` that reads as a counted drawer.
+    const b = tendered([{ id: "t", type: "Credit Card", amount: 48 }] as Sale["tenders"]);
+
+    expect(b.cashNet).toBeNull();
+    expect(rows(b)["Credit Card"]).toBe(48);
+  });
+
+  it("still lists the pay-out with its note under Movements (d9)", () => {
+    // Folding it into cash must not lose it: d9 captures pay-outs with their
+    // notes precisely because money leaving the till is otherwise invisible.
+    const b = tendered([{ id: "t", type: "Pay-out", amount: -20, note: "courier COD" }] as Sale["tenders"]);
+
+    expect(b.payouts).toEqual([{ saleLabel: "—", note: "courier COD", amount: -20 }]);
+  });
+});

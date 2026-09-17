@@ -312,7 +312,6 @@ export function OtherFunctionsModal({ onClose }: { onClose: () => void }) {
       batch: JournalBatch;
       unresolved: string[];
       ambiguousTenders: string[];
-      payouts: { sale: string; amount: number }[];
     };
   } | null>(null);
   const openBatches = app.closeBatches.filter((b) => !b.undoneAt);
@@ -358,9 +357,8 @@ export function OtherFunctionsModal({ onClose }: { onClose: () => void }) {
               // CloseBatch, so this cannot ride a constant.
               onClick={() =>
                 withActor("Total Today's Sales", (actor) => {
-                  const { breakdown: data, journal, unresolved, ambiguousTenders, payouts } =
-                    app.totalTodaysSales(actor);
-                  setBreakdown({ closing: true, data, journal: { batch: journal, unresolved, ambiguousTenders, payouts } });
+                  const { breakdown: data, journal, unresolved, ambiguousTenders } = app.totalTodaysSales(actor);
+                  setBreakdown({ closing: true, data, journal: { batch: journal, unresolved, ambiguousTenders } });
                 })
               }
             >
@@ -419,12 +417,10 @@ function JournalNotice({
   batch,
   unresolved,
   ambiguousTenders,
-  payouts,
 }: {
   batch: JournalBatch;
   unresolved: string[];
   ambiguousTenders: string[];
-  payouts: { sale: string; amount: number }[];
 }) {
   const dates = datesIn(batch);
   const bad = isImbalanced(batch);
@@ -467,18 +463,6 @@ function JournalNotice({
             </>
           )}
         </>
-      )}
-      {payouts.length > 0 && (
-        <p className="small" style={{ marginTop: "var(--sp-2)" }}>
-          <strong>
-            {payouts.length} pay-out{payouts.length === 1 ? "" : "s"} posted on the wrong side of the books
-          </strong>{" "}
-          ({payouts.map((p) => `${p.sale} ${money(p.amount)}`).join(", ")}). E-05 d16 makes a pay-out{" "}
-          <em>cash removed from the till</em>, so it should debit the expense and credit the cash it came out of. The
-          till funds one with an offsetting tender instead, so the Sale records cash that never entered the drawer and
-          does not say which tender was the offset — which makes the right entry underivable here. The journal balances
-          and two accounts are wrong by twice the pay-out. Raised against E-05.
-        </p>
       )}
       {ambiguousTenders.length > 0 && (
         <p className="small" style={{ marginTop: "var(--sp-2)" }}>
@@ -561,6 +545,29 @@ function BreakdownView({ data }: { data: DayBreakdown }) {
                     <div className="xsmall muted">money in, not a sale — a balance the store now owes</div>
                   </td>
                   <td className="num muted">{money(data.giftCardsLoaded)}</td>
+                </tr>
+              )}
+              {/* M-03 d16 — the day's cash movement, net of what left the
+                  drawer. A subtotal beneath the movements rather than one of
+                  them, because d14 keeps every movement in the column above
+                  and this is the figure you count against.
+
+                  NOT a drawer figure, and the wording has to keep saying so:
+                  this flow holds no opening float and runs no
+                  counted-versus-expected comparison, so what it can report is
+                  how much cash MOVED, never how much is in the till. */}
+              {data.cashNet !== null && (
+                <tr>
+                  <td>
+                    <strong>Cash, net</strong>
+                    <div className="xsmall muted">
+                      what the drawer took less what left it — no float, so this is the day's movement rather than
+                      what is in the till
+                    </div>
+                  </td>
+                  <td className="num">
+                    <strong>{money(data.cashNet)}</strong>
+                  </td>
                 </tr>
               )}
               {data.byTender.length === 0 && (

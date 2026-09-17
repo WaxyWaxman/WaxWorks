@@ -838,7 +838,6 @@ interface AppContextValue extends AppState {
     journal: JournalBatch;
     unresolved: string[];
     ambiguousTenders: string[];
-    payouts: { sale: string; amount: number }[];
   };
   undoEndOfDay: (batchId: string, by: string) => void;
   attachCustomer: (saleId: string, customerId: string | null) => void;
@@ -2417,7 +2416,6 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
       journal: journal.batch,
       unresolved: journal.unresolved,
       ambiguousTenders: journal.ambiguousTenders,
-      payouts: journal.payouts,
     };
   };
 
