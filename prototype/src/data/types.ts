@@ -758,6 +758,9 @@ export interface ReviewFlag {
   id: string;
   kind: ReviewFlagKind;
   summary: string;
+  // architecture A-68 makes this nullable for a SYSTEM-RAISED flag, and the
+  // prototype has none: M-05 d50 found d49's case unreachable, and M-07 d10's
+  // journal imbalance is not built. Left required until something raises one.
   recordedBy: string;
   at: string;
   acknowledged: boolean;
