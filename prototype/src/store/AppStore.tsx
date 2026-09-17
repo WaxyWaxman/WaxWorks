@@ -631,6 +631,13 @@ const seed: AppState = {
       intakeMode: "New",
       invoiceDate: "2026-08-30",
       receivedDate: "2026-08-31",
+      // M-06 d59 — this supplier bills in USD, so the Invoice carries the rate
+      // it was booked at. Seeded because the fallback for an Invoice with no
+      // recorded rate is 1, which is correct for an artifact written before the
+      // field existed and makes the prototype demonstrate the opposite of what
+      // it now does: a USD invoice settling at par, which is the defect d59
+      // closed. 1.42 matches the seeded USD rate in CURRENCIES.
+      exchangeRate: 1.42,
       statedSubtotal: 17.25,
       freight: 0,
       charges: [],
