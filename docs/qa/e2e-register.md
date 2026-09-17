@@ -320,26 +320,137 @@ accounts (`/chart`); no journal screen, on purpose. **Not placed in
 
 ### M-08 — Keep the general ledger
 
-Steps in [M-08](../flows/M-08-general-ledger.md). **No screen exists on either target** — the flow is `Specified` with no code at all, so every row is `Planned` for the product and `—` for the prototype, which does not model it ([prototype](../prototype.md)). **Not placed in [architecture](../architecture.md) §8** — see Open questions; M-08 arrived after the build order was written.
+Steps in [M-08](../flows/M-08-general-ledger.md). **Walked against the prototype on 2026-09-17**, which now
+has `/ledger` — five phases on six `src/lib/ledger*.ts` modules ([prototype](../prototype.md)). The product has
+no code, so every row stays `Planned` there. **Not placed in [architecture](../architecture.md) §8** — see Open
+questions; M-08 arrived after the build order was written, and A-79 moved only [M-07](../flows/M-07-chart-of-accounts.md)'s
+tables forward, not this flow.
+
+**Six rows walked, eight blocked, one not attempted.** A row is `Walked` only where **every** assertion in it was
+exercised; one clause that could not be reached makes the row `Blocked`, because a column that reads `Walked` on a
+partial run stops meaning anything. What blocks each is recorded below the table — three are unbuilt behaviour, two
+are unreachable from the seed's clock, one is a setup the spec makes impossible to create, and one is the open
+question [M-08](../flows/M-08-general-ledger.md) records against decision 25.
+
+*The walk was driven with a real browser against the running prototype rather than with `playwright-cli`, which is
+not installed — so there is **no recording artifact**, which the `/qa walk` procedure otherwise expects.*
 
 | # | Scenario | Steps | Asserts | Needs | Prototype | Product | Spec |
 |---|---|---|---|---|---|---|---|
-| M-08-T1 | **The opening position is typed from paper, balances by construction, and seals once.** Name the first day the books start. Inventory arrives **supplied by the system** — on hand × cost — not typed; type bank, loans and the paper-era payables lump into *Accounts payable — opening*, never into *Accounts payable*. **Equity is not typed**: it is shown as the figure that balances assets against liabilities, so the position cannot fail to balance. Type the accountant's own equity figure into the read-back: a difference is displayed and must be acknowledged before sealing. Seal it. | 1–8 | M-08 decision 6, M-08 decision 7, M-08 decision 9, M-08 decision 26, M-08 decision 28, A-78 | A chart (M-07-T1), stock on hand with costs, and an accountant's closing balance sheet. **No seed exists for the last of these** | — | Planned |  |
-| M-08-T2 | **The opening position is retypeable until the first real seal, and never after.** Unseal and retype it while no period has been sealed. Seal a month. Try again: refused, and the refusal says why — the correction route is a dated posting like any other. | 8 | M-08 decision 6 | M-08-T1 | — | Planned |  |
-| M-08-T3 | **The customer side opens empty, and a paper credit note is rung as a discount.** No customer balance is migrated. Present a pre-migration paper credit at the till: rung as a discount, no Customer created and no balance issued — and the month shows revenue low and discounts high, with the copy's cost still posted. | 6 | M-08 decision 8, E-07 decision 22 | M-08-T1, a sellable copy | — | Planned |  |
-| M-08-T4 | **A typed posting is manager-only, must balance, and cannot reach the accounts the system keeps.** Reached without a Manager: refused. Save unbalanced: refused, naming the amount still needed and which side — it does **not** go to Suspense. *Retained earnings* and *Accounts payable*: not offered. *Inventory*: offered, because a dead-stock write-down is exactly where book value should leave the shelf. | 9–15 | M-08 decision 10, M-08 decision 13, M-08 decision 14, A-74 | A chart, an open period | — | Planned |  |
-| M-08-T5 | **A typed posting carries its dimensions and its date is bounded at both ends.** Post rent: the line carries a **location** (required, the Store) and no **section** (blank means *not applicable*). Date it inside a sealed period: refused. Date it before the opening position: refused. Date it in the future: **permitted**. | 10–11 | M-08 decision 2, M-08 decision 11, M-08 decision 12, M-08 decision 27, A-72, A-73 | M-08-T1, one sealed period | — | Planned |  |
-| M-08-T6 | **Sealing reports every failure without sealing, and a Suspense line does not block it.** Leave an unbalanced posting and an invalid code in the period: the seal reports both and seals nothing. Fix, re-run, seal: the closing transaction carries balance-forwards. **A period carrying Suspense seals anyway**, and the total it carries is **gross** — short three dollars on one date and over three on another reports six, not zero. | 16–20 | M-08 decision 15, M-08 decision 20, M-07 decision 10, M-07 decision 25, A-75, A-76 | A period with postings, and a journal forced to Suspense | — | Planned |  |
-| M-08-T7 | **A second seal of the same period is unrepresentable.** Seal a month. Seal it again: refused — not by a check someone remembered but because a live seal is unique per period. The balance-forwards are not doubled. | 16–20 | M-08 decision 20, A-75 | M-08-T6 | — | Planned |  |
-| M-08-T8 | **A year-end seal writes visible closing postings.** Seal the period that ends the fiscal year M-06 configured. Revenue and expense are zeroed into retained earnings by **real journal lines** dated the last day of the year and identifiable as the seal's — not by a rule about how balance-forwards are computed. | 21 | M-08 decision 5, M-08 decision 17, M-06 decision 64 | M-08-T6, a fiscal year end set | — | Planned |  |
-| M-08-T9 | **Unsealing reaches the most recent period only, repeats to walk back, and stops at a filed year.** Unseal the latest sealed month: authorized, with a reason required and recorded. Reach an older month: unseal each in turn. Mark a year **filed**, then try to unseal into it: refused, and the refusal names what is holding it. | 22–23 | M-08 decision 18, M-08 decision 22, M-08 decision 29 | Three sealed months and one sealed year | — | Planned |  |
-| M-08-T10 | **Nothing writes into a sealed period, by any route.** With a day inside a sealed period, run M-03's **Undo End of Day** — the one reversal in this system that does not post forward: refused while the period is sealed, released when it is unsealed, and never released for a day inside a **filed** year. | 22–23 | M-08 decision 11, M-08 decision 22, M-08 decision 29, M-03 decision 4, A-66 | M-08-T9, a closed CloseBatch inside a sealed month | — | Planned |  |
-| M-08-T11 | **An account reads back as balance forward · activity · new balance forward, filtered by dimension.** Pick an account and a range: three figures and every line behind them. Narrow by **section**: the same query, fewer lines. The middle term is true with no opening position and no seal — the other two are not. | 24 | M-08 decision 2, M-08 decision 20, M-08 decision 24 | A sealed month and an open one | — | Planned |  |
-| M-08-T12 | **The books state a profit, and the balance sheet balances.** Draw a P&L for a sealed period: it has a bottom line and it is called a profit. Draw a balance sheet as at its end: equity carries **current earnings derived at the moment it is drawn**, named as its own line. Customer balances are **classified by sign and never netted across Customers** — store credit into liabilities, unpaid customer invoices into assets. | 25 | M-08 decision 23, M-08 decision 24, M-08 decision 25, E-07 decision 21, M-07 decision 27 | M-08-T6, one customer in credit and one owing | — | Planned |  |
-| M-08-T13 | **A statement excludes lines dated after its as-at date, and every statement answers the same way.** Post a future-dated entry. Draw a balance sheet as at today: absent. Draw the P&L for the period: absent. Draw both again once its date has arrived: present. | 24–25 | M-08 decision 30, A-73 | M-08-T5's future-dated posting | — | Planned |  |
-| M-08-T14 | **Issuing stores the figures, and re-opening shows what was issued.** Issue a balance sheet. Re-open the stored issuance: **the figures as issued**, never a recomputation. Export a journal range, then an overlapping one: warned, proceeds. The record of what left the building is what makes that warning possible. | 26 | M-08 decision 25, M-08 decision 31, M-07 decision 16, A-77 | M-08-T12 | — | Planned |  |
-| M-08-T15 | **Reconciling marks a set that nets to zero, moves no money, and gates nothing.** Mark entries in the bank account against a statement until the difference is zero; stamp the set. No balance moves. Seal the period with another account left unreconciled: it seals — the mark is evidence, never a gate. | 27 | M-08 decision 25 | A bank account with entries, and a statement to reconcile against | — | Planned |  |
+| M-08-T1 | **The opening position is typed from paper, balances by construction, and seals once.** Name the first day the books start. Inventory arrives **supplied by the system** — on hand × cost — not typed; type bank, loans and the paper-era payables lump into *Accounts payable — opening*, never into *Accounts payable*. **Equity is not typed**: it is shown as the figure that balances assets against liabilities, so the position cannot fail to balance. Type the accountant's own equity figure into the read-back: a difference is displayed and must be acknowledged before sealing. Seal it. | 1–8 | M-08 decision 6, M-08 decision 7, M-08 decision 9, M-08 decision 26, M-08 decision 28, A-78 | A chart (M-07-T1), stock on hand with costs, and an accountant's closing balance sheet. **No seed exists for the last of these** | Walked | Planned |  |
+| M-08-T2 | **The opening position is retypeable until the first real seal, and never after.** Unseal and retype it while no period has been sealed. Seal a month. Try again: refused, and the refusal says why — the correction route is a dated posting like any other. | 8 | M-08 decision 6 | M-08-T1 | Walked | Planned |  |
+| M-08-T3 | **The customer side opens empty, and a paper credit note is rung as a discount.** No customer balance is migrated. Present a pre-migration paper credit at the till: rung as a discount, no Customer created and no balance issued — and the month shows revenue low and discounts high, with the copy's cost still posted. | 6 | M-08 decision 8, E-07 decision 22 | M-08-T1, a sellable copy | Planned | Planned |  |
+| M-08-T4 | **A typed posting is manager-only, must balance, and cannot reach the accounts the system keeps.** Reached without a Manager: refused. Save unbalanced: refused, naming the amount still needed and which side — it does **not** go to Suspense. *Retained earnings* and *Accounts payable*: not offered. *Inventory*: offered, because a dead-stock write-down is exactly where book value should leave the shelf. | 9–15 | M-08 decision 10, M-08 decision 13, M-08 decision 14, A-74 | A chart, an open period | Walked | Planned |  |
+| M-08-T5 | **A typed posting carries its dimensions and its date is bounded at both ends.** Post rent: the line carries a **location** (required, the Store) and no **section** (blank means *not applicable*). Date it inside a sealed period: refused. Date it before the opening position: refused. Date it in the future: **permitted**. | 10–11 | M-08 decision 2, M-08 decision 11, M-08 decision 12, M-08 decision 27, A-72, A-73 | M-08-T1, one sealed period | Walked | Planned |  |
+| M-08-T6 | **Sealing reports every failure without sealing, and a Suspense line does not block it.** Leave an unbalanced posting and an invalid code in the period: the seal reports both and seals nothing. Fix, re-run, seal: the closing transaction carries balance-forwards. **A period carrying Suspense seals anyway**, and the total it carries is **gross** — short three dollars on one date and over three on another reports six, not zero. | 16–20 | M-08 decision 15, M-08 decision 20, M-07 decision 10, M-07 decision 25, A-75, A-76 | A period with postings, and a journal forced to Suspense | Blocked | Planned |  |
+| M-08-T7 | **A second seal of the same period is unrepresentable.** Seal a month. Seal it again: refused — not by a check someone remembered but because a live seal is unique per period. The balance-forwards are not doubled. | 16–20 | M-08 decision 20, A-75 | M-08-T6 | Blocked | Planned |  |
+| M-08-T8 | **A year-end seal writes visible closing postings.** Seal the period that ends the fiscal year M-06 configured. Revenue and expense are zeroed into retained earnings by **real journal lines** dated the last day of the year and identifiable as the seal's — not by a rule about how balance-forwards are computed. | 21 | M-08 decision 5, M-08 decision 17, M-06 decision 64 | M-08-T6, a fiscal year end set | Walked | Planned |  |
+| M-08-T9 | **Unsealing reaches the most recent period only, repeats to walk back, and stops at a filed year.** Unseal the latest sealed month: authorized, with a reason required and recorded. Reach an older month: unseal each in turn. Mark a year **filed**, then try to unseal into it: refused, and the refusal names what is holding it. | 22–23 | M-08 decision 18, M-08 decision 22, M-08 decision 29 | Three sealed months and one sealed year | Blocked | Planned |  |
+| M-08-T10 | **Nothing writes into a sealed period, by any route.** With a day inside a sealed period, run M-03's **Undo End of Day** — the one reversal in this system that does not post forward: refused while the period is sealed, released when it is unsealed, and never released for a day inside a **filed** year. | 22–23 | M-08 decision 11, M-08 decision 22, M-08 decision 29, M-03 decision 4, A-66 | M-08-T9, a closed CloseBatch inside a sealed month | Walked | Planned |  |
+| M-08-T11 | **An account reads back as balance forward · activity · new balance forward, filtered by dimension.** Pick an account and a range: three figures and every line behind them. Narrow by **section**: the same query, fewer lines. The middle term is true with no opening position and no seal — the other two are not. | 24 | M-08 decision 2, M-08 decision 20, M-08 decision 24 | A sealed month and an open one | Walked | Planned |  |
+| M-08-T12 | **The books state a profit, and the balance sheet balances.** Draw a P&L for a sealed period: it has a bottom line and it is called a profit. Draw a balance sheet as at its end: equity carries **current earnings derived at the moment it is drawn**, named as its own line. Customer balances are **classified by sign and never netted across Customers** — store credit into liabilities, unpaid customer invoices into assets. | 25 | M-08 decision 23, M-08 decision 24, M-08 decision 25, E-07 decision 21, M-07 decision 27 | M-08-T6, one customer in credit and one owing | Walked | Planned |  |
+| M-08-T13 | **A statement excludes lines dated after its as-at date, and every statement answers the same way.** Post a future-dated entry. Draw a balance sheet as at today: absent. Draw the P&L for the period: absent. Draw both again once its date has arrived: present. | 24–25 | M-08 decision 30, A-73 | M-08-T5's future-dated posting | Walked | Planned |  |
+| M-08-T14 | **Issuing stores the figures, and re-opening shows what was issued.** Issue a balance sheet. Re-open the stored issuance: **the figures as issued**, never a recomputation. Export a journal range, then an overlapping one: warned, proceeds. The record of what left the building is what makes that warning possible. | 26 | M-08 decision 25, M-08 decision 31, M-07 decision 16, A-77 | M-08-T12 | Walked | Planned |  |
+| M-08-T15 | **Reconciling marks a set that nets to zero, moves no money, and gates nothing.** Mark entries in the bank account against a statement until the difference is zero; stamp the set. No balance moves. Seal the period with another account left unreconciled: it seals — the mark is evidence, never a gate. | 27 | M-08 decision 25 | A bank account with entries, and a statement to reconcile against | Walked | Planned |  |
 | M-08-T16 | **A foreign payable nets Accounts payable to zero across finalize and payment.** Finalize a USD Invoice: it books in the **home** currency at the rate recorded on the Invoice. Settle it, confirming what actually left the bank. **A/P nets to zero across the two journals** and the movement lands in *Exchange gain or loss*. The defect this exists to catch balanced inside each journal separately, so only a scenario spanning both artifacts can see it. | 9–15 | M-06 decision 59, M-06 decision 60, M-07 decision 8 | A USD Supplier, a rate, and a finalized Invoice in that currency | — | Planned |  |
+
+#### What the walk of 2026-09-17 found
+
+**Blocked, and why.** Each is a fact about the prototype or the spec, not a judgement of either.
+
+- **M-08-T6 — the setup the row asks for cannot be created.** *"Leave an unbalanced posting… in the
+  period"*: [M-08](../flows/M-08-general-ledger.md) d10 refuses an unbalanced posting at write time, so one
+  can never be left anywhere, and no ledger surface can create a Suspense line because
+  [M-07](../flows/M-07-chart-of-accounts.md) d10 says no Manager action can. **The row describes a state its
+  own decisions make unreachable.** The seal's reporting is real and is untested by this route. *Route:*
+  `/flow-clarify` — how a Suspense line is ever staged for a test.
+- **M-08-T7 — no screen path.** *Seal a period* offers only the **oldest unsealed** month (step 16), so a
+  sealed period is never offered and the second seal has no button to press. The refusal exists in
+  `sealRefusal` and is unit-tested; the prototype cannot show it, and cannot show A-75's *unrepresentable* at
+  all, which needs the partial unique index. *Route:* nothing — the prototype is not the target for A-75.
+- ~~**M-08-T8 — not built.**~~ — **Built and walked on 2026-09-17.** d17's visible closing postings are
+  written by `yearEndClosingBatch`, and the seal writes them **before** it recomputes balance-forwards, because
+  the zeroing is dated the last day of the year and therefore falls inside the period being sealed. Walked with
+  books opening 1 November 2025: rent of 1,500 posted in November reads *activity 1,500, new balance forward
+  1,500*; December reads *balance forward 1,500, activity −1,500, new balance forward 0.00*, carrying one line
+  dated 2025-12-31 reading *"Year-end seal 2025-12 — closing Rent into retained earnings"*, with retained
+  earnings taking the other side as *"the year's result"*. **The earlier finding that this was unreachable from
+  the seed's clock was wrong** — a year end is reachable whenever the books open before the last December.
+- **M-08-T9 — two thirds walked.** The unseal with a required reason, and walking back, both hold and are
+  recorded. The **filed year** third needs a sealed December, which the seed's clock cannot reach. *Route:*
+  the same clock problem as T8.
+- ~~**M-08-T10 — built, not walked.**~~ — **Walked on 2026-09-17**, once the fixture was built: opened a
+  session as E. Okafor, rang and tendered a sale, ran *Total Today's Sales* to produce `batch-103` dated
+  2026-09-17, then sealed August and September from the ledger. Back at the till the Undo button was
+  **disabled**, carrying *"2026-09 is sealed, so 2026-09-17 cannot be restated. An Undo End of Day reaches back
+  and rewrites the day rather than posting forward, which is the one thing a seal refuses (M-08 d11). Unseal
+  2026-09 first."* Unsealing 2026-09 with d18's required reason **released it**: the caveat disappeared and the
+  button went live. The third clause — never released inside a **filed** year — is not walked and needs no
+  separate mechanism: d22 keeps a filed year sealed, so the same check refuses, and a unit test covers it.
+- ~~**M-08-T12 — one clause unexercised.**~~ — **Walked on 2026-09-17.** The screen now passes each
+  Customer's signed balance, so [E-07](../flows/E-07-manage-customers.md) d21's *classified by sign, never
+  netted* is exercised: the seed's customers read **120.50 into assets and 25.00 into liabilities**, never a
+  net. *What it surfaced is below.*
+- ~~**M-08-T14 — two thirds not built.**~~ — **Walked on 2026-09-17.** Re-opening a stored issuance shows the
+  figures as issued and recomputes nothing (d31), and the journal export is on the screen with
+  [M-07](../flows/M-07-chart-of-accounts.md) d16's overlap warning. Walked: exported 1–30 September, then a
+  range overlapping it — *"1 earlier export already covered part of this range"*, and **the Export button
+  stayed enabled**, because A-28a warns rather than refusing. Then an adjacent range, 1 October to 1 November:
+  **no warning**, because the bounds are half-open and two neighbours cannot both claim the boundary day.
+- ~~**M-08-T15 — the row asks for what the rule refuses.**~~ — **Resolved by decision 37 and walked on
+  2026-09-17.** A bank statement is a **second kind** of reconciliation. Walked both: three entries in the
+  bank account that do not net were **refused as a matched set** — *"out by 6,950.00. A matched set nets to
+  zero — mark it as cleared against a statement instead (d37)"* — and **permitted as a cleared set**, stamping
+  as `CLEARED · 3 entries`. *The row itself now needs rewriting:* it says *"until the difference is zero"*,
+  which is the matched rule, and a bank statement is the case that does not.
+
+**Two divergences on rows that did walk.**
+
+- **M-08-T2 — there is no *unseal* act for the opening position.** d6 says it *"can be unsealed and
+  retyped"*; the prototype instead leaves the form **editable** while the window is open and locks it when the
+  window shuts. The observable behaviour matches d6's intent and the refusal wording is right. What is missing
+  is the deliberate act, which everywhere else in this flow is an artifact with an actor — d18's unseal,
+  d22's filing. **d6 says *unsealed* without saying an unseal is recorded**, so this is a question for
+  `/flow-clarify`, not a defect.
+- **M-08-T5 — the lower bound fires before the sealed-period bound.** Dating a posting 2026-09-10 against
+  books that start 2026-09-17 reports *"the books start after 2026-09-16"* rather than *"2026-09 is sealed"*.
+  Both are [architecture](../architecture.md) A-73 bounds and both are correct; the row reads as though the
+  sealed case is the one a Manager meets first. Cosmetic, and worth knowing when the row is automated.
+
+**A new open question, surfaced by fixing M-08-T12.** A Customer's balance has **two sources**:
+[E-07](../flows/E-07-manage-customers.md) d5 derives it from movements, and the `customer-credit` account is
+written by the artifacts those movements cause. **Nothing ties them**, and in the prototype they disagree by
+95.50 on the seed alone. That is A-76's *two paths to one figure* in a second place, and A-76's answer —
+*stored is by definition the last recomputed* — does not transfer, because neither of these is a
+materialisation of the other. The balance sheet now **names the difference** rather than showing a sheet that
+is merely out of balance, which is an inference and not a recorded decision. Owner: `/flow-clarify`, or
+`/architecture` if the answer is structural.
+
+#### Rows that need rewriting against decisions 32 to 36
+
+Five decisions landed after these rows were written. **None is superseded, so no row goes `Stale`** — what
+follows is coverage the rows do not yet claim.
+
+- **M-08-T1** — add that the **gift card liability** (d33) and **Suspense** are not offered either, beside the
+  four accounts it names; and that the first day is **any day** (d35), which retires the guess the row was
+  written under.
+- **M-08-T4** — add **d33**, and **d32**, the test behind the whole list. The row's *"cannot reach the
+  accounts the system keeps"* is now a principle rather than an enumeration, so the row should assert the
+  principle's other half too: **the tax accounts are offered** (d34).
+- **M-08-T12** — add **d36**: a statement over an unsealed period is marked **provisional**.
+- **M-08-T15** — rewritten for **d37**: it asks for entries *"until the difference is zero"*, which is the
+  **matched** rule, against a **bank account**, which is the case that does not net. The row should assert
+  both kinds and which one a bank statement is.
+- **M-08-T4** — also **d38**: `customer-credit` and `undeposited` are no longer offered.
+- **M-08-T14** — add **d36**'s sharper half, that a **stored issuance keeps its provisional mark after its
+  period seals** where the live statement drops it. That is the assertion distinguishing storing the mark from
+  rendering it, and it has no row anywhere.
+
+**Two decisions have no row at all.** **d34** — tax collected and tax paid stay typeable because nothing in
+this system remits tax — is live, carries a stated operational exposure, and no scenario asserts it. **d36** is
+covered only as a clause above. Both want rows appended by `/qa register M-08`.
+
+---
 
 ### Registered
 
@@ -364,7 +475,7 @@ milestones have both tracks landed.
 | M5 Close, receipts, review | M-03-T1–T5, M-04-T7 *(acknowledge)* |
 | M6 Hardening | Every row above, run as one seeded trading day |
 | M7 Payables (A-39) | M-05-T1–T7, E-02-T9, M-01-T4 |
-| **M-08 — unplaced** | M-08-T1–T16. **M-08 is in no milestone**: it reached `Specified` after [architecture](../architecture.md) §8's build order was written, and §8 has no **D** or **U** row for it. Placing it is an `/architecture` decision, and it is the one thing standing between these sixteen rows and a work order. Note M-08-T16 spans M3 (receiving) and M7 (payables), so the ledger cannot be wholly earlier than either |
+| **M-08 — unplaced** | M-08-T1–T16. **M-08 is in no milestone**: it reached `Specified` after [architecture](../architecture.md) §8's build order was written, and §8 has no **D** or **U** row for it. A-79 moved [M-07](../flows/M-07-chart-of-accounts.md)'s chart and journal **tables** into M2 and M3, where A-67 already required them, and **deliberately left this flow unplaced**. Placing it is an `/architecture` decision and it is the one thing standing between these sixteen rows and a work order. Note M-08-T16 spans M3 (receiving) and M7 (payables) and **asserts no M-08 decision at all** — M-06 d59, d60 and M-07 d8 — so it bounds when the row runs rather than what M-08 builds, and is a candidate to move to M7's row |
 | Post-v1, in §8's order | M-02-T1–T10 → M-04-T1–T6 *(Add and Deactivate first, M-04 decision 21)* → M-06-T3, T5–T7, T9, T10, T12 *(the settings screens)* → M-07-T1–T7 and M-03-T6 *(the chart and the journal — unplaced, see Open questions)* |
 
 ---

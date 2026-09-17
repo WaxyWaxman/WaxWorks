@@ -161,6 +161,16 @@ Held copies count against **available** stock but remain on hand.
 
 ## Inherited from other flows
 
+**From [M-08](M-08-general-ledger.md):**
+
+- **A gift card expiry may not be added without reopening [M-08](M-08-general-ledger.md) d33 in the
+  same change.** d33 locks the gift card liability account against typed postings, and it is safe
+  **only because the balance drains through redemption and through nothing else** — this shop's
+  cards do not expire. Give them one and the write-off becomes a real accounting act with nowhere
+  to post it, which is the exact trap [M-08](M-08-general-ledger.md) d34 found in the tax accounts
+  and refused to build. The rule about expiry is **this flow's** to state; d33 records that it is
+  relying on it, because whoever adds an expiry will be reading this file and not that one.
+
 **From [M-04](M-04-manage-users.md):**
 
 - **A Sale's header displays the Employee's name, not their initials** ([M-04](M-04-manage-users.md) d16). Initials are released when a User is deactivated and may be reissued, so they no longer identify one person on their own. Attribution itself is unchanged — the Sale points at the User row.
