@@ -1366,3 +1366,68 @@ export interface JournalBatch {
    */
   suspense?: number;
 }
+
+// ---------------------------------------------------------------------------
+// M-08 — the ledger's periods (architecture A-74, A-75)
+// ---------------------------------------------------------------------------
+//
+// A period's state is DERIVED from the two tables below and is never stored
+// (A-75). There is deliberately no `sealed` column: M-07 d12 rejected a
+// month-end routine partly because it would "add a posted/unposted state that
+// can be forgotten, run twice, or need undoing", and d27 reversed d1 while
+// leaving that objection standing. Append-only rows answer it.
+//
+// Every act that writes one of these is MANAGER-ONLY (A-74), which is why each
+// carries both names: the acting Manager and the authorizing one. A-74 joined
+// them to A-28a's list precisely because M-04 d2 makes anything unlisted an
+// Employee action, and "there is no state that makes typing into the general
+// ledger harmless."
+
+/** M-08 d4 — a period is SEALED, never *closed*. Reserved in lexicon §15. */
+export interface LedgerPeriodSeal {
+  id: string;
+  /** `YYYY-MM`. A posting's period is its transaction date and nothing else. */
+  period: string;
+  sealedAt: string;
+  actorInitials: string;
+  /** A-74 — manager-only, so the authorizing Manager is recorded too. */
+  authorizedByInitials: string;
+  /**
+   * d15, M-07 d25 — the period's Suspense total, GROSS, carried onto the
+   * closing transaction so any statement drawn from the period can say so.
+   * A Suspense line never blocked the seal; it is reported and carried.
+   */
+  suspenseGross: number;
+}
+
+/**
+ * M-08 d18 — an unseal is an ARTIFACT: who, when, a required reason, and which
+ * period it reopened. An unseal changes figures the accountant may already
+ * hold, so it is the same class of act A-52 and M-04 d17 already log.
+ */
+export interface LedgerPeriodUnseal {
+  id: string;
+  /** A-75 — names the SEAL it reverses, not the period. That is what makes a
+   *  period sealed *iff* it has a seal with no unseal against it. */
+  sealId: string;
+  unsealedAt: string;
+  actorInitials: string;
+  authorizedByInitials: string;
+  /** d18 — required. Blank is refused, not defaulted. */
+  reason: string;
+}
+
+/**
+ * M-08 d22 — a year is marked FILED once the return has gone in, and a filed
+ * year refuses the unseal. The only permanently irreversible state in this
+ * system, and the only one that depends on a Manager arming it. A-66's shape
+ * with a tax return in place of a bank deposit.
+ */
+export interface LedgerYearFiling {
+  id: string;
+  /** The `YYYY-MM` the fiscal year ends in (d5, M-06 d64). */
+  fiscalYearEnd: string;
+  filedAt: string;
+  actorInitials: string;
+  authorizedByInitials: string;
+}
