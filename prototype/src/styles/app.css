@@ -655,6 +655,13 @@ table.data tr.band-row + tr.group-row td { border-top: none; }
   display: block; font-family: var(--font-sans); font-size: 9.5px; font-weight: 600;
   letter-spacing: 0.04em; text-transform: uppercase; color: var(--c-ink-faint);
 }
+/* E-03 d12 — the recency half of the stamp. Quieter than the caption above
+   it and not uppercased, because it is a sentence fragment ("sold 3 months
+   ago") rather than a label. */
+.hit .n small.ago {
+  text-transform: none; letter-spacing: 0; font-weight: 500;
+  color: var(--c-ink-faint); opacity: 0.85; margin-top: 1px;
+}
 
 /* ---- The shut strip ----
    52px. The magnifier keeps the rail's honesty rule (E-05 d30) by carrying the
@@ -1472,4 +1479,1340 @@ tr.recv-flagged > td:first-child { box-shadow: inset 3px 0 0 var(--c-warn); }
   .cust-figure { font-size: 34px; }
   .cust-figure-sub { display: none; }
   .cust-primary { height: 48px; font-size: var(--fs-md); }
+}
+
+/* ============================================================
+   M-01 SUPPLIERS  (d12-d18)
+   ============================================================
+   The fifth screen on the till's frame (E-05 d29), after Find, Receiving and
+   Customers. It reuses Customers' three-track skeleton wholesale —
+   .cust-frame / .cust-main / .cust-head / .cust-scroll / .cust-group /
+   .cust-grid / .cust-acct / .cust-figure / .cust-acct-foot — and the
+   .slab-* / .hit / .filter-chip family it already shares with Find and
+   Receiving. Only what genuinely differs is below.
+
+   What differs is the shape of the errand: a Supplier is a counterparty with
+   money running one way and stock the other, so the slab row carries a figure
+   AND a state, and the right track's top band is a work queue rather than a
+   single fact. */
+
+.sup-slab {
+  border-right: 1px solid var(--c-border-strong); background: var(--c-surface-2);
+  display: flex; flex-direction: column; min-height: 0; min-width: 0;
+}
+
+/* The shut strip tiles by 4-letter short code, not initials: that code is the
+   Supplier's identity on every invoice they send. Wider than .ini-tile
+   because four monospace characters do not fit in 38px at the tile's weight. */
+.code-tile {
+  position: relative; width: 42px; height: 38px; flex: none; padding: 0; cursor: pointer;
+  display: grid; place-items: center;
+  border: 1px solid var(--c-border-strong); border-radius: var(--radius-sm);
+  background: var(--c-surface); color: var(--c-ink-soft);
+  font-family: var(--font-mono); font-size: 10.5px; font-weight: 700;
+}
+.code-tile:hover { border-color: var(--c-ink); }
+.code-tile.on { border-color: var(--c-ink); box-shadow: inset 3px 0 0 var(--c-accent); color: var(--c-ink); }
+.code-tile:focus-visible { outline: 2px solid var(--c-accent); outline-offset: 2px; }
+.code-tile .bal-dot {
+  position: absolute; bottom: -3px; right: -3px;
+  width: 11px; height: 11px; border: 2px solid var(--c-surface-2);
+}
+/* In-flight is the state that matters when no money is owed either way. */
+.bal-dot.flight { background: var(--c-accent); }
+
+/* ---- the slab row, on two lines ----
+   Find's .hit is one row of three cells. Here the meta line would share the
+   middle column with the figure and end its ellipsis a hair from the money, so
+   it takes a row of its own under the name; the figure's caption drops to that
+   same row, keeping the number and its label together on the right. */
+.hit.sup-hit {
+  grid-template-columns: 42px minmax(0, 1fr) auto;
+  grid-template-rows: auto auto;
+  gap: 1px var(--sp-3);
+  align-items: baseline;
+}
+.hit.sup-hit .code {
+  grid-column: 1; grid-row: 1 / -1; align-self: center;
+  width: 42px; height: 34px; display: grid; place-items: center;
+  border: 1px solid var(--c-border); background: var(--c-surface-2);
+  font-family: var(--font-mono); font-size: 11px; font-weight: 700; color: var(--c-ink-soft);
+}
+.hit.sup-hit .t { grid-column: 2; grid-row: 1; }
+.hit.sup-hit .n { grid-column: 3; grid-row: 1; }
+.hit.sup-hit .m { grid-column: 2; grid-row: 2; }
+.hit.sup-hit .k {
+  grid-column: 3; grid-row: 2; text-align: right; white-space: nowrap;
+  font-family: var(--font-narrow); font-size: 9px; font-weight: 700;
+  letter-spacing: 0.05em; text-transform: uppercase; color: var(--c-ink-faint);
+}
+
+/* ---- the card ---- */
+/* Two controls on one line: a figure beside its basis, an input beside the
+   button that unlocks it. */
+.sup-pair-row { display: flex; gap: var(--sp-2); align-items: center; }
+.sup-pair-row > input, .sup-pair-row > select { min-width: 0; }
+.sup-pair-row > input[type="number"] { flex: 1; }
+.sup-pair > span:first-child {
+  display: block; font-size: var(--fs-xs); font-weight: 700; text-transform: uppercase;
+  letter-spacing: 0.04em; color: var(--c-ink-faint); margin-bottom: 4px;
+}
+
+/* Discount is the one gated field on the card (d13). It is the margin, and
+   setting a margin is manager-only (d11, E-02 d44, A-28a) — so it reads as
+   locked rather than merely disabled, and as live once authorised. */
+.sup-gated > span:first-child { display: flex; align-items: center; gap: 6px; }
+.sup-lock {
+  font-family: var(--font-narrow); font-size: 9.5px; font-weight: 700; letter-spacing: 0.08em;
+  text-transform: uppercase; color: var(--c-warn);
+  border: 1px solid var(--c-warn); background: var(--c-warn-soft); padding: 0 4px;
+}
+.sup-lock.open { color: var(--c-ok); border-color: var(--c-ok); background: var(--c-ok-soft); }
+.sup-gated.open input { border-color: var(--c-ok); }
+
+/* Same-as-billing (d13). A mirrored field reads as DERIVED, not as
+   empty-and-broken — and it is locked, because one that stays typable is one
+   that silently stops mirroring. */
+.sup-same {
+  display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 2px var(--sp-2);
+  align-items: center; cursor: pointer;
+  border: 1px solid var(--c-border-strong); background: var(--c-surface-2);
+  padding: var(--sp-2) var(--sp-3); border-radius: var(--radius-sm);
+}
+.sup-same input[type="checkbox"] { width: 15px; height: 15px; margin: 0; accent-color: var(--c-ink); cursor: pointer; }
+.sup-same > span:nth-of-type(1) {
+  font-size: var(--fs-sm); font-weight: 600; text-transform: none;
+  letter-spacing: 0; color: var(--c-ink); margin: 0;
+}
+.sup-same > .hint { grid-column: 2; margin: 0; }
+.sup-mirrored input:disabled { color: var(--c-ink-faint); font-style: italic; }
+
+/* Copy / Merge / Delete act on the record rather than edit a field, so they
+   sit apart from the card's own head, pinned to the foot of the middle track. */
+.sup-danger {
+  position: absolute; left: 50%; transform: translateX(-50%); bottom: var(--sp-3); z-index: 5;
+  display: flex; gap: var(--sp-2); padding: 6px var(--sp-2);
+  background: var(--c-surface); border: 1px solid var(--c-border-strong);
+  border-radius: var(--radius-sm); box-shadow: 0 3px 12px rgba(17, 17, 17, 0.12);
+}
+
+/* ---- the ledger track ---- */
+/* In flight sits above the money because a draft Invoice, an overdue PO line
+   and a Pending claim all go stale silently and nothing else chases them
+   (d14) — the supplier-side of E-07 d19's reasoning about holds. */
+.sup-flight-head {
+  display: flex; align-items: baseline; justify-content: space-between; gap: var(--sp-2);
+}
+.sup-flight-count {
+  font-family: var(--font-mono); font-size: 10px; color: var(--c-ink-soft);
+}
+/* Three rows fit; past that it scrolls inside itself rather than growing and
+   pushing the figure off a track whose whole purpose is being fixed. The
+   per-kind counts live in the head above, so the cap can never hide that a
+   claim exists. */
+.sup-flight-scroll { max-height: 192px; overflow-y: auto; margin-top: 2px; }
+.sup-flight-scroll.capped { box-shadow: inset 0 -12px 10px -10px rgba(17, 17, 17, 0.22); }
+.sup-flight-type {
+  font-family: var(--font-narrow); font-size: 9px; font-weight: 700; letter-spacing: 0.1em;
+  text-transform: uppercase; color: var(--c-ink-faint);
+  padding-top: var(--sp-2); margin-top: var(--sp-2); border-top: 1px solid var(--c-border);
+}
+.sup-flight-scroll > div:first-child > .sup-flight-type {
+  padding-top: 0; margin-top: 0; border-top: none;
+}
+/* Every row opens the thing it names on the screen that owns it (d18), so
+   they are buttons. */
+.sup-flight-row {
+  display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 2px var(--sp-2);
+  align-items: baseline; width: 100%; text-align: left; font: inherit; color: inherit;
+  cursor: pointer; background: transparent; border: 1px solid transparent;
+  border-radius: var(--radius-sm); padding: 5px 6px; margin: 2px 0 0 -6px;
+}
+.sup-flight-row:hover { background: var(--c-surface); border-color: var(--c-border-strong); }
+.sup-flight-row:hover .sup-flight-go { opacity: 1; }
+.sup-flight-row:focus-visible { outline: 2px solid var(--c-accent); outline-offset: 1px; }
+.sup-flight-go {
+  grid-column: 1 / -1; font-size: 10px; color: var(--c-accent); font-weight: 600; opacity: 0;
+}
+@media (prefers-reduced-motion: no-preference) {
+  .sup-flight-go { transition: opacity 120ms ease; }
+}
+
+/* Recent intake rows open their Invoice in Receiving, as it was finalized
+   (E-02 d36, A-27) — buttons, with the same hover as the rows above. */
+.cust-salerow.sup-intake {
+  width: calc(100% + 12px); margin-left: -6px; padding: 6px;
+  text-align: left; font: inherit; color: inherit; cursor: pointer;
+  background: transparent; border: 1px solid transparent;
+  border-bottom: 1px solid var(--c-border); border-radius: var(--radius-sm);
+}
+.cust-salerow.sup-intake:hover { background: var(--c-surface-2); border-color: var(--c-border-strong); }
+.cust-salerow.sup-intake:focus-visible { outline: 2px solid var(--c-accent); outline-offset: 1px; }
+
+/* The figures in this track are on DIFFERENT bases on purpose — A/P is Invoice
+   totals, Received is cost of goods (A-29, E-02 d34) — so the caveat is part
+   of the track, not a footnote someone may or may not reach. */
+.sup-caveat {
+  display: flex; flex-direction: column; gap: 6px; margin-top: 4px;
+  border-left: 2px solid var(--c-border-strong); padding-left: 8px;
+}
+.sup-caveat p { margin: 0; font-size: 10.5px; color: var(--c-ink-faint); line-height: 1.45; }
+.sup-caveat strong { color: var(--c-ink-soft); }
+.cust-standing .stat .v.in { color: var(--c-warn); }
+.cust-standing .stat .v.out { color: var(--c-ok); }
+
+/* A link that sits inside running text and must not look like a button. */
+.linkish {
+  border: none; background: none; padding: 0; font: inherit; font-size: inherit;
+  color: var(--c-accent); font-weight: 600; cursor: pointer; text-align: left;
+}
+.linkish:hover { text-decoration: underline; }
+
+@media (max-width: 1180px) {
+  .sup-slab { grid-row: 1 / -1; }
+  /* This track has the same two fixed bands above its scroll that Customers'
+     has — a work queue AND a figure — so it takes the same 58dvh. */
+  .sup-flight-scroll { max-height: 132px; }
+  .sup-danger { bottom: auto; top: var(--sp-2); }
+}
+
+/* ============================================================
+   M-02 WHAT'S ON ORDER  (d25-d30)
+   ============================================================
+   The sixth screen on the till's frame (E-05 d29), after Find, Receiving,
+   Customers and Suppliers. Same 320 / 1fr / 344 skeleton, same slab, same
+   sticky right track — this screen earns no special width.
+
+   It shares .slab-head / .slab-search / .slab-chips / .slab-list /
+   .slab-strip / .filter-chip / .cust-standing / .cust-group / .cust-grid /
+   .cust-primary / .cust-foot-sub with the four before it rather than
+   restating them. Only what differs is below. */
+.wo-frame {
+  position: relative;
+  flex: 1; min-height: 0; min-width: 0;
+  display: grid; grid-template-columns: 320px minmax(0, 1fr) 344px;
+  background: var(--c-surface);
+}
+.wo-frame.slab-shut { grid-template-columns: 52px minmax(0, 1fr) 344px; }
+
+/* ---- Track 1: the order slab ---- */
+.wo-slab {
+  border-right: 1px solid var(--c-border-strong); background: var(--c-surface-2);
+  display: flex; flex-direction: column; min-height: 0; min-width: 0;
+}
+.wo-slab-acts { flex: none; display: flex; gap: var(--sp-2); padding: var(--sp-3) var(--sp-3) 0; }
+.wo-slab-acts .btn { flex: 1; justify-content: center; }
+.wo-sortbar {
+  flex: none; display: flex; align-items: center; gap: var(--sp-2);
+  padding: 6px var(--sp-3); border-bottom: 1px solid var(--c-border-strong);
+}
+.wo-sortbar select { flex: 1; font-size: var(--fs-xs); font-weight: 600; padding: 3px 6px; }
+
+/* The scan box is a peer of the search, not a control tucked under it — a
+   barcode is how you look up the line in your hand. */
+.wo-scanbox { display: flex; gap: 6px; align-items: center; }
+.wo-scanbox input {
+  flex: 1; min-width: 0; font-family: var(--font-mono);
+  font-size: var(--fs-sm); font-weight: 600; padding: 5px 8px;
+  border: 1px dashed var(--c-border-strong); border-radius: var(--radius-sm);
+  background: var(--c-surface); color: var(--c-ink);
+}
+.wo-scanbox input:focus { outline: 2px solid var(--c-accent); outline-offset: -1px; border-style: solid; }
+
+/* Overdue is the one chip state anybody has to act on, so it is the one that
+   carries colour before it is pressed. */
+.filter-chip.hot { border-color: var(--c-danger); color: var(--c-danger); }
+.filter-chip.hot .count { color: var(--c-danger); }
+.filter-chip.hot.on { background: var(--c-danger); border-color: var(--c-danger); color: #fff; }
+.filter-chip.hot.on .count { color: #fbdcd7; }
+
+/* One PurchaseOrder, two rows — the same skeleton as Suppliers' .sup. The tile
+   carries the number's tail, because for a recorded order that number is the
+   SUPPLIER's reference and is the only thing identifying it. */
+.po-row {
+  display: grid; grid-template-columns: 44px minmax(0, 1fr) auto; gap: 1px var(--sp-3);
+  align-items: baseline; width: 100%; text-align: left; cursor: pointer;
+  padding: var(--sp-2) var(--sp-3); border: none; border-bottom: 1px solid var(--c-border);
+  border-left: 3px solid transparent; background: var(--c-surface); font: inherit; color: var(--c-ink);
+}
+.po-row:hover { background: var(--c-surface-2); }
+.po-row.on { border-left-color: var(--c-accent); box-shadow: inset 0 0 0 1px var(--c-ink); }
+.po-row:focus-visible { outline: 2px solid var(--c-accent); outline-offset: -2px; }
+/* A PO whose lines all fell out of the current search stays listed but recedes
+   — scoping to it is still legal, it just has nothing matching in it. */
+.po-row.dim { opacity: 0.42; }
+.po-row .code {
+  grid-column: 1; grid-row: 1 / -1; align-self: center;
+  width: 44px; height: 34px; display: grid; place-items: center;
+  border: 1px solid var(--c-border); background: var(--c-surface-2);
+  font-family: var(--font-mono); font-size: var(--fs-xs); font-weight: 700; color: var(--c-ink-soft);
+}
+.po-row.ext .code { border-style: dashed; border-color: var(--c-ink-faint); }
+.po-row .t {
+  grid-column: 2; grid-row: 1; display: flex; align-items: baseline; gap: 5px;
+  font-size: var(--fs-sm); font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.po-row .m {
+  grid-column: 2; grid-row: 2; font-size: var(--fs-xs); color: var(--c-ink-faint);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.po-row .n {
+  grid-column: 3; grid-row: 1; font-family: var(--font-mono); font-size: var(--fs-sm);
+  font-weight: 700; text-align: right; font-variant-numeric: tabular-nums; color: var(--c-ink-soft);
+}
+.po-row .n.late { color: var(--c-danger); }
+.po-row .k {
+  grid-column: 3; grid-row: 2; text-align: right; white-space: nowrap;
+  font-family: var(--font-narrow); font-size: 9px; font-weight: 700;
+  letter-spacing: 0.05em; text-transform: uppercase; color: var(--c-ink-faint);
+}
+/* The permanent first row: step 9 lists lines oldest first ACROSS everything,
+   so the cross-PO view is never something you have to find your way back to. */
+.po-row.all { background: var(--c-surface-2); border-bottom: 2px solid var(--c-ink); }
+.po-row.all .code { border-color: var(--c-ink); background: var(--c-ink); color: #fff; }
+
+/* Order state as a dot — colour means STATE, the way Find's stock dots do. */
+.ord-dot { width: 9px; height: 9px; border-radius: 50%; flex: none; display: inline-block; }
+.ord-dot.late { background: var(--c-danger); }
+.ord-dot.back { background: var(--c-warn); }
+.ord-dot.ship { background: var(--c-ok); }
+.ord-dot.plain { background: var(--c-border-strong); }
+.po-tile {
+  position: relative; width: 38px; height: 38px; flex: none; padding: 0; cursor: pointer;
+  display: grid; place-items: center; border: 1px solid var(--c-border-strong);
+  border-radius: var(--radius-sm); background: var(--c-surface); color: var(--c-ink-soft);
+  font-family: var(--font-mono); font-size: 10.5px; font-weight: 700;
+}
+.po-tile:hover { border-color: var(--c-ink); }
+.po-tile.on { border-color: var(--c-ink); box-shadow: inset 3px 0 0 var(--c-accent); color: var(--c-ink); }
+.po-tile .ord-dot { position: absolute; bottom: -3px; right: -3px; width: 11px; height: 11px; border: 2px solid var(--c-surface-2); }
+
+/* ---- Track 2: the lines ---- */
+.wo-main { display: flex; flex-direction: column; min-width: 0; min-height: 0; background: var(--c-surface); }
+.wo-main-head {
+  flex: none; display: flex; align-items: flex-start; gap: var(--sp-3); flex-wrap: wrap;
+  padding: var(--sp-3) var(--sp-4); border-bottom: 2px solid var(--c-ink);
+}
+.wo-main-head h2 { margin: 0; font-size: 27px; letter-spacing: -0.025em; line-height: 1.1; }
+.wo-main-head.entry { background: var(--c-accent-soft); }
+.wo-head-acts { margin-left: auto; display: flex; gap: var(--sp-2); align-items: center; }
+.wo-list { flex: 1; min-height: 0; overflow-y: auto; }
+.wo-entry-scroll {
+  flex: 1; min-height: 0; overflow-y: auto; padding: var(--sp-4);
+  display: flex; flex-direction: column; gap: var(--sp-5);
+}
+
+/* d19 — overdue-first is a fixed GROUPING, not a sort of its own, so it gets a
+   band rather than rows silently floating to the top. */
+.wo-grp {
+  position: sticky; top: 0; z-index: 1;
+  display: flex; align-items: baseline; justify-content: space-between; gap: var(--sp-2);
+  padding: var(--sp-2) var(--sp-4); background: var(--c-surface-2);
+  border-top: 1px solid var(--c-border-strong); border-bottom: 1px solid var(--c-border-strong);
+}
+.wo-grp:first-child { border-top: none; }
+.wo-grp.late { background: var(--c-danger-soft); border-color: var(--c-danger); }
+.wo-grp.late .lab { color: var(--c-danger); }
+
+/* One order line. A button, because it opens in track 3. Age is the first
+   column and the biggest thing in the row, because age is what this screen is
+   about. */
+.wo-row {
+  display: grid; grid-template-columns: 46px minmax(0, 1fr) auto auto auto; gap: 2px var(--sp-3);
+  align-items: baseline; width: 100%; text-align: left; cursor: pointer; font: inherit; color: var(--c-ink);
+  padding: var(--sp-2) var(--sp-4); background: var(--c-surface);
+  border: none; border-bottom: 1px solid var(--c-border); border-left: 3px solid transparent;
+}
+.wo-row:hover { background: var(--c-surface-2); }
+.wo-row.on { border-left-color: var(--c-accent); box-shadow: inset 0 0 0 1px var(--c-ink); }
+.wo-row:focus-visible { outline: 2px solid var(--c-accent); outline-offset: -2px; }
+.wo-row .age {
+  grid-column: 1; grid-row: 1 / -1; align-self: center; text-align: right; line-height: 1;
+  font-family: var(--font-mono); font-size: var(--fs-md); font-weight: 700;
+  font-variant-numeric: tabular-nums; color: var(--c-ink-faint);
+}
+.wo-row.late .age { color: var(--c-danger); }
+.wo-row .age em {
+  display: block; font-style: normal; font-family: var(--font-narrow);
+  font-size: 8.5px; letter-spacing: 0.08em; text-transform: uppercase; margin-top: 2px;
+}
+.wo-row .t {
+  grid-column: 2; grid-row: 1; font-size: var(--fs-sm); font-weight: 600;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.wo-row .m {
+  grid-column: 2; grid-row: 2; font-size: var(--fs-xs); color: var(--c-ink-faint);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.wo-row .m .who { color: var(--c-accent); font-weight: 600; }
+.wo-row .q { grid-column: 3; grid-row: 1 / -1; align-self: center; text-align: right; white-space: nowrap; }
+.wo-row .q .v { font-family: var(--font-mono); font-size: var(--fs-base); font-weight: 700; font-variant-numeric: tabular-nums; }
+.wo-row .q .k {
+  display: block; font-family: var(--font-narrow); font-size: 8.5px; font-weight: 700;
+  letter-spacing: 0.06em; text-transform: uppercase; color: var(--c-ink-faint);
+}
+.wo-row .s {
+  grid-column: 4; grid-row: 1 / -1; align-self: center; width: 106px;
+  display: flex; flex-direction: column; align-items: flex-end; gap: 2px;
+}
+.wo-row .p {
+  grid-column: 5; grid-row: 1 / -1; align-self: center; text-align: right; width: 62px;
+  font-size: var(--fs-sm); font-weight: 700; font-variant-numeric: tabular-nums; color: var(--c-ink-soft);
+}
+
+/* The destination chooser (d28) — two real options side by side rather than a
+   tickbox, because the routes differ in fields, gate and consequence. */
+.wo-dest { display: grid; grid-template-columns: 1fr 1fr; gap: var(--sp-2); }
+.wo-dest-opt {
+  display: flex; flex-direction: column; gap: 3px; text-align: left; cursor: pointer; font: inherit;
+  border: 1px solid var(--c-border-strong); background: var(--c-surface); color: var(--c-ink);
+  padding: var(--sp-3); border-radius: var(--radius-sm);
+}
+.wo-dest-opt:hover { border-color: var(--c-ink); }
+.wo-dest-opt[aria-pressed="true"] {
+  border-color: var(--c-ink); background: var(--c-surface-2); box-shadow: inset 3px 0 0 var(--c-accent);
+}
+.wo-dest-opt:focus-visible { outline: 2px solid var(--c-accent); outline-offset: 2px; }
+.wo-dest-opt .dt { font-size: var(--fs-sm); font-weight: 700; }
+.wo-dest-opt .dm { font-size: var(--fs-xs); color: var(--c-ink-soft); line-height: 1.35; }
+
+/* d33 — what is already here or coming, stated and not judged. These are the
+   figures the titlecard shows for free; the sheet has no titlecard, which is
+   the whole of d28's accepted consequence. Zeroes stay visible and grey so
+   every row reads the same shape, and a non-zero carries itself without an
+   alarm colour — d32 made the duplicate the ordinary case, and an amber row
+   that fires on the ordinary case is one people learn to scroll past. */
+.wo-stockline {
+  display: block; margin-top: 1px;
+  font-family: var(--font-mono); font-size: var(--fs-xs); color: var(--c-ink-faint);
+  /* One line, always. Stacked over four rows these figures stop being a
+     glance and become something to read, which defeats the point of them. */
+  white-space: nowrap;
+}
+.wo-stockline .on { color: var(--c-ink); font-weight: 700; }
+
+/* ---- Track 3: the line ---- */
+.wo-track {
+  border-left: 2px solid var(--c-ink); background: var(--c-surface);
+  display: flex; flex-direction: column; min-height: 0;
+}
+/* Who is waiting sits above the age for the reason Waiting sits above the
+   balance on the Customer card: a late line with a name on it is a phone call
+   somebody is owed, not a supplier problem you get to eventually. */
+.wo-waiting {
+  flex: none; padding: var(--sp-3) var(--sp-4);
+  border-bottom: 1px solid var(--c-border); background: var(--c-surface-2);
+}
+.wo-waiting.live { background: var(--c-accent-soft); box-shadow: inset 3px 0 0 var(--c-ink); }
+.wo-waiting .lab { display: flex; align-items: baseline; justify-content: space-between; gap: var(--sp-2); }
+.wo-w-name { font-size: var(--fs-md); font-weight: 700; margin-top: 2px; }
+.wo-w-name.none { font-size: var(--fs-sm); font-weight: 600; color: var(--c-ink-faint); }
+.wo-w-sub { font-size: var(--fs-xs); color: var(--c-ink-soft); margin-top: 1px; }
+.wo-w-row { font-size: var(--fs-sm); margin-top: 2px; }
+
+.wo-track-head { flex: none; padding: var(--sp-3) var(--sp-4); }
+.wo-figure { font-size: 46px; font-weight: 800; line-height: 1; letter-spacing: -0.035em; font-variant-numeric: tabular-nums; }
+.wo-figure.late { color: var(--c-danger); }
+.wo-figure.nil { color: var(--c-ink-faint); font-size: 24px; font-weight: 700; }
+.wo-figure-say { margin-top: 4px; font-size: var(--fs-sm); font-weight: 600; }
+.wo-figure-sub { margin-top: 2px; font-size: var(--fs-xs); color: var(--c-ink-faint); }
+.wo-rule { flex: none; height: 2px; background: var(--c-ink); }
+.wo-track-mid {
+  flex: 1; min-height: 0; overflow-y: auto; padding: var(--sp-3) var(--sp-4);
+  display: flex; flex-direction: column; gap: var(--sp-4);
+}
+.wo-sec { display: flex; flex-direction: column; gap: 6px; }
+.wo-sec-empty { font-size: var(--fs-xs); color: var(--c-ink-faint); padding: 4px 0; }
+.wo-title { font-size: var(--fs-md); font-weight: 700; line-height: 1.2; }
+.wo-caveat {
+  font-size: var(--fs-xs); color: var(--c-ink-faint);
+  border-left: 2px solid var(--c-border-strong); padding-left: 7px;
+}
+.wo-caveat.warn { color: var(--c-warn); border-left-color: var(--c-warn); }
+.cust-standing .stat .v.part { color: var(--c-warn); }
+
+/* d23's log, on the floor of the scroll — the same place History sits on the
+   Customer card and the Log on the Supplier card. */
+.wo-logline {
+  display: grid; grid-template-columns: 74px minmax(0, 1fr); gap: var(--sp-2);
+  padding: 5px 0; border-bottom: 1px solid var(--c-border); font-size: var(--fs-xs);
+}
+.wo-logline .at { color: var(--c-ink-faint); }
+
+/* Set status and Re-flag, inline in the track rather than over the table. */
+.wo-editor {
+  display: flex; flex-direction: column; gap: var(--sp-2);
+  border: 1px solid var(--c-ink); background: var(--c-surface-2);
+  padding: var(--sp-3); border-radius: var(--radius-sm);
+}
+.wo-editor .field { margin: 0; }
+.wo-editor .btn-row { justify-content: flex-end; }
+
+.wo-track-foot {
+  flex: none; border-top: 2px solid var(--c-ink); background: var(--c-surface);
+  padding: var(--sp-3) var(--sp-4); display: flex; flex-direction: column; gap: 6px;
+}
+
+/* Under ~1180 the right track drops to a band underneath, the same move every
+   other screen makes. 58dvh like Customers and Suppliers, because this track
+   also carries two fixed bands above its scroll — Waiting AND the age. */
+@media (max-width: 1180px) {
+  .wo-frame { grid-template-columns: 320px minmax(0, 1fr); grid-template-rows: minmax(0, 1fr) auto; }
+  .wo-frame.slab-shut { grid-template-columns: 52px minmax(0, 1fr); }
+  .wo-slab { grid-row: 1 / -1; }
+  .wo-main { grid-column: 2; grid-row: 1; }
+  .wo-track {
+    grid-column: 2; grid-row: 2;
+    border-left: none; border-top: 2px solid var(--c-ink); max-height: 58dvh;
+  }
+  .wo-waiting, .wo-track-head { padding: var(--sp-2) var(--sp-4); }
+  .wo-figure { font-size: 34px; }
+  .wo-figure-sub { display: none; }
+  .wo-dest { grid-template-columns: 1fr; }
+  .wo-row { grid-template-columns: 46px minmax(0, 1fr) auto auto; }
+  .wo-row .p { display: none; }
+}
+
+
+/* ======================================================================
+   Order Processing — M-02 Phase 2, on the till's three tracks.
+
+   Its own frame, main and track rules, the way find-frame, recv-frame,
+   cust-frame and wo-frame each have theirs: the small atoms are shared
+   (.slab-*, .rail-*, .filter-chip, .po-row, .cust-standing), the frame is
+   not, so a change made for one screen cannot silently re-lay another.
+
+   Track 1 is the streams and the placed POs. Track 2 is step 4's table as
+   rows, or one stream's lines, or a placed PO. Track 3 is what the scope
+   amounts to and the verb that acts on it. What used to be four stacked
+   modals over two tables is faces of these three.
+   ====================================================================== */
+.op-frame {
+  position: relative;
+  flex: 1; min-height: 0; min-width: 0;
+  display: grid; grid-template-columns: 320px minmax(0, 1fr) 344px;
+  background: var(--c-surface);
+}
+.op-frame.slab-shut { grid-template-columns: 52px minmax(0, 1fr) 344px; }
+
+/* ---- Track 1: the stream slab ---- */
+.op-slab {
+  border-right: 1px solid var(--c-border-strong); background: var(--c-surface-2);
+  display: flex; flex-direction: column; min-height: 0; min-width: 0;
+}
+.op-sortbar {
+  flex: none; display: flex; align-items: center; gap: var(--sp-2);
+  padding: 6px var(--sp-3); border-bottom: 1px solid var(--c-border-strong);
+}
+.op-sortbar select { flex: 1; font-size: var(--fs-xs); font-weight: 600; padding: 3px 6px; }
+
+/* Pending and placed are two different KINDS of scope, not two filters of
+   one kind, so the list separates them rather than toggling between them:
+   processing a stream and voiding a PO are the same errand at the same desk,
+   and neither should be somewhere you have to navigate to. */
+.op-band {
+  display: flex; align-items: baseline; justify-content: space-between; gap: var(--sp-2);
+  padding: 5px var(--sp-3); background: var(--c-surface-2);
+  border-top: 1px solid var(--c-border-strong); border-bottom: 1px solid var(--c-border-strong);
+  position: sticky; top: 0; z-index: 1;
+}
+.op-band:first-child { border-top: none; }
+
+/* Readiness as a dot, beside the order-state dots On Order already defines.
+   Green is the one state anybody acts on here: this stream can be sent. */
+.ord-dot.ready { background: var(--c-ok); }
+.ord-dot.short { background: var(--c-border-strong); }
+.ord-dot.placed { background: var(--c-ink-faint); }
+.ord-dot.void { background: var(--c-danger); }
+
+.po-row .n.ready, .po-row .k.ready { color: var(--c-ok); }
+/* A voided PO keeps the lines already received (d24), so it stays listed —
+   but it must not read as live. */
+.po-row.voided .t { text-decoration: line-through; text-decoration-color: var(--c-danger); }
+
+/* Ready is the chip worth colour before it is pressed — it is the only one
+   that says "you could send this now". Green, not the danger red On Order
+   spends on Overdue: nothing here is late, some of it is merely possible. */
+.filter-chip.go { border-color: var(--c-ok); color: var(--c-ok); }
+.filter-chip.go .count { color: var(--c-ok); }
+.filter-chip.go.on { background: var(--c-ok); border-color: var(--c-ok); color: #fff; }
+.filter-chip.go.on .count { color: #cfe4d7; }
+
+/* ---- Track 2: the streams, or one stream's lines ---- */
+.op-main { display: flex; flex-direction: column; min-width: 0; min-height: 0; background: var(--c-surface); }
+.op-main-head {
+  flex: none; display: flex; align-items: flex-start; gap: var(--sp-3); flex-wrap: wrap;
+  padding: var(--sp-3) var(--sp-4); border-bottom: 2px solid var(--c-ink);
+}
+.op-main-head h2 { margin: 0; font-size: var(--fs-xl); letter-spacing: -0.025em; line-height: 1.1; }
+.op-main-head.entry { background: var(--c-accent-soft); }
+.op-head-acts { margin-left: auto; display: flex; gap: var(--sp-2); align-items: center; }
+.op-list { flex: 1; min-height: 0; overflow-y: auto; }
+.op-scroll {
+  flex: 1; min-height: 0; overflow-y: auto; padding: var(--sp-4);
+  display: flex; flex-direction: column; gap: var(--sp-4);
+}
+.op-grp {
+  display: flex; align-items: baseline; justify-content: space-between; gap: var(--sp-2);
+  padding: 5px var(--sp-4); background: var(--c-surface-2);
+  border-top: 1px solid var(--c-border-strong); border-bottom: 1px solid var(--c-border-strong);
+}
+.op-grp:first-child { border-top: none; }
+
+/* Step 4's table as rows. A stream is PICKED, not read across, so the row
+   leads with the decision — ready, or short by how much — and keeps the money
+   hard right where every other list on the system keeps it. */
+.op-row {
+  display: grid; grid-template-columns: 54px minmax(0, 1fr) auto auto 104px;
+  gap: 1px var(--sp-3); align-items: baseline; width: 100%; text-align: left; cursor: pointer;
+  padding: var(--sp-3) var(--sp-4); border: none; border-bottom: 1px solid var(--c-border);
+  border-left: 3px solid transparent; background: var(--c-surface); font: inherit; color: var(--c-ink);
+}
+.op-row:hover { background: var(--c-surface-2); }
+.op-row.on { border-left-color: var(--c-accent); box-shadow: inset 0 0 0 1px var(--c-ink); }
+.op-row:focus-visible { outline: 2px solid var(--c-accent); outline-offset: -2px; }
+.op-row .age {
+  grid-column: 1; grid-row: 1 / -1; align-self: center; text-align: center; line-height: 1;
+  font-family: var(--font-mono); font-size: var(--fs-lg); font-weight: 700; color: var(--c-ink-soft);
+}
+.op-row .age em {
+  display: block; font-family: var(--font-narrow); font-style: normal; font-size: 9px;
+  font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--c-ink-faint);
+}
+.op-row .t {
+  grid-column: 2; grid-row: 1; display: flex; align-items: baseline; gap: 6px;
+  font-size: var(--fs-md); font-weight: 700; min-width: 0;
+}
+.op-row .t span.nm { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.op-row .m {
+  grid-column: 2; grid-row: 2; font-size: var(--fs-sm); color: var(--c-ink-faint);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.op-row .m .who { color: var(--c-accent); font-weight: 600; }
+.op-row .q { grid-column: 3; grid-row: 1 / -1; align-self: center; text-align: right; white-space: nowrap; }
+.op-row .q .v { font-family: var(--font-mono); font-size: var(--fs-base); font-weight: 700; font-variant-numeric: tabular-nums; }
+.op-row .q .k {
+  display: block; font-family: var(--font-narrow); font-size: 9px; font-weight: 700;
+  letter-spacing: 0.05em; text-transform: uppercase; color: var(--c-ink-faint);
+}
+.op-row .s { grid-column: 4; grid-row: 1 / -1; align-self: center; display: flex; flex-direction: column; align-items: flex-end; gap: 3px; }
+.op-row .p {
+  grid-column: 5; grid-row: 1 / -1; align-self: center; text-align: right;
+  font-family: var(--font-mono); font-weight: 700; font-variant-numeric: tabular-nums;
+}
+.op-row .p em {
+  display: block; font-family: var(--font-narrow); font-style: normal; font-size: 9px;
+  font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; color: var(--c-ink-faint);
+}
+
+/* ---- Track 3: the scope, or the highlighted line's titlecard ---- */
+.op-track {
+  border-left: 2px solid var(--c-ink); background: var(--c-surface);
+  display: flex; flex-direction: column; min-height: 0;
+}
+.op-waiting {
+  flex: none; padding: var(--sp-3) var(--sp-4);
+  border-bottom: 1px solid var(--c-border); background: var(--c-surface-2);
+}
+.op-waiting.live { background: var(--c-accent-soft); box-shadow: inset 3px 0 0 var(--c-ink); }
+.op-waiting .lab { display: flex; align-items: baseline; justify-content: space-between; gap: var(--sp-2); }
+.op-w-name { font-size: var(--fs-sm); font-weight: 600; color: var(--c-ink-faint); margin-top: 2px; }
+.op-w-row { font-size: var(--fs-sm); margin-top: 2px; }
+.op-w-sub { font-size: var(--fs-xs); color: var(--c-ink-soft); margin-top: 1px; }
+
+.op-track-head { flex: none; padding: var(--sp-3) var(--sp-4); }
+.op-figure { font-size: 46px; font-weight: 800; line-height: 1; letter-spacing: -0.035em; font-variant-numeric: tabular-nums; }
+.op-figure.ready { color: var(--c-ok); }
+.op-figure.sm { font-size: 30px; }
+.op-figure-say { margin-top: 4px; font-size: var(--fs-sm); font-weight: 600; }
+.op-figure-sub { margin-top: 2px; font-size: var(--fs-xs); color: var(--c-ink-faint); }
+.op-rule { flex: none; height: 2px; background: var(--c-ink); }
+.op-track-mid {
+  flex: 1; min-height: 0; overflow-y: auto; padding: var(--sp-3) var(--sp-4);
+  display: flex; flex-direction: column; gap: var(--sp-4);
+}
+.op-sec { display: flex; flex-direction: column; gap: 6px; }
+.op-sec-empty { font-size: var(--fs-xs); color: var(--c-ink-faint); padding: 4px 0; }
+.op-title { font-size: var(--fs-md); font-weight: 700; line-height: 1.2; }
+.op-caveat {
+  font-size: var(--fs-xs); color: var(--c-ink-faint);
+  border-left: 2px solid var(--c-border-strong); padding-left: 7px;
+}
+.op-caveat.warn { color: var(--c-warn); border-left-color: var(--c-warn); }
+.op-track-foot {
+  flex: none; border-top: 2px solid var(--c-ink); background: var(--c-surface);
+  padding: var(--sp-3) var(--sp-4); display: flex; flex-direction: column; gap: 6px;
+}
+
+/* Step 4 records Ready as a yes or no. The thing a manager actually decides
+   is whether to WAIT, and that needs the distance rather than the verdict —
+   so the bar is the distance and the badge stays the verdict. */
+.op-meter { margin-top: var(--sp-2); }
+.op-meter .bar {
+  height: 8px; background: var(--c-surface-2);
+  border: 1px solid var(--c-border-strong); position: relative; overflow: hidden;
+}
+.op-meter .fill { position: absolute; inset: 0 auto 0 0; background: var(--c-ink); }
+.op-meter .fill.ready { background: var(--c-ok); }
+.op-meter .mk {
+  display: flex; justify-content: space-between; margin-top: 3px;
+  font-family: var(--font-mono); font-size: 10.5px; color: var(--c-ink-faint);
+}
+
+/* Under ~1180 the right track drops to a band underneath, the same move every
+   other screen makes. */
+@media (max-width: 1180px) {
+  .op-frame { grid-template-columns: 320px minmax(0, 1fr); grid-template-rows: minmax(0, 1fr) auto; }
+  .op-frame.slab-shut { grid-template-columns: 52px minmax(0, 1fr); }
+  .op-slab { grid-row: 1 / -1; }
+  .op-main { grid-column: 2; grid-row: 1; }
+  .op-track {
+    grid-column: 2; grid-row: 2;
+    border-left: none; border-top: 2px solid var(--c-ink); max-height: 58dvh;
+  }
+  .op-waiting, .op-track-head { padding: var(--sp-2) var(--sp-4); }
+  .op-figure { font-size: 34px; }
+  .op-figure-sub { display: none; }
+  .op-row { grid-template-columns: 46px minmax(0, 1fr) auto; }
+  .op-row .p { display: none; }
+  /* The figure and the badge say the same thing two ways — "2 of 25 min" and
+     "23 units short". Narrow, the supplier name matters more than saying it
+     twice, so the figure goes and the badge keeps the answer in words. */
+  .op-row .q { display: none; }
+}
+
+
+/* ======================================================================
+   Accounts Payable — M-05, on the till's three tracks.
+
+   Shares .slab-head / .slab-search / .slab-chips / .slab-list / .slab-band /
+   .slab-strip / .filter-chip / .cust-standing / .wo-sec / .wo-caveat /
+   .wo-rule with Find, Receiving, Customers, Suppliers and On Order rather
+   than restating them — one slab, six errands.
+
+   The one structure NOT carried over is the row. On Order's .wo-row is a
+   record plus its metadata; a payables ledger is six money columns that have
+   to line up, so track 2 is a real table (.ap-ledger).
+   ====================================================================== */
+.ap-frame {
+  position: relative;
+  flex: 1; min-height: 0; min-width: 0;
+  display: grid; grid-template-columns: 320px minmax(0, 1fr) 344px;
+  background: var(--c-surface);
+}
+.ap-frame.slab-shut { grid-template-columns: 52px minmax(0, 1fr) 344px; }
+
+/* ---- Track 1: the payables slab ---- */
+.ap-slab {
+  border-right: 1px solid var(--c-border-strong); background: var(--c-surface-2);
+  display: flex; flex-direction: column; min-height: 0; min-width: 0;
+}
+.ap-slab-acts { flex: none; display: flex; gap: var(--sp-2); padding: var(--sp-3) var(--sp-3) 0; }
+.ap-slab-acts .btn { flex: 1; justify-content: center; }
+.ap-sortbar {
+  flex: none; display: flex; align-items: center; gap: var(--sp-2);
+  padding: 6px var(--sp-3); border-bottom: 1px solid var(--c-border-strong);
+}
+.ap-sortbar select {
+  font: inherit; font-size: var(--fs-sm); font-weight: 600; flex: 1; padding: 3px 6px;
+  border: 1px solid var(--c-border-strong); background: var(--c-surface); color: var(--c-ink);
+  border-radius: var(--radius-sm);
+}
+
+/* Deliberately NOT one number: M-05 requires a supplier's currency to carry
+   through, and the rate that would let these be added lives in M-06. */
+.ap-total {
+  flex: none; padding: var(--sp-3); border-bottom: 1px solid var(--c-border-strong);
+  background: var(--c-surface);
+}
+.ap-total .tot { display: flex; align-items: baseline; justify-content: space-between; gap: var(--sp-2); }
+.ap-total .v { font-family: var(--font-mono); font-size: var(--fs-lg); font-weight: 800; font-variant-numeric: tabular-nums; letter-spacing: -0.02em; }
+.ap-total .v.sub { font-size: var(--fs-base); font-weight: 700; color: var(--c-ink-soft); }
+.ap-total .hint { display: block; font-size: var(--fs-xs); color: var(--c-ink-faint); margin-top: 5px; }
+
+/* One Supplier — the same skeleton as On Order's .po-row and Suppliers' rows. */
+.sup-row {
+  display: grid; grid-template-columns: 44px minmax(0, 1fr) auto; gap: 1px var(--sp-3);
+  align-items: baseline; width: 100%; text-align: left; cursor: pointer;
+  padding: var(--sp-2) var(--sp-3); border: none; border-bottom: 1px solid var(--c-border);
+  border-left: 3px solid transparent; background: var(--c-surface); font: inherit; color: var(--c-ink);
+}
+.sup-row:hover { background: var(--c-surface-2); }
+.sup-row.on { border-left-color: var(--c-accent); box-shadow: inset 0 0 0 1px var(--c-ink); }
+.sup-row.dim { opacity: 0.5; }
+.sup-row .code {
+  grid-column: 1; grid-row: 1 / -1; align-self: center;
+  width: 44px; height: 34px; display: grid; place-items: center;
+  border: 1px solid var(--c-border); background: var(--c-surface-2);
+  font-family: var(--font-mono); font-size: var(--fs-xs); font-weight: 700; color: var(--c-ink-soft);
+}
+.sup-row.cons .code { border-style: dashed; border-color: var(--c-ink-faint); }
+.sup-row .t { grid-column: 2; grid-row: 1; font-size: var(--fs-sm); font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sup-row .m { grid-column: 2; grid-row: 2; font-size: var(--fs-xs); color: var(--c-ink-faint); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sup-row .n { grid-column: 3; grid-row: 1; font-family: var(--font-mono); font-size: var(--fs-sm); font-weight: 700; text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.sup-row .n.nil { color: var(--c-ink-faint); font-weight: 600; }
+.sup-row .n.late { color: var(--c-danger); }
+.sup-row .k {
+  grid-column: 3; grid-row: 2; text-align: right; white-space: nowrap;
+  font-family: var(--font-narrow); font-size: 9px; font-weight: 700;
+  letter-spacing: 0.05em; text-transform: uppercase; color: var(--c-ink-faint);
+}
+.sup-row .k.late { color: var(--c-danger); }
+.sup-row .k.good { color: var(--c-ok); }
+/* Gift cards are not a Supplier, and the row says so (d10). */
+.sup-row.gc { background: var(--c-surface-2); border-top: 2px solid var(--c-ink); }
+.sup-row.gc .code { border: 1px solid var(--c-ink); background: var(--c-ink); color: #fff; font-size: var(--fs-md); }
+
+.ap-dot { width: 9px; height: 9px; border-radius: 50%; flex: none; display: inline-block; vertical-align: middle; }
+.ap-dot.late { background: var(--c-danger); }
+.ap-dot.credit { background: var(--c-ok); }
+.ap-dot.claim { background: var(--c-warn); }
+.ap-dot.owed { background: var(--c-ink-soft); }
+.ap-dot.settled { background: var(--c-border-strong); }
+.po-tile.gc { border-color: var(--c-ink); background: var(--c-ink); color: #fff; font-size: var(--fs-md); }
+.filter-chip.good { border-color: var(--c-ok); color: var(--c-ok); }
+.filter-chip.good .count { color: var(--c-ok); }
+.filter-chip.good.on { background: var(--c-ok); border-color: var(--c-ok); color: #fff; }
+
+/* ---- Track 2: the combined ledger ---- */
+.ap-main { display: flex; flex-direction: column; min-width: 0; min-height: 0; background: var(--c-surface); }
+.ap-main-head {
+  flex: none; display: flex; align-items: flex-start; gap: var(--sp-3); flex-wrap: wrap;
+  padding: var(--sp-3) var(--sp-4); border-bottom: 2px solid var(--c-ink);
+}
+.ap-main-head h2 { margin: 0; font-size: 27px; letter-spacing: -0.025em; line-height: 1.1; }
+.ap-head-acts { margin-left: auto; display: flex; gap: var(--sp-2); align-items: center; }
+.ap-list { flex: 1; min-height: 0; overflow-y: auto; }
+
+/* d14 draws the only real line through this ledger: counted, or not counted
+   yet. There are NO aging bands — M-05 words that question as one about where
+   the report lives, and drawing the buckets would answer it by drawing it. */
+.ap-grp {
+  position: sticky; top: 0; z-index: 2;
+  display: flex; align-items: baseline; gap: var(--sp-2);
+  padding: var(--sp-2) var(--sp-4); background: var(--c-surface-2);
+  border-bottom: 1px solid var(--c-border-strong); border-top: 1px solid var(--c-border-strong);
+}
+.ap-grp:first-child { border-top: none; }
+.ap-grp.uncounted { background: var(--c-warn-soft); border-color: var(--c-warn); }
+.ap-grp.uncounted .lab { color: var(--c-warn); }
+.ap-grp.settled { background: var(--c-surface); }
+.ap-grp .say { font-size: var(--fs-xs); color: var(--c-ink-faint); font-weight: 600; }
+.ap-grp .btn.sm { margin-left: auto; }
+
+table.ap-ledger { width: 100%; border-collapse: collapse; }
+table.ap-ledger thead th {
+  position: sticky; top: 0; z-index: 1; background: var(--c-surface);
+  font-family: var(--font-narrow); font-weight: 700; font-size: 10px; letter-spacing: 0.08em;
+  text-transform: uppercase; color: var(--c-ink-faint); text-align: left;
+  padding: 6px var(--sp-2); border-bottom: 1px solid var(--c-ink); white-space: nowrap;
+}
+table.ap-ledger th.num, table.ap-ledger td.num { text-align: right; font-family: var(--font-mono); font-variant-numeric: tabular-nums; white-space: nowrap; }
+table.ap-ledger th:first-child, table.ap-ledger td:first-child { padding-left: var(--sp-4); width: 30px; }
+table.ap-ledger th:last-child, table.ap-ledger td:last-child { padding-right: var(--sp-4); }
+table.ap-ledger td {
+  padding: 7px var(--sp-2); border-bottom: 1px solid var(--c-border);
+  font-size: var(--fs-sm); vertical-align: middle; background: var(--c-surface);
+}
+tr.ap-row { cursor: pointer; }
+tr.ap-row:hover td { background: var(--c-surface-2); }
+tr.ap-row.on td { background: var(--c-accent-soft); }
+tr.ap-row.on td:first-child { box-shadow: inset 3px 0 0 var(--c-accent); }
+tr.ap-row.over td { background: var(--c-danger-soft); }
+tr.ap-row.remainder td { background: var(--c-ok-soft); }
+tr.ap-row.settled { cursor: default; }
+tr.ap-row.settled td { color: var(--c-ink-faint); background: var(--c-surface-2); }
+tr.ap-row.settled:hover td { background: var(--c-surface-2); }
+.ap-ledger .ref { font-family: var(--font-mono); font-size: var(--fs-sm); font-weight: 600; }
+.ap-ledger .sub { display: block; font-size: var(--fs-xs); color: var(--c-ink-faint); }
+.ap-ledger .sub.warn { color: var(--c-warn); }
+.ap-ledger .st { display: block; }
+.ap-ledger strong.cr { color: var(--c-ok); }
+.ap-ledger strong.nil { color: var(--c-ink-faint); }
+.ap-ledger .due { font-family: var(--font-mono); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.ap-ledger .due.over { color: var(--c-danger); font-weight: 700; }
+.ap-ledger .due.soon { color: var(--c-warn); }
+.ap-ledger .due.none { color: var(--c-ink-faint); }
+.ap-ledger .terms {
+  display: block; font-family: var(--font-narrow); font-size: 9px; font-weight: 700;
+  letter-spacing: 0.06em; text-transform: uppercase; color: var(--c-ink-faint);
+}
+.ap-ledger .paid-by { display: block; font-size: var(--fs-xs); color: var(--c-ink-faint); }
+/* E-02 d40 / A-33a / A-41 — correctable until paid, immutable after. The verb
+   changes rather than the link disappearing, because a paid Invoice is still
+   the document you want to look at. */
+.rec-link {
+  display: inline-block; font: inherit; font-size: var(--fs-xs); font-weight: 600; cursor: pointer; margin-top: 3px;
+  border: 1px solid var(--c-border-strong); background: var(--c-surface); color: var(--c-ink-soft);
+  padding: 1px 5px; border-radius: var(--radius-sm); white-space: nowrap;
+}
+.rec-link:hover { border-color: var(--c-ink); color: var(--c-ink); }
+.rec-link.locked { border-style: dashed; }
+
+/* ---- Track 3: the supplier, the selection, or the new entry ---- */
+.ap-track {
+  border-left: 1px solid var(--c-border-strong); background: var(--c-surface);
+  display: flex; flex-direction: column; min-height: 0;
+}
+.ap-waiting {
+  flex: none; padding: var(--sp-3) var(--sp-4);
+  border-bottom: 1px solid var(--c-border); background: var(--c-surface-2);
+}
+.ap-waiting.live { background: var(--c-ok-soft); box-shadow: inset 3px 0 0 var(--c-ok); }
+.ap-waiting .lab { display: flex; align-items: baseline; justify-content: space-between; gap: var(--sp-2); }
+.ap-w-name { font-size: var(--fs-md); font-weight: 700; margin-top: 2px; }
+.ap-w-name.none { font-size: var(--fs-sm); font-weight: 600; color: var(--c-ink-faint); }
+.ap-w-sub { font-size: var(--fs-xs); color: var(--c-ink-soft); margin-top: 1px; }
+.ap-track-head { flex: none; padding: var(--sp-3) var(--sp-4); }
+.ap-figure { font-family: var(--font-mono); font-size: 46px; font-weight: 800; line-height: 1; letter-spacing: -0.035em; font-variant-numeric: tabular-nums; }
+.ap-figure.cr { color: var(--c-ok); }
+.ap-figure.nil { color: var(--c-ink-faint); font-size: 26px; font-weight: 700; }
+.ap-figure-say { margin-top: 4px; font-size: var(--fs-sm); font-weight: 600; }
+.ap-figure-sub { margin-top: 2px; font-size: var(--fs-xs); color: var(--c-ink-faint); }
+.ap-track-mid {
+  flex: 1; min-height: 0; overflow-y: auto; padding: var(--sp-3) var(--sp-4);
+  display: flex; flex-direction: column; gap: var(--sp-4);
+}
+.ap-track-foot {
+  flex: none; border-top: 2px solid var(--c-ink); background: var(--c-surface);
+  padding: var(--sp-3) var(--sp-4); display: flex; flex-direction: column; gap: 6px;
+}
+.ap-track-foot .primary { justify-content: center; height: 56px; font-size: 18px; font-weight: 800; }
+.ap-track-foot .secondary { justify-content: center; height: 36px; }
+
+/* One row of the settlement being composed. Two inputs, because d18 lets the
+   Manager say where the credit lands and d19 makes it one act with the money. */
+.ap-tgt {
+  display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: var(--sp-2);
+  align-items: center; padding: 6px 0; border-bottom: 1px solid var(--c-border);
+}
+.ap-tgt.dual { grid-template-columns: minmax(0, 1fr) 78px; row-gap: 3px; align-items: start; }
+.ap-tgt.dual .l { grid-row: 1 / span 2; align-self: center; }
+.ap-tgt .l { min-width: 0; }
+.ap-tgt .l .t { font-size: var(--fs-sm); font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ap-tgt .l .m { font-size: var(--fs-xs); color: var(--c-ink-faint); }
+.ap-tgt .inp { display: flex; align-items: center; gap: 4px; justify-content: flex-end; }
+.ap-tgt .inp .tag {
+  font-family: var(--font-narrow); font-size: 8.5px; font-weight: 700; letter-spacing: 0.06em;
+  text-transform: uppercase; color: var(--c-ink-faint); width: 34px; text-align: right;
+}
+.ap-tgt .inp .tag.cr { color: var(--c-ok); }
+.ap-tgt input {
+  font-family: var(--font-mono); font-size: var(--fs-sm); font-weight: 700; width: 78px; text-align: right;
+  padding: 4px 6px; border: 1px solid var(--c-border-strong); border-radius: var(--radius-sm);
+  background: var(--c-surface); color: var(--c-ink);
+}
+.ap-tgt input.cr { border-color: var(--c-ok); background: var(--c-ok-soft); }
+.ap-tgt input.cr:disabled { border-color: var(--c-border); background: var(--c-surface-2); opacity: 0.5; }
+.ap-tgt .num.mono { font-family: var(--font-mono); font-weight: 700; font-variant-numeric: tabular-nums; }
+
+/* d23 — the credit total is fixed, so the bar tracks placement against a
+   target rather than a running balance in hand. */
+.ap-credit-bar {
+  border: 1px solid var(--c-ok); background: var(--c-ok-soft); padding: var(--sp-2) var(--sp-3);
+  border-radius: var(--radius-sm); display: flex; flex-direction: column; gap: 2px;
+}
+.ap-credit-bar.spent { border-color: var(--c-danger); background: var(--c-danger-soft); }
+.ap-credit-bar .ln { display: flex; justify-content: space-between; gap: var(--sp-2); font-size: var(--fs-sm); }
+.ap-credit-bar .ln .mono { font-family: var(--font-mono); font-weight: 700; }
+.ap-credit-bar .who { font-size: var(--fs-xs); color: var(--c-ink-soft); }
+
+.ap-split { display: flex; justify-content: space-between; gap: var(--sp-2); font-size: var(--fs-sm); padding: 3px 0; border-bottom: 1px solid var(--c-border); }
+.ap-split .mono { font-family: var(--font-mono); font-weight: 700; font-variant-numeric: tabular-nums; }
+.ap-split.tot { border-bottom: none; border-top: 1px solid var(--c-ink); padding-top: 5px; font-weight: 700; }
+
+.ap-blocked { border-left: 3px solid var(--c-danger); background: var(--c-danger-soft); padding: var(--sp-3); }
+.ap-blocked .t { font-size: var(--fs-sm); font-weight: 700; color: var(--c-danger); }
+.ap-blocked .m { font-size: var(--fs-xs); color: var(--c-ink-soft); margin-top: 3px; display: flex; flex-direction: column; gap: 4px; }
+.ap-zero-ok { border-left: 3px solid var(--c-ok); background: var(--c-ok-soft); padding: var(--sp-3); }
+.ap-zero-ok .t { font-size: var(--fs-sm); font-weight: 700; color: var(--c-ok); }
+.ap-zero-ok .m { font-size: var(--fs-xs); color: var(--c-ink-soft); margin-top: 3px; }
+
+/* d16 — one row per batch, opened to see its targets. d22/d30 — a voided one
+   is kept, struck, never removed. */
+.ap-batch { border: 1px solid var(--c-border); background: var(--c-surface-2); border-radius: var(--radius-sm); }
+.ap-batch + .ap-batch { margin-top: 5px; }
+.ap-batch.voided { border-style: dashed; opacity: 0.75; }
+.ap-batch.voided .ap-batch-head .l { text-decoration: line-through; }
+.ap-batch-head {
+  display: flex; align-items: baseline; justify-content: space-between; gap: var(--sp-2);
+  width: 100%; text-align: left; font: inherit; cursor: pointer; padding: 6px var(--sp-2);
+  background: none; border: none; color: var(--c-ink);
+}
+.ap-batch-head:hover { background: var(--c-surface); }
+.ap-batch-head .l { font-size: var(--fs-sm); font-weight: 600; }
+.ap-batch-body { padding: 0 var(--sp-2) var(--sp-2); border-top: 1px solid var(--c-border); }
+.ap-batch-body .tgt { display: flex; justify-content: space-between; gap: var(--sp-2); font-size: var(--fs-xs); padding: 3px 0; }
+.ap-batch-body .by { font-size: var(--fs-xs); color: var(--c-ink-faint); padding-top: 4px; }
+
+/* Under ~1180 the right track drops to a band underneath, as every other
+   screen does. 58dvh, and for the same reason: two fixed bands above a scroll. */
+@media (max-width: 1180px) {
+  .ap-frame { grid-template-columns: 320px minmax(0, 1fr); grid-template-rows: minmax(0, 1fr) auto; }
+  .ap-frame.slab-shut { grid-template-columns: 52px minmax(0, 1fr); }
+  .ap-slab { grid-row: 1 / -1; }
+  .ap-main { grid-column: 2; grid-row: 1; }
+  .ap-track {
+    grid-column: 2; grid-row: 2;
+    border-left: none; border-top: 2px solid var(--c-ink); max-height: 58dvh;
+  }
+  .ap-waiting, .ap-track-head { padding: var(--sp-2) var(--sp-4); }
+  .ap-figure { font-size: 34px; }
+  .ap-figure-sub { display: none; }
+  .ap-track-foot .primary { height: 48px; font-size: var(--fs-md); }
+}
+
+/* E-02 d45/d47 — a field showing the Supplier's default rather than its own
+   value. Dashed, because "inherited" and "set here" are different facts and a
+   Manager overriding one should be able to see which they are looking at. */
+.field.recv-inherited select { border-style: dashed; color: var(--c-ink-soft); }
+.recv-from {
+  margin-left: 6px; font-family: var(--font-narrow); font-size: 9px; font-weight: 700;
+  letter-spacing: 0.06em; text-transform: uppercase; color: var(--c-ink-faint);
+}
+
+/* ======================================================================
+   SUPPLIER CLAIMS (E-04 §"Supplier claims") — the same three tracks as
+   Payable: a 320px slab that collapses to a 52px strip, the work, and a
+   344px act track that follows the selection.
+
+   The one structure NOT carried over is Payable's .ap-ledger table. A claim
+   is a few lines with prose in them — a reason and a note — rather than six
+   money columns that have to line up, so track 2 is a list of cards each
+   opening a short table, closer to On Order's row.
+   ====================================================================== */
+.claims-frame {
+  position: relative;
+  flex: 1; min-height: 0; min-width: 0;
+  display: grid; grid-template-columns: 320px minmax(0, 1fr) 344px;
+  background: var(--c-surface);
+}
+.claims-frame.slab-shut { grid-template-columns: 52px minmax(0, 1fr) 344px; }
+
+/* ---- Track 1 ---- */
+.claims-slab {
+  border-right: 1px solid var(--c-border-strong); background: var(--c-surface-2);
+  display: flex; flex-direction: column; min-height: 0; min-width: 0;
+}
+.claims-sortbar {
+  flex: none; display: flex; align-items: center; gap: var(--sp-2);
+  padding: 6px var(--sp-3); border-bottom: 1px solid var(--c-border-strong);
+}
+.claims-sortbar .lab {
+  font-family: var(--font-narrow); font-size: 9.5px; font-weight: 800;
+  letter-spacing: 0.09em; text-transform: uppercase; color: var(--c-ink-faint);
+}
+.claims-sortbar select {
+  font: inherit; font-size: var(--fs-sm); font-weight: 600; flex: 1; padding: 3px 6px;
+  border: 1px solid var(--c-border-strong); background: var(--c-surface);
+}
+.claims-band {
+  position: sticky; top: 0; z-index: 1;
+  padding: 5px var(--sp-3); background: var(--c-surface-2);
+  border-bottom: 1px solid var(--c-border);
+  font-family: var(--font-narrow); font-size: 9.5px; font-weight: 800;
+  letter-spacing: 0.09em; text-transform: uppercase; color: var(--c-ink-faint);
+  display: flex; justify-content: space-between;
+}
+/* Laid out like .sup-row, and for its reason: a code, a name over its meta,
+   and a figure over its badge. Each cell is PLACED rather than nested in
+   wrapper spans, so the name and the figure are separate grid items with a
+   real gutter between them — nested wrappers left the name butting into the
+   number with only 8px, which read as one run-on line once a supplier had
+   both a long name and a wide badge. */
+.claims-srow {
+  width: 100%; text-align: left; font: inherit; cursor: pointer;
+  display: grid; grid-template-columns: 38px minmax(0, 1fr) auto; gap: 1px var(--sp-3);
+  align-items: baseline; padding: var(--sp-2) var(--sp-3);
+  border: none; border-bottom: 1px solid var(--c-border); background: var(--c-surface);
+}
+.claims-srow:hover { background: var(--c-accent-soft); }
+.claims-srow.on { background: var(--c-ink); color: #fff; }
+.claims-srow.on .sub, .claims-srow.on .code { color: #bdbdb8; }
+.claims-srow.on .code { border-color: #55554f; background: transparent; }
+.claims-srow .code { grid-column: 1; grid-row: 1 / -1; align-self: center; }
+.claims-srow .nm {
+  grid-column: 2; grid-row: 1; font-weight: 700; font-size: var(--fs-sm);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.claims-srow .sub {
+  grid-column: 2; grid-row: 2; font-size: var(--fs-xs); color: var(--c-ink-faint);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+/* tabular-nums so the figures line up down the column instead of wandering
+   with the digit widths, the same treatment .sup-row .n gets. */
+.claims-srow .amt {
+  grid-column: 3; grid-row: 1; text-align: right; white-space: nowrap;
+  font-family: var(--font-mono); font-size: var(--fs-sm); font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+.claims-srow .wait {
+  grid-column: 3; grid-row: 2; text-align: right; white-space: nowrap;
+  font-size: 9.5px; font-weight: 800; letter-spacing: 0.05em;
+  text-transform: uppercase; color: var(--c-danger);
+}
+.claims-srow.on .wait { color: #ff9b8f; }
+
+/* ---- Track 2 ---- */
+.claims-main { display: flex; flex-direction: column; min-width: 0; min-height: 0; background: var(--c-surface); }
+.claims-main-head {
+  flex: none; display: flex; gap: var(--sp-3); align-items: flex-start;
+  padding: var(--sp-4); border-bottom: 1px solid var(--c-border-strong);
+}
+.claims-main-head h2 { font-size: var(--fs-lg); margin: 0; }
+.claims-list { overflow: auto; flex: 1; min-height: 0; }
+.claims-sec { border-bottom: 1px solid var(--c-border-strong); }
+.claims-sec-head {
+  position: sticky; top: 0; z-index: 1;
+  display: flex; align-items: baseline; gap: var(--sp-3);
+  padding: 7px var(--sp-4); background: var(--c-surface-2);
+  border-bottom: 1px solid var(--c-border);
+}
+.claims-sec-head .t {
+  font-family: var(--font-narrow); font-size: var(--fs-xs); font-weight: 800;
+  letter-spacing: 0.08em; text-transform: uppercase; white-space: nowrap;
+}
+.claims-sec-head .say { font-size: var(--fs-xs); color: var(--c-ink-faint); min-width: 0; }
+.claims-sec-head .tot { margin-left: auto; font-family: var(--font-mono); font-size: var(--fs-sm); font-weight: 700; }
+.claims-quiet {
+  padding: 10px var(--sp-4); font-size: var(--fs-sm); color: var(--c-ink-soft);
+  display: flex; gap: var(--sp-3); align-items: center; flex-wrap: wrap;
+}
+
+/* A standing batch (d22) — a card, because it is a container you send whole,
+   not a row you tick. */
+.claims-bucket {
+  border: 1px solid var(--c-border-strong); margin: var(--sp-3) var(--sp-4);
+  background: var(--c-surface); cursor: pointer;
+}
+.claims-bucket:hover { border-color: var(--c-accent); }
+.claims-bucket.on { border-color: var(--c-accent); border-width: 2px; background: var(--c-accent-soft); }
+.claims-bucket-top {
+  display: flex; align-items: center; gap: var(--sp-3);
+  padding: 9px var(--sp-3); border-bottom: 1px solid var(--c-border);
+}
+.claims-bucket-top .nm { font-weight: 800; font-size: var(--fs-sm); }
+.claims-bucket-top .sep {
+  font-family: var(--font-mono); font-weight: 600; font-size: var(--fs-xs); color: var(--c-ink-faint);
+}
+.claims-bucket-top .fig { margin-left: auto; font-weight: 700; }
+.claims-bucket-lines { padding: var(--sp-2) var(--sp-3) var(--sp-3); }
+
+.claims-card { border-bottom: 1px solid var(--c-border); }
+.claims-card.on { background: var(--c-accent-soft); box-shadow: inset 3px 0 0 var(--c-accent); }
+.claims-card.closed { opacity: 0.85; }
+.claims-card-top {
+  display: flex; gap: var(--sp-3); align-items: flex-start; padding: 10px var(--sp-4);
+}
+.claims-card-top .id {
+  display: flex; align-items: center; gap: 7px; flex-wrap: wrap;
+  font-weight: 800; font-size: var(--fs-sm);
+}
+.claims-card-top .meta { display: block; font-size: var(--fs-xs); color: var(--c-ink-faint); margin-top: 3px; }
+.claims-card-top .fig { margin-left: auto; text-align: right; font-weight: 700; white-space: nowrap; }
+.claims-card-top .fig .sub {
+  display: block; font-size: var(--fs-xs); font-weight: 600; color: var(--c-ink-faint);
+}
+.claims-card-lines { padding: 0 var(--sp-4) var(--sp-3) var(--sp-4); }
+
+/* Below the 1180px breakpoint the act track drops under the work, and the
+   work track gets narrow enough that the fixed Invoice/Reason/Qty/Cost widths
+   leave the Record column a few pixels — enough to stack "Purple Rain" one
+   word per line. The table keeps a floor and its card scrolls sideways
+   instead, which is the treatment tables get everywhere here: a table may be
+   wider than its container, inside its own overflow-x. */
+.claims-bucket-lines, .claims-card-lines { overflow-x: auto; }
+table.claims-ln { width: 100%; min-width: 430px; border-collapse: collapse; font-size: var(--fs-sm); }
+table.claims-ln th {
+  text-align: left; font-family: var(--font-narrow); font-size: 9.5px; font-weight: 800;
+  letter-spacing: 0.08em; text-transform: uppercase; color: var(--c-ink-faint);
+  padding: 4px 8px 4px 0; border-bottom: 1px solid var(--c-border);
+}
+table.claims-ln td { padding: 5px 8px 5px 0; border-bottom: 1px solid var(--c-border); vertical-align: top; }
+.claims-reason {
+  display: inline-block; font-size: var(--fs-xs); font-weight: 800; letter-spacing: 0.03em;
+  text-transform: uppercase; border: 1px solid var(--c-border-strong);
+  padding: 1px 5px; color: var(--c-ink-soft); white-space: nowrap;
+}
+
+/* E-04 d20's gap — what the store absorbed. The screen's most important
+   number, and nothing showed it before. */
+.claims-delta {
+  background: var(--c-warn-soft); border: 1px solid var(--c-warn);
+  padding: var(--sp-3); margin: var(--sp-3) 0;
+}
+.claims-delta.over { background: var(--c-ok-soft); border-color: var(--c-ok); }
+.claims-delta .fig {
+  display: flex; justify-content: space-between;
+  font-family: var(--font-mono); font-weight: 700; font-size: var(--fs-md); color: var(--c-warn);
+}
+.claims-delta.over .fig { color: var(--c-ok); }
+.claims-delta p { margin: 6px 0 0; font-size: var(--fs-xs); color: var(--c-ink-soft); line-height: 1.5; }
+
+/* The other outcome: a write-off, deliberately grey where the credit is amber. */
+.claims-dead {
+  background: var(--c-surface-2); border: 1px solid var(--c-border-strong);
+  padding: var(--sp-3); margin: var(--sp-3) 0;
+}
+.claims-dead .fig {
+  display: flex; justify-content: space-between;
+  font-family: var(--font-mono); font-weight: 700; font-size: var(--fs-md); color: var(--c-ink-soft);
+}
+.claims-dead p { margin: 6px 0 0; font-size: var(--fs-xs); color: var(--c-ink-soft); line-height: 1.5; }
+
+/* ---- Track 3 ---- */
+.claims-act {
+  border-left: 1px solid var(--c-border-strong); background: var(--c-surface-2);
+  display: flex; flex-direction: column; min-height: 0; min-width: 0;
+}
+.claims-act-head {
+  flex: none; padding: var(--sp-3) var(--sp-4);
+  border-bottom: 1px solid var(--c-border-strong); background: var(--c-surface);
+}
+.claims-act-head .t {
+  font-family: var(--font-narrow); font-size: var(--fs-xs); font-weight: 800;
+  letter-spacing: 0.09em; text-transform: uppercase;
+}
+.claims-act-head .s { font-size: var(--fs-xs); color: var(--c-ink-faint); margin-top: 3px; }
+.claims-act-body { padding: var(--sp-4); overflow: auto; flex: 1; min-height: 0; }
+.claims-act-foot {
+  flex: none; padding: var(--sp-3) var(--sp-4);
+  border-top: 1px solid var(--c-border-strong); background: var(--c-surface);
+}
+.claims-mail {
+  background: var(--c-surface); border: 1px solid var(--c-border-strong); padding: var(--sp-3);
+  font-family: var(--font-mono); font-size: 10.5px; line-height: 1.6; color: var(--c-ink-soft);
+  white-space: pre-wrap; max-height: 190px; overflow: auto;
+}
+
+/* Below 1180px the act track drops to a band under the work, like every
+   other three-track screen here. */
+@media (max-width: 1180px) {
+  .claims-frame { grid-template-columns: 320px minmax(0, 1fr); }
+  .claims-frame.slab-shut { grid-template-columns: 52px minmax(0, 1fr); }
+  .claims-act {
+    grid-column: 1 / -1;
+    border-left: none; border-top: 2px solid var(--c-ink); max-height: 58dvh;
+  }
+}
+
+/* E-04 d28 — a line deliberately not about a shipment. Italic and faint so it
+   reads as a stated fact rather than a missing value; a blank and a choice
+   must not look the same. */
+.claims-noinv { font-style: italic; color: var(--c-ink-faint); font-family: var(--font-sans); font-size: var(--fs-xs); }
+
+/* E-04 d29 — a batch that went out, was voided and came back. Without this a
+   returned claim is indistinguishable from one never sent, which is the one
+   thing the person correcting it needs to know. */
+.claims-retired {
+  display: inline-block; margin-left: 8px;
+  font-family: var(--font-narrow); font-size: 9.5px; font-weight: 800;
+  letter-spacing: 0.06em; text-transform: uppercase;
+  color: var(--c-danger); border: 1px solid var(--c-danger);
+  background: var(--c-danger-soft); padding: 1px 5px;
+}
+
+/* ---- M-04 Users ------------------------------------------------------------
+   Reuses .cust-frame / .cust-main / .cust-head / .cust-scroll / .cust-acct /
+   .cust-acct-foot and the .sup-slab / .slab-* / .hit / .filter-chip / .badge
+   family, the same way Suppliers does. Only what genuinely differs is here.
+
+   What differs: a deactivated user has to stay visible and readable rather
+   than being hidden, because M-04 d5 keeps the row forever and d19 can bring
+   it back — so "off" is a weight, not a disappearance. And the right track is
+   a log rather than a figure, since A-55 makes before-and-after the point. */
+
+.slab-strip .strip-ini { font-size: 18px; line-height: 1; }
+
+.hit.user-off { opacity: 0.55; }
+.hit.user-off .ini { background: var(--c-surface-2); color: var(--c-muted); }
+
+.badge.off { background: var(--c-surface-2); color: var(--c-muted); border-color: var(--c-border-strong); }
+
+.users-empty { padding: var(--sp-3); }
+
+.loglist { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--sp-2); }
+.loglist > li { border-left: 2px solid var(--c-border-strong); padding: 0 0 0 var(--sp-2); }
+
+/* ---- E-01 identification -----------------------------------------------
+   Built for the counter: no Enter, no OK, Escape cancels the action. The
+   field is large because it is aimed at while looking at a customer, and the
+   hint under it resolves to a NAME rather than echoing the letters back —
+   initials are reusable (M-04 d16), so the letters are not the confirmation. */
+
+.idy-scrim {
+  position: fixed; inset: 0; z-index: 90;
+  background: color-mix(in srgb, var(--c-ink) 42%, transparent);
+  display: flex; align-items: flex-start; justify-content: center; padding-top: 14vh;
+}
+.idy {
+  background: var(--c-surface); border: 2px solid var(--c-ink);
+  padding: var(--sp-4); width: min(360px, 92vw);
+  display: flex; flex-direction: column; gap: var(--sp-2);
+}
+.idy-reason { font-weight: 700; }
+.idy-input {
+  font-size: 34px; font-weight: 700; letter-spacing: 0.16em; text-align: center;
+  text-transform: uppercase; padding: var(--sp-2); width: 100%;
+  border: 2px solid var(--c-border-strong); background: var(--c-surface);
+}
+.idy-input:focus { outline: none; border-color: var(--c-ink); }
+.idy-input.bad { border-color: var(--c-danger); color: var(--c-danger); }
+.idy-hint { min-height: 1.4em; font-size: var(--fs-sm); color: var(--c-muted); text-align: center; }
+.idy-hint.ok { color: var(--c-ok); font-weight: 700; }
+.idy-foot {
+  display: flex; justify-content: space-between; gap: var(--sp-2);
+  font-size: var(--fs-xs); color: var(--c-muted); border-top: 1px solid var(--c-border); padding-top: var(--sp-2);
+}
+.idy-esc { white-space: nowrap; }
+.idy-none { color: var(--c-muted); }
+.sess-name { font-weight: 700; }
+.sess-out { margin-left: var(--sp-2); }
+
+/* The session chip's menu. The name is the control — Log out matters but is
+   not a per-minute action, so it does not hold width on the till's busiest
+   strip (E-01 d13/d10 are why it has to exist at all: the lapse has no
+   maximum and an Open Sale suppresses it). */
+.sess-wrap { position: relative; }
+.sess-name {
+  font-weight: 700; background: none; border: none; padding: 0; cursor: pointer;
+  color: inherit; font-size: inherit; font-family: inherit;
+}
+.sess-name:hover, .sess-name.on { text-decoration: underline; }
+.sess-menu {
+  position: absolute; top: calc(100% + 6px); right: 0; z-index: 60;
+  background: var(--c-surface); border: 2px solid var(--c-ink);
+  min-width: 220px; padding: var(--sp-2); display: flex; flex-direction: column; gap: var(--sp-2);
+}
+.sess-item {
+  text-align: left; background: none; border: 1px solid var(--c-border-strong);
+  padding: var(--sp-2); cursor: pointer; font: inherit; font-weight: 700;
+}
+.sess-item:hover { background: var(--c-surface-2); border-color: var(--c-ink); }
+.sess-note { font-size: var(--fs-xs); color: var(--c-muted); }
+.idy-who { text-align: center; font-weight: 700; }
+.idy-hint.bad { color: var(--c-danger); font-weight: 700; }
+.idy-sub {
+  font-size: var(--fs-sm); color: var(--c-muted);
+  border-top: 1px solid var(--c-border); padding-top: var(--sp-2);
+}
+
+/* M-06 Settings reuses the Users frame entirely — slab, main, log. Only the
+   inline table inputs differ, because a settings table is a grid of small
+   values rather than a list of names. */
+input.mini { width: 72px; text-align: right; }
+table.data input[type="text"], table.data input:not([type]) { width: 100%; }
+table.data td { vertical-align: middle; }
+
+/* E-02 d51 — a thin margin is warned about, not priced away. Short of
+   below-cost's `bad`, which d35 flags; this only says the decided price is
+   under what this supplier's Discount implies. */
+.recv-readout-fig.warn .v {
+  color: var(--c-warn);
+}
+.recv-margin-warn {
+  display: block;
+  color: var(--c-warn);
+  font-size: 11px;
+  line-height: 1.2;
 }

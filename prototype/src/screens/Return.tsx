@@ -3,11 +3,14 @@ import { useNavigate, useParams } from "react-router-dom";
 import { Modal } from "../components/Modal";
 import { TillRail } from "../components/TillRail";
 import { VoidSaleModal } from "../components/VoidSaleModal";
-import { GRADES, type Grade, type RecordEntry } from "../data/types";
+import { ADJUSTMENT_REASONS, GRADES, type AdjustmentReason, type Grade, type RecordEntry } from "../data/types";
 import { money } from "../lib/money";
+import { genreNameFor } from "../lib/taxonomy";
 import { resolveScan } from "../lib/resolve";
 import { balanceDue, saleTotals } from "../lib/totals";
+import { defaultTenderRow } from "../lib/tenders";
 import { useApp } from "../store/AppStore";
+import { useActor } from "../components/Identify";
 
 // Entered exclusively from the till rail's + New return (mirrors how
 // /sell/:saleId is never itself a nav item). A Return is a Sale with isReturn
@@ -56,8 +59,8 @@ export function ReturnScreen() {
 function ReturnEditor({ saleId }: { saleId: string }) {
   const app = useApp();
   const sale = app.sales.find((s) => s.id === saleId)!;
-  const totals = saleTotals(sale, app.taxLines);
-  const due = balanceDue(sale, app.taxLines);
+  const totals = saleTotals(sale, app.taxCtxFor(sale));
+  const due = balanceDue(sale, app.taxCtxFor(sale));
   const customer = app.customerFor(sale.customerId);
 
   const [addItem, setAddItem] = useState(false);
@@ -272,6 +275,9 @@ function ReturnEditor({ saleId }: { saleId: string }) {
                       type: "Cash",
                       amount: totals.grand,
                       note: "Refund paid from till",
+                      // E-05 d36 — a refund is raised for the customer, not
+                      // chosen from the pad, so it takes the default row.
+                      tenderRowId: defaultTenderRow("Cash", app.tenders)?.id,
                     })
                   }
                 >
@@ -287,6 +293,7 @@ function ReturnEditor({ saleId }: { saleId: string }) {
                       amount: totals.grand,
                       accountDirection: "add",
                       note: "Refund to account balance",
+                      tenderRowId: defaultTenderRow("Account Balance", app.tenders)?.id,
                     })
                   }
                 >
@@ -472,7 +479,7 @@ function AddReturnedItem({ saleId, onClose }: { saleId: string; onClose: () => v
   const results = useMemo(() => {
     if (!query) return [];
     const match = (r: RecordEntry) =>
-      [r.artist, r.title, r.label, r.catalogNo, r.genre, r.manufacturerUpc]
+      [r.artist, r.title, r.label, r.catalogNo, genreNameFor(app.genres, r.genreId), r.manufacturerUpc]
         .filter(Boolean)
         .some((f) => String(f).toLowerCase().includes(query));
     return app.records.filter(match).slice(0, 12);
@@ -575,7 +582,7 @@ function AddReturnedItem({ saleId, onClose }: { saleId: string; onClose: () => v
                           <td colSpan={4}>
                             {r.artist} — {r.title}
                             <div className="xsmall muted">
-                              {r.label} · {r.catalogNo} · {r.genre}
+                              {r.label} · {r.catalogNo} · {genreNameFor(app.genres, r.genreId)}
                             </div>
                           </td>
                         </tr>
@@ -693,8 +700,13 @@ function RouteStock({
   onClose: () => void;
 }) {
   const app = useApp();
+  const withActor = useActor();
   const item = app.itemFor(itemId)!;
   const [mode, setMode] = useState<"sellable" | "regrade" | "writeoff">("sellable");
+  // E-04's reason code. The write-off option has called itself "reason-coded"
+  // since it was written and never asked for the code — M-07 d6 is what made
+  // that cost something, by giving each of the six its own account.
+  const [reason, setReason] = useState<AdjustmentReason>("Damaged");
   const [grade, setGrade] = useState<Grade>(item.grade);
   const [price, setPrice] = useState(String(item.price));
 
@@ -709,7 +721,8 @@ function RouteStock({
           </button>
           <button
             className="btn primary"
-            onClick={() => {
+            onClick={() =>
+              withActor("Route returned copy", () => {
               app.routeReturnLine(
                 saleId,
                 lineId,
@@ -717,9 +730,11 @@ function RouteStock({
                 mode,
                 mode === "regrade" ? grade : undefined,
                 mode === "regrade" ? Number(price) || 0 : undefined,
+                mode === "writeoff" ? reason : undefined,
               );
               onClose();
-            }}
+            })
+            }
           >
             Apply
           </button>
@@ -757,6 +772,27 @@ function RouteStock({
             <strong>Write off</strong> — not sellable at all; reason-coded adjustment (E-04).
           </span>
         </label>
+        {mode === "writeoff" && (
+          <div className="row" style={{ paddingLeft: 24 }}>
+            <select
+              aria-label="Adjustment reason"
+              value={reason}
+              onChange={(e) => setReason(e.target.value as AdjustmentReason)}
+            >
+              {ADJUSTMENT_REASONS.map((r) => (
+                <option key={r} value={r}>
+                  {r}
+                </option>
+              ))}
+            </select>
+            <span className="small muted">
+              M-07 d6 gives each of the six its own account, because{" "}
+              <em>"the six exist because a Manager is made to choose between them, and collapsing them in the ledger
+              throws away the only thing that choice was for."</em>{" "}
+              The write-off posts to this one when you apply it (d12) — it does not wait for the close.
+            </span>
+          </div>
+        )}
       </div>
     </Modal>
   );

@@ -4,17 +4,25 @@ import { BarcodeInput } from "../components/BarcodeInput";
 import { Modal } from "../components/Modal";
 import { TillRail } from "../components/TillRail";
 import { VoidSaleModal } from "../components/VoidSaleModal";
-import { CURRENT_USER } from "../data/seed";
-import type { InventoryItem, RecordEntry, Sale, SaleLine, TenderType } from "../data/types";
+import type { InventoryItem, RecordEntry, Sale, SaleLine, TenderRow, TenderType } from "../data/types";
+import { defaultTenderRow, offerableTenders } from "../lib/tenders";
 import { money } from "../lib/money";
+import { genreNameFor, sectionSearchTerms } from "../lib/taxonomy";
 import { resolveScan } from "../lib/resolve";
-import { availableOnHand, balanceDue, saleTotals } from "../lib/totals";
+import { availableOnHand, balanceDue, lineTaxComponents, saleTotals } from "../lib/totals";
 import { useApp } from "../store/AppStore";
+import { useIdentify, useActor } from "../components/Identify";
 
-const TENDERS: TenderType[] = ["Cash", "Credit Card", "Account Balance", "Gift Card", "Pay-out", "Used Credit"];
+// E-05 d36 — the pad is built from the store's CONFIGURED tenders, not from a
+// hardcoded list of behaviours. M-06 d4 always said the display name is
+// configurable; a pad of behaviour names ignored that, and a Sale recorded only
+// which KIND of tender it was, so M-06 d22's whole reason for giving Visa and
+// Mastercard separate accounts — they settle as separate deposits — could never
+// be acted on.
 
 export function PointOfSale() {
   const app = useApp();
+  const identify = useIdentify();
   const nav = useNavigate();
   const { saleId } = useParams();
 
@@ -57,7 +65,19 @@ export function PointOfSale() {
           <div className="stack">
             <div className="lab">No sale open</div>
             <p className="muted">Start one here, or pick something up from the rail.</p>
-            <button className="btn primary" onClick={() => nav(`/sell/${app.newSale()}`)}>
+            <button
+              className="btn primary"
+              onClick={() =>
+                identify.request({
+                  reason: "New sale",
+                  always: true,
+                  onOk: (u) => {
+                    app.identify(u.id);
+                    nav(`/sell/${app.newSale()}`);
+                  },
+                })
+              }
+            >
               + New sale
             </button>
           </div>
@@ -69,20 +89,21 @@ export function PointOfSale() {
 
 function SaleEditor() {
   const app = useApp();
+  const withActor = useActor();
   const nav = useNavigate();
   const sale = app.activeSale!;
-  const totals = saleTotals(sale, app.taxLines);
-  const due = balanceDue(sale, app.taxLines);
+  const totals = saleTotals(sale, app.taxCtxFor(sale));
+  const due = balanceDue(sale, app.taxCtxFor(sale));
   const customer = app.customerFor(sale.customerId);
 
   const [picker, setPicker] = useState<{ record: RecordEntry; items: InventoryItem[] } | null>(null);
   const [negPrompt, setNegPrompt] = useState<RecordEntry | null>(null);
-  const [ntPrompt, setNtPrompt] = useState<{ code: string; label: string; price: number } | null>(null);
+  const [ntPrompt, setNtPrompt] = useState<{ code: string; label: string; price: number; genreId: string } | null>(null);
   const [gcLoad, setGcLoad] = useState<string | null>(null);
   const [gcRedeem, setGcRedeem] = useState<{ code: string; balance: number } | null>(null);
   // The slab offers all six tender types directly, so opening the modal
   // carries which one was pressed rather than defaulting to Cash.
-  const [showTender, setShowTender] = useState<TenderType | null>(null);
+  const [showTender, setShowTender] = useState<string | null>(null);
   const [custPick, setCustPick] = useState(false);
   const [receipt, setReceipt] = useState<number | null>(null);
   const [scanNote, setScanNote] = useState<string | null>(null);
@@ -113,7 +134,7 @@ function SaleEditor() {
         else setPicker({ record: res.record, items: res.items });
         break;
       case "nontracked":
-        if (res.item.price === 0) setNtPrompt({ code: res.item.code, label: res.item.label, price: 0 });
+        if (res.item.price === 0) setNtPrompt({ code: res.item.code, label: res.item.label, price: 0, genreId: res.item.genreId });
         else app.addNonTrackedLine(sale.id, res.item, res.item.price);
         break;
       case "giftcard":
@@ -177,7 +198,12 @@ function SaleEditor() {
           {/* Every Open Sale is locked to whoever started it, so saying so on
               your own sale is noise — and in a fixed header it reads as an
               error. The lock only matters when somebody else holds it. */}
-          {sale.lockedBy && sale.lockedBy !== CURRENT_USER && (
+          {/* E-05 d23 — compare against the SESSION actor, which is what the
+              store stamps on lockedBy. It used to compare against a constant,
+              which matched only because the store used the same constant; once
+              the session became real the two diverged and every Sale opened by
+              anyone but the seeded Employee read as locked by someone else. */}
+          {sale.lockedBy && sale.lockedBy !== app.actorName && (
             <>
               <span className="badge warn">locked · {sale.lockedBy}</span>
               <button className="btn ghost sm" onClick={() => app.forceUnlockSale(sale.id)}>
@@ -231,9 +257,9 @@ function SaleEditor() {
           {customer && (
             <>
               <span className="badge">disc {customer.globalDiscountPct}%</span>
-              {customer.defaultTaxLineId && (
-                <span className="badge">
-                  tax → {app.taxLines.find((t) => t.id === customer.defaultTaxLineId)?.name}
+              {customer.taxGroupId && (
+                <span className="chip small">
+                  tax → {app.taxGroups.find((g) => g.id === customer.taxGroupId)?.shortName}
                 </span>
               )}
               <span className={"badge " + (customer.balance >= 0 ? "ok" : "warn")}>
@@ -371,9 +397,9 @@ function SaleEditor() {
                 Take payment
               </div>
               <div className="tender-grid">
-                {TENDERS.map((t) => (
-                  <button key={t} className="btn" onClick={() => setShowTender(t)}>
-                    {t}
+                {offerableTenders(app.tenders).map((row) => (
+                  <button key={row.id} className="btn" onClick={() => setShowTender(row.id)}>
+                    {row.name}
                   </button>
                 ))}
               </div>
@@ -518,7 +544,7 @@ function SaleEditor() {
           defaultValue={0}
           onCancel={() => setNtPrompt(null)}
           onConfirm={(p) => {
-            app.addNonTrackedLine(sale.id, { code: ntPrompt.code, label: ntPrompt.label, price: p, section: "MERCH" }, p);
+            app.addNonTrackedLine(sale.id, { code: ntPrompt.code, label: ntPrompt.label, price: p, genreId: ntPrompt.genreId }, p);
             setNtPrompt(null);
           }}
         />
@@ -550,7 +576,14 @@ function SaleEditor() {
                 className="btn primary"
                 onClick={() => {
                   const amt = Math.min(gcRedeem.balance, Math.max(0, due));
-                  app.addTender(sale.id, { type: "Gift Card", amount: amt, reference: gcRedeem.code });
+                  app.addTender(sale.id, {
+                    type: "Gift Card",
+                    amount: amt,
+                    reference: gcRedeem.code,
+                    // Raised on the customer's behalf rather than from the pad,
+                    // so it resolves the row the same way the journal would.
+                    tenderRowId: defaultTenderRow("Gift Card", app.tenders)?.id,
+                  });
                   setGcRedeem(null);
                 }}
               >
@@ -578,7 +611,8 @@ function SaleEditor() {
 
       {showTender && (
         <TenderModal
-          initialType={showTender}
+          initialRowId={showTender}
+          rows={offerableTenders(app.tenders)}
           due={due}
           hasCustomer={!!customer}
           onClose={() => setShowTender(null)}
@@ -599,7 +633,9 @@ function SaleEditor() {
                   key={method}
                   className="btn"
                   onClick={() => {
-                    app.addLog(sale.id, `Customer contacted by ${method.toLowerCase()} — ${CURRENT_USER}`);
+                    withActor("Log customer contact", (actor) =>
+                      app.addLog(sale.id, `Customer contacted by ${method.toLowerCase()} — ${actor}`),
+                    );
                     setLoggingContact(false);
                   }}
                 >
@@ -738,11 +774,24 @@ function LookupModal({
   const results = useMemo(() => {
     if (!query) return [];
     const match = (r: RecordEntry) =>
-      [r.artist, r.title, r.label, r.catalogNo, r.genre, r.section, r.manufacturerUpc]
+      [
+        r.artist,
+        r.title,
+        r.label,
+        r.catalogNo,
+        genreNameFor(app.genres, r.genreId),
+        // d31 — Section is no longer a field on the Record, so searching
+        // by it means resolving through the genre. Code and name both.
+        sectionSearchTerms(app.genres, app.sections, r.genreId),
+        r.manufacturerUpc,
+      ]
         .filter(Boolean)
         .some((f) => String(f).toLowerCase().includes(query));
-    return app.records.filter((r) => !r.catalogOnly && match(r));
-  }, [query, app.records]);
+    // Every Record here is one the shop adopted (d18), so there is nothing
+    // to filter out: a provider match is not a Record and never appears in
+    // this list. E-05 d34 is what brings one in, and it adopts first.
+    return app.records.filter((r) => match(r));
+  }, [query, app.records, app.genres, app.sections]);
 
   return (
     <Modal title="Lookup — add a line" onClose={onClose}>
@@ -765,7 +814,7 @@ function LookupModal({
                     <td colSpan={3}>
                       {r.artist} — {r.title}
                       <div className="xsmall muted">
-                        {r.label} · {r.catalogNo} · {r.genre}
+                        {r.label} · {r.catalogNo} · {genreNameFor(app.genres, r.genreId)}
                       </div>
                     </td>
                   </tr>
@@ -875,18 +924,22 @@ function LineRow({ line, locked }: { line: SaleLine; locked: boolean }) {
                 }}
               />
             </label>
+            {/* M-06 d14 — tax is resolved from TWO AXES and never overridden
+                on the line: the Customer's tax group (or the store default)
+                and the Genre's product tax code meet at a cell that names the
+                taxes. The dropdown that used to be here let an Employee pick
+                a blended rate per line, which is d1's superseded model and is
+                exactly what two tables replaced. What resolved is shown
+                instead, read-only. */}
             <label>
               <span>Tax</span>
-              <select
-                value={line.taxLineId}
-                onChange={(e) => app.updateLine(sale.id, line.id, { taxLineId: e.target.value })}
-              >
-                {app.taxLines.map((t) => (
-                  <option key={t.id} value={t.id}>
-                    {t.name}
-                  </option>
-                ))}
-              </select>
+              <span className="small muted" style={{ alignSelf: "center" }}>
+                {(() => {
+                  const parts = lineTaxComponents(line, app.taxCtxFor(sale));
+                  if (!parts.length) return `out of scope · code ${line.productTaxCode}`;
+                  return parts.map((c) => `${c.name} ${c.ratePpm / 10000}%`).join(" + ");
+                })()}
+              </span>
             </label>
           </div>
         )}
@@ -954,17 +1007,21 @@ function PricePrompt({
 }
 
 function TenderModal({
-  initialType = "Cash",
+  initialRowId,
+  rows,
   due,
   hasCustomer,
   onAdd,
   onClose,
 }: {
-  initialType?: TenderType;
+  /** The row whose button was pressed (E-05 d36). */
+  initialRowId?: string;
+  rows: TenderRow[];
   due: number;
   hasCustomer: boolean;
   onAdd: (t: {
     type: TenderType;
+    tenderRowId?: string;
     amount: number;
     note?: string;
     reference?: string;
@@ -972,7 +1029,13 @@ function TenderModal({
   }) => void;
   onClose: () => void;
 }) {
-  const [type, setType] = useState<TenderType>(initialType);
+  const [rowId, setRowId] = useState<string>(initialRowId ?? rows[0]?.id ?? "");
+  // The BEHAVIOUR still drives everything the pad does — what needs a note, a
+  // customer, a gift card code, a direction. M-06 d4 fixes a row's behaviour
+  // permanently, so reading it back off the row cannot disagree with what was
+  // chosen, and the Sale does not need a second copy of it.
+  const row = rows.find((r) => r.id === rowId);
+  const type: TenderType = row?.behavior ?? "Cash";
   const [raw, setRaw] = useState(String(Math.max(0, due).toFixed(2)));
   const [note, setNote] = useState("");
   const [reference, setReference] = useState("");
@@ -1005,6 +1068,11 @@ function TenderModal({
             onClick={() =>
               onAdd({
                 type,
+                // E-05 d36 — WHICH tender, not just which kind. M-06 d22 gives
+                // Visa and Mastercard separate accounts because they settle as
+                // separate deposits; this is the field that makes that
+                // reconcilable from a Sale.
+                tenderRowId: rowId,
                 amount: isNegativeType ? -Math.abs(amount) : amount,
                 note: note.trim() || undefined,
                 reference: reference.trim() || undefined,
@@ -1020,11 +1088,11 @@ function TenderModal({
     >
       <div className="stack">
         <label className="field">
-          <span>Type</span>
-          <select value={type} onChange={(e) => setType(e.target.value as TenderType)}>
-            {TENDERS.map((t) => (
-              <option key={t} value={t}>
-                {t}
+          <span>Tender</span>
+          <select value={rowId} onChange={(e) => setRowId(e.target.value)}>
+            {rows.map((r) => (
+              <option key={r.id} value={r.id}>
+                {r.name}
               </option>
             ))}
           </select>

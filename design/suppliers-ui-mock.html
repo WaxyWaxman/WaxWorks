@@ -1,0 +1,1410 @@
+<title>Suppliers, Three Tracks</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700;800&family=Archivo+Narrow:wght@600;700&display=swap">
+<style>
+/*
+ * M-01 Suppliers, re-laid as the till's three tracks.
+ * Palette, type and structural class names are lifted from
+ * design/customers-ui-mock.html and prototype/src/styles/app.css verbatim —
+ * this mock adds no colour and no new skeleton of its own, on purpose. The
+ * point is that Suppliers reads as the same screen as Customers, Find and
+ * Receive, doing a different errand.
+ *
+ * PROPOSED — NOT RATIFIED. Two recorded conflicts are rendered rather than
+ * resolved; see the notes under the screen.
+ */
+:root {
+  --c-bg: #f1f1ef;
+  --c-surface: #ffffff;
+  --c-surface-2: #f7f7f5;
+  --c-ink: #111111;
+  --c-ink-soft: #55554f;
+  --c-ink-faint: #8a8a84;
+  --c-border: #e4e4e0;
+  --c-border-strong: #ccccc7;
+  --c-accent: #d64500;
+  --c-accent-ink: #ffffff;
+  --c-accent-soft: #fff4ee;
+  --c-ok: #1f6b3f;
+  --c-ok-soft: #eaf3ed;
+  --c-warn: #8a6a1a;
+  --c-warn-soft: #fbf4e4;
+  --c-danger: #c0392b;
+  --c-danger-soft: #fdf3f1;
+
+  --font-sans: "Archivo", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Helvetica, sans-serif;
+  --font-narrow: "Archivo Narrow", "Archivo", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: ui-monospace, "SF Mono", "Cascadia Mono", "Roboto Mono", Menlo, Consolas, monospace;
+
+  --sp-1: 4px; --sp-2: 8px; --sp-3: 12px; --sp-4: 16px; --sp-5: 24px; --sp-6: 32px;
+  --radius-sm: 2px;
+}
+
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+body {
+  margin: 0; background: var(--c-bg); color: var(--c-ink);
+  font-family: var(--font-sans); font-size: 14px; line-height: 1.45;
+  -webkit-font-smoothing: antialiased;
+}
+.page { max-width: 1580px; margin: 0 auto; padding: var(--sp-6) var(--sp-5) 96px; }
+
+/* ---- page furniture (not part of the app) ---- */
+.masthead { display: flex; align-items: flex-end; gap: var(--sp-5); flex-wrap: wrap; margin-bottom: var(--sp-4); }
+.masthead h1 { font-size: 30px; letter-spacing: -0.03em; margin: 0 0 2px; line-height: 1.05; }
+.masthead p { margin: 0; color: var(--c-ink-soft); max-width: 66ch; font-size: 14.5px; }
+.stamp {
+  font-family: var(--font-narrow); font-weight: 700; font-size: 11px; letter-spacing: 0.12em;
+  text-transform: uppercase; color: var(--c-ink-faint); border: 1px solid var(--c-border-strong);
+  padding: 3px 8px; white-space: nowrap;
+}
+.stamp.live { color: var(--c-accent); border-color: var(--c-accent); }
+
+.controls {
+  display: flex; align-items: center; gap: var(--sp-2); flex-wrap: wrap;
+  border: 1px solid var(--c-border-strong); background: var(--c-surface);
+  padding: var(--sp-2) var(--sp-3); margin-bottom: var(--sp-3);
+}
+.controls .lab { margin-right: var(--sp-1); }
+.toggle {
+  font: inherit; font-size: 12.5px; font-weight: 600; cursor: pointer;
+  border: 1px solid var(--c-border-strong); background: var(--c-surface-2);
+  color: var(--c-ink-soft); padding: 5px 10px; border-radius: var(--radius-sm);
+}
+.toggle:hover { border-color: var(--c-ink); color: var(--c-ink); }
+.toggle[aria-pressed="true"] { background: var(--c-ink); border-color: var(--c-ink); color: #fff; }
+.toggle:disabled { opacity: 0.4; cursor: not-allowed; }
+.toggle:focus-visible, .rail-ico:focus-visible, .chip:focus-visible, .sup:focus-visible, .tile:focus-visible {
+  outline: 2px solid var(--c-accent); outline-offset: 2px;
+}
+.ctl-sep { width: 1px; align-self: stretch; background: var(--c-border-strong); margin: 0 var(--sp-2); }
+
+/* ---- the app frame ---- */
+.screen {
+  border: 1px solid var(--c-ink); background: var(--c-surface);
+  height: clamp(660px, 86dvh, 920px);
+  display: flex; flex-direction: column; overflow: hidden;
+}
+.band {
+  flex: none; height: 58px; display: flex; align-items: stretch;
+  background: var(--c-surface); border-bottom: 2px solid var(--c-ink);
+}
+.band .wordmark {
+  width: 168px; display: flex; align-items: center; gap: var(--sp-2); padding-left: 18px;
+  font-weight: 800; font-size: 16px; letter-spacing: 0.02em; border-right: 1px solid var(--c-border-strong);
+}
+.band .wordmark .dot { width: 10px; height: 10px; border-radius: 50%; background: var(--c-accent); }
+.band .mode {
+  flex: 1; display: flex; align-items: center; justify-content: center;
+  font-size: 14px; font-weight: 600; letter-spacing: 0.05em; color: var(--c-ink-soft);
+  border-right: 1px solid var(--c-border-strong);
+}
+.band .mode.on { background: var(--c-ink); color: #fff; font-weight: 800; }
+.band .who {
+  width: 172px; display: flex; flex-direction: column; justify-content: center;
+  padding-left: 16px; border-left: 1px solid var(--c-border-strong);
+}
+
+.lab {
+  font-family: var(--font-narrow); font-weight: 700; font-size: 11px; letter-spacing: 0.1em;
+  text-transform: uppercase; color: var(--c-ink-faint);
+}
+.xsmall { font-size: 11px; }
+.small { font-size: 12.5px; }
+.muted { color: var(--c-ink-faint); }
+.mono { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+
+/* Three tracks. Same skeleton as .till-frame / .find-frame / .recv-frame /
+   .cust-frame. The right track is 344px here too — the figure it carries is
+   the same width as the customer balance. */
+.frame {
+  flex: 1; min-height: 0; display: grid;
+  grid-template-columns: 320px minmax(0, 1fr) 344px;
+}
+.frame.slab-shut { grid-template-columns: 52px minmax(0, 1fr) 344px; }
+
+/* ============ TRACK 1 — the supplier slab ============ */
+.slab {
+  border-right: 1px solid var(--c-border-strong); background: var(--c-surface-2);
+  display: flex; flex-direction: column; min-height: 0; min-width: 0;
+}
+.slab-head {
+  flex: none; display: flex; align-items: center; gap: var(--sp-2);
+  padding: var(--sp-2) var(--sp-2) var(--sp-2) var(--sp-3);
+  border-bottom: 1px solid var(--c-border-strong);
+}
+.slab-head .lab { flex: 1; }
+.rail-ico {
+  position: relative; width: 38px; height: 38px; flex: none; padding: 0; cursor: pointer;
+  display: grid; place-items: center; font-size: 15px; line-height: 1;
+  border: 1px solid var(--c-border-strong); background: var(--c-surface);
+  color: var(--c-ink); border-radius: var(--radius-sm);
+}
+.rail-ico:hover { border-color: var(--c-ink); }
+.rail-badge {
+  position: absolute; top: -6px; right: -6px; min-width: 16px; height: 16px; padding: 0 4px;
+  background: var(--c-ink); color: #fff; border-radius: 8px;
+  font-family: var(--font-mono); font-size: 10px; font-weight: 700;
+  display: grid; place-items: center; line-height: 1;
+}
+.rail-sep { width: 24px; height: 1px; background: var(--c-border-strong); flex: none; }
+
+.slab-open-only { display: flex; flex-direction: column; min-height: 0; flex: 1; }
+.slab-acts { flex: none; display: flex; gap: var(--sp-2); padding: var(--sp-3) var(--sp-3) 0; }
+.slab-acts .btn { flex: 1; justify-content: center; }
+.slab-search {
+  flex: none; padding: var(--sp-3); display: flex; flex-direction: column; gap: 6px;
+  border-bottom: 1px solid var(--c-border-strong);
+}
+/* Same weight as Customers' box: the search is what the screen exists to do
+   (M-01 steps 1-2), so it reads as a slab, not a form control. Unlike
+   Customers, the account number IS searched here — M-01 step 2 says so. */
+.slab-search input {
+  font: inherit; font-size: 15px; font-weight: 600; width: 100%;
+  border: 2px solid var(--c-ink); background: var(--c-surface); color: var(--c-ink);
+  padding: 7px 10px; border-radius: var(--radius-sm);
+}
+.slab-search input::placeholder { color: var(--c-border-strong); font-weight: 400; }
+.slab-search .hint { font-size: 10.5px; color: var(--c-ink-faint); }
+
+.chips { display: flex; flex-wrap: wrap; gap: var(--sp-1); align-items: center; padding: var(--sp-2) var(--sp-3); border-bottom: 1px solid var(--c-border-strong); }
+.chip {
+  font: inherit; font-size: 11.5px; font-weight: 600; cursor: pointer;
+  border: 1px solid var(--c-border-strong); background: var(--c-surface); color: var(--c-ink-soft);
+  padding: 3px 7px; border-radius: var(--radius-sm); display: inline-flex; gap: 5px; align-items: center;
+}
+.chip .count { font-family: var(--font-mono); font-size: 10.5px; color: var(--c-ink-faint); }
+.chip:hover { border-color: var(--c-ink); color: var(--c-ink); }
+.chip.on { background: var(--c-ink); border-color: var(--c-ink); color: #fff; }
+.chip.on .count { color: #d5d5d1; }
+.chip:disabled { opacity: 0.4; cursor: not-allowed; }
+.chip-sep { width: 1px; align-self: stretch; background: var(--c-border-strong); margin: 0 3px; }
+
+.sortbar {
+  flex: none; display: flex; align-items: center; gap: var(--sp-2);
+  padding: 6px var(--sp-3); border-bottom: 1px solid var(--c-border-strong);
+}
+.sortbar select {
+  font: inherit; font-size: 11.5px; font-weight: 600; flex: 1; padding: 3px 6px;
+  border: 1px solid var(--c-border-strong); background: var(--c-surface); color: var(--c-ink);
+  border-radius: var(--radius-sm);
+}
+
+.slab-list { flex: 1; min-height: 0; overflow-y: auto; }
+.slab-band {
+  position: sticky; top: 0; z-index: 1; background: var(--c-surface-2);
+  border-bottom: 1px solid var(--c-border-strong);
+  padding: var(--sp-3) var(--sp-3) var(--sp-2);
+  display: flex; align-items: baseline; justify-content: space-between; gap: var(--sp-2);
+}
+.slab-empty { padding: var(--sp-5) var(--sp-3); color: var(--c-ink-faint); font-size: 12.5px; text-align: center; }
+.slab-empty .btn { margin-top: var(--sp-3); }
+
+/* One Supplier. The same three-column skeleton as Find's .hit and Customers'
+   .cust: a tile, two lines of name, one right-hand figure. The tile is the
+   4-letter short code rather than initials, because that code is the
+   Supplier's identity on every invoice they send (M-01 fields). */
+/* Two rows, not one. The meta line — "Rep · WW-4471" — used to sit in the
+   middle column with only 8px between its ellipsis and the figure, so a long
+   one read as though it ran into the money. It gets its own row spanning under
+   the name instead, and the figure's caption drops to that same row so the
+   number and its label still stack as a unit on the right. */
+.sup {
+  display: grid; grid-template-columns: 38px minmax(0, 1fr) auto; gap: 1px var(--sp-3);
+  align-items: baseline; width: 100%; text-align: left; cursor: pointer;
+  padding: var(--sp-2) var(--sp-3); border: none; border-bottom: 1px solid var(--c-border);
+  border-left: 3px solid transparent; background: var(--c-surface); font: inherit; color: var(--c-ink);
+}
+.sup:hover { background: var(--c-surface-2); }
+.sup.on { border-left-color: var(--c-accent); box-shadow: inset 0 0 0 1px var(--c-ink); }
+.code {
+  grid-column: 1; grid-row: 1 / -1; align-self: center;
+  width: 38px; height: 34px; display: grid; place-items: center;
+  border: 1px solid var(--c-border); background: var(--c-surface-2);
+  font-family: var(--font-mono); font-size: 11px; font-weight: 700; letter-spacing: 0.02em;
+  color: var(--c-ink-soft);
+}
+.sup .t {
+  grid-column: 2; grid-row: 1;
+  font-size: 12.5px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.sup .m {
+  grid-column: 2; grid-row: 2;
+  font-size: 11px; color: var(--c-ink-faint); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.sup .n {
+  grid-column: 3; grid-row: 1;
+  font-family: var(--font-mono); font-size: 12.5px; font-weight: 700; text-align: right;
+  font-variant-numeric: tabular-nums; color: var(--c-ink-soft); white-space: nowrap;
+}
+.sup .k {
+  grid-column: 3; grid-row: 2; text-align: right; white-space: nowrap;
+  font-family: var(--font-narrow); font-size: 9px; font-weight: 700;
+  letter-spacing: 0.05em; text-transform: uppercase; color: var(--c-ink-faint);
+}
+.sup .n.owed { color: var(--c-warn); }
+.sup .n.credit { color: var(--c-ok); }
+.sup .n.nil { color: var(--c-ink-faint); font-weight: 600; }
+
+/* State as a dot — colour means STATE, the way Find's stock dots do. Which
+   state it means depends on who is looking; see the notes. */
+.st-dot { width: 9px; height: 9px; border-radius: 50%; flex: none; display: inline-block; }
+.st-dot.owed { background: var(--c-warn); }
+.st-dot.credit { background: var(--c-ok); }
+.st-dot.nil { background: var(--c-border-strong); }
+.st-dot.flight { background: var(--c-accent); }
+
+/* the 52px shut strip */
+.slab-strip {
+  height: 100%; display: flex; flex-direction: column; align-items: center;
+  gap: var(--sp-2); padding: var(--sp-2) 0; min-height: 0;
+}
+.strip-stack { flex: 1; min-height: 0; overflow-y: auto; scrollbar-width: none; display: flex; flex-direction: column; align-items: center; gap: 6px; }
+.strip-stack::-webkit-scrollbar { display: none; }
+.tile {
+  position: relative; width: 38px; height: 38px; flex: none; padding: 0; cursor: pointer;
+  display: grid; place-items: center; border: 1px solid var(--c-border-strong);
+  border-radius: var(--radius-sm); background: var(--c-surface); color: var(--c-ink-soft);
+  font-family: var(--font-mono); font-size: 10.5px; font-weight: 700;
+}
+.tile:hover { border-color: var(--c-ink); }
+.tile.on { border-color: var(--c-ink); box-shadow: inset 3px 0 0 var(--c-accent); color: var(--c-ink); }
+.tile .st-dot { position: absolute; bottom: -3px; right: -3px; border: 2px solid var(--c-surface-2); width: 11px; height: 11px; }
+.strip-lab {
+  font-family: var(--font-narrow); font-size: 8.5px; font-weight: 700; letter-spacing: 0.12em;
+  text-transform: uppercase; color: var(--c-border-strong); writing-mode: vertical-rl; padding: var(--sp-1) 0;
+}
+
+/* ============ TRACK 2 — the card ============ */
+.main { display: flex; flex-direction: column; min-width: 0; min-height: 0; background: var(--c-surface); }
+.main-head {
+  flex: none; display: flex; align-items: flex-start; gap: var(--sp-3); flex-wrap: wrap;
+  padding: var(--sp-3) var(--sp-4); border-bottom: 2px solid var(--c-ink);
+}
+.main-head h2 { margin: 0; font-size: 27px; letter-spacing: -0.025em; line-height: 1.1; }
+.main-head .badges { display: flex; flex-wrap: wrap; gap: var(--sp-2); margin-top: 6px; align-items: center; }
+.head-acts { margin-left: auto; display: flex; gap: var(--sp-2); align-items: center; }
+
+.badge {
+  display: inline-flex; align-items: center; gap: 4px; font-family: var(--font-narrow);
+  font-size: 10.5px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase;
+  border: 1px solid var(--c-border-strong); color: var(--c-ink-soft); padding: 1px 6px; background: var(--c-surface);
+}
+.badge.ok { color: var(--c-ok); border-color: var(--c-ok); background: var(--c-ok-soft); }
+.badge.warn { color: var(--c-warn); border-color: var(--c-warn); background: var(--c-warn-soft); }
+.badge.ink { color: #fff; background: var(--c-ink); border-color: var(--c-ink); }
+.badge.accent { color: var(--c-accent); border-color: var(--c-accent); background: var(--c-accent-soft); }
+.badge.mono { font-family: var(--font-mono); text-transform: none; letter-spacing: 0; font-weight: 600; }
+
+.btn {
+  display: inline-flex; align-items: center; gap: 6px; cursor: pointer; font: inherit;
+  font-size: 13px; font-weight: 600; padding: 6px 12px; border-radius: var(--radius-sm);
+  border: 1px solid var(--c-border-strong); background: var(--c-surface); color: var(--c-ink);
+}
+.btn:hover { border-color: var(--c-ink); }
+.btn.ink { background: var(--c-ink); border-color: var(--c-ink); color: #fff; }
+.btn.accent { background: var(--c-accent); border-color: var(--c-accent); color: var(--c-accent-ink); }
+.btn.ghost { border-color: transparent; background: transparent; color: var(--c-ink-soft); }
+.btn.danger { color: var(--c-danger); border-color: var(--c-border-strong); }
+.btn.danger:hover { border-color: var(--c-danger); background: var(--c-danger-soft); }
+.btn.sm { font-size: 11.5px; padding: 3px 8px; }
+.btn:disabled { opacity: 0.45; cursor: not-allowed; }
+
+.saved {
+  display: inline-flex; align-items: center; gap: 5px; font-size: 11px; font-weight: 600;
+  color: var(--c-ok); border: 1px solid var(--c-ok); background: var(--c-ok-soft);
+  padding: 2px 7px; border-radius: var(--radius-sm);
+}
+
+.card-scroll {
+  flex: 1; min-height: 0; overflow-y: auto;
+  padding: var(--sp-4); display: flex; flex-direction: column; gap: var(--sp-5);
+}
+.group { display: flex; flex-direction: column; gap: var(--sp-3); }
+.group > .group-head {
+  display: flex; align-items: baseline; justify-content: space-between; gap: var(--sp-3);
+  border-bottom: 1px solid var(--c-border-strong); padding-bottom: var(--sp-1);
+}
+.grid2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(232px, 1fr)); gap: var(--sp-3) var(--sp-4); }
+.f { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.f.wide { grid-column: 1 / -1; }
+.f input, .f select, .f textarea {
+  font: inherit; font-size: 14px; font-weight: 600; width: 100%; padding: 6px 9px;
+  border: 1px solid var(--c-border-strong); background: var(--c-surface); color: var(--c-ink);
+  border-radius: var(--radius-sm);
+}
+.f textarea { font-weight: 400; resize: vertical; }
+.f input:focus, .f select:focus, .f textarea:focus { outline: 2px solid var(--c-accent); outline-offset: -1px; }
+.f input:disabled, .f select:disabled { background: var(--c-surface-2); color: var(--c-ink-soft); border-style: dashed; cursor: not-allowed; }
+.f .hint { font-size: 10.5px; color: var(--c-ink-faint); }
+.f .lab { display: flex; align-items: center; gap: 5px; }
+
+/* Same-as-billing. The lock is the point: a mirrored field that is still
+   typable is a field that silently stops mirroring. */
+.f-check {
+  display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 2px var(--sp-2);
+  align-items: center; cursor: pointer;
+  border: 1px solid var(--c-border-strong); background: var(--c-surface-2);
+  padding: var(--sp-2) var(--sp-3); border-radius: var(--radius-sm);
+}
+.f-check input { width: 15px; height: 15px; margin: 0; accent-color: var(--c-ink); cursor: pointer; }
+.f-check > span:nth-of-type(1) { font-size: 13px; font-weight: 600; }
+.f-check .hint { grid-column: 2; font-size: 10.5px; color: var(--c-ink-faint); }
+/* A mirrored field reads as derived, not as empty-and-broken. */
+.mirrored input:disabled { color: var(--c-ink-faint); font-style: italic; }
+
+/* The one gated field on the card. Discount IS the margin (M-01 d7 as
+   superseded: there is no separate Margin field), and setting a margin is
+   manager-only (M-01 d11, E-02 d44, architecture A-28a). So it cannot be a
+   plain live input the way every other field on this card is. Locked for an
+   Employee, live for a Manager — who authorizes in place with their own
+   initials, both names recorded (M-04 d3, d4). */
+.f.gated input { border-color: var(--c-warn); background: var(--c-warn-soft); }
+.f.gated input:disabled { border-style: solid; border-color: var(--c-border-strong); background: var(--c-surface-2); }
+.lock {
+  font-family: var(--font-narrow); font-size: 9.5px; font-weight: 700; letter-spacing: 0.08em;
+  text-transform: uppercase; color: var(--c-warn); border: 1px solid var(--c-warn);
+  background: var(--c-warn-soft); padding: 0 4px;
+}
+
+table.hist { width: 100%; border-collapse: collapse; }
+table.hist thead th {
+  font-family: var(--font-narrow); font-weight: 700; font-size: 10px; letter-spacing: 0.08em;
+  text-transform: uppercase; color: var(--c-ink-faint); text-align: left;
+  padding: 5px var(--sp-2) 5px 0; border-bottom: 1px solid var(--c-ink); white-space: nowrap;
+}
+table.hist td { padding: 6px var(--sp-2) 6px 0; border-bottom: 1px solid var(--c-border); font-size: 13px; }
+table.hist td.r, table.hist th.r { text-align: right; padding-right: 0; }
+table.hist .empty { color: var(--c-ink-faint); font-size: 12.5px; padding: var(--sp-4) 0; }
+
+/* ============ TRACK 3 — the ledger ============ */
+.acct {
+  border-left: 1px solid var(--c-border-strong); background: var(--c-surface);
+  display: flex; flex-direction: column; min-height: 0;
+}
+.acct-live { display: flex; flex-direction: column; min-height: 0; flex: 1; }
+
+/* "In flight with them" takes the top slot for the reason Waiting does on the
+   Customer card: it is the only thing on this screen anyone has to ACT on. A
+   draft invoice, an overdue PO line and a Pending claim all go stale quietly. */
+.flight {
+  flex: none; border-bottom: 1px solid var(--c-border); background: var(--c-surface-2);
+  padding: var(--sp-3) var(--sp-4);
+}
+.flight.live { background: var(--c-accent-soft); box-shadow: inset 3px 0 0 var(--c-ink); }
+.flight.none { color: var(--c-ink-faint); }
+/* Capped at three rows, then it scrolls inside itself. A busy supplier can
+   have a draft, several open POs and two claims at once — unbounded, this band
+   would push the A/P figure off the track entirely, which is the one thing the
+   sticky right slab exists to prevent. The label carries the full count so the
+   cap never hides how many there are. */
+.fl-scroll { max-height: 190px; overflow-y: auto; margin-top: 2px; }
+.fl-scroll.capped { box-shadow: inset 0 -12px 10px -10px rgba(17,17,17,0.22); }
+.flight .lab { display: flex; align-items: baseline; justify-content: space-between; gap: var(--sp-2); }
+.fl-more { font-family: var(--font-mono); font-size: 10px; color: var(--c-ink-soft); letter-spacing: 0; text-transform: none; }
+/* Grouped by kind, oldest first inside each group. The group label is what
+   stops the three-row cap from hiding a whole kind: the counts are in the
+   band's own label, above the scroll, so a claim below the fold is still
+   announced. */
+.fl-type {
+  font-family: var(--font-narrow); font-size: 9px; font-weight: 700; letter-spacing: 0.1em;
+  text-transform: uppercase; color: var(--c-ink-faint);
+  padding-top: var(--sp-2); margin-top: var(--sp-2); border-top: 1px solid var(--c-border);
+}
+.fl-type:first-child { padding-top: 0; margin-top: 0; border-top: none; }
+/* Every row opens the thing it names, on the screen that owns it — a draft in
+   Receiving, a PO in What's on Order, a claim in Claims. So they are buttons,
+   not text. */
+.fl-row {
+  display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 2px var(--sp-2); align-items: baseline;
+  width: 100%; text-align: left; font: inherit; color: inherit; cursor: pointer;
+  background: transparent; border: 1px solid transparent; border-radius: var(--radius-sm);
+  padding: 4px 6px; margin-left: -6px;
+}
+.fl-row:hover { background: var(--c-surface); border-color: var(--c-border-strong); }
+.fl-row:hover .fl-go { opacity: 1; }
+.fl-row:focus-visible { outline: 2px solid var(--c-accent); outline-offset: 1px; }
+.fl-t { font-size: 13px; font-weight: 700; line-height: 1.25; }
+.fl-m { font-size: 11px; color: var(--c-ink-soft); grid-column: 1 / -1; }
+.fl-ref { font-family: var(--font-mono); font-size: 11.5px; font-weight: 700; color: var(--c-ink); }
+.fl-go {
+  grid-column: 1 / -1; font-size: 10px; color: var(--c-accent); font-weight: 600;
+  opacity: 0; transition: opacity 120ms ease;
+}
+@media (prefers-reduced-motion: reduce) { .fl-go { transition: none; } }
+
+.acct-head { flex: none; padding: var(--sp-3) var(--sp-4); }
+.figure { font-size: 46px; font-weight: 800; line-height: 1; letter-spacing: -0.035em; font-variant-numeric: tabular-nums; }
+.figure.owed { color: var(--c-warn); }
+.figure.credit { color: var(--c-ok); }
+.figure.nil { color: var(--c-ink-faint); font-size: 24px; font-weight: 700; }
+.figure-say { margin-top: 4px; font-size: 13px; font-weight: 600; }
+.figure-sub { margin-top: 2px; font-size: 11px; color: var(--c-ink-faint); }
+.rule { flex: none; height: 2px; background: var(--c-ink); }
+
+.acct-mid { flex: 1; min-height: 0; overflow-y: auto; padding: var(--sp-3) var(--sp-4); display: flex; flex-direction: column; gap: var(--sp-4); }
+.sec { display: flex; flex-direction: column; gap: 6px; }
+
+.standing { display: grid; grid-template-columns: 1fr 1fr; gap: var(--sp-2) var(--sp-3); }
+.stat { display: flex; flex-direction: column; gap: 1px; }
+.stat .v { font-family: var(--font-mono); font-size: 17px; font-weight: 700; font-variant-numeric: tabular-nums; line-height: 1.1; }
+.stat .k { font-family: var(--font-narrow); font-size: 9.5px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--c-ink-faint); }
+.stat.span { grid-column: 1 / -1; border-top: 1px solid var(--c-border); padding-top: 6px; }
+.stat.span .v { font-size: 14px; }
+.stat .v.in { color: var(--c-warn); }
+.stat .v.out { color: var(--c-ok); }
+
+/* Recent intake rows open the Invoice they name, in Receiving — so these are
+   buttons too, and the same hover as the in-flight rows says so. */
+.row-line {
+  display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 2px var(--sp-2);
+  padding: 6px; margin-left: -6px; width: calc(100% + 12px);
+  border: 1px solid transparent; border-bottom: 1px solid var(--c-border);
+  background: transparent; font: inherit; color: inherit; text-align: left; cursor: pointer;
+  border-radius: var(--radius-sm);
+}
+.row-line:hover { background: var(--c-surface-2); border-color: var(--c-border-strong); }
+.row-line:focus-visible { outline: 2px solid var(--c-accent); outline-offset: 1px; }
+.row-line .t { grid-column: 1; grid-row: 1; font-family: var(--font-mono); font-size: 12px; font-weight: 700; }
+.row-line .m { grid-column: 1; grid-row: 2; font-size: 10.5px; color: var(--c-ink-faint); }
+.row-line .v { grid-column: 2; grid-row: 1 / -1; align-self: center; text-align: right; font-family: var(--font-mono); font-size: 13px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.sec-empty { font-size: 11.5px; color: var(--c-ink-faint); padding: 4px 0; }
+.caveat { font-size: 10.5px; color: var(--c-ink-faint); border-left: 2px solid var(--c-border-strong); padding-left: 7px; margin-top: 2px; }
+
+.acct-foot { flex: none; border-top: 2px solid var(--c-ink); padding: var(--sp-3) var(--sp-4); display: flex; flex-direction: column; gap: 6px; }
+.acct-foot .primary { justify-content: center; height: 56px; font-size: 18px; font-weight: 800; text-align: center; line-height: 1.15; }
+.acct-foot .secondary { justify-content: center; height: 36px; }
+.foot-sub { font-size: 11px; color: var(--c-ink-faint); text-align: center; }
+
+/* Mock-only. Stands in for a navigation this mock cannot perform. */
+.toast {
+  position: absolute; left: 50%; transform: translateX(-50%); top: 70px; z-index: 20;
+  background: var(--c-ink); color: #fff; padding: 7px 14px; border-radius: var(--radius-sm);
+  font-family: var(--font-mono); font-size: 12px; font-weight: 600; pointer-events: none;
+  box-shadow: 0 4px 14px rgba(17,17,17,0.22);
+}
+
+/* ---- notes below the screen ---- */
+.notes { margin-top: var(--sp-6); display: grid; grid-template-columns: repeat(auto-fit, minmax(330px, 1fr)); gap: var(--sp-5); }
+.note h2 {
+  font-family: var(--font-narrow); font-size: 13px; font-weight: 700; letter-spacing: 0.1em;
+  text-transform: uppercase; color: var(--c-ink-faint); margin: 0 0 var(--sp-3);
+  padding-bottom: 5px; border-bottom: 1px solid var(--c-border-strong);
+}
+.note p, .note li, .note dd { font-size: 13.5px; color: var(--c-ink-soft); }
+.note p { margin: 0 0 var(--sp-3); }
+.note strong { color: var(--c-ink); }
+.note dl { margin: 0; display: flex; flex-direction: column; gap: var(--sp-3); }
+.note dt { font-weight: 700; color: var(--c-ink); font-size: 13.5px; }
+.note dd { margin: 2px 0 0; }
+.note ul { margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 6px; }
+.note ol { margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: 6px; }
+.cite { font-family: var(--font-mono); font-size: 11.5px; color: var(--c-ink-faint); }
+.warnbox { border-left: 3px solid var(--c-accent); background: var(--c-accent-soft); padding: var(--sp-3) var(--sp-4); margin-bottom: var(--sp-3); }
+.warnbox p:last-child { margin-bottom: 0; }
+.note.wide { grid-column: 1 / -1; }
+table.props { width: 100%; border-collapse: collapse; }
+table.props th {
+  font-family: var(--font-narrow); font-weight: 700; font-size: 10px; letter-spacing: 0.08em;
+  text-transform: uppercase; color: var(--c-ink-faint); text-align: left;
+  padding: 5px var(--sp-3) 5px 0; border-bottom: 1px solid var(--c-ink); vertical-align: bottom;
+}
+table.props td { padding: 8px var(--sp-3) 8px 0; border-bottom: 1px solid var(--c-border); font-size: 13px; color: var(--c-ink-soft); vertical-align: top; }
+table.props td:first-child { white-space: nowrap; font-weight: 700; color: var(--c-ink); }
+
+@media (prefers-reduced-motion: no-preference) {
+  .frame { transition: grid-template-columns 160ms ease; }
+}
+@media (max-width: 1180px) {
+  .frame, .frame.slab-shut { grid-template-columns: 52px minmax(0, 1fr); grid-template-rows: minmax(0, 1fr) auto; }
+  .slab { grid-row: 1 / -1; }
+  .slab-open-only { display: none !important; }
+  .slab-strip { display: flex !important; }
+  .main { grid-column: 2; grid-row: 1; }
+  /* Same 58dvh Customers takes, and for the same reason: this track also has
+     two fixed bands above the scroll — in-flight AND the A/P figure. */
+  .acct { grid-column: 2; grid-row: 2; border-left: none; border-top: 2px solid var(--c-ink); max-height: 58dvh; }
+  .flight, .acct-head { padding: var(--sp-2) var(--sp-4); }
+  .figure { font-size: 34px; }
+  .figure-sub { display: none; }
+  .acct-foot .primary { height: 48px; font-size: 16px; }
+}
+</style>
+
+<div class="page">
+
+  <header class="masthead">
+    <div>
+      <h1>Suppliers, in three tracks</h1>
+      <p>M-01 laid out the way Sell, Find, Receive and Customers already are — a retractable slab on the left, the open card in the middle, the ledger pinned to the right. Layout mock, not working code. <strong>Third pass:</strong> Discount stays manager-only, the in-flight band groups by kind, bands follow the sort, the row-by-row ledger moved out to A/P, billing and shipping addresses split behind a <em>same as billing</em> lock, and every row is now a way in — click one.</p>
+    </div>
+    <span class="stamp">branch Suppliers-UI</span>
+    <span class="stamp live">decisions recorded — M-01 d12–18</span>
+  </header>
+
+  <div class="controls">
+    <span class="lab">Viewer</span>
+    <button class="toggle role-btn" data-role="manager" aria-pressed="true">Manager</button>
+    <button class="toggle role-btn" data-role="employee" aria-pressed="false">Employee</button>
+    <span class="xsmall muted">Both see the money. <em>Discount</em> and <em>Record a payment</em> are what differ.</span>
+    <span class="ctl-sep"></span>
+    <span class="lab">Mock controls</span>
+    <button class="toggle" id="t-slab" aria-pressed="true">Slab open</button>
+    <span class="ctl-sep"></span>
+    <span class="lab">Open card</span>
+    <button class="toggle who-btn" data-who="fab" aria-pressed="true">F.A.B. · owing</button>
+    <button class="toggle who-btn" data-who="indie" aria-pressed="false">Indie · USD</button>
+    <button class="toggle who-btn" data-who="crate" aria-pressed="false">Crate · in credit</button>
+    <button class="toggle who-btn" data-who="walk" aria-pressed="false">Walk-in · 2nd-hand</button>
+    <span class="xsmall muted" style="margin-left:auto">Search, chips and sort are live. Try <span class="mono">CD-118</span> — the account number <em>is</em> searched here.</span>
+  </div>
+
+  <div class="screen" style="position:relative">
+
+    <!-- Mock-only: the real screen navigates. This says where. -->
+    <div class="toast" id="toast" hidden></div>
+
+    <div class="band">
+      <div class="wordmark"><span class="dot"></span>WAX WORKS</div>
+      <div class="mode">FIND</div>
+      <div class="mode">SELL</div>
+      <div class="mode">RECEIVE</div>
+      <div class="mode on">MORE</div>
+      <div class="who">
+        <span class="xsmall muted">Signed in</span>
+        <span class="small" style="font-weight:600" id="who-name">R. Duval · Manager</span>
+      </div>
+    </div>
+
+    <div class="frame" id="frame">
+
+      <!-- ============ TRACK 1 ============ -->
+      <nav class="slab" aria-label="Suppliers">
+
+        <!-- shut: the 52px strip -->
+        <div class="slab-strip" id="strip" hidden>
+          <button class="rail-ico" id="strip-expand" title="Open the list" aria-expanded="false">⟩</button>
+          <button class="rail-ico" title="New supplier">＋</button>
+          <button class="rail-ico" title="Search — opens the list with the cursor in the box">
+            🔎<span class="rail-badge" id="strip-badge">4</span>
+          </button>
+          <div class="rail-sep"></div>
+          <div class="strip-stack" id="strip-stack"></div>
+          <div class="strip-lab">recent</div>
+        </div>
+
+        <!-- open -->
+        <div class="slab-open-only" id="slab-open">
+          <div class="slab-head">
+            <span class="lab">Suppliers</span>
+            <button class="rail-ico" id="slab-collapse" title="Collapse — the card takes the width">⟨</button>
+          </div>
+
+          <div class="slab-acts">
+            <button class="btn ink" id="new-btn">＋ New supplier</button>
+          </div>
+
+          <div class="slab-search">
+            <input type="search" id="q" placeholder="name · short code · account #" aria-label="Search suppliers by name, short code or account number">
+            <span class="hint">All three are searched <span class="cite">(M-01 step 2)</span> — unlike Customers, where the account number is not.</span>
+          </div>
+
+          <div class="chips" id="chips"></div>
+
+          <div class="sortbar">
+            <span class="lab">Sort</span>
+            <select id="sort"></select>
+          </div>
+
+          <div class="slab-list" id="slab-list"></div>
+        </div>
+      </nav>
+
+      <!-- ============ TRACK 2 — the card ============ -->
+      <section class="main">
+        <div class="main-head">
+          <div style="min-width:0">
+            <h2 id="card-name">F.A.B. Distribution</h2>
+            <div class="badges" id="card-badges"></div>
+          </div>
+          <div class="head-acts">
+            <span class="saved" id="saved" hidden>✓ Saved</span>
+            <button class="btn sm" id="copy-btn">Copy</button>
+            <button class="btn sm" id="merge-btn">Merge</button>
+            <button class="btn sm danger" id="del-btn">Delete</button>
+          </div>
+        </div>
+
+        <div class="card-scroll" id="card-scroll">
+
+          <div class="group">
+            <div class="group-head"><span class="lab">Identity</span></div>
+            <div class="grid2">
+              <label class="f"><span class="lab">Short name</span><input type="text" id="c-code" maxlength="4"><span class="hint">4-letter code, the one that appears on their invoices.</span></label>
+              <label class="f"><span class="lab">Full name</span><input type="text" id="c-name"></label>
+              <label class="f"><span class="lab">Account #</span><input type="text" id="c-acct"></label>
+              <label class="f"><span class="lab">Type</span><select id="c-type"><option>New</option><option>Used</option><option>Bargain</option></select></label>
+            </div>
+          </div>
+
+          <div class="group">
+            <div class="group-head"><span class="lab">Ordering</span><span class="xsmall muted">Consumed by M-02 · not yet read by anything else</span></div>
+            <div class="grid2">
+              <label class="f"><span class="lab">Order via</span><select id="c-via"><option>Phone</option><option>Email</option><option>FTP</option><option>Their Website</option><option>Fax</option><option>Rep</option></select></label>
+              <label class="f"><span class="lab">Currency</span><input type="text" id="c-cur" maxlength="3"><span class="hint" id="c-cur-hint"></span></label>
+              <label class="f"><span class="lab">Minimum order qty</span><input type="text" id="c-minq"><span class="hint">0 means quantity does not gate it — readiness falls back to the amount.</span></label>
+              <label class="f"><span class="lab">Minimum order amount / basis</span><input type="text" id="c-mina"><span class="hint">Only consulted when qty is 0.</span></label>
+              <label class="f"><span class="lab">Cancel-by</span><input type="text" id="c-cancel"><span class="hint">Blank means this Supplier does not support it. Overridable per order.</span></label>
+              <label class="f"><span class="lab">Backorders allowed</span><select id="c-back"><option>Yes</option><option>No</option></select></label>
+            </div>
+          </div>
+
+          <div class="group">
+            <div class="group-head"><span class="lab">Terms</span><span class="xsmall muted">One of these is gated</span></div>
+            <div class="grid2">
+              <label class="f gated" id="f-disc">
+                <span class="lab">Discount <span class="lock" id="disc-lock">manager-only</span></span>
+                <input type="text" id="c-disc">
+                <span class="hint">% off <em>their</em> retail, and the multiplier in the suggested-retail formula at receiving <span class="cite">(E-02 d8)</span>. <strong>This is the margin field</strong> — there is no separate one <span class="cite">(M-01 d7 superseded)</span>, which is why setting it is manager-only <span class="cite">(M-01 d11 · E-02 d44 · A-28a)</span>.</span>
+              </label>
+              <label class="f"><span class="lab">Consignment</span><select id="c-consign"><option>No</option><option>Yes</option></select><span class="hint">Invoices from them default to Consignment in accounts payable <span class="cite">(M-05 d13)</span>.</span></label>
+              <label class="f wide"><span class="lab">Second-hand default</span>
+                <div style="display:flex;gap:var(--sp-2);align-items:center">
+                  <button class="btn sm" id="c-sh-btn">Make 2nd-hand default</button>
+                  <span class="xsmall muted" id="c-sh-say"></span>
+                </div>
+                <span class="hint">Not a form field — set from the card. Only one Supplier carries it <span class="cite">(M-01 d5, E-02 d27)</span>.</span>
+              </label>
+            </div>
+          </div>
+
+          <div class="group">
+            <div class="group-head"><span class="lab">Contact</span></div>
+            <div class="grid2">
+              <label class="f"><span class="lab">Email</span><input type="text" id="c-email"><span class="hint">Where orders and claims are sent.</span></label>
+              <label class="f"><span class="lab">Main phone</span><input type="text" id="c-phone"></label>
+              <label class="f"><span class="lab">Rep name</span><input type="text" id="c-rep"></label>
+              <label class="f"><span class="lab">Rep phone</span><input type="text" id="c-repphone"></label>
+            </div>
+          </div>
+
+          <div class="group">
+            <div class="group-head"><span class="lab">Billing address</span><span class="xsmall muted">Where payment is remitted · not in the M-01 field set — proposed</span></div>
+            <div class="grid2">
+              <label class="f wide"><span class="lab">Line 1</span><input type="text" id="b-ad1"></label>
+              <label class="f wide"><span class="lab">Line 2</span><input type="text" id="b-ad2"></label>
+              <label class="f"><span class="lab">City</span><input type="text" id="b-city"></label>
+              <label class="f"><span class="lab">Province / State</span><input type="text" id="b-prov" maxlength="2"><span class="hint">2-letter, the same shape a Customer address uses.</span></label>
+              <label class="f"><span class="lab">Country</span><input type="text" id="b-country"></label>
+            </div>
+          </div>
+
+          <div class="group">
+            <div class="group-head"><span class="lab">Shipping address</span><span class="xsmall muted">Where stock ships from — what a claim is argued against</span></div>
+            <label class="f-check">
+              <input type="checkbox" id="c-same">
+              <span>Same as billing address</span>
+              <span class="hint">Ticked, the fields below mirror billing and are locked. Untick to enter a different one — a distributor's warehouse is rarely its accounts office.</span>
+            </label>
+            <div class="grid2">
+              <label class="f wide"><span class="lab">Line 1</span><input type="text" id="s-ad1"></label>
+              <label class="f wide"><span class="lab">Line 2</span><input type="text" id="s-ad2"></label>
+              <label class="f"><span class="lab">City</span><input type="text" id="s-city"></label>
+              <label class="f"><span class="lab">Province / State</span><input type="text" id="s-prov" maxlength="2"></label>
+              <label class="f"><span class="lab">Country</span><input type="text" id="s-country"></label>
+            </div>
+          </div>
+
+          <div class="group">
+            <div class="group-head"><span class="lab">Notes</span></div>
+            <div class="grid2">
+              <label class="f wide"><textarea id="c-notes" rows="2"></textarea><span class="hint">Free-form, visible to all staff.</span></label>
+            </div>
+          </div>
+
+          <div class="group">
+            <div class="group-head"><span class="lab">Log</span><span class="xsmall muted">Every add, edit, copy, merge and default change <span class="cite">(M-01 d4)</span></span></div>
+            <table class="hist">
+              <thead><tr><th style="width:150px">When</th><th>What</th></tr></thead>
+              <tbody id="log-body"></tbody>
+            </table>
+          </div>
+
+        </div>
+      </section>
+
+      <!-- ============ TRACK 3 — the ledger ============ -->
+      <aside class="acct" aria-label="Ledger and actions">
+        <div class="acct-live">
+
+          <!-- 1. what is in flight with them -->
+          <div class="flight" id="flight"></div>
+
+          <!-- 2. what is owed, either way — MANAGER ONLY -->
+          <div id="money-head">
+            <div class="acct-head">
+              <div class="lab">Outstanding A/P</div>
+              <div class="figure owed" id="fig">$1,842.60</div>
+              <div class="figure-say" id="fig-say">Owed to them</div>
+              <div class="figure-sub" id="fig-sub">Finalized Invoices and entries, less payments and applied credits.</div>
+            </div>
+            <div class="rule"></div>
+          </div>
+
+          <div class="acct-mid" id="acct-mid">
+            <!-- 3. what has moved both ways — MANAGER ONLY -->
+            <div class="sec" id="sec-trade">
+              <span class="lab">Trade, last 12 months</span>
+              <div class="standing" id="trade"></div>
+              <div class="caveat" id="trade-caveat"></div>
+            </div>
+
+            <!-- 4. what came in lately. Each row opens that Invoice in
+                    Receiving, which is browsable and opens as-finalized
+                    (E-02 d36, architecture A-27). -->
+            <div class="sec">
+              <span class="lab">Recent intake</span>
+              <div id="intake"></div>
+              <span class="xsmall muted">Opens in Receiving, as it was finalized <span class="cite">(E-02 d36, A-27)</span>.</span>
+            </div>
+          </div>
+
+          <div class="acct-foot">
+            <button class="btn accent primary" id="foot-primary">Open draft invoice</button>
+            <div class="foot-sub" id="foot-sub"></div>
+            <button class="btn secondary" id="foot-second" hidden></button>
+          </div>
+        </div>
+      </aside>
+
+    </div>
+  </div>
+
+  <div class="notes">
+
+    <section class="note wide">
+      <h2>Where the gates ended up</h2>
+      <div class="warnbox">
+        <p><strong>Discount stays manager-only.</strong> Locked for an Employee, live for a Manager, who authorizes in place with their own initials and has both names recorded <span class="cite">(M-04 d3, d4)</span>. This is the outcome that <strong>reverses nothing</strong>: M-01 d11, E-02 d44 and architecture A-28a all stand as written, no supersession row, no §9 amendment, and d2's "future receiving only" stays safe because the only person who can trip it is the one the review queue would have told anyway.</p>
+        <p><strong>Employees can see the balances.</strong> The one change to the record, and a small one: the lexicon defines manager-only as "an action an Employee cannot perform <em>at all</em>" <span class="cite">(lexicon.md:44)</span> — about <strong>performing</strong>, not <strong>viewing</strong>. Nothing ever said viewing a balance was gated, so this fills a gap rather than reversing anything. It still needs writing down, because the next person to read "manager-only in its entirety" <span class="cite">(M-05 d2)</span> will otherwise conclude the opposite. <strong>Record a payment</strong> is an A/P action and stays gated — toggle the viewer and watch the foot's secondary button, now the only thing that changes.</p>
+        <p><strong>One term, worth keeping straight:</strong> the gate on Discount is <strong>manager-only</strong>, never a <em>manager override</em> — that term is retired <span class="cite">(M-04 d8, lexicon:41)</span>, and reading one for the other is exactly the mistake M-01 d6 made and d11 had to reverse.</p>
+      </div>
+    </section>
+
+    <section class="note">
+      <h2>What each track is for</h2>
+      <dl>
+        <dt>Left — the supplier slab (retractable)</dt>
+        <dd>Search over name, short code and account # — all three, which M-01 step 2 already says. Chips, a sort control, the list. Shut, a 52px strip carrying New, Search with a result badge, and the cards you have opened, tiled by their 4-letter code. It <strong>pushes</strong> rather than overlays, for E-03's reason: you read the list and the card against each other.</dd>
+        <dt>Middle — the open card</dt>
+        <dd>The full M-01 field set grouped Identity / Ordering / Terms / Contact / Billing / Shipping / Notes, with the Log on the floor of the same scroll — the same place History sits on the Customer card <span class="cite">(E-07 d16)</span>. Every field is a live input except Discount, which is gated.</dd>
+        <dt>Right — the ledger (sticky)</dt>
+        <dd>Four things in priority order: <strong>what is in flight with them</strong>, <strong>what is owed</strong> as a single figure, <strong>what has moved both ways</strong>, and <strong>what came in lately</strong>. No row-by-row ledger — that is Accounts Payable's screen and it is one click away. The foot is the errand you are actually on.</dd>
+      </dl>
+    </section>
+
+    <section class="note">
+      <h2>Why in-flight sits above the money</h2>
+      <p>On the Customer card, Waiting outranks the balance because a hold does not expire and nothing chases it <span class="cite">(E-07 d19, E-05 d7)</span>. The supplier-side equivalent of a stale hold is a <strong>draft Invoice left open</strong>, an <strong>overdue PO line</strong>, and a <strong>Pending claim nobody has followed up</strong>. All three go quiet the same way, and all three are things an Employee can act on — which is also why this band is the part of the track that survives the Employee/Manager toggle.</p>
+      <p>PO-line status is M-02's own: Pending and Ordered derived from whether a PO number exists, Shipped / Backordered / Cancelled set by a person <span class="cite">(M-02 d12, d22)</span>. Nothing verifies an expected date — a date that has passed is a prompt to chase, not a state.</p>
+    </section>
+
+    <section class="note">
+      <h2>The foot is a ladder, like d20's</h2>
+      <p>E-07 d20 made the Customer card's primary action a ladder — open the hold, else attach to the Sale in flight, else start a new one. The supplier equivalent, in the same shape:</p>
+      <ol>
+        <li><strong>Open draft Invoice</strong> — there is one sitting half-received. It is the thing that goes stale.</li>
+        <li><strong>Process order</strong> — lines are pending against them and the stream is at its minimum <span class="cite">(M-01 fields, M-02 d4)</span>.</li>
+        <li><strong>Start an intake</strong> — nothing in flight, so the errand is a new Invoice.</li>
+      </ol>
+      <p>For a Manager, <strong>Record a payment</strong> rides underneath as a secondary when there is a balance — the same slot the Customer card gives "Attach to the Sale in flight instead."</p>
+    </section>
+
+    <section class="note">
+      <h2>What "Received $" has to decide first</h2>
+      <p>You asked for a total Received figure. The record already carries <strong>two different numbers</strong> that could answer to that name, and they are not close:</p>
+      <ul>
+        <li><strong>Cost of goods</strong> — <span class="mono">subtotal + freight + misc</span>, inbound tax <em>excluded</em> <span class="cite">(A-29, E-02 d34)</span>, because GST and QST are Input Tax Credits, a receivable rather than a cost.</li>
+        <li><strong>Invoice total</strong> — what is actually owed the Supplier, tax included <span class="cite">(E-02:98)</span>.</li>
+      </ul>
+      <p>The mock shows <strong>cost of goods</strong>, and says so on the figure, because the number sitting next to a Sold figure is a cost-of-goods number or the margin beside it is wrong. The Invoice total is the one that reconciles to the A/P balance above it — so the two figures in this track are deliberately <em>not</em> the same basis, and the caveat line says that out loud.</p>
+    </section>
+
+    <section class="note">
+      <h2>What "Sold $" cannot see</h2>
+      <p>Sold is summed over copies whose Invoice traces back to this Supplier. Two gaps, both structural rather than fixable by the query:</p>
+      <ul>
+        <li><strong>Copies with no Invoice behind them</strong> — an oversold copy minted straight from a Sale <span class="cite">(E-05 d21)</span>, or stock that predates the system. They attribute to no Supplier and drop out silently, so the figure names how many it dropped.</li>
+        <li><strong>Margin is overstated</strong>, by roughly 2.6% on the reference invoice: freight, tax and misc stay at Invoice level and are never allocated to items <span class="cite">(E-02:100, M-03:60)</span>. M-03 requires any margin reporting to state that caveat, so this track states it.</li>
+      </ul>
+      <p>There is also a scope line here worth naming rather than stepping over: <strong>trend and margin reporting beyond the daily close is listed out of scope</strong> <span class="cite">(PRD §7:241)</span> — "a reporting surface of its own." Two totals on a supplier card is not that surface, but it is the first step onto it.</p>
+    </section>
+
+    <section class="note">
+      <h2>The slab row, on two lines</h2>
+      <p>It was one line of three cells: code, name, figure — with the grey meta line sharing the middle column and ending its ellipsis eight pixels from the money. At the widths a real account number reaches, the two read as one run of text.</p>
+      <p>It is four cells on two rows now. Name and figure on the first, <strong>the meta line and the figure's caption on the second</strong> — so the grey text has the full width under the name, and "we owe" still sits under the number it belongs to. Nothing was dropped; the in-flight count joined the meta line, since there is now room for it.</p>
+      <p><strong>Bands belong to the sort now, not to the list.</strong> A–Z is the default, and sorting A–Z means you are looking someone up by name — a band across it splits the alphabet in two, so the name you want is in one of two places instead of one. That is a cost with no matching benefit. Bands appear only under <em>Outstanding A/P</em>, where the split <em>is</em> the ordering, and the Owing chip covers wanting just that band. Customers' rule still holds on top: a band that does not actually split the list does not render.</p>
+    </section>
+
+    <section class="note">
+      <h2>The in-flight cap</h2>
+      <p>You were right that it was unbounded. F.A.B. now carries six — two drafts, two POs, two claims — which is an ordinary week for a distributor, and at full height it pushed the A/P figure clean off the track. The band is capped at <strong>three rows and scrolls inside itself</strong>, with a shadow on the bottom edge so there is a visible reason to scroll.</p>
+      <p><strong>Grouped by kind, oldest first inside each</strong> — drafts, then orders, then claims. Not too much: the three kinds open on three <em>different screens</em>, so grouping them is also grouping by where the row takes you, and a flat oldest-first list would have you jumping between Receiving, What's on Order and Claims in whatever order the dates happened to fall. The order of the groups is a priority order too — a draft is ours to finish, a PO is theirs to ship, a claim is theirs to answer.</p>
+      <p><strong>The grouping is what makes the cap safe.</strong> Flat, a cap of three could show three drafts and leave a nine-day-old claim below the fold with nothing to announce it. So the counts moved into the band's label, above the scroll, <em>per kind</em>: <span class="mono">2 drafts · 2 on order · 2 claims</span>. You can see a claim exists without scrolling to it. A cap that hides how much it is hiding is worse than no cap.</p>
+    </section>
+
+    <section class="note">
+      <h2>Two addresses, one checkbox</h2>
+      <p>Better than the remit-to flag it replaces, because it puts the fact in <em>fields</em> rather than in a note somebody has to read. F.A.B. is the case: accounts office is a Toronto box number, the warehouse is on Rue Guy in Montréal. Under the old flag that lived in free text, where nothing could ever consume it.</p>
+      <p><strong>Ticked, the shipping fields mirror billing and are locked</strong> — greyed and italic, so they read as derived rather than as blank-and-broken. A mirrored field that is still typable is a field that silently stops mirroring the moment someone corrects the billing address, and then the two disagree with nothing to say which is right. Editing billing while it is ticked moves shipping with it.</p>
+      <p><strong>Unticking keeps the copied values</strong> rather than blanking them, because "nearly the same address, different unit" is the usual reason to untick, and it puts the cursor in line 1. Three of the four seeded suppliers are ticked — which is the honest ratio, and the reason the checkbox defaults on.</p>
+      <p><strong>Which one is which matters for a Supplier</strong> in a way it does not for a Customer: billing is where <em>we</em> send money, shipping is where <em>their</em> stock comes from. The group heads say so out loud, so neither gets read as one of the store's own addresses.</p>
+    </section>
+
+    <section class="note">
+      <h2>Every row is a way in</h2>
+      <p>The in-flight rows and the recent-intake rows are buttons, not text — each opens the thing it names on the screen that owns it. Hover one and it says where it goes.</p>
+      <dl>
+        <dt>A draft, or a past Invoice → Receiving</dt>
+        <dd>Receiving history is already a first-class browsable screen and past Invoices open <em>as they were finalized</em> <span class="cite">(E-02 d36, A-27)</span>, and the Invoice is already in the URL as <span class="mono">/receiving/:invoiceId</span> — so this is a deep link to something that exists, not a new surface.</dd>
+        <dt>A PO → What's on Order</dt>
+        <dd>Where a line gets re-flagged or its status set <span class="cite">(M-02 d12, d22)</span>.</dd>
+        <dt>A claim → Claims</dt>
+        <dd>Where it is chased or marked Credited <span class="cite">(E-04)</span>.</dd>
+        <dt>The A/P figure → Accounts Payable</dt>
+        <dd>The row-by-row ledger came out of this track entirely. M-05 already shows outstanding Invoices, claims and manual entries in one combined list per supplier <span class="cite">(M-05 d3)</span> — restating it here meant two places to read the same rows, and only one of them could act on them.</dd>
+      </dl>
+    </section>
+
+    <section class="note">
+      <h2>What I did not invent</h2>
+      <ul>
+        <li><strong>Whether deleting a Supplier is manager-only.</strong> M-01 leaves it open on purpose — A-28a gates "deletions" as an unnamed category, the lexicon's manager-only entry omits deletions entirely, and E-07 d12 explicitly ungates deleting a Customer. Delete is drawn ungated for both viewers with no opinion attached.</li>
+        <li><strong>What the addresses are for.</strong> M-01's field table has no address at all — both blocks are new, and the groups say so on the screen. They are drawn in the shape <code>CustomerAddress</code> already uses so there is one address shape in the system rather than two. Nothing consumes either yet: billing is captured for M-05, shipping for E-04's claim correspondence.</li>
+        <li><strong>Currency conversion.</strong> Indie Direct is USD in seed. M-05 requires the store-currency equivalent at the configured rate <span class="cite">(M-05:80, M-06)</span>. The mock shows both figures and does not invent a rate — it shows the placeholder the settings screen would fill.</li>
+        <li><strong>What Merge does to the totals.</strong> Merge repoints every dependent pointer rather than rewriting history <span class="cite">(M-01 d9)</span> — so a merged Supplier's Received and Sold figures absorb the other's. Whether that is what a Manager expects is a real question and nobody has answered it.</li>
+        <li><strong>Lifetime figures.</strong> The Customer card carries this-year / last-year / lifetime. This one carries 12 months only, because no decision says what a Supplier "year" is and the fiscal-year question belongs to a reporting surface, not here.</li>
+      </ul>
+    </section>
+
+    <section class="note wide">
+      <h2>Rows appended to M-01</h2>
+      <p>Recorded as <strong>M-01 decisions 12–18</strong>, in that order. Nothing was superseded: Discount stayed manager-only, so d11, E-02 d44 and architecture A-28a all stand as written. M-05 carries the mirror of d16, d18 and the billing address under <em>Inherited from other flows</em>.</p>
+      <table class="props">
+        <thead><tr><th>Where</th><th>Proposed decision</th></tr></thead>
+        <tbody>
+          <tr>
+            <td>M-01 d12</td>
+            <td><strong>Suppliers is laid out as the till's three tracks</strong> — the frame becomes E-05 d29's by way of E-02 d38 and E-07 d17: a retractable supplier slab, the open card, and the ledger, each scrolling on its own, the frame never scrolling. The screen loses its page heading and description as the other fixed-frame screens did. The slab pushes rather than overlays. Shut it is a 52px strip carrying New, Search with a result count, and the cards actually opened, tiled by short code. Below 1180px the ledger drops to a 58dvh bottom strip.</td>
+          </tr>
+          <tr>
+            <td>M-01 d13</td>
+            <td><strong>The card is the edit surface, with one exception.</strong> Following E-07 d13 and d18, every field saves on change and New opens a blank card rather than a modal — <em>except Discount</em>, which is the margin field (d7 as superseded) and stays manager-only (d11, E-02 d44, A-28a). A Manager authorizes in place with their own initials; both names are recorded (M-04 d3, d4). Accepted consequence: one field on the card behaves unlike every other field on it, and that is drawn rather than left silent. The card also gains <strong>two addresses</strong> — billing (where payment is remitted) and shipping (where stock ships from) — each line 1, line 2, city, province/state, country, in the shape <code>CustomerAddress</code> already uses. A <strong>Same as billing address</strong> checkbox mirrors shipping onto billing and <em>locks</em> those fields; unticking leaves the copied values as a starting point. Nothing consumes either yet: billing is captured for M-05, shipping for E-04 claim correspondence.</td>
+          </tr>
+          <tr>
+            <td>M-01 d16</td>
+            <td><strong>An Employee may view a Supplier's outstanding A/P and trade totals; every A/P action remains manager-only.</strong> Resolves what the first pass left open. The lexicon's manager-only entry is about <em>performing</em>, not <em>viewing</em>, so this fills a gap rather than reversing a decision — but it needs writing down, because the next person reading "manager-only in its entirety" (M-05 d2) will otherwise reach the opposite conclusion. M-05 carries the mirror note. Recording a payment, applying a credit and creating a manual entry all stay where they are.</td>
+          </tr>
+          <tr>
+            <td>M-01 d17</td>
+            <td><strong>The slab bands by A/P state only when it is sorted by A/P.</strong> A–Z is the default and is a look-up by name; a band across it splits the alphabet in two for no gain. Under <em>Outstanding A/P</em> the split is the ordering, so the band is free. E-07 d17's rule still applies on top — a band that does not actually split the list does not render.</td>
+          </tr>
+          <tr>
+            <td>M-01 d18</td>
+            <td><strong>The ledger track carries the A/P figure, not the rows behind it.</strong> M-05 d3 already shows outstanding Invoices, Pending claims and manual entries in one combined list per supplier, and it is the screen that can act on them. Restating the rows here would mean two places to read the same facts and one of them powerless. The figure links through instead. Same principle governs the rest of the track: <strong>every in-flight and recent-intake row opens the thing it names on the screen that owns it</strong> — a draft or past Invoice in Receiving (deep-linkable as <span class="mono">/receiving/:invoiceId</span>, opening as-finalized per E-02 d36 and A-27), a PO in What's on Order, a claim in Claims.</td>
+          </tr>
+          <tr>
+            <td>M-01 d14</td>
+            <td><strong>The ledger track carries, in order: what is in flight, outstanding A/P, trade over 12 months, and recent intake.</strong> In-flight sits above the money for E-07 d19's reason — a draft Invoice, an overdue PO line and a Pending claim all go stale silently, and this is the screen where that stops being true. It is <strong>grouped by kind — drafts, orders, claims — oldest first inside each, capped at three rows and scrolling</strong>, with the per-kind counts in its label so the cap can never hide that a claim exists. A supplier can carry six or more at once, and unbounded the band would push the A/P figure off a track whose whole purpose is to be fixed. <strong>Received is cost of goods</strong> (<span class="mono">subtotal + freight + misc</span>, inbound tax excluded — A-29, E-02 d34), not the Invoice total, and the track says which it is. Any margin shown states the unallocated-freight caveat (M-03, E-02 d34 consequence). Copies with no Invoice behind them are excluded from Sold and the exclusion is counted on the figure rather than hidden.</td>
+          </tr>
+          <tr>
+            <td>M-01 d15</td>
+            <td><strong>The card's primary action is a ladder:</strong> open the draft Invoice, else process the pending order stream, else start an intake. Record a payment rides underneath as a secondary for a Manager with a balance. Mirrors E-07 d20's shape and its reasoning — the thing that goes stale silently outranks the thing that does not.</td>
+          </tr>
+          <tr>
+            <td>M-01 open q.</td>
+            <td><strong>Per-Supplier trade totals are a first step onto the reporting surface PRD §7 defers</strong> — recorded as an open question rather than a decision, so that when that surface is built it knows two of its figures already exist here and must agree with them. Two more went in beside it: what a Supplier “year” is (d14 fixes a rolling 12 months because nothing says calendar or fiscal), and whether a Supplier can carry more than two addresses.</td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
+  </div>
+</div>
+
+<script>
+// ---------------------------------------------------------------------------
+// Mock data. Supplier records are the seed set from prototype/src/data/seed.ts
+// verbatim. Everything under `ap`, `trade`, `flight` and `intake` is INVENTED
+// for the mock — no flow specifies these figures, which is the whole point of
+// the notes above.
+// ---------------------------------------------------------------------------
+const SUPPLIERS = [
+  {
+    id: "fab", code: "FAB1", name: "F.A.B. Distribution", acct: "WW-4471",
+    via: "Rep", type: "New", cur: "CAD", disc: "60%", consign: "No",
+    minq: "25 units", mina: "— (qty gates it)", cancel: "45 days", back: "Yes",
+    email: "claims@fabdist.example", phone: "514-555-0100",
+    rep: "Dana Cho", repPhone: "514-555-0142",
+    bill: { ad1: "PO Box 4471, Station A", ad2: "", city: "Toronto", prov: "ON", country: "Canada" },
+    ship: { ad1: "2250 Rue Guy", ad2: "Unit 400", city: "Montréal", prov: "QC", country: "Canada" },
+    same: false,
+    notes: "Rep visits monthly, will hold new releases on request.",
+    secondHand: false,
+    log: [
+      { at: "2026-09-04 11:20", text: "Cancel-by set to 45 days by R. Duval" },
+      { at: "2026-01-06 09:00", text: "Discount set to 60% by R. Duval" },
+      { at: "2025-11-18 15:42", text: "Created by R. Duval" },
+    ],
+    ap: { balance: 1842.60, rows: [
+      { t: "INV FAB1-88214", m: "Finalized 2026-08-29 · PO 4471-C · $1,204.10 paid", v: "$1,842.60", cls: "owed" },
+      { t: "CLAIM #118", m: "Pending since 2026-09-02 · short shipped, 3 copies", v: "$74.85", cls: "nil" },
+    ]},
+    trade: { in12: "$24,180.14", out12: "$38,946.00", copiesIn: "1,104 copies", copiesOut: "902 sold", margin: "38.2%", dropped: 0 },
+    flight: { rows: [
+      { kind: "draft", age: 3, link: "FAB1-88461", t: "Draft invoice FAB1-88461", ref: "DRAFT", m: "opened 3 days ago · 18 of 42 lines scanned · started by E. Okafor" },
+      { kind: "draft", age: 11, link: "FAB1-88390", t: "Draft invoice FAB1-88390", ref: "DRAFT", m: "opened 11 days ago · 2 of 31 lines scanned · started by R. Duval" },
+      { kind: "order", age: 40, t: "PO 4471-D — 12 lines outstanding", ref: "4471-D", m: "placed 2026-08-02 · cancel-by passed 4 days ago · 6 lines marked Shipped" },
+      { kind: "order", age: 59, t: "PO 4471-C — 3 lines outstanding", ref: "4471-C", m: "placed 2026-07-14 · 2 lines Backordered by them" },
+      { kind: "claim", age: 9, t: "Claim #118 — no reply", ref: "#118", m: "sent 2026-09-02 by email · short shipped, 3 copies" },
+      { kind: "claim", age: 2, t: "Claim #121 — no reply", ref: "#121", m: "sent 2026-09-09 by email · received damaged, 2 copies" },
+    ]},
+    intake: [
+      { t: "FAB1-88214", m: "29 Aug 2026 · 42 lines · 118 copies", v: "$4,210.88" },
+      { t: "FAB1-87902", m: "31 Jul 2026 · 38 lines · 96 copies", v: "$3,644.20" },
+      { t: "FAB1-87511", m: "27 Jun 2026 · 51 lines · 140 copies", v: "$5,102.35" },
+    ],
+    foot: { label: "Open draft invoice\nFAB1-88461", sub: "18 of 42 lines scanned. It has been open 3 days.", second: "Record a payment" },
+  },
+  {
+    id: "indie", code: "INDI", name: "Indie Direct Supply", acct: "9927-A",
+    via: "Their Website", type: "New", cur: "USD", disc: "50%", consign: "No",
+    minq: "0 — amount gates it", mina: "$250.00 (Retail)", cancel: "Not supported", back: "No",
+    email: "returns@indiedirect.example", phone: "212-555-0199",
+    rep: "", repPhone: "",
+    bill: { ad1: "118 W 22nd St", ad2: "", city: "New York", prov: "NY", country: "United States" },
+    ship: { ad1: "", ad2: "", city: "", prov: "", country: "" },
+    same: true,
+    notes: "",
+    secondHand: false,
+    log: [
+      { at: "2026-01-06 09:00", text: "Discount set to 50% by R. Duval" },
+      { at: "2025-12-02 10:15", text: "Created by E. Okafor" },
+    ],
+    ap: { balance: 0, rows: [] },
+    trade: { in12: "US$6,410.00", out12: "$11,880.00", copiesIn: "214 copies", copiesOut: "186 sold", margin: "—", dropped: 0, usd: true },
+    flight: { rows: [
+      { kind: "order", age: 11, t: "9 lines pending, not yet placed", ref: "no PO", m: "oldest raised 11 days ago · $268.40 at retail — over their $250 minimum" },
+    ]},
+    intake: [
+      { t: "INDI-5540", m: "18 Aug 2026 · 22 lines · 64 copies", v: "US$1,980.00" },
+      { t: "INDI-5488", m: "02 Jul 2026 · 19 lines · 51 copies", v: "US$1,644.50" },
+    ],
+    foot: { label: "Process order\n9 lines · over minimum", sub: "Assigns a PO number and placed date to every line in the stream.", second: null },
+  },
+  {
+    id: "crate", code: "CRAT", name: "Crate Digger Wholesale", acct: "CD-118",
+    via: "Email", type: "New", cur: "CAD", disc: "40%", consign: "No",
+    minq: "10 units", mina: "— (qty gates it)", cancel: "30 days", back: "Yes",
+    email: "orders@cratedigger.example", phone: "438-555-0177",
+    rep: "", repPhone: "",
+    bill: { ad1: "77 Avenue Mozart Est", ad2: "", city: "Montréal", prov: "QC", country: "Canada" },
+    ship: { ad1: "", ad2: "", city: "", prov: "", country: "" },
+    same: true,
+    notes: "Email-only ordering — no rep, no phone line.",
+    secondHand: false,
+    log: [
+      { at: "2026-09-08 16:05", text: "Claim #114 credit applied by R. Duval" },
+      { at: "2026-01-06 09:00", text: "Discount set to 40% by R. Duval" },
+      { at: "2025-10-30 09:30", text: "Created by R. Duval" },
+    ],
+    ap: { balance: -120.00, rows: [
+      { t: "CREDIT — claim #114", m: "Applied 2026-09-08 · exceeded what was outstanding", v: "-$120.00", cls: "credit" },
+    ]},
+    trade: { in12: "$9,455.70", out12: "$16,220.00", copiesIn: "468 copies", copiesOut: "391 sold", margin: "41.7%", dropped: 0 },
+    flight: { rows: [] },
+    intake: [
+      { t: "CRAT-2209", m: "21 Aug 2026 · 16 lines · 44 copies", v: "$1,180.00" },
+      { t: "CRAT-2188", m: "14 Jul 2026 · 12 lines · 31 copies", v: "$842.60" },
+    ],
+    foot: { label: "Start an intake from\nCrate Digger Wholesale", sub: "Opens a new draft Invoice at Receiving with this Supplier set.", second: null },
+  },
+  {
+    id: "walk", code: "WALK", name: "Walk-in / trade-in", acct: "—",
+    via: "Phone", type: "Used", cur: "CAD", disc: "0%", consign: "No",
+    minq: "0", mina: "—", cancel: "Not supported", back: "No",
+    email: "—", phone: "",
+    rep: "", repPhone: "",
+    bill: { ad1: "", ad2: "", city: "", prov: "", country: "" },
+    ship: { ad1: "", ad2: "", city: "", prov: "", country: "" },
+    same: true,
+    notes: "Counter buys and trade-ins. There is nobody to post anything to — the address stays blank on purpose.",
+    secondHand: true,
+    log: [
+      { at: "2026-01-06 09:00", text: "Marked default for second-hand by R. Duval" },
+      { at: "2025-09-14 08:50", text: "Created by R. Duval" },
+    ],
+    ap: { balance: 0, rows: [] },
+    trade: { in12: "$3,280.00", out12: "$7,905.00", copiesIn: "312 copies", copiesOut: "244 sold", margin: "58.5%", dropped: 37 },
+    flight: { rows: [
+      { kind: "draft", age: 0, link: "SH-260911-2", t: "Draft invoice SH-260911-2", ref: "DRAFT", m: "opened this morning · 6 copies in · counter buy, not yet finalized" },
+    ]},
+    intake: [
+      { t: "SH-260908-1", m: "08 Sep 2026 · 11 copies", v: "$148.00" },
+      { t: "SH-260902-1", m: "02 Sep 2026 · 8 copies", v: "$96.50" },
+    ],
+    foot: { label: "Start a second-hand\nintake", sub: "Pre-selected here because this Supplier carries the second-hand default.", second: null },
+  },
+];
+
+// Fixed order, because it is a priority order: a draft is ours to finish, a PO
+// is theirs to ship, a claim is theirs to answer. Oldest first inside each.
+const FLIGHT_KINDS = [
+  { key: "draft", short: (n) => n === 1 ? "draft" : "drafts", go: "Receiving", label: (n) => n + (n === 1 ? " draft invoice" : " draft invoices") },
+  { key: "order", short: () => "on order", go: "What's on Order", label: (n) => n === 1 ? "1 order outstanding" : n + " orders outstanding" },
+  { key: "claim", short: (n) => n === 1 ? "claim" : "claims", go: "Claims", label: (n) => n + (n === 1 ? " claim waiting" : " claims waiting") },
+];
+
+// ---- state ----
+let role = "manager";
+let who = "fab";
+let slabOpen = true;
+let filter = "all";
+let sort = "az";
+let query = "";
+let recent = ["fab"];
+
+const $ = (id) => document.getElementById(id);
+const money = (n) => (n < 0 ? "-$" : "$") + Math.abs(n).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+const isManager = () => role === "manager";
+
+const apState = (s) => (s.ap.balance > 0.005 ? "owed" : s.ap.balance < -0.005 ? "credit" : "nil");
+const inFlight = (s) => s.flight.rows.length > 0;
+
+// ---- the slab ----
+function matches(s) {
+  const q = query.trim().toLowerCase();
+  if (!q) return true;
+  return (s.name + " " + s.code + " " + s.acct).toLowerCase().includes(q);
+}
+
+// Two live states now sit side by side, divided from the stored Type chips the
+// way Customers divides Waiting from account type — a live state and a stored
+// field are two axes, not one list of five equivalent things.
+function chipDefs() {
+  return [
+    { key: "all", label: "All", test: () => true },
+    { key: "owing", label: "Owing", test: (s) => apState(s) === "owed" },
+    { key: "flight", label: "In flight", test: inFlight },
+    { sep: true },
+    { key: "New", label: "New", test: (s) => s.type === "New" },
+    { key: "Used", label: "Used", test: (s) => s.type === "Used" },
+    { key: "Bargain", label: "Bargain", test: (s) => s.type === "Bargain" },
+  ];
+}
+
+function sortDefs() {
+  return [
+    { key: "az", label: "A–Z, full name" },
+    { key: "code", label: "Short code" },
+    { key: "recent", label: "Recently seen" },
+    { key: "owing", label: "Outstanding A/P" },
+    { key: "received", label: "Received, 12 months" },
+  ];
+}
+
+function rows() {
+  const searched = SUPPLIERS.filter(matches);
+  const def = chipDefs().find((c) => c.key === filter);
+  const out = def && def.test ? searched.filter(def.test) : searched;
+  const list = [...out];
+  if (sort === "code") list.sort((a, b) => a.code.localeCompare(b.code));
+  else if (sort === "recent") list.sort((a, b) => rank(a.id) - rank(b.id));
+  else if (sort === "owing") list.sort((a, b) => b.ap.balance - a.ap.balance);
+  else if (sort === "received") list.sort((a, b) => num(b.trade.in12) - num(a.trade.in12));
+  else list.sort((a, b) => a.name.localeCompare(b.name));
+  return list;
+}
+const rank = (id) => { const i = recent.indexOf(id); return i === -1 ? 1e9 : i; };
+const num = (s) => Number(String(s).replace(/[^0-9.]/g, "")) || 0;
+
+function renderChips() {
+  const defs = chipDefs();
+  const searched = SUPPLIERS.filter(matches);
+  $("chips").innerHTML = defs.map((d) => {
+    if (d.sep) return '<span class="chip-sep"></span>';
+    const n = searched.filter(d.test).length;
+    const off = n === 0 && d.key !== "all";
+    return '<button class="chip' + (filter === d.key ? " on" : "") + '" data-filter="' + d.key + '"' +
+      (off ? " disabled" : "") + ">" + d.label + ' <span class="count">' + n + "</span></button>";
+  }).join("");
+  $("chips").querySelectorAll(".chip").forEach((b) => b.onclick = () => {
+    const f = b.dataset.filter;
+    filter = filter === f ? "all" : f;
+    render();
+  });
+}
+
+function renderSort() {
+  const defs = sortDefs();
+  if (!defs.some((d) => d.key === sort)) sort = "az";
+  $("sort").innerHTML = defs.map((d) => '<option value="' + d.key + '"' + (sort === d.key ? " selected" : "") + ">" + d.label + "</option>").join("");
+}
+
+function renderList() {
+  const list = rows();
+  $("strip-badge").textContent = list.length;
+  if (list.length === 0) {
+    $("slab-list").innerHTML = '<div class="slab-empty"><div>No supplier matches “' + esc(query) + '”.</div>' +
+      '<button class="btn">＋ New supplier named “' + esc(query) + '”</button></div>';
+    return;
+  }
+  // The band belongs to the SORT, not to the list. Sorting A-Z means you are
+  // looking someone up by name, and a band splits the alphabet in two so the
+  // name you want is in one of two places instead of one. Only the A/P sort
+  // gets bands — there the split IS the ordering, and the Owing chip covers
+  // the case where you want just that band.
+  const test = (s) => apState(s) === "owed";
+  const hot = list.filter(test), cold = list.filter((s) => !test(s));
+  const banded = sort === "owing" && filter === "all" && hot.length > 0 && cold.length > 0;
+  const labels = ["Owing", "Settled"];
+  let html = "";
+  if (!banded) html = list.map(supRow).join("");
+  else html = band(labels[0], hot.length) + hot.map(supRow).join("") + band(labels[1], cold.length) + cold.map(supRow).join("");
+  $("slab-list").innerHTML = html;
+  $("slab-list").querySelectorAll(".sup").forEach((b) => b.onclick = () => select(b.dataset.id));
+}
+const band = (l, n) => '<div class="slab-band"><span class="lab">' + l + '</span><span class="lab">' + n + "</span></div>";
+
+function supRow(s) {
+  const st = apState(s);
+  const n = s.flight.rows.length;
+  // Four cells on two rows. The figure's caption sits under the figure rather
+  // than nested inside it, so the grey meta line gets the whole width beneath
+  // the name instead of ending an ellipsis 8px from the money.
+  const meta = [s.via, esc(s.acct), n ? n + " in flight" : null].filter(Boolean).join(" · ");
+  return '<button type="button" class="sup' + (s.id === who ? " on" : "") + '" data-id="' + s.id + '">' +
+    '<span class="code">' + s.code + "</span>" +
+    '<span class="t">' + esc(s.name) + "</span>" +
+    '<span class="n ' + st + '">' + money(s.ap.balance) + "</span>" +
+    '<span class="m">' + meta + "</span>" +
+    '<span class="k">' + (st === "owed" ? "we owe" : st === "credit" ? "in credit" : "settled") + "</span>" +
+    "</button>";
+}
+
+function renderStrip() {
+  $("strip-stack").innerHTML = recent.map((id) => {
+    const s = SUPPLIERS.find((x) => x.id === id);
+    // Balance state, the way the customer strip carries balance state — with
+    // in-flight winning the dot when there is nothing owed, since that is then
+    // the only thing on the card anyone has to act on.
+    const st = apState(s) !== "nil" ? apState(s) : (inFlight(s) ? "flight" : "nil");
+    return '<button class="tile' + (id === who ? " on" : "") + '" data-id="' + id + '" title="' + esc(s.name) + '">' +
+      s.code + '<span class="st-dot ' + st + '"></span></button>';
+  }).join("");
+  $("strip-stack").querySelectorAll(".tile").forEach((b) => b.onclick = () => select(b.dataset.id));
+}
+
+// ---- the card ----
+function renderCard() {
+  const s = SUPPLIERS.find((x) => x.id === who);
+  $("card-name").textContent = s.name;
+  const badges = ['<span class="badge mono">' + s.code + "</span>", '<span class="badge">' + s.type + "</span>"];
+  if (s.secondHand) badges.push('<span class="badge ok">2nd-hand default</span>');
+  if (s.cur !== "CAD") badges.push('<span class="badge warn">' + s.cur + "</span>");
+  if (inFlight(s)) badges.push('<span class="badge accent">' + s.flight.rows.length + " in flight</span>");
+  $("card-badges").innerHTML = badges.join("");
+
+  const set = (id, v) => { $(id).value = v; };
+  set("c-code", s.code); set("c-name", s.name); set("c-acct", s.acct);
+  set("c-type", s.type); set("c-via", s.via); set("c-cur", s.cur);
+  set("c-minq", s.minq); set("c-mina", s.mina); set("c-cancel", s.cancel);
+  set("c-back", s.back); set("c-disc", s.disc); set("c-consign", s.consign);
+  set("c-email", s.email); set("c-phone", s.phone); set("c-rep", s.rep);
+  set("c-repphone", s.repPhone); set("c-notes", s.notes);
+  for (const k of ADDR_KEYS) set("b-" + k, s.bill[k]);
+  $("c-same").checked = s.same;
+  applySameAddress();
+
+  $("c-cur-hint").textContent = s.cur === "CAD" ? "Store currency." :
+    "Foreign — Invoices show their own currency and the store equivalent at the configured rate (M-05, M-06).";
+  $("c-sh-btn").disabled = s.secondHand;
+  $("c-sh-say").textContent = s.secondHand ? "This Supplier carries it." : "Currently on Walk-in / trade-in.";
+
+  // The gate, drawn rather than described.
+  $("c-disc").disabled = !isManager();
+  $("disc-lock").textContent = isManager() ? "manager · initials recorded" : "manager-only";
+
+  $("log-body").innerHTML = s.log.map((e) =>
+    '<tr><td class="mono xsmall">' + e.at + "</td><td>" + esc(e.text) + "</td></tr>").join("");
+}
+
+const ADDR_KEYS = ["ad1", "ad2", "city", "prov", "country"];
+
+// Ticked, shipping mirrors billing and is locked — a mirrored field that is
+// still typable is a field that silently stops mirroring. Unticking leaves the
+// copied values behind as a starting point rather than blanking them, since
+// "nearly the same address" is the usual reason to untick it.
+function applySameAddress() {
+  const s = SUPPLIERS.find((x) => x.id === who);
+  const same = $("c-same").checked;
+  for (const k of ADDR_KEYS) {
+    const f = $("s-" + k);
+    f.value = same ? $("b-" + k).value : (s.ship[k] || $("b-" + k).value);
+    f.disabled = same;
+    f.closest(".f").classList.toggle("mirrored", same);
+  }
+}
+
+// ---- the ledger ----
+function renderLedger() {
+  const s = SUPPLIERS.find((x) => x.id === who);
+
+  // 1. in flight — never gated. An Employee receives against them and raises
+  //    claims against them, so this is theirs as much as the Manager's.
+  const f = $("flight");
+  const n = s.flight.rows.length;
+  if (n === 0) {
+    f.className = "flight none";
+    f.innerHTML = '<div class="lab"><span>In flight with them</span></div><div class="xsmall muted">Nothing open — no draft invoice, no outstanding order, no claim waiting.</div>';
+  } else {
+    // Grouped by kind in a fixed order, oldest first inside each group. The
+    // three kinds open on three different screens, so grouping them is also
+    // grouping by where the row takes you.
+    //
+    // Three rows fit; past that it scrolls rather than growing and pushing the
+    // A/P figure off a track whose whole point is being fixed. The per-kind
+    // counts sit in the label ABOVE the scroll, so the cap can never hide that
+    // a claim exists — which is the one thing a cap on this band could break.
+    const capped = n > 3;
+    let html = "";
+    for (const g of FLIGHT_KINDS) {
+      const rows = s.flight.rows.filter((r) => r.kind === g.key).sort((a, b) => b.age - a.age);
+      if (rows.length === 0) continue;
+      html += '<div class="fl-type">' + g.label(rows.length) + (rows.length > 1 ? " · oldest first" : "") + "</div>" +
+        rows.map((r) =>
+          '<button type="button" class="fl-row" data-go="' + esc(g.go) + '" data-ref="' + esc(r.link || r.ref) + '">' +
+          '<span class="fl-t">' + esc(r.t) + '</span><span class="fl-ref">' + esc(r.ref) + "</span>" +
+          '<span class="fl-m">' + esc(r.m) + "</span>" +
+          '<span class="fl-go">→ open in ' + esc(g.go) + "</span></button>").join("");
+    }
+    f.className = "flight live";
+    f.innerHTML = '<div class="lab"><span>In flight with them</span><span class="fl-more">' +
+      FLIGHT_KINDS.map((g) => {
+        const c = s.flight.rows.filter((r) => r.kind === g.key).length;
+        return c ? c + " " + g.short(c) : null;
+      }).filter(Boolean).join(" · ") + "</span></div>" +
+      '<div class="fl-scroll' + (capped ? " capped" : "") + '">' + html + "</div>";
+    f.querySelectorAll(".fl-row").forEach((b) => b.onclick = () => go(b.dataset.go, b.dataset.ref));
+  }
+
+  {
+    const st = apState(s);
+    $("fig").className = "figure " + st;
+    $("fig").textContent = st === "nil" ? money(0) : money(s.ap.balance);
+    $("fig-say").textContent = st === "owed" ? "Owed to them" : st === "credit" ? "In our favour" : "Settled";
+    $("fig-sub").innerHTML = (st === "owed"
+      ? "Finalized Invoices and entries, less payments and applied credits."
+      : st === "credit"
+        ? "A credit exceeded what was outstanding. It nets against the next Invoice."
+        : "Nothing outstanding either way.") +
+      ' <a href="#" id="ap-link" style="color:var(--c-accent)">See it in Accounts&nbsp;Payable →</a>';
+    $("ap-link").onclick = (e) => { e.preventDefault(); go("Accounts Payable", s.code); };
+
+    const t = s.trade;
+    $("trade").innerHTML =
+      stat("Received (COGS)", t.in12, "in") +
+      stat("Sold", t.out12, "out") +
+      '<div class="stat span"><span class="v">' + t.copiesIn + " · " + t.copiesOut +
+      (t.margin !== "—" ? " · " + t.margin + " margin" : "") + '</span><span class="k">Copies, and the spread</span></div>';
+
+    const caveats = [];
+    caveats.push("Received is cost of goods — subtotal + freight + misc, inbound tax excluded (A-29). The A/P figure above is Invoice totals, tax included: different bases, on purpose.");
+    if (t.margin !== "—") caveats.push("Margin reflects supplier cost only; freight and misc stay at Invoice level, so it is overstated by roughly 2.6% (E-02 d34, M-03).");
+    if (t.usd) caveats.push("Received is in " + s.cur + " as invoiced. The store-currency equivalent needs the configured rate (M-06) — not invented here.");
+    if (t.dropped) caveats.push(t.dropped + " sold copies have no Invoice behind them — oversold or pre-system — and are excluded from Sold rather than guessed at.");
+    $("trade-caveat").innerHTML = caveats.map(esc).join("<br><br>");
+
+    // The rows behind the figure live in Accounts Payable, which is the screen
+    // that exists to work them. This track carries the summary and the way in.
+    $("intake").innerHTML = s.intake.map((r) =>
+      '<button type="button" class="row-line" data-ref="' + esc(r.t) + '"><span class="t">' + esc(r.t) +
+      '</span><span class="m">' + esc(r.m) + '</span><span class="v">' + r.v + "</span></button>").join("");
+    $("intake").querySelectorAll(".row-line").forEach((b) => b.onclick = () => go("Receiving", b.dataset.ref));
+  }
+
+  // 5. the foot ladder.
+  $("foot-primary").innerHTML = esc(s.foot.label).replace(/\n/g, "<br>");
+  $("foot-sub").textContent = s.foot.sub;
+  const second = isManager() && s.foot.second && apState(s) === "owed";
+  $("foot-second").hidden = !second;
+  if (second) $("foot-second").textContent = s.foot.second;
+}
+const stat = (k, v, cls) => '<div class="stat"><span class="v ' + cls + '">' + v + '</span><span class="k">' + k + "</span></div>";
+const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+
+// ---- wiring ----
+function select(id) {
+  who = id;
+  recent = [id, ...recent.filter((r) => r !== id)].slice(0, 9);
+  document.querySelectorAll(".who-btn").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.who === id)));
+  render();
+  flashSaved(false);
+}
+
+// In the real screen these navigate. Here they say where they would have gone,
+// which is the part worth reviewing.
+let goTimer;
+function go(where, ref) {
+  const t = $("toast");
+  t.textContent = "→ " + where + " · " + ref;
+  t.hidden = false;
+  clearTimeout(goTimer);
+  goTimer = setTimeout(() => (t.hidden = true), 1900);
+}
+
+let savedTimer;
+function flashSaved(show) {
+  clearTimeout(savedTimer);
+  $("saved").hidden = !show;
+  if (show) savedTimer = setTimeout(() => ($("saved").hidden = true), 1400);
+}
+
+function render() {
+  $("frame").classList.toggle("slab-shut", !slabOpen);
+  $("strip").hidden = slabOpen;
+  $("slab-open").hidden = !slabOpen;
+  $("t-slab").setAttribute("aria-pressed", String(slabOpen));
+  $("who-name").textContent = isManager() ? "R. Duval · Manager" : "E. Okafor · Employee";
+  renderChips(); renderSort(); renderList(); renderStrip(); renderCard(); renderLedger();
+}
+
+document.querySelectorAll(".role-btn").forEach((b) => b.onclick = () => {
+  role = b.dataset.role;
+  document.querySelectorAll(".role-btn").forEach((x) => x.setAttribute("aria-pressed", String(x.dataset.role === role)));
+  filter = "all";
+  render();
+});
+document.querySelectorAll(".who-btn").forEach((b) => b.onclick = () => select(b.dataset.who));
+$("t-slab").onclick = () => { slabOpen = !slabOpen; render(); if (slabOpen) $("q").focus(); };
+$("slab-collapse").onclick = () => { slabOpen = false; render(); };
+$("strip-expand").onclick = () => { slabOpen = true; render(); $("q").focus(); };
+$("q").oninput = (e) => { query = e.target.value; renderChips(); renderList(); };
+$("sort").onchange = (e) => { sort = e.target.value; renderList(); };
+
+// Live save, the way E-07 d13 has it — no Edit function, no confirm step, so
+// the card owes a signal that the keystroke landed.
+$("card-scroll").addEventListener("input", (e) => {
+  // Live mirroring: typing into billing while it is ticked has to move
+  // shipping with it, or the lock is only cosmetic.
+  if ($("c-same").checked && e.target.id.startsWith("b-")) applySameAddress();
+  flashSaved(true);
+});
+$("c-same").addEventListener("change", () => {
+  applySameAddress();
+  flashSaved(true);
+  if (!$("c-same").checked) $("s-ad1").focus();
+});
+
+render();
+</script>

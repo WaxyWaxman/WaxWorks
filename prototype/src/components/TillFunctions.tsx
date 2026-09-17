@@ -2,13 +2,15 @@ import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { BarcodeInput } from "./BarcodeInput";
 import { Modal } from "./Modal";
-import { CURRENT_USER } from "../data/seed";
-import type { Sale } from "../data/types";
+import type { JournalBatch, Sale } from "../data/types";
 import type { DayBreakdown } from "../lib/dayBreakdown";
 import { money } from "../lib/money";
 import { resolveScan } from "../lib/resolve";
 import { saleTotals } from "../lib/totals";
+import { datesIn, isImbalanced } from "../lib/journal";
 import { useApp } from "../store/AppStore";
+import { ManagerAuthorize } from "./ManagerAuthorize";
+import { useActor } from "./Identify";
 
 // The things nobody touches with a customer waiting: past Sales, the holds
 // list, and the day close (M-03). They belong to the TILL rather than to the
@@ -244,7 +246,7 @@ export function SearchModal({ onClose }: { onClose: () => void }) {
           <tbody>
             {rows.map((sale) => {
               const cust = app.customerFor(sale.customerId);
-              const totals = saleTotals(sale, app.taxLines);
+              const totals = saleTotals(sale, app.taxCtxFor(sale));
               return (
                 <tr key={sale.id}>
                   <td>
@@ -299,11 +301,36 @@ export function SearchModal({ onClose }: { onClose: () => void }) {
 
 export function OtherFunctionsModal({ onClose }: { onClose: () => void }) {
   const app = useApp();
-  const [breakdown, setBreakdown] = useState<{ closing: boolean; data: DayBreakdown } | null>(null);
+  const [undoing, setUndoing] = useState<string | null>(null);
+  const withActor = useActor();
+  const [breakdown, setBreakdown] = useState<{
+    closing: boolean;
+    data: DayBreakdown;
+    // M-07 d7 — what the close wrote beside the summary. Present only on a
+    // real close: View Subtotal touches nothing and therefore writes nothing.
+    journal?: {
+      batch: JournalBatch;
+      unresolved: string[];
+      ambiguousTenders: string[];
+    };
+  } | null>(null);
   const openBatches = app.closeBatches.filter((b) => !b.undoneAt);
 
   if (breakdown) {
+    if (undoing)
     return (
+      <ManagerAuthorize
+        title="Undo End of Day — manager only"
+        reason="Reopens settled takings: the batch's Sales return to Current (M-03 d4). Manager-only under architecture A-28a."
+        onConfirm={(by) => {
+          app.undoEndOfDay(undoing, by);
+          setUndoing(null);
+        }}
+        onCancel={() => setUndoing(null)}
+      />
+    );
+
+  return (
       <Modal title={breakdown.closing ? "Today's Sales — Totalled" : "Subtotal"} onClose={onClose}>
         <BreakdownView data={breakdown.data} />
         {breakdown.closing && (
@@ -311,6 +338,7 @@ export function OtherFunctionsModal({ onClose }: { onClose: () => void }) {
             Current Sales moved to Closed. Undo from Other Functions if needed.
           </div>
         )}
+        {breakdown.journal && <JournalNotice {...breakdown.journal} />}
       </Modal>
     );
   }
@@ -325,10 +353,14 @@ export function OtherFunctionsModal({ onClose }: { onClose: () => void }) {
             </button>
             <button
               className="btn primary"
-              onClick={() => {
-                const { breakdown: data } = app.totalTodaysSales(CURRENT_USER);
-                setBreakdown({ closing: true, data });
-              }}
+              // Tier 2 (E-01 d5). M-03 records the closing User on the
+              // CloseBatch, so this cannot ride a constant.
+              onClick={() =>
+                withActor("Total Today's Sales", (actor) => {
+                  const { breakdown: data, journal, unresolved, ambiguousTenders } = app.totalTodaysSales(actor);
+                  setBreakdown({ closing: true, data, journal: { batch: journal, unresolved, ambiguousTenders } });
+                })
+              }
             >
               Total Today's Sales
             </button>
@@ -349,7 +381,12 @@ export function OtherFunctionsModal({ onClose }: { onClose: () => void }) {
                   Batch <span className="mono">{b.id}</span> — {b.saleIds.length} Sale
                   {b.saleIds.length === 1 ? "" : "s"} — {b.at} by {b.by}
                 </span>
-                <button className="btn sm danger" onClick={() => app.undoEndOfDay(b.id, CURRENT_USER)}>
+                <button
+                  className="btn sm danger"
+                  // Manager-only (A-28a, M-03 d4) and the last one in the
+                  // prototype with no gate — it reopens settled takings.
+                  onClick={() => setUndoing(b.id)}
+                >
                   Undo
                 </button>
               </div>
@@ -358,6 +395,85 @@ export function OtherFunctionsModal({ onClose }: { onClose: () => void }) {
         </div>
       </div>
     </Modal>
+  );
+}
+
+/**
+ * M-07 d10's SECOND mechanism, at the surface it names: *"the Manager is
+ * told."*
+ *
+ * Suspense keeps the journal balanced by construction, so the export is always
+ * a valid document — and telling the Manager is what stops a balanced-but-wrong
+ * journal going quiet, which is the failure Suspense would otherwise introduce.
+ * Two mechanisms, not two options.
+ *
+ * Deliberately NOT a journal view. d9 gives this flow no dashboard, no balances
+ * and no journal display — *"a read-only journal view would be the first step
+ * back toward the ledger decision 1 declined."* This is a receipt for a thing
+ * that happened, in the close's own screen rather than in M-07's, and it counts
+ * lines rather than showing them.
+ */
+function JournalNotice({
+  batch,
+  unresolved,
+  ambiguousTenders,
+}: {
+  batch: JournalBatch;
+  unresolved: string[];
+  ambiguousTenders: string[];
+}) {
+  const dates = datesIn(batch);
+  const bad = isImbalanced(batch);
+  return (
+    <div className={`callout ${bad ? "warn" : "ok"}`} style={{ marginTop: "var(--sp-2)" }}>
+      {bad ? (
+        <>
+          <strong>The journal did not balance, and the close went through anyway.</strong> {money(batch.suspense ?? 0)}{" "}
+          went to <strong>Suspense</strong> so the books stay a valid document (d10).{" "}
+          <strong>Nobody at the till caused this and nobody can correct it</strong> — a figure in Suspense is always a
+          defect in this software. It has been raised in the review queue; report it.
+          {unresolved.length > 0 && (
+            <>
+              {" "}
+              What could not be resolved: {unresolved.join("; ")}.
+            </>
+          )}
+        </>
+      ) : (
+        <>
+          <strong>Journal written</strong> onto this batch — {batch.lines.length} line
+          {batch.lines.length === 1 ? "" : "s"}
+          {dates.length > 1 ? (
+            <>
+              {" "}
+              across <strong>{dates.length} business dates</strong> ({dates.join(", ")}), because this close swept more
+              than one day (d14). Each day is dated its own, not today.
+            </>
+          ) : (
+            <> dated {dates[0] ?? "—"}.</>
+          )}{" "}
+          Balanced. It posts nowhere else and nothing runs at month end (d12) — it waits for the export.
+          {/* d24 — a balanced journal can still have had a date guessed for it,
+              and Suspense cannot see that. Shown on the balanced branch too, or
+              the one case that needs saying is the one case never said. */}
+          {unresolved.length > 0 && (
+            <>
+              {" "}
+              <strong>But:</strong> {unresolved.join("; ")}
+            </>
+          )}
+        </>
+      )}
+      {ambiguousTenders.length > 0 && (
+        <p className="small" style={{ marginTop: "var(--sp-2)" }}>
+          <strong>Told apart only by behaviour:</strong> {ambiguousTenders.join(", ")}. More than one configured tender
+          shares each of these, and a Sale records the behaviour rather than the tender — so every one of them posted to
+          a single account. M-06 d22 gives Visa and Mastercard separate accounts <em>because they settle as separate
+          deposits</em>, and that reconciliation is not reachable until the till offers the configured tenders. Raised
+          against E-05.
+        </p>
+      )}
+    </div>
   );
 }
 
@@ -429,6 +545,29 @@ function BreakdownView({ data }: { data: DayBreakdown }) {
                     <div className="xsmall muted">money in, not a sale — a balance the store now owes</div>
                   </td>
                   <td className="num muted">{money(data.giftCardsLoaded)}</td>
+                </tr>
+              )}
+              {/* M-03 d16 — the day's cash movement, net of what left the
+                  drawer. A subtotal beneath the movements rather than one of
+                  them, because d14 keeps every movement in the column above
+                  and this is the figure you count against.
+
+                  NOT a drawer figure, and the wording has to keep saying so:
+                  this flow holds no opening float and runs no
+                  counted-versus-expected comparison, so what it can report is
+                  how much cash MOVED, never how much is in the till. */}
+              {data.cashNet !== null && (
+                <tr>
+                  <td>
+                    <strong>Cash, net</strong>
+                    <div className="xsmall muted">
+                      what the drawer took less what left it — no float, so this is the day's movement rather than
+                      what is in the till
+                    </div>
+                  </td>
+                  <td className="num">
+                    <strong>{money(data.cashNet)}</strong>
+                  </td>
                 </tr>
               )}
               {data.byTender.length === 0 && (

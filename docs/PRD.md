@@ -56,7 +56,7 @@ The Manager aims to empower their employees to help make good decisions and some
 
 The Manager inherits all Employee capabilities (superset).
 
-**Two mechanisms, not one.** A small set of actions is **manager-only** — an Employee cannot perform them at all, and a Manager authorizes in place by entering their own initials, with both names recorded. Everything else that used to be gated behind a *manager override* now **proceeds and raises a review flag** the Manager reviews afterward: below-cost shelf pricing, invoice adjustments beyond ±2%, selling into negative stock. Both mechanics are defined in [M-04](flows/M-04-manage-users.md) — see decisions 8 and 9, and [architecture](architecture.md) A-28.
+**Two mechanisms, not one.** A small set of actions is **manager-only** — an Employee cannot perform them at all, and a Manager authorizes in place by entering their own initials, with both names recorded. Everything else that used to be gated behind a *manager override* now **proceeds and raises a review flag** the Manager reviews afterward: below-cost shelf pricing, an accepted subtotal discrepancy, selling into negative stock. (*Invoice adjustments beyond ±2%* were on that list until [architecture](architecture.md) A-48 made them impossible instead.) Both mechanics are defined in [M-04](flows/M-04-manage-users.md) — see decisions 8 and 9, and [architecture](architecture.md) A-28.
 
 This extends the design intent that Employees have high agency: a Manager sees what happened rather than standing in the way of it.
 
@@ -70,7 +70,7 @@ Each flow is its own document. Status is tracked per flow so parallel work doesn
 
 | ID | Flow | Status |
 |---|---|---|
-| E-01 | [Authenticate to the platform](flows/E-01-authenticate.md) | In clarification |
+| E-01 | [Authenticate to the platform](flows/E-01-authenticate.md) | **Specified** |
 | E-02 | [Receive inventory](flows/E-02-receive-inventory.md) | **Specified** |
 | E-03 | [Search the inventory](flows/E-03-search-inventory.md) | **Specified** |
 | E-04 | [Manage the inventory](flows/E-04-manage-inventory.md) | **Specified** |
@@ -85,9 +85,10 @@ Each flow is its own document. Status is tracked per flow so parallel work doesn
 | M-01 | [Suppliers](flows/M-01-supplier-margin.md) | **Specified** |
 | M-02 | [Re-order inventory](flows/M-02-reorder-inventory.md) | **Specified** |
 | M-03 | [Daily summary of sales and inventory](flows/M-03-daily-summary.md) | **Specified** |
-| M-04 | [Add/remove employees or managers](flows/M-04-manage-users.md) | In clarification |
+| M-04 | [Add/remove employees or managers](flows/M-04-manage-users.md) | **Specified** |
 | M-05 | [Accounts payable](flows/M-05-accounts-payable.md) | **Specified** |
-| M-06 | [Configure the store](flows/M-06-settings.md) | In clarification |
+| M-06 | [Configure the store](flows/M-06-settings.md) | **Specified** |
+| M-07 | [Chart of accounts](flows/M-07-chart-of-accounts.md) | **Specified** |
 
 ---
 
@@ -105,7 +106,7 @@ _Partially derived from E-02. Refine as further flows land._
 | **Invoice** | Inbound receiving document. Draft, finalized, then paid; correctable until paid, immutable after ([E-02](flows/E-02-receive-inventory.md) d40). Keyed by `(supplier, invoice_number)`. Carries invoice-level freight / tax / misc. |
 | **InvoiceLine** | One received item on an invoice — links Record, cost (`Ext. Price`), accepted retail price, condition. |
 | ~~**InvoiceScan**~~ | **Removed** — there is no invoice photography and no document extraction ([E-02](flows/E-02-receive-inventory.md) d27). Invoice-level totals are entered manually. |
-| **CostAdjustment** | The ±2% reconciliation delta; flows into COGS. Beyond ±2% it proceeds and raises a ReviewFlag (E-02 d35). |
+| **CostAdjustment** | The reconciliation delta between the derived Invoice Total and the Total recorded; flows into COGS. **Bounded to ±2%** — beyond it the write path refuses the Total rather than flagging it ([architecture](architecture.md) A-48, E-02 d50, superseding d35's flag). |
 | **Backorder** | Units ordered but not shipped (the supplier's `Balance`). **Derived, not stored** — ordered minus received against that PurchaseOrder line across every Invoice (E-02 d30). |
 | **PurchaseOrder** | Manager-created reorder (M-02). Triggers catalog metadata prefetch. One Invoice may span several POs, so the link lives on the InvoiceLine ([E-02](flows/E-02-receive-inventory.md) d28). |
 | **Sale / Transaction** | A checkout (E-05). Carries a Sale number unique **per store** (E-05 d22) and one of five states: **Open**, Current, Held, Closed, Void. An Open Sale is pre-tender, unnumbered, and locked to the Employee ringing it (E-05 d21, d23). |
@@ -114,14 +115,18 @@ _Partially derived from E-02. Refine as further flows land._
 | **Return** | Reversal of a sale (E-06). A negative-quantity SaleLine, not a separate document. |
 | **Hold** | A Sale in the **Held** state — stock committed to a customer, by reservation (E-04) or on receipt of a customer-attached order (M-02). |
 | **Customer** | A person or business the store deals with. Optional on any Sale. Carries a signed account balance, a global discount, and a default tax line (E-07). |
-| **GiftCard** | A `GC`-prefixed code carrying a balance. Loaded as a SaleLine, redeemed as a Tender (E-05). |
+| **GiftCard** | A `GC`-prefixed code and a movement history; the balance is the **sum of its movements**, stored nowhere ([architecture](architecture.md) A-51). Loaded as a SaleLine, redeemed as a Tender (E-05), reversed by a void or edit. An over-redemption is refused, never clamped. |
 | **SupplierClaim** | A claim for credit against a supplier Invoice for short, damaged, or unshipped stock (E-04). Pending or Credited. |
-| **APPayment** | A payment recorded against a supplier Invoice — method, reference, amount, date (M-05). |
+| **PaymentBatch** | One settlement act, recorded once however many things it settled — method, reference, date, recorded-by, and **targets** naming what was settled and whether each was money or claim credit ([M-05](flows/M-05-accounts-payable.md) d16, d19). Voided whole, never edited (d22). Supersedes **APPayment**, which named one payment against one Invoice. |
 | **InventoryAdjustment** | A manager-only correction to stock, carrying a reason code, before/after counts, and attribution (E-04). |
-| **ReviewFlag** | A record that an Employee took an action worth a Manager's later attention — below-cost pricing, an adjustment beyond ±2%, a Sale driving stock negative. Carries the actor, the subject, and the figures that raised it. Acknowledged, never deleted ([M-04](flows/M-04-manage-users.md) d8). |
+| **ReviewFlag** | A record of something worth a Manager's later attention — **usually an Employee action, and since [architecture](architecture.md) A-68 not always**, since `actor_user_id` is nullable and a null actor means the **system** raised it — below-cost pricing, an accepted derived-versus-stated subtotal discrepancy, a Sale driving stock negative, a broken sale lock. (*An adjustment beyond ±2%* was on this list until [architecture](architecture.md) A-48 made it impossible rather than flagged.) Acknowledged by a Manager (M-04 d17). Carries the actor, the subject, and the figures that raised it. Acknowledged, never deleted ([M-04](flows/M-04-manage-users.md) d8). |
 | **Section** | Top-level reporting category (`VINYL`, `MERCH`). Genres roll up into Sections (M-06). |
-| **TaxLine** | A named, rated tax entry. Sellable things reference one rather than carrying a boolean (M-06). |
-| **CloseBatch** | One end-of-day close — its identifier, timestamp, closing User, and the Sales it moved to Closed (M-03). |
+| ~~**TaxLine**~~ | **Superseded by [M-06](flows/M-06-settings.md) d11**, which replaced decision 1's single table — and with it the `tax_lines` / `tax_components` shape ([architecture](architecture.md) §5). Tax is resolved from **two axes that never compete**, not from a line a sellable thing points at. Replaced by the three entities below. |
+| **TaxType** · **TaxGroup** · **ProductTaxCode** | One lookup, three parts ([M-06](flows/M-06-settings.md) d11, d12, d14). A **TaxType** is one tax that exists — code, name, `rate_ppm` ([architecture](architecture.md) A-47), a registration number (d48) and **no active flag** (d57, A-63). A **TaxGroup** is a jurisdiction or customer class carrying a ShortName. A **ProductTaxCode** is carried by a Genre and therefore by everything sellable. A **cell** on `(group, code)` names the taxes to apply. A Sale line snapshots the rates it resolved, at tender ([architecture](architecture.md) A-57). |
+| **CloseBatch** | One end-of-day close — its identifier, timestamp, closing User, and the Sales it moved to Closed (M-03). Carries the day's **stored summary** ([architecture](architecture.md) A-30) and its **JournalBatch** ([M-07](flows/M-07-chart-of-accounts.md) d7). Once a BankDeposit stands against it, Undo End of Day is refused ([architecture](architecture.md) A-66). |
+| **GLAccount** | One row of the store's chart of accounts ([M-07](flows/M-07-chart-of-accounts.md)). Carries a **role** the software resolves it by, and a **number and name the store owns and edits** (d3) — nothing is ever resolved by number. A **bank account is a GLAccount with a bank role**, not an entity of its own, and no balance is held for it ([architecture](architecture.md) A-65). Every seam — Section, tender, tax type twice, adjustment reason — maps to one (d5, d6, d11). |
+| **JournalBatch** | A balanced set of debits and credits, **immutable once written** ([M-07](flows/M-07-chart-of-accounts.md) d7, d8). Written by the artifact that causes it, inside that artifact's transaction ([architecture](architecture.md) A-67); Sales are the exception and batch at the close for volume (d12). Lines carry their own **business date** (d14) and **currency code** (d17). A correction never rewrites one — it posts forward (d8). |
+| **BankDeposit** | What actually reached the bank, recorded against the undeposited funds a close produced ([M-07](flows/M-07-chart-of-accounts.md)). The difference **is** the card processing fee, derived and never configured. Appended and voided by a counter-row, never edited; while one stands, Undo End of Day is refused ([architecture](architecture.md) A-66). **Not** a customer deposit, which is a line-less Sale tendered to their account ([E-05](flows/E-05-sell-a-record.md) d25, [lexicon](lexicon.md) §14). |
 | **User** | Employee or Manager, scoped to a store. |
 
 ### 4.1 Catalog vs. copy
@@ -179,7 +184,7 @@ _Status: **ratified**._
 
 **Auditability.** Attribution is required on every Sale, Return, void, hold cancellation, pay-out, inventory adjustment, override, Invoice finalization, and payment. Beyond attribution, four things are immutable or effectively so:
 
-- a finalized Invoice (E-02 decision 23);
+- a **paid** Invoice, and only for as long as it is paid ([E-02](flows/E-02-receive-inventory.md) d40, [architecture](architecture.md) A-33, A-33a). Immutability attaches at **paid**, not at finalize, and **releases** if the PaymentBatch that settled it is voided ([M-05](flows/M-05-accounts-payable.md) d22) — so this is the one entry in this list that is conditional rather than permanent. Between finalize and paid an Invoice is **correctable**;
 - SaleLine values, which are snapshotted at time of sale (E-05 decision 13);
 - a voided Sale's number, which is retained rather than reused (E-05 decision 4);
 - a User record, which is deactivated rather than deleted so historical attribution survives (M-04 decision 5).

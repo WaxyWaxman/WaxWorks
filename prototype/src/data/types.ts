@@ -4,7 +4,11 @@
 export type Grade = "M" | "NM" | "VG+" | "VG" | "G+" | "G" | "F" | "P";
 export const GRADES: Grade[] = ["M", "NM", "VG+", "VG", "G+", "G", "F", "P"];
 
-export type Section = "VINYL" | "MERCH";
+// M-06 d28 — Sections are an EDITABLE TABLE, not a fixed list, so the type is
+// the code rather than a closed union. The attributes live on SectionRow
+// below; a Record carries only the code, because d31 says a catalog entry
+// stores nothing its configuration already implies.
+export type Section = string;
 
 export interface RecordEntry {
   id: string;
@@ -15,14 +19,23 @@ export interface RecordEntry {
   format: string;
   year: number;
   country: string;
-  genre: string;
-  section: Section;
+  // The genre's stable id, never its name (see Genre below).
+  genreId: string;
+  // A-61 — the provider tags this Record was adopted under, the matched one
+  // marked. Undefined where the release carried none at all, which d53 keeps
+  // distinct from an unmapped tag: both prompt, but only one can write a map
+  // row. Display-only and never read by the money path, which resolves
+  // through the genre's product tax code (d12).
+  providerTags?: AdoptedTag[];
+  // M-06 d31, d32 — the Record stores its GENRE and NOT its Section. Section
+  // is derived through the genre's required parent (see lib/taxonomy.ts);
+  // storing both was the same fact at two removes, and it drifted the moment
+  // a genre was remapped.
   art: string; // emoji stand-in for cover art
   manufacturerUpc?: string;
   discogsId?: string;
   stickyPrice?: number; // New stock only
   minOnHand: number;
-  catalogOnly?: boolean; // a Discogs match we do not hold
   // A default only — the Supplier actually used is recorded on each order
   // line (M-02), so the same title can be bought from different Suppliers
   // over time without rewriting history.
@@ -42,8 +55,12 @@ export interface InventoryItem {
   conditionNote?: string;
   status: ItemStatus;
   heldByCustomerId?: string;
-  arrivedOnInvoice?: string;
-  supplierId?: string; // set when arrivedOnInvoice traces to a Supplier — claimable
+  // architecture A-45, E-02 d48 — the InvoiceLine this copy was minted from,
+  // and the ONLY link back to its paperwork. The Invoice is one lookup away
+  // and the Supplier two; neither is stored here. Absent = not received on
+  // any Invoice, which is an oversold copy until E-04 d19 reconciles it.
+  // Resolve it through lib/provenance.ts, never by parsing a label.
+  invoiceLineId?: string;
   // "Oversold" (lexicon) — minted straight from a Sale, before any Invoice
   // line ever backed it (E-05 decision 21 allows selling into negative
   // inventory). It's real from the moment it's sold — status is "sold" from
@@ -77,6 +94,8 @@ export interface Supplier {
   discountPct: number; // % off retail this supplier offers — also drives suggested retail at receiving (E-02 decision 8)
   cancelByDays?: number; // default days from order-placed to auto-cancel if unfulfilled; unset = not supported by this supplier, overridable per order
   currency: string;
+  paymentTerms?: PaymentTerms; // M-01 d19, d20 — the DEFAULT for Invoices received from them
+  defaultPaymentMethod?: PaymentMethod; // M-01 d20 — how they are normally paid; a default, never a rule
   type: SupplierType;
   notes?: string;
   email: string;
@@ -89,14 +108,29 @@ export interface Supplier {
   // any Supplier can carry second-hand invoices, this just picks which one
   // to suggest first.
   consignment?: boolean; // M-05 — a real Receiving Invoice from this Supplier displays as "Consignment" rather than "Invoice" in Accounts Payable
+  // M-01 d13. Billing is where payment is remitted; shipping is where stock
+  // ships from — the address a claim is argued against. When
+  // shipSameAsBilling is true (the default, and true of most Suppliers) the
+  // card mirrors billing into the locked shipping fields and `shipping` is
+  // not read: the mirror is derived at render, never a second copy that can
+  // drift. Nothing consumes either yet — billing is captured for M-05,
+  // shipping for E-04 claim correspondence.
+  billing?: PostalAddress;
+  shipping?: PostalAddress;
+  shipSameAsBilling?: boolean;
   log: { at: string; text: string }[];
 }
 
+// M-06 d17 — freight, services and bulk goods are REAL CATALOG ENTRIES
+// carrying a genre, not a separate type with a Section. That is what makes
+// tax resolution have no special case: every sellable thing reaches the
+// till through catalog entry → genre → product tax code → taxes, one path.
+// Section is derived from the genre's parent like anything else (d31).
 export interface NonTrackedItem {
   code: string; // e.g. FREIGHT
   label: string;
   price: number; // 0 => prompt at till
-  section: Section;
+  genreId: string;
 }
 
 export interface GiftCard {
@@ -119,13 +153,19 @@ export type TenderType =
   | "Pay-out"
   | "Used Credit";
 
-export interface CustomerAddress {
+// One address shape, used by both a Customer and a Supplier (M-01 d13) —
+// two shapes would mean two renderers and two validation rules for the same
+// five fields.
+export interface PostalAddress {
   line1?: string;
   line2?: string;
   city?: string;
   provinceState?: string; // 2-letter
   country?: string;
 }
+
+/** @deprecated Kept as the name E-07 already uses. Same shape. */
+export type CustomerAddress = PostalAddress;
 
 export interface Customer {
   id: string; // internal key, never shown
@@ -138,7 +178,11 @@ export interface Customer {
   contactPreference: "Phone" | "Email";
   address?: CustomerAddress;
   globalDiscountPct: number;
-  defaultTaxLineId?: string;
+  // M-06 d14, E-07 — the Customer supplies ONE of the two coordinates: their
+  // tax group. It is the group's ShortName that appears on the card. Absent
+  // means the store's default group applies; it is not an override and never
+  // competes with the product's axis.
+  taxGroupId?: string;
   note?: string;
   balance: number; // A/R balance — + store owes customer (store credit); - customer owes store
 }
@@ -159,7 +203,24 @@ export interface SaleLine {
   qty: number; // negative => Return
   price: number;
   discountPct: number;
-  taxLineId: string;
+  // M-06 d12 — what the PRODUCT is: the Genre's product tax code, copied onto
+  // the line when it is added, because that is a fact about what was sold and
+  // is fixed the moment it goes in the basket (A-57).
+  productTaxCode: string;
+  // The genre the line resolved through, kept as a POINTER rather than a
+  // copy. It is what M-03's *By Section* reads, and it must stay live:
+  // architecture A-60 has merging a genre re-bucket every Record under it
+  // at once, which a snapshotted Section could not do. Contrast
+  // `productTaxCode` directly above, which is deliberately a snapshot —
+  // what was charged is a fact, where which shelf it belongs on is not.
+  // Item lines carry it via `recordId`; non-tracked and gift-card lines
+  // carry it here, since they have no Record in this prototype.
+  genreId?: string;
+  // A-57 — the tax SNAPSHOT: the tax types resolved and the rates applied,
+  // never a reference to a configuration row. Taken at TENDER, not at line-add,
+  // because what was collected is not a fact until something is collected.
+  // Undefined while the Sale is open; the screen computes live until then.
+  tax?: TaxComponent[];
   note?: string;
   linkedSaleNumber?: number; // E-06 link to original Sale
   stockRouted?: boolean; // E-06 step 6 — returned copy has been dispositioned
@@ -169,6 +230,20 @@ export interface SaleLine {
 export interface Tender {
   id: string;
   type: TenderType;
+  /**
+   * M-07 d21 — WHICH configured tender this was, as opposed to which behavior.
+   * The ledger needs the row: M-06 d22 gives Visa and Mastercard separate
+   * accounts precisely because they settle as separate deposits, and `type`
+   * says only `Credit Card` for both.
+   *
+   * Optional because the till's tender pad offers the seven BEHAVIORS rather
+   * than the configured rows, so nothing sets this yet and the journal falls
+   * back to the first active row of the behavior — see `tenderRowFor` in
+   * journal.ts, which is where the consequence is written down. Left as a seam
+   * rather than fixed here: which rows the till offers is E-05's and M-06's
+   * call, not this flow's.
+   */
+  tenderRowId?: string;
   amount: number;
   note?: string;
   reference?: string;
@@ -185,6 +260,10 @@ export interface Sale {
   holdRef?: string;
   po?: string;
   customerId?: string;
+  // M-06 d14 — who the CUSTOMER is: their tax group, else the store's default.
+  // Snapshotted at tender alongside the line tax, so a Sale records the
+  // coordinate it actually resolved through rather than re-deriving it later.
+  taxGroupId?: string;
   lines: SaleLine[];
   tenders: Tender[];
   createdBy: string;
@@ -193,6 +272,18 @@ export interface Sale {
   lockedBy?: string; // set while Open; cleared on Hold/tender/void — E-05 locking
   replacesSaleId?: string; // Edit (Current) voids the original and duplicates it — this points back, for the audit trail
   batchId?: string; // set once a Current Sale is closed by Total Today's Sales (M-03)
+  /**
+   * M-07 d19 — a Sale's BUSINESS DATE is the calendar date of its tender
+   * (E-05 step 12), which is the moment A-57 already resolves tax at. d14 then
+   * groups journal lines by it, so a close nobody ran on Monday files Monday's
+   * revenue on Monday rather than on the day the button was pressed.
+   *
+   * A field rather than a read of the `Tendered —` log entry: the date is
+   * load-bearing for two decisions now, and deriving it from log PROSE is the
+   * shape E-04 d25 refused — a derived fact must not key on something a person
+   * can type. Seeded Sales predate it, so `businessDateOf` still falls back.
+   */
+  tenderedAt?: string;
   log: { at: string; text: string }[];
 }
 
@@ -217,13 +308,85 @@ export const CLAIM_REASONS = [
 ] as const;
 export type ClaimReason = (typeof CLAIM_REASONS)[number];
 
-export type ClaimStatus = "Draft" | "Pending" | "Credited";
+// E-04 d11, d24. There is no `Draft`: the prototype carried one the record
+// never admitted, and d21 retired it. **Unsent is derived from `sentAt`**
+// (d25) — never from the absent claim number, which d10 lets a person type
+// and which a derived state must therefore not key on (architecture A-43).
+// So an unsent claim is an ordinary `Pending` one that has no sent date.
+export type ClaimStatus = "Pending" | "Credited" | "Abandoned";
+
+// E-04 d24 — why the store stopped expecting the money. Same shape as the
+// adjustment reason codes in d4: visible rather than gated.
+export const ABANDON_REASONS = [
+  "Declined by supplier",
+  "No response",
+  "Not worth chasing",
+  "Other",
+] as const;
+export type AbandonReason = (typeof ABANDON_REASONS)[number];
+
+// E-04 d27 — why the claim itself was wrong. A different question from
+// ABANDON_REASONS: those say no money is coming, these say the claim should
+// never have been sent.
+export const VOID_REASONS = [
+  "Raised against the wrong copy",
+  "Wrong Invoice",
+  "Wrong reason or amount",
+  "Duplicate of another claim",
+  "Other",
+] as const;
+export type VoidReason = (typeof VOID_REASONS)[number];
+
+/**
+ * E-04 d27 and d29, architecture A-44 as amended by A-46 — a claim void is a
+ * ROW, never a column. A `voidedAt` on the claim would be an update to the row
+ * the void exists to leave alone (the rule A-36 sets for payment batches).
+ *
+ * A void is a REVERSAL, not a terminal state (d29): it retires the number and
+ * returns the claim to unsent, keeping its lines and separator, so it can be
+ * corrected and sent again. Only `Credited` and `Abandoned` end a claim, and
+ * both are statuses — which is why nothing here needs consulting to ask
+ * whether a claim is finished.
+ *
+ * Keyed by `claimNumber`, not by claim: a claim may be sent, voided and sent
+ * again without limit, so one claim can retire several numbers (A-46). The
+ * number is unique and never reused (d26), so it is the natural key.
+ */
+export interface ClaimVoid {
+  id: string;
+  claimId: string;
+  claimNumber: number; // the number this void retired
+  reason: VoidReason;
+  note?: string;
+  at: string;
+  by: string;
+}
+
+/**
+ * E-04 d28 — what a claim line is arguing about.
+ *
+ * A union rather than an optional id, because "names Invoice X" and "is
+ * deliberately about no Invoice" are different facts and a nullable field
+ * cannot tell either of them from "somebody forgot". The `none` case is an
+ * explicit choice a person makes, per line.
+ *
+ * NOT to be confused with an Invoice that has no supplier reference: E-02 d1
+ * auto-generates `REF####` for those, so every Invoice in the system has a
+ * number. `none` means *not about a particular shipment*.
+ *
+ * And it is EVIDENCE, never routing. A claim credit settles the supplier
+ * balance (M-05 d6, d26); what it attaches to is decided by ticking at
+ * settlement (M-05 d27, d33). A line naming 55021 may settle against 54880.
+ */
+export type ClaimLineAgainst =
+  | { kind: "invoice"; invoiceId: string }
+  | { kind: "none" };
 
 export interface ClaimLine {
   id: string;
   recordId: string;
   itemId?: string;
-  invoiceNumber?: string;
+  against: ClaimLineAgainst;
   reason: string; // one of CLAIM_REASONS, or free text (E-04 §"Supplier claims")
   note?: string;
   cost: number;
@@ -238,12 +401,23 @@ export interface SupplierClaim {
   status: ClaimStatus;
   creditMemo?: string; // the supplier's own reference, captured on Credited
   lines: ClaimLine[];
-  // M-05 — once Credited, applying the credit settles that much of the
-  // Supplier's overall balance without money moving; it isn't earmarked to
-  // one Invoice (decision 11) and is only ever applied once, in full.
-  applied?: boolean;
-  appliedAt?: string;
-  appliedBy?: string;
+  // E-04 d20 — the supplier's credit memo is the point of truth. What they
+  // GRANT may differ from what was claimed: a few dollars deducted for the
+  // cost of the return is routine. `creditedAmount` is the memo's figure and
+  // is what M-05 d26 counts, d27 attaches and d28 consumes; the claim's own
+  // total stays readable as what was asked for. Absent = they granted it all.
+  creditedAmount?: number;
+  // NOT stored: whether the credit has been consumed. Architecture A-37
+  // derives it from the presence of a live credit target naming this claim,
+  // for the reason A-33b refuses a stored `paid` — a flag has a release path
+  // (d22's void) that someone has to remember, and a derivation has none.
+  // E-04 d23 — stamped in the same act that assigns the number. Two jobs:
+  // it is the figure "days waiting" is measured from, and it is what d25
+  // derives sent-ness from. Absent = unsent.
+  sentAt?: string;
+  // E-04 d24 — set with status `Abandoned`. The status is the authority
+  // (architecture A-44); this is the detail behind it.
+  abandonment?: { reason: AbandonReason; note?: string; at: string; by: string };
   createdBy: string;
   createdAt: string;
   log: { at: string; text: string }[];
@@ -263,7 +437,11 @@ export interface SupplierClaim {
 // already minted, and a newly added line mints its own immediately, the
 // same as finalizing always has.
 export type IntakeMode = "New" | "Second-hand";
-export type InvoiceStatus = "Draft" | "Finalized" | "Paid";
+// A-33b: **paid is DERIVED, never stored.** The stored states are the two a
+// person sets. Ask `invoiceIsPaid()` (lib/totals) whether it is paid — that
+// function is A-41's single seam, and every write path against a finalized
+// Invoice calls it and refuses while it is true.
+export type InvoiceStatus = "Draft" | "Finalized";
 
 export interface InvoiceLine {
   id: string;
@@ -327,24 +505,106 @@ export interface PendingOrderLine {
    * voided PO reads as live in Previously placed.
    */
   poVoidedAt?: string;
+  /**
+   * Stamped on lines created by the record-an-order-placed-elsewhere route
+   * (M-02 d25) — when the order was ENTERED, as against `placedAt`, which is
+   * when it actually went out (d26). The two differ by however long it took
+   * somebody to get round to typing it in.
+   *
+   * Same justification as `poVoidedAt` above: the prototype has no
+   * PurchaseOrder entity to hold the fact, so the lines carry it. Without it a
+   * recorded order is indistinguishable from one this system sent, and the
+   * screen cannot say whose reference the PO number is.
+   */
+  recordedAt?: string;
 }
 
 /** A placed line is never deleted — it is Cancelled, or it is received (d21). */
 export type OrderLineStatus = "Shipped" | "Backordered" | "Cancelled";
 export const ORDER_LINE_STATUSES: OrderLineStatus[] = ["Shipped", "Backordered", "Cancelled"];
 
-// ---- Accounts payable (M-05) ----
-export type PaymentMethod = "Cheque" | "Credit Card" | "EFT" | "Cash";
-export const PAYMENT_METHODS: PaymentMethod[] = ["Cheque", "Credit Card", "EFT", "Cash"];
+// ---- Payment terms (M-01 d19, E-02 d45) ----
+// When a bill falls due. NOT Supplier.cancelByDays, which is an ORDERING
+// figure — days from order-placed to auto-cancel. Before these, nothing in
+// the system recorded when money was owed, which is why M-05's aging question
+// could not be answered: the field was missing, not the report.
+export type PaymentTerms =
+  | "Net 15"
+  | "Net 30"
+  | "Net 45"
+  | "Net 60"
+  | "Net 90"
+  | "End of Month"
+  | "On receipt"
+  | "COD"
+  | "Prepaid";
+export const PAYMENT_TERMS: PaymentTerms[] = [
+  "Net 15", "Net 30", "Net 45", "Net 60", "Net 90", "End of Month", "On receipt", "COD", "Prepaid",
+];
 
-// One thing a PaymentBatch's money went against — a real Invoice (E-02) or a
+/**
+ * How a term turns into a due date (E-02 d45 — always from the INVOICE date).
+ * Three shapes, not one, because "End of Month" is not a number of days:
+ *   days  — invoice date + n.
+ *   eom   — the last day of the month the invoice is dated in (M-01 d20), so
+ *           3 Sep and 28 Sep are both due 30 Sep. A late-month invoice on
+ *           these terms is due almost at once; that is the term, not a bug.
+ *   none  — COD and Prepaid produce no due date and so age nowhere.
+ */
+export type TermRule = { kind: "days"; days: number } | { kind: "eom" } | { kind: "none" };
+export const TERM_RULE: Record<PaymentTerms, TermRule> = {
+  "Net 15": { kind: "days", days: 15 },
+  "Net 30": { kind: "days", days: 30 },
+  "Net 45": { kind: "days", days: 45 },
+  "Net 60": { kind: "days", days: 60 },
+  "Net 90": { kind: "days", days: 90 },
+  "End of Month": { kind: "eom" },
+  "On receipt": { kind: "days", days: 0 },
+  COD: { kind: "none" },
+  Prepaid: { kind: "none" },
+};
+
+// ---- Accounts payable (M-05) ----
+// M-01 d20. EFT and e-Transfer are deliberately separate: different rails that
+// appear differently on a bank statement, and M-05 d5 makes that statement the
+// reconciliation surface. "Other" reconciles against nothing and exists only so
+// an unusual method has somewhere to go.
+export type PaymentMethod = "Cheque" | "Credit Card" | "EFT" | "e-Transfer" | "Cash" | "Other";
+export const PAYMENT_METHODS: PaymentMethod[] = ["Cheque", "Credit Card", "EFT", "e-Transfer", "Cash", "Other"];
+
+// One thing a settlement went against — a real Invoice (E-02) or a
 // manually-entered PayableEntry. "kind" plus "id" together address it, since
 // the two live in different arrays.
+//
+// `settleKind` is M-05 d19: one batch carries both money and claim credit,
+// and a target records which it was.
+//
+// A target does NOT name the credit that funded it (M-05 d42, architecture
+// A-69). It used to, on the grounds that d22's void "has to put it back
+// exactly and a pool with no provenance cannot be reversed" — but A-37
+// already attaches a credit to AT MOST ONE non-voided batch, so the void
+// un-consumes it from the BATCH and never needed the pair. Nothing read the
+// pairing: an Invoice's balance reads a target's amount and kind. What it did
+// do was make consumption underivable for a credit no target happened to
+// name, which is how a ticked-but-undrawn credit came to be counted twice.
 export type PayableTargetKind = "invoice" | "entry";
+export type SettleKind = "money" | "credit";
 export interface PaymentTarget {
   kind: PayableTargetKind;
   id: string;
   amount: number;
+  settleKind: SettleKind;
+}
+
+// M-05 d22 / architecture A-33a: a void is a NEW ARTIFACT appended against
+// the batch, never a column on it and never a deletion. Modelled as its own
+// array so "never edited" is structural rather than a convention someone
+// remembers. One per batch — a second is impossible by construction.
+export interface PaymentBatchVoid {
+  id: string;
+  batchId: string;
+  voidedAt: string;
+  voidedBy: string;
 }
 
 // One Record-Payment action — paying several Invoices/Entries with one
@@ -357,23 +617,78 @@ export interface PaymentBatch {
   supplierId: string;
   method: PaymentMethod;
   reference: string; // free text — "Cheque 101", "Credit card 1278" — what reconciles against the bank statement
+  /**
+   * architecture A-65 — **the account this payment drew on**, defaulted from
+   * the Method and overridable. A-65's own reason: *"a shop paying some
+   * suppliers from one chequing account and others from a second, both by
+   * cheque, is not distinguishable by `Cheque`"*, so the account is a field on
+   * the settlement rather than a property of the Method.
+   *
+   * Decided by A-65 and unbuilt until E-02 d54 needed it: a counter buy's
+   * payable is settled drawing on **Second-hand purchases**, where the till
+   * already put the money (M-07 d26) — which the hardcoded bank account it
+   * used to assume could not express.
+   *
+   * Optional only so that settlements recorded before this existed still read;
+   * the journal falls back to the reserved bank account and says so.
+   */
+  drawnOnAccountId?: string;
   date: string;
   recordedBy: string;
   createdAt: string;
   targets: PaymentTarget[];
+  /**
+   * `ap_batch_credits` (architecture A-69, M-05 d42) — the credits that funded
+   * this batch, and how much of each was applied. This is the single source of
+   * A-37's `consumed`: a credit is consumed when a non-voided batch names it
+   * here, so voiding the batch un-consumes it with nothing to flip.
+   *
+   * d27 — only a credit the drawdown actually reached appears. One ticked but
+   * never drawn "stays as it was" and is not named.
+   */
+  credits: BatchCredit[];
 }
 
-// One slice of a Credited claim's amount landing on this Invoice. A claim's
-// credit isn't earmarked to one Invoice the Manager picks — applying it nets
-// against the whole Supplier balance, auto-distributed across their
-// outstanding Invoices (oldest received first), which is why one claim can
-// produce several of these, one per Invoice it touched (M-05 decision 11).
-export interface AppliedCredit {
+/**
+ * M-05 d46 — a clearing is an ACT WITH MEMBERS, addressable the way a
+ * PaymentBatch is: listed beside payment history, opened to see its members,
+ * with Un-clear on it where Void sits on a batch. `ap_clearings` +
+ * `ap_clearing_members` (architecture A-36).
+ *
+ * An entry is CLEARED because a clearing names it — derived, never stored on
+ * the entry. That is A-37's shape, and it is what makes d48 work: reversing a
+ * clearing REMOVES it (architecture A-70), and its members are un-cleared by
+ * the absence of the row, with nothing to flip.
+ */
+export interface Clearing {
   id: string;
-  claimId: string;
+  supplierId: string;
+  memberIds: string[]; // d15 — at least two, and their signed amounts sum to zero
+  clearedAt: string;
+  clearedBy: string;
+}
+
+export interface BatchCredit {
+  creditId: string; // the SupplierClaim or Credit PayableEntry it came from
+  amount: number; // how much of it this batch applied — d28's "consumed whole" less any remainder
+}
+
+/**
+ * One labelled charge off the supplier's paperwork (E-02 d53) — a tax, or
+ * something miscellaneous.
+ *
+ * The **kind is what resolves the account**, which is the whole point of
+ * labelling them: a `tax` charge posts to that tax type's *paid* account
+ * ([M-07](docs/flows/M-07-chart-of-accounts.md) d5, an Input Tax Credit and so
+ * a receivable), and a `misc` charge to the reserved misc account (d23, a cost
+ * of goods). One flat figure could resolve to neither.
+ */
+export interface InvoiceCharge {
+  id: string;
+  kind: "tax" | "misc";
+  /** Set iff `kind` is `tax` — the TaxType's code (M-06 d11's single letter). */
+  taxCode?: string;
   amount: number;
-  appliedAt: string;
-  appliedBy: string;
 }
 
 export interface Invoice {
@@ -383,14 +698,34 @@ export interface Invoice {
   intakeMode: IntakeMode;
   invoiceDate: string;
   receivedDate: string;
+  // E-02 d45 — defaulted from the Supplier, overridable here, because the
+  // paperwork in hand is the agreement. Net-N runs from the INVOICE date.
+  paymentTerms?: PaymentTerms;
+  // E-02 d47 — same shape, and an EXPECTATION rather than a record: what
+  // actually happened is on the PaymentBatch (M-05 d34). Reading one for the
+  // other is the mistake this comment exists to prevent.
+  paymentMethod?: PaymentMethod;
   statedSubtotal: number; // from the invoice photo/manual entry — decision 15
-  tax: number;
   freight: number;
-  misc: number;
+  /**
+   * E-02 d53 — everything else the supplier billed, **each one labelled**, and
+   * the label is what picks its ledger account.
+   *
+   * Replaces the flat `tax` and `misc` figures. Those were one number each, and
+   * [M-07](docs/flows/M-07-chart-of-accounts.md) d5 needs inbound tax **per
+   * type**: GST and QST are separate registrations remitted to separate
+   * authorities, so their input tax credits cannot share a row or the
+   * accountant cannot file either return.
+   *
+   * A list rather than one more fixed field, because how many there are is a
+   * property of **the store**, not of this software — a Quebec shop has GST and
+   * QST, an Alberta one has GST alone, and neither should be made to look at
+   * the other's boxes.
+   */
+  charges: InvoiceCharge[];
   totalOverride?: number; // reconciling to the paper total — beyond ±2% raises a ReviewFlag
   status: InvoiceStatus;
   lines: InvoiceLine[];
-  creditsApplied: AppliedCredit[]; // balance is derived from this plus matching PaymentBatch targets, never edited directly
   createdBy: string;
   createdAt: string;
   finalizedAt?: string;
@@ -417,10 +752,23 @@ export interface Invoice {
 export type PayableEntryType = "Invoice" | "Claim" | "Credit" | "Adjustment" | "Consignment";
 export const PAYABLE_ENTRY_TYPES: PayableEntryType[] = ["Invoice", "Claim", "Credit", "Adjustment", "Consignment"];
 
+// Where an entry came from. `manual` is decision 12's Create-new. The other
+// two are NOT manual ledger entries — d12's defining characteristic is that a
+// manual entry is not sourced from Receiving or Supplier Claims, and these are
+// sourced from a settlement and a void respectively:
+//   remainder — d25: the part of a credit that could not attach to anything.
+//   reversal  — d30: what a void appends against a remainder, instead of
+//               deleting it. Equal and opposite, so the pair nets to zero.
+export type PayableEntrySource = "manual" | "remainder" | "reversal";
+
 export interface PayableEntry {
   id: string;
   supplierId: string;
   type: PayableEntryType;
+  source?: PayableEntrySource;   // absent = "manual"
+  fromCreditId?: string;         // remainder: the credit it is left over from
+  fromVoidId?: string;           // reversal: the void that posted it
+  reversalOfId?: string;         // reversal: the remainder it cancels
   reference: string; // free text — a bill #, a memo #, a note on what the adjustment is for
   date: string;
   subtotal: number;
@@ -433,9 +781,36 @@ export interface PayableEntry {
   // that eventually replaced it, say — a Manager can mark them Cleared
   // against each other. Cleared entries stay in the ledger (never deleted)
   // but drop out of what still needs attention.
-  clearedWith?: string[]; // ids of the other PayableEntry rows cleared alongside this one
+  // A d15 CLEARING no longer writes here — it is its own artifact (Clearing
+  // below, M-05 d46, architecture A-36). These three are left to d27's
+  // settlement disposal alone, which is a different act with a different
+  // reversal: its batch's void (d22), not an un-clear.
   clearedAt?: string;
   clearedBy?: string;
+  /**
+   * Set iff a SETTLEMENT retired this row — d27's Claim placeholder, which
+   * retires contributing nothing. Absent means a Manager cleared it by hand
+   * under d15.
+   *
+   * The two acts wrote identical `clearedAt`/`clearedBy` and nothing else,
+   * so they were indistinguishable. d39 makes a CLEARING reversible; it does
+   * not authorise reversing a settlement's disposal, which belongs to that
+   * batch's void (d22) and is an open question in M-05. Discriminating on
+   * the absence of `clearedWith` would have been the same implicit trap.
+   */
+  clearedInBatchId?: string;
+  /**
+   * The PaymentBatch that emitted this remainder (M-05 d25, d38).
+   *
+   * Two things read it. `voidPaymentBatch` finds the remainders to reverse
+   * under d30 — it used to match on `createdAt` equality, which cross-claims
+   * between two settlements against one supplier in the same tick. And the
+   * money that actually left the bank is DERIVED from it: money targets plus
+   * this batch's overpayment remainders, which is what d5's reference has to
+   * reconcile against. Derived rather than stored, so it cannot drift from
+   * the rows it describes (A-36, A-37, A-33b all refuse the stored copy).
+   */
+  fromBatchId?: string;
   createdBy: string;
   createdAt: string;
   log: { at: string; text: string }[];
@@ -451,15 +826,477 @@ export type ReviewFlagKind =
   | "total-adjustment"
   | "discrepancy-accepted"
   | "negative-stock"
-  | "sale-lock-broken";
+  | "sale-lock-broken"
+  // architecture A-68 — the first SYSTEM-RAISED kind. M-07 d10: a journal that
+  // did not balance had its difference posted to Suspense, and the Manager is
+  // told. It has no actor because it is not an action: it is this system's own
+  // arithmetic failing, and no Manager can cause one or clear one.
+  | "journal-imbalance";
 
 export interface ReviewFlag {
   id: string;
   kind: ReviewFlagKind;
   summary: string;
-  recordedBy: string;
+  /**
+   * architecture A-68 — NULLABLE, and null means the system raised it. Modelled
+   * as optional here because the prototype now has one such kind:
+   * `journal-imbalance` (M-07 d10), which has no actor. M-05 d50's
+   * `money_on_cleared_entry` is still unreachable and still raises nothing.
+   *
+   * Whatever renders a flag has to read the absence as *the system*, and d10
+   * requires it to say so in those terms — a Manager cannot have caused this
+   * one and must not be invited to fix it.
+   */
+  recordedBy?: string;
   at: string;
   acknowledged: boolean;
   acknowledgedBy?: string;
   acknowledgedAt?: string;
+}
+
+// ---------------------------------------------------------------------------
+// Users (M-04) and the staff session (E-01)
+// ---------------------------------------------------------------------------
+
+// Two roles, Manager a strict superset of Employee (M-04 d1). There is no tier
+// above Manager: M-04 d11 puts the Store's assigned identifiers outside the
+// role model, and d14 protects the last Manager with a floor rule rather than
+// with a role that outranks them.
+export type UserRole = "Employee" | "Manager";
+
+export interface User {
+  id: string;
+  name: string;
+  // Stored NORMALISED - trimmed and upper-cased on write (M-04 d20), so the
+  // uniqueness check is a plain comparison and no shift key can mint a
+  // near-duplicate at the counter.
+  initials: string;
+  role: UserRole;
+  // Deactivated, never deleted (M-04 d5): every Sale, adjustment and
+  // authorisation stays attributed to whoever performed it, so the row has to
+  // outlive their leaving. Uniqueness of initials is among ACTIVE users only
+  // (d13 as amended by d16) - a departed user's initials are released.
+  active: boolean;
+  // E-01 d21. OPTIONAL, for anyone, up to 8 characters. It is a barrier and
+  // not authentication — a shop may well use a single letter — so nothing in
+  // the model treats it as proof of identity. Absent means no second step.
+  //
+  // Plain text here because this is an in-memory mock with no server; the
+  // real thing hashes it and never logs the value (see the decision).
+  password?: string;
+  // Before-and-after, per A-55: without it, who promoted whom exists nowhere
+  // after the second change, and this is the privilege boundary.
+  log: { at: string; text: string }[];
+}
+
+// ---------------------------------------------------------------------------
+// M-06 settings — the configuration other flows resolve against
+//
+// Two of these open up types that used to be closed unions. The union values
+// were never wrong; they were the *behaviour*, and M-06 separates behaviour
+// from the row a shop configures:
+//
+//   - d22/d23: many tenders may share one behaviour — `Visa` and `Mastercard`
+//     both settle as a card — so the behaviour stays an enum and the tender
+//     becomes a row.
+//   - d28: a Section is an editable table with real attributes, so the code
+//     stays a string and the attributes move to a row.
+//
+// Nothing on the money path changes shape as a result, which is the point.
+// ---------------------------------------------------------------------------
+
+export interface SectionRow {
+  code: string; // two characters (d28)
+  name: string;
+  // d20 — whether a Section enters revenue reporting is a property of the
+  // Section. Freight is not revenue; a gift card load is a liability.
+  countsAsRevenue: boolean;
+  // d29 — the Section supplies the DEFAULT; whether a thing tracks stock
+  // stays a property of the catalog entry.
+  tracksStockDefault: boolean;
+  // d30 — both default true, both false on the gift card Section. Not gates:
+  // a property of what is being sold, not of who is selling it.
+  discountable: boolean;
+  returnable: boolean;
+  // d40 — a Section may override the store's dead-stock threshold.
+  deadStockDays?: number;
+  // d9 — referenced settings are deactivated, never deleted.
+  active: boolean;
+  // Pre-loaded and not removable: d20 gives freight and gift cards one each.
+  systemOwned?: boolean;
+}
+
+export interface TenderRow {
+  id: string;
+  name: string; // d4 — the display name is configurable
+  behavior: TenderType; // d4 — the behaviour is not
+  active: boolean;
+  // NO GL code. M-06 d58 retired d23's reserved field; the tender-to-account
+  // mapping lives in M-07 (architecture A-64).
+  // `rounding` is written by the system, never offered (d26).
+  systemOwned?: boolean;
+}
+
+export interface CurrencyRow {
+  code: string; // ISO — CAD, USD
+  name: string;
+  // d38 — ONE rate per currency, and it is a PLANNING rate the shop sets
+  // conservatively. There is no separate buffer (it supersedes d36's).
+  rate: number;
+  // d33 — each rate carries the date it was last set, because the staleness
+  // risk is answered by showing the date rather than by hiding it.
+  rateSetOn: string;
+  active: boolean;
+}
+
+export type DrawerPolicy = "every" | "cash" | "never"; // d25
+export type ReceiptWidth = "80mm" | "58mm" | "letter"; // d50
+
+// The scalars. Every one of these is a figure another flow reads, which is
+// why they are a store setting rather than a constant (A-5 scopes to a Store).
+export interface StoreSettings {
+  sessionLapseSeconds: number; // d45, A-50 — default 300, no maximum (E-01 d13)
+  priceEndingMinor: number; // d44, A-49 — 99, 95 or 0, an integer of minor units
+  deadStockDays: number; // d40 — default 180, a Section may override
+  streamAgingDays: number; // d41 — default 14
+  drawerPolicy: DrawerPolicy; // d25 — does nothing in v1; the hardware is not there
+  receiptWidth: ReceiptWidth; // d50
+}
+
+export interface StoreDetails {
+  legalName: string; // the entity, on outbound customer invoices
+  tradingName: string; // the name on the door, on receipts
+  address: PostalAddress;
+  phone: string;
+  email: string;
+  website: string;
+  receiptFooter: string;
+  receiptFooterOn: boolean; // d46 — free text with its own on/off flag
+  logoPath?: string; // d51, A-56 — an uploaded image, never a URL
+  // d47 — assigned, never editable, and writable by nobody who works in the
+  // shop. M-04 d11 settled who assigns them: we do, at setup.
+  readonly storeId: string; // seven digits
+  readonly position: number;
+}
+
+// A-52 — every settings write is logged with its actor and the values BEFORE
+// and AFTER, because the question asked afterwards is always "what did this
+// used to be", and d8's never-retroactive rule makes the old value the only
+// record of what yesterday's Sales were computed against.
+export interface SettingsLogEntry {
+  at: string;
+  actor: string;
+  group: string;
+  key: string;
+  before: string;
+  after: string;
+}
+
+// ---------------------------------------------------------------------------
+// M-06 tax — two tables, not one (d11)
+//
+// A TAX TYPE is one tax that EXISTS, shared by every group that charges it, so
+// a legislated rate change is edited once. A TAX GROUP is a jurisdiction or
+// customer class, carrying one cell per product tax code. The cell names the
+// taxes. d1's single table could not express a rate shared across
+// jurisdictions without repeating it, and repeated rates drift.
+// ---------------------------------------------------------------------------
+
+// The shape lib/tax.ts produces. Declared here rather than imported so the
+// data model does not depend on the library that computes it.
+export interface TaxComponent {
+  code: string;
+  name: string;
+  ratePpm: number;
+  amount: number;
+}
+
+export interface TaxType {
+  code: string; // a single letter — a, b, c — used to compose the cells
+  name: string; // GST, QST, PST, HST
+  ratePpm: number; // A-47 — parts per million, because QST is 9.975%
+  // A-58 / d52 — ONE pending change: the new rate and the date it starts.
+  // Never read ratePpm directly; resolve through taxRateAt().
+  pendingRatePpm?: number;
+  pendingFrom?: string;
+  // d48 — the registration number belongs on the TYPE, not in store details:
+  // GST and QST are separate registrations and a receipt carries each beside
+  // its own tax.
+  registrationNumber?: string;
+  // NO GL account. M-06 d58 retired d11's reserved field, and a tax type needs
+  // TWO accounts anyway — collected and paid (M-07 d5) — where this carried
+  // one. The mapping lives in M-07 (architecture A-64).
+  // NO `active` FLAG, and its absence is the decision (M-06 d57,
+  // architecture A-63). A tax type is the one piece of configuration here
+  // with no assignments — nothing is filed under `b`, and a completed Sale
+  // line snapshots the rate rather than referencing the row (A-57) — so a
+  // cell naming it is the only reference, and liveness is DERIVED from the
+  // cells rather than stored beside them. `ab+` -> `a` is how `b` stops
+  // being charged. A stored flag let a housekeeping toggle silently charge
+  // less tax, which is the defect A-63 closes by making it unrepresentable.
+}
+
+export interface ProductTaxCode {
+  code: string; // 1, 2, B, 3
+  // d12 — a description beside it, because a bare letter sitting on a genre is
+  // tribal knowledge and the next person to read it has nothing to go on.
+  description: string;
+  active: boolean;
+}
+
+export interface TaxGroup {
+  id: string;
+  description: string; // Quebec, Ontario, Wholesale
+  shortName: string; // up to four characters — this is what appears on a Customer
+  active: boolean;
+}
+
+// d13 — stored as ROWS, drawn as a grid. Storage shape and screen shape are
+// decoupled deliberately: the grid is how a person reads it, and rows are how
+// it stays addable-to without a migration per product tax code.
+export interface TaxGroupCell {
+  groupId: string;
+  productTaxCode: string;
+  spec: string; // "", "a", "ab", "ab+"
+}
+
+// A-61 — what the catalog provider says about a release. MusicBrainz genre
+// tags are user-submitted and carry a VOTE COUNT, which is the provider's own
+// answer to "this release has three tags, which one is meant".
+export interface ProviderTag {
+  tag: string;
+  votes: number;
+}
+
+// A-61 — the tags a Record was ADOPTED under, with the one the map matched
+// marked. A snapshot, never re-resolved: `release_cache` is shared and
+// refreshable (A-6), so it holds what the provider says NOW, where the
+// question a mis-shelved Record raises is what it said THEN. Same shape as
+// A-57's rates on a Sale line, for the same reason.
+export interface AdoptedTag extends ProviderTag {
+  matched?: boolean;
+}
+
+// architecture A-6 — what the catalog provider knows about a pressing,
+// held in a cache that sits UNDERNEATH the per-Store catalog. This is NOT a
+// Record: there is no Record until adoption (d53), which is why a release
+// carries tags and no genre. A Store owns its Records; the cache is shared
+// across Stores, so nothing store-specific may ever be written into it.
+export interface ReleaseCacheEntry {
+  id: string;
+  artist: string;
+  title: string;
+  label: string;
+  catalogNo: string;
+  format: string;
+  year: number;
+  country: string;
+  art: string;
+  manufacturerUpc?: string;
+  musicbrainzId?: string;
+  // Undefined where the provider carries no genre tags at all — d53's
+  // second state, which prompts exactly like an unmapped tag and differs
+  // only in having nothing to key a map row on.
+  tags?: ProviderTag[];
+}
+
+// M-06 d6, d32 — the genre map: provider tag to genre and NOTHING ELSE. The
+// Section follows from the genre's required parent and is never guessed.
+export interface GenreMapRow {
+  tag: string;
+  genreId: string;
+  // A-61 — manager-only (A-59), defaulting to zero so a shop that sets
+  // nothing gets the provider's vote order. It exists because votes measure
+  // consensus rather than specificity.
+  priority: number;
+}
+
+// d12, d32 — a Genre carries a MANDATORY parent Section and the product tax
+// code. d17 makes genre mandatory on every sellable thing, including
+// non-tracked ones, which is what closes the "what tax does freight pay"
+// question without a special case.
+export interface Genre {
+  // A STABLE KEY, not the name. A Record points at this; the name is a label a
+  // Manager may correct. Joining by name meant renaming `Metal` orphaned every
+  // Record under it at once — Section fell to the em dash and, worse, the tax
+  // code fell back to the standard one silently (d12 puts the product tax code
+  // on the genre). It also made architecture A-60's merge unrepresentable:
+  // merge is specified as REPOINTING every dependent pointer, and a name join
+  // has no pointer to repoint. Architecture §5 models genres as rows with
+  // id-shaped references, so this is the prototype catching up.
+  id: string;
+  name: string;
+  section: string; // Section code — mandatory (d32)
+  productTaxCode: string; // mandatory (d12, d17)
+  // d9 — a referenced Genre is deactivated, never deleted. Off stops it being
+  // OFFERED; it does not stop it RESOLVING, or a Record under a retired genre
+  // would silently change what tax it attracts.
+  active: boolean;
+  // d17 — shop-internal genres are omitted from the picker rather than gated,
+  // so setting a Record's genre to Freight is unrepresentable (d19).
+  internal?: boolean;
+  // d18 — the gift card load resolves through THIS genre, from the money
+  // path rather than from a catalog entry, so nothing in the catalog holds a
+  // reference A-54 could see. System-owned on d9's terms: not deletable, and
+  // its product tax code is not editable, because changing either silently
+  // starts taxing money the shop has merely received.
+  systemOwned?: boolean;
+}
+
+// ---------------------------------------------------------------------------
+// M-07 — the chart of accounts.
+//
+// d1: this is a chart and a journal export, NOT an internal ledger. No account
+// carries a balance here; the books live with the shop's accountant.
+
+/**
+ * What the software resolves an account BY (M-07 d3). The role is fixed and not
+ * editable; the number and name belong to the store.
+ *
+ * Absent means the Manager added it (step 3): it carries no role, nothing posts
+ * to it automatically, and it exists to be a mapping target.
+ *
+ * The per-seam roles — revenue, undeposited, tax-collected, tax-paid,
+ * adjustment — are NOT unique: there is one account per Section, per tender,
+ * per tax type twice (d5) and per reason code (d6). Those resolve through a
+ * GLMapping, not through the role. The rest are one each.
+ */
+export type GLRole =
+  // one each — the reserved roles the software must be able to resolve
+  | "inventory"
+  | "cogs"
+  | "accounts-payable"
+  | "freight-inbound"
+  // d23 — invoice-level MISC, beside freight rather than inside it. E-02 step 6
+  // has the Employee type the two as separate figures off the paperwork, and a
+  // misc charge can be anything a supplier bills that is not freight.
+  | "misc-inbound"
+  | "second-hand-purchases"
+  | "gift-card-liability"
+  | "customer-credit"
+  | "cash-over-short"
+  | "card-processing-fees"
+  | "bank"
+  | "suspense"
+  // one per seam — resolved through a mapping.
+  //
+  // The five tender roles are d21: every tender keeps its own account, and each
+  // takes the KIND its behavior implies. M-06 d22's reason for per-tender
+  // granularity is about deposits, and that reason does not reach a gift card
+  // redemption, where no money moves at all.
+  | "revenue"
+  | "undeposited" // cash and card — money that will reach a bank
+  | "tender-gift-card" // a redemption draws down a liability
+  | "tender-customer-credit" // store_credit and used_credit
+  | "tender-payout" // cash out for an expense (M-06)
+  | "tender-rounding" // the system-written nickel difference (M-06 d26)
+  | "tax-collected"
+  | "tax-paid"
+  | "adjustment";
+
+/**
+ * M-07 d22 — the six kinds a destination asks for. DERIVED from an account's
+ * role, and stored only on an account the Manager added, which is the only one
+ * with no role to derive it from.
+ */
+export type GLAccountType = "asset" | "liability" | "equity" | "income" | "cogs" | "expense";
+
+export interface GLAccount {
+  id: string;
+  /** Fixed (d3). Absent = added by the Manager, with nothing posting to it. */
+  role?: GLRole;
+  /** The STORE's, not ours — d3: nothing resolves an account by its number. */
+  number: string;
+  name: string;
+  /**
+   * d22 — set ONLY where `role` is absent. Deriving it from the role everywhere
+   * else keeps it from being the second copy of a fact that A-36, A-37 and
+   * A-33b each refused, and from depending on the NUMBER, which d3 makes the
+   * store's and which they are invited to change.
+   */
+  type?: GLAccountType;
+  /** M-06 d9 — an account that has been posted to is deactivated, never deleted. */
+  active: boolean;
+}
+
+/** Which seam posts where (M-07 d4 — the mapping lives here, not on the seam). */
+export type GLSeamKind = "section" | "tender" | "tax-collected" | "tax-paid" | "adjustment";
+
+export interface GLMapping {
+  seamKind: GLSeamKind;
+  seamId: string;
+  accountId: string;
+}
+
+/**
+ * E-04's six adjustment reason codes, which d6 gives an account each: "the six
+ * exist because a Manager is made to choose between them, and collapsing them
+ * in the ledger throws away the only thing that choice was for."
+ *
+ * Defined here because the prototype had never modelled them as data.
+ */
+export type AdjustmentReason = (typeof ADJUSTMENT_REASONS)[number];
+
+export const ADJUSTMENT_REASONS = [
+  "Shrinkage",
+  "Damaged",
+  "Found",
+  "Miscount / correction",
+  "Written off",
+  "Other",
+] as const;
+
+// ---------------------------------------------------------------------------
+// M-07 Phase 3 — the journal.
+//
+// d1 keeps saying it and it governs everything below: this is a chart and a
+// journal EXPORT, not a ledger. A JournalBatch is a record of what happened,
+// stored rather than derived (d7) so that two exports of the same week can
+// never disagree. Nothing here accumulates into a balance.
+
+/**
+ * One line of one journal. Carries its OWN business date (d14) and its OWN
+ * currency code (d17) — **neither may be inferred from the batch it sits in**,
+ * because a batch can span two days (a close nobody ran on Monday sweeps
+ * Monday and Tuesday) and a supplier Invoice can be in USD.
+ *
+ * `debit` and `credit` are both present and exactly one of them is non-zero,
+ * which is the shape d15's CSV emits and the shape every destination expects.
+ */
+export interface JournalLine {
+  /** The account this posts to — resolved by role or through a GLMapping,
+   *  NEVER by number (d3). */
+  accountId: string;
+  /** d14 — the date the underlying thing happened, not the date it was posted. */
+  businessDate: string;
+  debit: number;
+  credit: number;
+  /** d17 — its own code. Nothing is ever converted, here or at export. */
+  currency: string;
+  memo: string;
+}
+
+/**
+ * A journal batch, written by the artifact that caused it, inside the same
+ * transaction (architecture A-67). Immutable once written (d8, d14): a
+ * correction posts FORWARD as a new batch dated when it was made, and nothing
+ * ever edits one of these.
+ */
+export interface JournalBatch {
+  id: string;
+  /**
+   * d15 — what the accountant's question resolves to. `close:<batch id>`,
+   * `invoice:<number>`, `payment:<reference>`, `adjustment:<id>`. It names the
+   * ARTIFACT, which is what makes *what is this $52* answerable.
+   */
+  source: string;
+  /** When the journal was written — distinct from any line's business date. */
+  writtenAt: string;
+  lines: JournalLine[];
+  /**
+   * d10 — set when the difference had to go to Suspense. Always a defect in
+   * this system and never a data-entry mistake, so it is recorded on the batch
+   * rather than left to be noticed in a total.
+   */
+  suspense?: number;
 }

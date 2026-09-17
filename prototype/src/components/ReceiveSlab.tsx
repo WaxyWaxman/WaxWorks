@@ -1,8 +1,9 @@
 import { useEffect, useRef } from "react";
 import type { Invoice, Supplier } from "../data/types";
 import { money } from "../lib/money";
-import { round2 } from "../lib/totals";
+import { invoiceChargesTotal, round2 } from "../lib/totals";
 import { useApp } from "../store/AppStore";
+import { ChevronLeft, ChevronRight } from "./Chevrons";
 
 // The receiving slab (E-02 d38, d42). Invoices, and only Invoices: the drafts
 // in flight and the ones received lately, searched by supplier, number, date,
@@ -69,7 +70,7 @@ export function ReceiveSlab({
   // show every tidy invoice as $0.00.
   const invoiceTotal = (iv: Invoice) =>
     iv.totalOverride ??
-    round2(iv.lines.reduce((sum, l) => sum + l.cost * l.qty, 0) + iv.tax + iv.freight + iv.misc);
+    round2(iv.lines.reduce((sum, l) => sum + l.cost * l.qty, 0) + iv.freight + invoiceChargesTotal(iv));
 
   if (!open) {
     return (
@@ -310,16 +311,6 @@ function InvoiceRow({
 
 const ICON = { width: 19, height: 19, viewBox: "0 0 24 24", fill: "none", stroke: "currentColor" } as const;
 
-const ChevronRight = () => (
-  <svg {...ICON} strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-    <path d="M9 5l7 7-7 7" />
-  </svg>
-);
-const ChevronLeft = () => (
-  <svg {...ICON} strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-    <path d="M15 5l-7 7 7 7" />
-  </svg>
-);
 const Plus = () => (
   <svg {...ICON} strokeWidth="2" strokeLinecap="round" aria-hidden="true">
     <path d="M12 5v14M5 12h14" />

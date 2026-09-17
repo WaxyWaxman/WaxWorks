@@ -1,3 +1,4 @@
+import type { TaxContext } from "./totals";
 import { isClosedState, orderLineState, outstandingQty, type OrderLineState } from "./orderLines";
 import type {
   Customer,
@@ -5,7 +6,6 @@ import type {
   PendingOrderLine,
   RecordEntry,
   Sale,
-  TaxLine,
 } from "../data/types";
 import { customerBalanceDelta, daysAgo, saleTotals } from "./totals";
 
@@ -91,7 +91,7 @@ export function customerFacts(
     sales: Sale[];
     pendingOrders: PendingOrderLine[];
     invoices: Invoice[];
-    taxLines: TaxLine[];
+    taxCtx: TaxContext;
     records: RecordEntry[];
   },
 ): CustomerFacts {
@@ -121,7 +121,7 @@ export function customerFacts(
     .filter((o) => !isClosedState(o.state));
 
   const sold = mine.filter(isSold);
-  const totals = sold.map((s) => ({ sale: s, grand: saleTotals(s, input.taxLines).grand }));
+  const totals = sold.map((s) => ({ sale: s, grand: saleTotals(s, input.taxCtx).grand }));
 
   const year = new Date().getFullYear();
   const yearOf = (at: string) => Number(at.slice(0, 4));

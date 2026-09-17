@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { NavLink, Route, Routes, useLocation } from "react-router-dom";
-import { CURRENT_USER } from "./data/seed";
+import { IdentifyProvider, useIdentify } from "./components/Identify";
+import { useApp } from "./store/AppStore";
 import { Home } from "./screens/Home";
 import { Search } from "./screens/Search";
 import { PointOfSale } from "./screens/PointOfSale";
@@ -12,7 +13,11 @@ import { OrderProcessing } from "./screens/OrderProcessing";
 import { WhatsOnOrder } from "./screens/WhatsOnOrder";
 import { Suppliers } from "./screens/Suppliers";
 import { AccountsPayable } from "./screens/AccountsPayable";
+import { Users } from "./screens/Users";
+import { Settings } from "./screens/Settings";
+import { ChartOfAccounts } from "./screens/ChartOfAccounts";
 import { ReviewQueueBadge } from "./components/ReviewQueue";
+import { useEffect as useEffectShell } from "react";
 
 // The top menu is one band of equal segments (design review — Signal), and it
 // carries exactly the three jobs done with a customer at the counter. Everything
@@ -56,6 +61,14 @@ const MORE_NAV: { group: string; items: { to: string; label: string; flow: strin
     ],
   },
   {
+    group: "Administration",
+    items: [
+      { to: "/users", label: "Users", flow: "M-04" },
+      { to: "/settings", label: "Settings", flow: "M-06" },
+      { to: "/chart", label: "Chart of accounts", flow: "M-07" },
+    ],
+  },
+  {
     group: "This prototype",
     items: [{ to: "/", label: "Flow map", flow: "review path", end: true }],
   },
@@ -64,6 +77,142 @@ const MORE_NAV: { group: string; items: { to: string; label: string; flow: strin
 const MORE_PATHS = MORE_NAV.flatMap((g) => g.items.map((i) => i.to));
 
 export function App() {
+  return (
+    <IdentifyProvider>
+      <AppShell />
+    </IdentifyProvider>
+  );
+}
+
+// E-01's session, drawn where the till can see it.
+//
+// It is an actor and a timer in the browser and nothing else (A-3, A-50), so
+// the whole of it lives in the shell: who is in session, and a lapse that
+// measures INACTIVITY rather than elapsed time — an hour of continuous work
+// never prompts, six minutes away does (M-06 d45).
+function SessionChip() {
+  const app = useApp();
+  const identify = useIdentify();
+
+  // d10 / A-19a — an Open Sale suppresses the lapse on its terminal, whatever
+  // the setting says, so a lapse can never strand a locked Sale mid-ring.
+  const openSale = app.sales.some((x) => x.state === "Open");
+
+  useEffectShell(() => {
+    if (!app.sessionUser || openSale) return;
+    const tick = setInterval(() => {
+      const idleFor = (Date.now() - app.sessionLastActivity) / 1000;
+      // d21: a password holder's session is capped at the 5-minute default
+      // however long the shop set its own lapse to.
+      if (idleFor >= app.effectiveLapseSeconds) app.endSession();
+    }, 1000);
+    return () => clearInterval(tick);
+  }, [app, openSale]);
+
+  // Any interaction is activity. Cheap and global rather than sprinkled
+  // through every screen, because the rule is about the terminal, not any
+  // particular control.
+  useEffectShell(() => {
+    if (!app.sessionUser) return;
+    const touch = () => app.touchSession();
+    document.addEventListener("pointerdown", touch);
+    document.addEventListener("keydown", touch);
+    return () => {
+      document.removeEventListener("pointerdown", touch);
+      document.removeEventListener("keydown", touch);
+    };
+  }, [app]);
+
+  if (!app.sessionUser)
+    return (
+      <span className="who">
+        <button
+          className="btn sm primary"
+          onClick={() =>
+            identify.request({
+              reason: "Open a session on this terminal",
+              // E-01 d21 — opening a session is one of the two moments a
+              // password is asked for. Users without one are unaffected.
+              requirePassword: true,
+              onOk: (u) => app.identify(u.id),
+            })
+          }
+        >
+          Enter initials
+        </button>
+        <span className="idy-none"> no session · Till 1</span>
+      </span>
+    );
+
+  // The name opens a small menu carrying Log out, rather than a button sitting
+  // permanently on the till's busiest strip. Ending a session on purpose has
+  // to be POSSIBLE — the lapse has no maximum (d13) and an Open Sale
+  // suppresses it outright (d10), so a till left signed in stays signed in —
+  // but it is not a per-minute action, and the width is worth more.
+  return <SessionMenu openSale={openSale} />;
+}
+
+function SessionMenu({ openSale }: { openSale: boolean }) {
+  const app = useApp();
+  const [open, setOpen] = useState(false);
+  const wrapRef = useRef<HTMLSpanElement>(null);
+
+  useEffectShell(() => {
+    if (!open) return;
+    const onPointer = (e: PointerEvent) => {
+      if (!wrapRef.current?.contains(e.target as Node)) setOpen(false);
+    };
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && setOpen(false);
+    document.addEventListener("pointerdown", onPointer);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("pointerdown", onPointer);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [open]);
+
+  if (!app.sessionUser) return null;
+
+  return (
+    <span className="who sess-wrap" ref={wrapRef}>
+      <button
+        className={"sess-name" + (open ? " on" : "")}
+        aria-haspopup="true"
+        aria-expanded={open}
+        onClick={() => setOpen((v) => !v)}
+      >
+        {app.sessionUser.name} <span aria-hidden="true">▾</span>
+      </button>
+      <span className="muted">
+        {" "}
+        {app.sessionUser.role} · Till 1{openSale ? " · sale open, no lapse" : ""}
+      </span>
+      {open && (
+        <span className="sess-menu" role="menu">
+          <button
+            className="sess-item"
+            role="menuitem"
+            onClick={() => {
+              setOpen(false);
+              app.endSession();
+            }}
+          >
+            Log out
+          </button>
+          <span className="sess-note">
+            {openSale
+              ? "A Sale is open, so the lapse is suppressed (d10) — this till stays signed in until you log out."
+              : app.effectiveLapseSeconds < app.sessionLapseSeconds
+                ? `Lapses after ${Math.round(app.effectiveLapseSeconds / 60)} min idle — capped because you have a password (d21), not the shop's ${Math.round(app.sessionLapseSeconds / 60)} min.`
+                : `Lapses after ${Math.round(app.effectiveLapseSeconds / 60)} min idle (M-06 d45).`}
+          </span>
+        </span>
+      )}
+    </span>
+  );
+}
+
+function AppShell() {
   const location = useLocation();
   // /return/:saleId has no nav entry of its own — a Return is entered from
   // (and belongs to) Point of Sale, so its editor keeps "Sell" lit rather than
@@ -79,17 +228,28 @@ export function App() {
   // stranding you on a screen with no way back to a Sale in flight.
   const atTill = location.pathname.startsWith("/sell") || onReturn;
 
-  // Find was the second screen built this way, Receiving the third (E-02
-  // d38) and Customers the fourth (E-07 d17). Three tracks only work if the frame is fixed: a page that scrolls as
-  // one document cannot keep the scan field and the reconcile check where they
-  // were. Still scoped to these screens rather than made a global rule — the
-  // remaining long tables (Order Processing, Accounts Payable) are read top to
-  // bottom and lose more than they gain from a fixed frame.
+  // Find was the second screen built this way, Receiving the third (E-02 d38),
+  // Customers the fourth (E-07 d17), Suppliers the fifth (M-01 d17), What's on
+  // Order the sixth and Order Processing the seventh (M-02 Phase 2).
+  //
+  // Three tracks only work if the frame is fixed: a page that scrolls as one
+  // document cannot keep the search box and the primary action where they were
+  // last time, which is the entire claim the layout makes. Suppliers and
+  // What's on Order were re-laid onto the frame without being added here, so
+  // both were scrolling as documents and quietly giving that up.
+  //
+  // Still a list rather than a global rule: Accounts Payable is a long table
+  // read top to bottom and loses more than it gains from a fixed frame.
   const ownsWindow =
     atTill ||
     location.pathname.startsWith("/search") ||
     location.pathname.startsWith("/receiving") ||
-    location.pathname.startsWith("/customers");
+    location.pathname.startsWith("/customers") ||
+    location.pathname.startsWith("/suppliers") ||
+    location.pathname.startsWith("/on-order") ||
+    location.pathname.startsWith("/orders") ||
+    location.pathname.startsWith("/users") ||
+    location.pathname.startsWith("/settings");
 
   return (
     <div className={"app" + (ownsWindow ? " app-fixed" : "")}>
@@ -113,7 +273,7 @@ export function App() {
         <span className="review-slot">
           <ReviewQueueBadge />
         </span>
-        <span className="who">{CURRENT_USER} · Till 1 · Prototype</span>
+        <SessionChip />
       </header>
       <main className={"main" + (ownsWindow ? " main-fixed" : "")}>
         <Routes>
@@ -131,7 +291,13 @@ export function App() {
           <Route path="/orders" element={<OrderProcessing />} />
           <Route path="/on-order" element={<WhatsOnOrder />} />
           <Route path="/suppliers" element={<Suppliers />} />
+          <Route path="/suppliers/:supplierId" element={<Suppliers />} />
           <Route path="/payable" element={<AccountsPayable />} />
+          <Route path="/users" element={<Users />} />
+          <Route path="/users/:userId" element={<Users />} />
+          <Route path="/chart" element={<ChartOfAccounts />} />
+          <Route path="/settings" element={<Settings />} />
+          <Route path="/settings/:group" element={<Settings />} />
         </Routes>
       </main>
     </div>

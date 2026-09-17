@@ -3,6 +3,7 @@ import type { Sale } from "../data/types";
 import { money } from "../lib/money";
 import { tenderedTotal } from "../lib/totals";
 import { useApp } from "../store/AppStore";
+import { defaultTenderRow } from "../lib/tenders";
 
 // E-05 d31 — Void (and Edit, which is a Void plus a re-ring) only at zero.
 // Rather than refusing and leaving the operator to work out what to do, this
@@ -42,6 +43,9 @@ export function VoidSaleModal({
         ? { accountDirection: "add" as const }
         : {}),
       note: took ? "Reversal before void" : "Collected back before void",
+      // E-05 d36 — raised by the system to undo a Sale rather than chosen at
+      // the pad, so it takes the default row for the behaviour.
+      tenderRowId: defaultTenderRow(type, app.tenders)?.id,
     });
 
   const act = () => {

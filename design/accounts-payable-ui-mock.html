@@ -1,0 +1,2284 @@
+<title>Accounts Payable, Three Tracks (retired)</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700;800&family=Archivo+Narrow:wght@600;700&display=swap">
+<style>
+/*
+ * M-05 — Accounts payable, re-laid as the till's three tracks.
+ *
+ * Palette, type and structural class names are lifted from
+ * design/whats-on-order-ui-mock.html verbatim. This mock adds no colour and
+ * almost no skeleton of its own, on purpose: Accounts Payable should read as
+ * the same screen as On Order, Customers, Find, Receive and Suppliers, doing
+ * a different errand.
+ *
+ * The one structure NOT carried over is the row. On Order's .lrow is a record
+ * plus its metadata; a payables ledger is six money columns that have to line
+ * up, so track 2 is a real table. Forcing .lrow onto it would be symmetry
+ * bought at the cost of the thing the screen is for.
+ *
+ * RETIRED. This mock did its job and has been overtaken by the built screen
+ * at prototype/src/screens/AccountsPayable.tsx, which implements M-05 d17–d33.
+ * It is kept because it is the record of the design review that produced those
+ * decisions, and because several of them are easier to understand next to the
+ * drawing that argued for them.
+ *
+ * Do not read it as current. Known divergences, all of them decided AFTER this
+ * file stopped being maintained:
+ *   d33 — the Manager does NOT place a credit per Invoice. Ticking the
+ *         Invoices IS the choosing; inside that set the credit simply fills.
+ *         This mock still draws a credit box per row, which is the reading
+ *         d33 retired.
+ *   d32 — a reversing Adjustment is a counterweight, not a debit: it can be
+ *         cleared, never settled. This mock treats it as a debit.
+ *   d31 — struck, and only ever existed to patch d33's misreading.
+ *   E-04 d20 — a claim counts at what its credit memo GRANTS, which may be
+ *         less than what was claimed.
+ */
+:root {
+  --c-bg: #f1f1ef;
+  --c-surface: #ffffff;
+  --c-surface-2: #f7f7f5;
+  --c-ink: #111111;
+  --c-ink-soft: #55554f;
+  --c-ink-faint: #8a8a84;
+  --c-border: #e4e4e0;
+  --c-border-strong: #ccccc7;
+  --c-accent: #d64500;
+  --c-accent-ink: #ffffff;
+  --c-accent-soft: #fff4ee;
+  --c-ok: #1f6b3f;
+  --c-ok-soft: #eaf3ed;
+  --c-warn: #8a6a1a;
+  --c-warn-soft: #fbf4e4;
+  --c-danger: #c0392b;
+  --c-danger-soft: #fdf3f1;
+
+  --font-sans: "Archivo", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Helvetica, sans-serif;
+  --font-narrow: "Archivo Narrow", "Archivo", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: ui-monospace, "SF Mono", "Cascadia Mono", "Roboto Mono", Menlo, Consolas, monospace;
+
+  --sp-1: 4px; --sp-2: 8px; --sp-3: 12px; --sp-4: 16px; --sp-5: 24px; --sp-6: 32px;
+  --radius-sm: 2px;
+}
+
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+body {
+  margin: 0; background: var(--c-bg); color: var(--c-ink);
+  font-family: var(--font-sans); font-size: 14px; line-height: 1.45;
+  -webkit-font-smoothing: antialiased;
+}
+.page { max-width: 1580px; margin: 0 auto; padding: var(--sp-6) var(--sp-5) 96px; }
+
+/* ---- page furniture (not part of the app) ---- */
+.masthead { display: flex; align-items: flex-end; gap: var(--sp-5); flex-wrap: wrap; margin-bottom: var(--sp-4); }
+.masthead h1 { font-size: 30px; letter-spacing: -0.03em; margin: 0 0 2px; line-height: 1.05; }
+.masthead p { margin: 0; color: var(--c-ink-soft); max-width: 70ch; font-size: 14.5px; }
+.stamp {
+  font-family: var(--font-narrow); font-weight: 700; font-size: 11px; letter-spacing: 0.12em;
+  text-transform: uppercase; color: var(--c-ink-faint); border: 1px solid var(--c-border-strong);
+  padding: 3px 8px; white-space: nowrap;
+}
+.stamp.live { color: var(--c-accent); border-color: var(--c-accent); }
+.stamp.retired { color: var(--c-danger); border-color: var(--c-danger); background: var(--c-danger-soft); }
+
+/* Retired. Loud on purpose: a stale mock that reads as current is worse than
+   no mock at all, and the page below still looks entirely plausible. */
+.retired-banner {
+  border: 2px solid var(--c-danger); background: var(--c-danger-soft);
+  padding: var(--sp-3) var(--sp-4); margin-bottom: var(--sp-4);
+  font-size: 13.5px; color: var(--c-ink-soft); line-height: 1.5;
+}
+.retired-banner strong { color: var(--c-ink); }
+.retired-banner span { display: block; margin-top: var(--sp-2); }
+.retired-banner code {
+  font-family: var(--font-mono); font-size: 12px;
+  background: var(--c-surface); border: 1px solid var(--c-border-strong); padding: 0 4px;
+}
+.screen { opacity: 0.82; }
+
+.controls {
+  display: flex; align-items: center; gap: var(--sp-2); flex-wrap: wrap;
+  border: 1px solid var(--c-border-strong); background: var(--c-surface);
+  padding: var(--sp-2) var(--sp-3); margin-bottom: var(--sp-3);
+}
+.controls .lab { margin-right: var(--sp-1); }
+.toggle {
+  font: inherit; font-size: 12.5px; font-weight: 600; cursor: pointer;
+  border: 1px solid var(--c-border-strong); background: var(--c-surface-2);
+  color: var(--c-ink-soft); padding: 5px 10px; border-radius: var(--radius-sm);
+}
+.toggle:hover { border-color: var(--c-ink); color: var(--c-ink); }
+.toggle[aria-pressed="true"] { background: var(--c-ink); border-color: var(--c-ink); color: #fff; }
+.toggle:disabled { opacity: 0.4; cursor: not-allowed; }
+.toggle:focus-visible, .rail-ico:focus-visible, .chip:focus-visible, .sup:focus-visible,
+.tile:focus-visible, .lr:focus-visible { outline: 2px solid var(--c-accent); outline-offset: -2px; }
+.ctl-sep { width: 1px; align-self: stretch; background: var(--c-border-strong); margin: 0 var(--sp-2); }
+
+/* ---- the app frame ---- */
+.screen {
+  border: 1px solid var(--c-ink); background: var(--c-surface);
+  height: clamp(660px, 86dvh, 920px);
+  display: flex; flex-direction: column; overflow: hidden;
+}
+.band {
+  flex: none; height: 58px; display: flex; align-items: stretch;
+  background: var(--c-surface); border-bottom: 2px solid var(--c-ink);
+}
+.band .wordmark {
+  width: 168px; display: flex; align-items: center; gap: var(--sp-2); padding-left: 18px;
+  font-weight: 800; font-size: 16px; letter-spacing: 0.02em; border-right: 1px solid var(--c-border-strong);
+}
+.band .wordmark .dot { width: 10px; height: 10px; border-radius: 50%; background: var(--c-accent); }
+.band .mode {
+  flex: 1; display: flex; align-items: center; justify-content: center;
+  font-size: 14px; font-weight: 600; letter-spacing: 0.05em; color: var(--c-ink-soft);
+  border-right: 1px solid var(--c-border-strong);
+}
+.band .mode.on { background: var(--c-ink); color: #fff; font-weight: 800; }
+.band .who {
+  width: 172px; display: flex; flex-direction: column; justify-content: center;
+  padding-left: 16px; border-left: 1px solid var(--c-border-strong);
+}
+
+.lab {
+  font-family: var(--font-narrow); font-weight: 700; font-size: 11px; letter-spacing: 0.1em;
+  text-transform: uppercase; color: var(--c-ink-faint);
+}
+.xsmall { font-size: 11px; }
+.small { font-size: 12.5px; }
+.muted { color: var(--c-ink-faint); }
+.mono { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+
+/* Three tracks. The same 320 / 1fr / 344 skeleton as .cust-frame, .find-frame
+   and .wo-frame — this screen earns no special width either. */
+.frame {
+  flex: 1; min-height: 0; display: grid;
+  grid-template-columns: 320px minmax(0, 1fr) 344px;
+}
+.frame.slab-shut { grid-template-columns: 52px minmax(0, 1fr) 344px; }
+
+/* ============ TRACK 1 — the payables slab ============ */
+.slab {
+  border-right: 1px solid var(--c-border-strong); background: var(--c-surface-2);
+  display: flex; flex-direction: column; min-height: 0; min-width: 0;
+}
+.slab-head {
+  flex: none; display: flex; align-items: center; gap: var(--sp-2);
+  padding: var(--sp-2) var(--sp-2) var(--sp-2) var(--sp-3);
+  border-bottom: 1px solid var(--c-border-strong);
+}
+.slab-head .lab { flex: 1; }
+.rail-ico {
+  position: relative; width: 38px; height: 38px; flex: none; padding: 0; cursor: pointer;
+  display: grid; place-items: center; font-size: 15px; line-height: 1;
+  border: 1px solid var(--c-border-strong); background: var(--c-surface);
+  color: var(--c-ink); border-radius: var(--radius-sm);
+}
+.rail-ico:hover { border-color: var(--c-ink); }
+.rail-ico:disabled { opacity: 0.4; cursor: not-allowed; }
+.rail-badge {
+  position: absolute; top: -6px; right: -6px; min-width: 16px; height: 16px; padding: 0 4px;
+  background: var(--c-ink); color: #fff; border-radius: 8px;
+  font-family: var(--font-mono); font-size: 10px; font-weight: 700;
+  display: grid; place-items: center; line-height: 1;
+}
+.rail-badge.ok { background: var(--c-ok); }
+.rail-sep { width: 24px; height: 1px; background: var(--c-border-strong); flex: none; }
+
+.slab-open-only { display: flex; flex-direction: column; min-height: 0; flex: 1; }
+.slab-acts { flex: none; display: flex; gap: var(--sp-2); padding: var(--sp-3) var(--sp-3) 0; }
+.slab-acts .btn { flex: 1; justify-content: center; }
+
+/* The store-wide figure. Deliberately NOT one number: M-05 requires a
+   supplier's currency to carry through, and the store-currency rate that
+   would let these be added lives in M-06, which is not built. One total per
+   currency is the honest shape; a single sum would be a fabricated rate. */
+.slab-total {
+  flex: none; padding: var(--sp-3); border-bottom: 1px solid var(--c-border-strong);
+  background: var(--c-surface);
+}
+.slab-total .tot { display: flex; align-items: baseline; justify-content: space-between; gap: var(--sp-2); }
+.slab-total .tot + .tot { margin-top: 3px; }
+.slab-total .v { font-family: var(--font-mono); font-size: 20px; font-weight: 800; font-variant-numeric: tabular-nums; letter-spacing: -0.02em; }
+.slab-total .v.sub { font-size: 14px; font-weight: 700; color: var(--c-ink-soft); }
+.slab-total .hint { display: block; font-size: 10.5px; color: var(--c-ink-faint); margin-top: 5px; }
+
+.slab-search {
+  flex: none; padding: var(--sp-3); display: flex; flex-direction: column; gap: 6px;
+  border-bottom: 1px solid var(--c-border-strong);
+}
+.slab-search input {
+  font: inherit; font-size: 15px; font-weight: 600; width: 100%;
+  border: 2px solid var(--c-ink); background: var(--c-surface); color: var(--c-ink);
+  padding: 7px 10px; border-radius: var(--radius-sm);
+}
+.slab-search input::placeholder { color: var(--c-border-strong); font-weight: 400; }
+.slab-search .hint { font-size: 10.5px; color: var(--c-ink-faint); }
+
+.chips { display: flex; flex-wrap: wrap; gap: var(--sp-1); align-items: center; padding: var(--sp-2) var(--sp-3); border-bottom: 1px solid var(--c-border-strong); }
+.chip {
+  font: inherit; font-size: 11.5px; font-weight: 600; cursor: pointer;
+  border: 1px solid var(--c-border-strong); background: var(--c-surface); color: var(--c-ink-soft);
+  padding: 3px 7px; border-radius: var(--radius-sm); display: inline-flex; gap: 5px; align-items: center;
+}
+.chip .count { font-family: var(--font-mono); font-size: 10.5px; color: var(--c-ink-faint); }
+.chip:hover { border-color: var(--c-ink); color: var(--c-ink); }
+.chip.on { background: var(--c-ink); border-color: var(--c-ink); color: #fff; }
+.chip.on .count { color: #d5d5d1; }
+.chip:disabled { opacity: 0.4; cursor: not-allowed; }
+/* Green rather than the usual hot red: an unapplied credit is the one thing
+   on this screen that is in the STORE's favour. Colour means state. */
+.chip.good { border-color: var(--c-ok); color: var(--c-ok); }
+.chip.good .count { color: var(--c-ok); }
+.chip.good.on { background: var(--c-ok); border-color: var(--c-ok); color: #fff; }
+.chip.good.on .count { color: #cfe3d6; }
+.chip.hot { border-color: var(--c-danger); color: var(--c-danger); }
+.chip.hot .count { color: var(--c-danger); }
+.chip.hot.on { background: var(--c-danger); border-color: var(--c-danger); color: #fff; }
+.chip.hot.on .count { color: #fbdcd7; }
+
+.sortbar {
+  flex: none; display: flex; align-items: center; gap: var(--sp-2);
+  padding: 6px var(--sp-3); border-bottom: 1px solid var(--c-border-strong);
+}
+.sortbar select {
+  font: inherit; font-size: 11.5px; font-weight: 600; flex: 1; padding: 3px 6px;
+  border: 1px solid var(--c-border-strong); background: var(--c-surface); color: var(--c-ink);
+  border-radius: var(--radius-sm);
+}
+
+.slab-list { flex: 1; min-height: 0; overflow-y: auto; }
+.slab-band {
+  position: sticky; top: 0; z-index: 1; background: var(--c-surface-2);
+  border-bottom: 1px solid var(--c-border-strong); border-top: 1px solid var(--c-border-strong);
+  padding: var(--sp-2) var(--sp-3);
+  display: flex; align-items: baseline; justify-content: space-between; gap: var(--sp-2);
+}
+.slab-empty { padding: var(--sp-5) var(--sp-3); color: var(--c-ink-faint); font-size: 12.5px; text-align: center; }
+
+/* One Supplier. The same skeleton as On Order's .po and Suppliers' .sup: a
+   tile, two rows of text, one right-hand figure. The tile carries the short
+   code, because that is what a Supplier is called everywhere else. */
+.sup {
+  display: grid; grid-template-columns: 44px minmax(0, 1fr) auto; gap: 1px var(--sp-3);
+  align-items: baseline; width: 100%; text-align: left; cursor: pointer;
+  padding: var(--sp-2) var(--sp-3); border: none; border-bottom: 1px solid var(--c-border);
+  border-left: 3px solid transparent; background: var(--c-surface); font: inherit; color: var(--c-ink);
+}
+.sup:hover { background: var(--c-surface-2); }
+.sup.on { border-left-color: var(--c-accent); box-shadow: inset 0 0 0 1px var(--c-ink); }
+.sup .code {
+  grid-column: 1; grid-row: 1 / -1; align-self: center;
+  width: 44px; height: 34px; display: grid; place-items: center;
+  border: 1px solid var(--c-border); background: var(--c-surface-2);
+  font-family: var(--font-mono); font-size: 11px; font-weight: 700; color: var(--c-ink-soft);
+}
+.sup.cons .code { border-style: dashed; border-color: var(--c-ink-faint); }
+.sup .t { grid-column: 2; grid-row: 1; font-size: 12.5px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sup .m { grid-column: 2; grid-row: 2; font-size: 11px; color: var(--c-ink-faint); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sup .n {
+  grid-column: 3; grid-row: 1; font-family: var(--font-mono); font-size: 12.5px; font-weight: 700;
+  text-align: right; font-variant-numeric: tabular-nums; color: var(--c-ink); white-space: nowrap;
+}
+.sup .n.nil { color: var(--c-ink-faint); font-weight: 600; }
+.sup .n.late { color: var(--c-danger); }
+.sup .k {
+  grid-column: 3; grid-row: 2; text-align: right; white-space: nowrap;
+  font-family: var(--font-narrow); font-size: 9px; font-weight: 700;
+  letter-spacing: 0.05em; text-transform: uppercase; color: var(--c-ink-faint);
+}
+.sup .k.good { color: var(--c-ok); }
+.sup .k.late { color: var(--c-danger); }
+.sup.dim { opacity: 0.5; }
+
+/* Gift cards are not a Supplier, and the row says so rather than sitting in
+   the same list pretending to be one. d10 registers the liability here; the
+   slab is "what the store owes", and card holders are owed too. */
+.sup.gc { background: var(--c-surface-2); border-top: 2px solid var(--c-ink); }
+.sup.gc .code { border: 1px solid var(--c-ink); background: var(--c-ink); color: #fff; font-size: 15px; }
+
+.st-dot { width: 9px; height: 9px; border-radius: 50%; flex: none; display: inline-block; vertical-align: middle; }
+.st-dot.credit { background: var(--c-ok); }
+.st-dot.claim { background: var(--c-warn); }
+.st-dot.owed { background: var(--c-ink-soft); }
+.st-dot.settled { background: var(--c-border-strong); }
+
+/* the 52px shut strip */
+.slab-strip {
+  height: 100%; display: flex; flex-direction: column; align-items: center;
+  gap: var(--sp-2); padding: var(--sp-2) 0; min-height: 0;
+}
+.strip-stack { flex: 1; min-height: 0; overflow-y: auto; scrollbar-width: none; display: flex; flex-direction: column; align-items: center; gap: 6px; }
+.strip-stack::-webkit-scrollbar { display: none; }
+.tile {
+  position: relative; width: 38px; height: 38px; flex: none; padding: 0; cursor: pointer;
+  display: grid; place-items: center; border: 1px solid var(--c-border-strong);
+  border-radius: var(--radius-sm); background: var(--c-surface); color: var(--c-ink-soft);
+  font-family: var(--font-mono); font-size: 10.5px; font-weight: 700;
+}
+.tile:hover { border-color: var(--c-ink); }
+.tile.on { border-color: var(--c-ink); box-shadow: inset 3px 0 0 var(--c-accent); color: var(--c-ink); }
+.tile.gc { border-color: var(--c-ink); background: var(--c-ink); color: #fff; font-size: 15px; }
+.tile .st-dot { position: absolute; bottom: -3px; right: -3px; border: 2px solid var(--c-surface-2); width: 11px; height: 11px; }
+.strip-lab {
+  font-family: var(--font-narrow); font-size: 8.5px; font-weight: 700; letter-spacing: 0.12em;
+  text-transform: uppercase; color: var(--c-border-strong); writing-mode: vertical-rl; padding: var(--sp-1) 0;
+}
+
+/* ============ TRACK 2 — the combined ledger ============ */
+.main { display: flex; flex-direction: column; min-width: 0; min-height: 0; background: var(--c-surface); }
+.main-head {
+  flex: none; display: flex; align-items: flex-start; gap: var(--sp-3); flex-wrap: wrap;
+  padding: var(--sp-3) var(--sp-4); border-bottom: 2px solid var(--c-ink);
+}
+.main-head h2 { margin: 0; font-size: 27px; letter-spacing: -0.025em; line-height: 1.1; }
+.main-head .badges { display: flex; flex-wrap: wrap; gap: var(--sp-2); margin-top: 6px; align-items: center; }
+.head-acts { margin-left: auto; display: flex; gap: var(--sp-2); align-items: center; }
+
+.badge {
+  display: inline-flex; align-items: center; gap: 4px; font-family: var(--font-narrow);
+  font-size: 10.5px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase;
+  border: 1px solid var(--c-border-strong); color: var(--c-ink-soft); padding: 1px 6px; background: var(--c-surface);
+}
+.badge.ok { color: var(--c-ok); border-color: var(--c-ok); background: var(--c-ok-soft); }
+.badge.warn { color: var(--c-warn); border-color: var(--c-warn); background: var(--c-warn-soft); }
+.badge.danger { color: var(--c-danger); border-color: var(--c-danger); background: var(--c-danger-soft); }
+.badge.ink { color: #fff; background: var(--c-ink); border-color: var(--c-ink); }
+.badge.accent { color: var(--c-accent); border-color: var(--c-accent); background: var(--c-accent-soft); }
+.badge.mono { font-family: var(--font-mono); text-transform: none; letter-spacing: 0; font-weight: 600; }
+
+.btn {
+  display: inline-flex; align-items: center; gap: 6px; cursor: pointer; font: inherit;
+  font-size: 13px; font-weight: 600; padding: 6px 12px; border-radius: var(--radius-sm);
+  border: 1px solid var(--c-border-strong); background: var(--c-surface); color: var(--c-ink);
+}
+.btn:hover { border-color: var(--c-ink); }
+.btn.ink { background: var(--c-ink); border-color: var(--c-ink); color: #fff; }
+.btn.accent { background: var(--c-accent); border-color: var(--c-accent); color: var(--c-accent-ink); }
+.btn.ghost { border-color: transparent; background: transparent; color: var(--c-ink-soft); }
+.btn.danger { color: var(--c-danger); border-color: var(--c-border-strong); }
+.btn.danger:hover { border-color: var(--c-danger); background: var(--c-danger-soft); }
+.btn.sm { font-size: 11.5px; padding: 3px 8px; }
+.btn:disabled { opacity: 0.45; cursor: not-allowed; }
+
+.list-scroll { flex: 1; min-height: 0; overflow-y: auto; }
+
+/* The band. d14 draws one real line through this ledger — a Claim placeholder
+   does NOT move the balance until it is cleared — so the list is banded on
+   exactly that, and on nothing invented. Aging buckets are an OPEN QUESTION
+   in M-05 and this mock does not answer it: no 30/60/90 anywhere. */
+.grp {
+  position: sticky; top: 0; z-index: 2;
+  display: flex; align-items: baseline; justify-content: space-between; gap: var(--sp-2);
+  padding: var(--sp-2) var(--sp-4); background: var(--c-surface-2);
+  border-bottom: 1px solid var(--c-border-strong); border-top: 1px solid var(--c-border-strong);
+}
+.grp.uncounted { background: var(--c-warn-soft); border-color: var(--c-warn); }
+.grp.uncounted .lab { color: var(--c-warn); }
+.grp.settled { background: var(--c-surface); }
+.grp.settled .lab { color: var(--c-ink-faint); }
+.grp:first-child { border-top: none; }
+.grp .say { font-size: 10.5px; color: var(--c-ink-faint); font-weight: 600; }
+.grp .btn.sm { margin-left: auto; }
+
+/* The aging column. A COLUMN, not 30/60/90 buckets: M-05 words its open
+   question as where aging lives, and drawing the buckets would answer that
+   by drawing it. Overdue is a fact per row here, not a report. */
+td .due { font-family: var(--font-mono); font-variant-numeric: tabular-nums; white-space: nowrap; }
+td .due.over { color: var(--c-danger); font-weight: 700; }
+td .due.soon { color: var(--c-warn); }
+td .due.none { color: var(--c-ink-faint); }
+td .terms {
+  display: block; font-family: var(--font-narrow); font-size: 9px; font-weight: 700;
+  letter-spacing: 0.06em; text-transform: uppercase; color: var(--c-ink-faint);
+}
+td .terms.inherited { font-style: italic; }
+tr.lr.over td { background: var(--c-danger-soft); }
+tr.lr.over:hover td { background: #fbe9e6; }
+tr.lr.settled td { color: var(--c-ink-faint); background: var(--c-surface-2); }
+
+/* The round trip E-02 d40 / A-33 describe: correctable until paid, immutable
+   after. The link changes verb rather than disappearing, because a paid
+   Invoice is still the document you want to look at. */
+td .st-txt { display: block; }
+.rec-link {
+  display: inline-block; font: inherit; font-size: 10.5px; font-weight: 600; cursor: pointer; margin-top: 3px;
+  border: 1px solid var(--c-border-strong); background: var(--c-surface); color: var(--c-ink-soft);
+  padding: 1px 5px; border-radius: var(--radius-sm); white-space: nowrap;
+}
+.rec-link:hover { border-color: var(--c-ink); color: var(--c-ink); }
+.rec-link.locked { border-style: dashed; }
+.paid-by { display: block; font-size: 10.5px; color: var(--c-ink-faint); }
+.paid-by .mono { font-weight: 700; }
+
+/* The ledger. A real table because these are money columns that have to line
+   up — see the note at the head of this file. */
+table.ledger { width: 100%; border-collapse: collapse; }
+table.ledger thead th {
+  position: sticky; top: 0; z-index: 1; background: var(--c-surface);
+  font-family: var(--font-narrow); font-weight: 700; font-size: 10px; letter-spacing: 0.08em;
+  text-transform: uppercase; color: var(--c-ink-faint); text-align: left;
+  padding: 6px var(--sp-2); border-bottom: 1px solid var(--c-ink); white-space: nowrap;
+}
+table.ledger th.r, table.ledger td.r { text-align: right; }
+table.ledger th:first-child, table.ledger td:first-child { padding-left: var(--sp-4); width: 30px; }
+table.ledger th:last-child, table.ledger td:last-child { padding-right: var(--sp-4); }
+table.ledger td {
+  padding: 7px var(--sp-2); border-bottom: 1px solid var(--c-border); font-size: 13px;
+  vertical-align: middle; background: var(--c-surface);
+}
+tr.lr { cursor: pointer; }
+tr.lr:hover td { background: var(--c-surface-2); }
+tr.lr.on td { background: var(--c-accent-soft); }
+tr.lr.on td:first-child { box-shadow: inset 3px 0 0 var(--c-accent); }
+tr.lr.locked { cursor: default; }
+tr.lr.locked td { color: var(--c-ink-faint); }
+tr.lr.locked:hover td { background: var(--c-surface); }
+td .ref { font-family: var(--font-mono); font-size: 12px; font-weight: 600; }
+td .num { font-family: var(--font-mono); font-variant-numeric: tabular-nums; white-space: nowrap; }
+td .num.bal { font-weight: 700; }
+td .num.cr { color: var(--c-ok); }
+td .num.nil { color: var(--c-ink-faint); }
+td .age { font-family: var(--font-narrow); font-size: 9.5px; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; color: var(--c-ink-faint); display: block; }
+td .sub { display: block; font-size: 10.5px; color: var(--c-ink-faint); }
+table.ledger .empty { color: var(--c-ink-faint); font-size: 12.5px; padding: var(--sp-5) var(--sp-4); text-align: center; }
+input[type="checkbox"] { width: 15px; height: 15px; accent-color: var(--c-accent); cursor: pointer; margin: 0; display: block; }
+input[type="checkbox"]:disabled { cursor: not-allowed; opacity: 0.3; }
+
+/* ============ TRACK 3 — the supplier, the selection, or the new entry ====== */
+.acct {
+  border-left: 1px solid var(--c-border-strong); background: var(--c-surface);
+  display: flex; flex-direction: column; min-height: 0;
+}
+/* The top slot, where On Order puts "who is waiting". Same reasoning: of
+   everything true about this supplier, an unapplied credit is the one thing
+   that is money sitting on the table, and d11 already says exactly where it
+   would land — so the band shows the landing before you press anything. */
+.waiting {
+  flex: none; border-bottom: 1px solid var(--c-border); background: var(--c-surface-2);
+  padding: var(--sp-3) var(--sp-4);
+}
+.waiting.live { background: var(--c-ok-soft); box-shadow: inset 3px 0 0 var(--c-ok); }
+.waiting .lab { display: flex; align-items: baseline; justify-content: space-between; gap: var(--sp-2); }
+.w-name { font-size: 15px; font-weight: 700; margin-top: 2px; }
+.w-name.none { font-size: 12.5px; font-weight: 600; color: var(--c-ink-faint); }
+.w-sub { font-size: 11px; color: var(--c-ink-soft); margin-top: 1px; }
+.w-split { margin-top: 6px; display: flex; flex-direction: column; gap: 2px; }
+.w-split .ln { display: flex; justify-content: space-between; gap: var(--sp-2); font-size: 11.5px; }
+.w-split .ln .mono { font-weight: 700; }
+
+.acct-head { flex: none; padding: var(--sp-3) var(--sp-4); }
+.figure { font-size: 46px; font-weight: 800; line-height: 1; letter-spacing: -0.035em; font-variant-numeric: tabular-nums; font-family: var(--font-mono); }
+.figure.nil { color: var(--c-ink-faint); font-size: 26px; font-weight: 700; }
+.figure.cr { color: var(--c-ok); }
+.figure.late { color: var(--c-danger); }
+.figure-say { margin-top: 4px; font-size: 13px; font-weight: 600; }
+.figure-sub { margin-top: 2px; font-size: 11px; color: var(--c-ink-faint); }
+.rule { flex: none; height: 2px; background: var(--c-ink); }
+
+.acct-mid { flex: 1; min-height: 0; overflow-y: auto; padding: var(--sp-3) var(--sp-4); display: flex; flex-direction: column; gap: var(--sp-4); }
+.sec { display: flex; flex-direction: column; gap: 6px; }
+.standing { display: grid; grid-template-columns: 1fr 1fr; gap: var(--sp-2) var(--sp-3); }
+.stat { display: flex; flex-direction: column; gap: 1px; }
+.stat .v { font-family: var(--font-mono); font-size: 17px; font-weight: 700; font-variant-numeric: tabular-nums; line-height: 1.1; }
+.stat .v.cr { color: var(--c-ok); }
+.stat .v.un { color: var(--c-warn); }
+.stat .v.nil { color: var(--c-ink-faint); }
+.stat .k { font-family: var(--font-narrow); font-size: 9.5px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--c-ink-faint); }
+.stat.span { grid-column: 1 / -1; border-top: 1px solid var(--c-border); padding-top: 6px; }
+.stat.span .v { font-size: 14px; }
+
+/* Payment history, on the floor of the track — the same place History sits on
+   the Customer card, the Log sits on the Supplier card, and the line's log
+   sits on On Order. d16: one row per PaymentBatch, opened to see its targets,
+   NOT one row per target sharing a reference. */
+.batch {
+  border: 1px solid var(--c-border); background: var(--c-surface-2);
+  border-radius: var(--radius-sm);
+}
+.batch + .batch { margin-top: 5px; }
+.batch-head {
+  display: flex; align-items: baseline; justify-content: space-between; gap: var(--sp-2);
+  width: 100%; text-align: left; font: inherit; cursor: pointer; padding: 6px var(--sp-2);
+  background: none; border: none; color: var(--c-ink);
+}
+.batch-head:hover { background: var(--c-surface); }
+.batch-head .l { font-size: 12px; font-weight: 600; }
+.batch-head .l .mono { font-weight: 700; }
+.batch-body { padding: 0 var(--sp-2) var(--sp-2) var(--sp-2); border-top: 1px solid var(--c-border); }
+.batch-body .tgt { display: flex; justify-content: space-between; gap: var(--sp-2); font-size: 11.5px; padding: 3px 0; }
+.batch-body .by { font-size: 10.5px; color: var(--c-ink-faint); padding-top: 4px; }
+
+/* d22 — the void. Destructive-ish and irreversible in the other direction, so
+   it asks first and names what it hands back, the way the discard confirm on
+   On Order does. A voided batch is kept, struck, never removed. */
+.batch.voided { border-style: dashed; opacity: 0.75; }
+.batch.voided .batch-head .l { text-decoration: line-through; }
+.void-ask { border-left: 3px solid var(--c-danger); background: var(--c-danger-soft); padding: var(--sp-2); margin-top: 6px; }
+.void-ask .t { font-size: 12.5px; font-weight: 700; color: var(--c-danger); }
+.void-ask .m { font-size: 11px; color: var(--c-ink-soft); margin-top: 3px; }
+.void-acts { display: flex; gap: 6px; justify-content: flex-end; margin-top: var(--sp-2); }
+
+/* d23 - the credit total is fixed, so the bar tracks placement against a
+   target rather than a running balance in hand. */
+.credit-bar .cbar-on { display: flex; align-items: center; gap: var(--sp-2); cursor: pointer; font-size: 12px; font-weight: 600; }
+.credit-bar .cbar-on input { width: 14px; height: 14px; accent-color: var(--c-ok); flex: none; }
+.credit-bar .cbar-on .mono { margin-left: auto; font-weight: 700; }
+.credit-bar #cbar-body { margin-top: 4px; display: flex; flex-direction: column; gap: 2px; }
+.credit-bar .ln.rem { color: var(--c-accent-dark, #a83700); font-weight: 700; border-top: 1px dashed var(--c-border-strong); padding-top: 3px; margin-top: 2px; }
+/* d25 - a remainder Credit is not a manual entry and should not read as one. */
+tr.lr.remainder td { background: var(--c-ok-soft); }
+tr.lr.remainder:hover td { background: #e0eee6; }
+
+.sec-empty { font-size: 11.5px; color: var(--c-ink-faint); padding: 4px 0; }
+.caveat { font-size: 10.5px; color: var(--c-ink-faint); border-left: 2px solid var(--c-border-strong); padding-left: 7px; margin-top: 2px; }
+.caveat.warn { color: var(--c-warn); border-left-color: var(--c-warn); }
+.caveat.prop { color: var(--c-accent); border-left-color: var(--c-accent); }
+
+.acct-foot { flex: none; border-top: 2px solid var(--c-ink); padding: var(--sp-3) var(--sp-4); display: flex; flex-direction: column; gap: 6px; }
+.acct-foot .primary { justify-content: center; height: 56px; font-size: 18px; font-weight: 800; text-align: center; line-height: 1.15; }
+.acct-foot .secondary { justify-content: center; height: 36px; }
+.foot-sub { font-size: 11px; color: var(--c-ink-faint); text-align: center; }
+
+/* Fields, shared with the On Order mock's entry sheet. */
+.f { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.f input, .f select {
+  font: inherit; font-size: 14px; font-weight: 600; width: 100%; padding: 6px 9px;
+  border: 1px solid var(--c-border-strong); background: var(--c-surface); color: var(--c-ink);
+  border-radius: var(--radius-sm);
+}
+.f input:focus, .f select:focus { outline: 2px solid var(--c-accent); outline-offset: -1px; }
+.f .hint { font-size: 10.5px; color: var(--c-ink-faint); }
+.f.bad input { border-color: var(--c-danger); background: var(--c-danger-soft); }
+.f.mono-in input { font-family: var(--font-mono); }
+.f2 { display: grid; grid-template-columns: 1fr 1fr; gap: var(--sp-2); }
+
+/* One row of the settlement being composed. Two inputs, because d18 lets the
+   Manager say how much of each Invoice is met by credit and how much by
+   money — and d19 makes that one act rather than two. Stacked rather than
+   side by side: 344px is not wide enough to label two money fields across. */
+.tgt-row {
+  display: grid; grid-template-columns: minmax(0, 1fr) 92px; gap: var(--sp-2);
+  align-items: center; padding: 6px 0; border-bottom: 1px solid var(--c-border);
+}
+.tgt-row.dual { grid-template-columns: minmax(0, 1fr) 78px; row-gap: 3px; align-items: start; }
+.tgt-row.dual .l { grid-row: 1 / span 2; align-self: center; }
+.tgt-row.dual .inp { display: flex; align-items: center; gap: 4px; justify-content: flex-end; }
+.tgt-row.dual .inp .tag {
+  font-family: var(--font-narrow); font-size: 8.5px; font-weight: 700; letter-spacing: 0.06em;
+  text-transform: uppercase; color: var(--c-ink-faint); width: 34px; text-align: right;
+}
+.tgt-row.dual .inp .tag.cr { color: var(--c-ok); }
+.tgt-row.dual input { width: 78px; }
+.tgt-row.dual input.cr { border-color: var(--c-ok); background: var(--c-ok-soft); }
+.tgt-row.dual input.cr:disabled { border-color: var(--c-border); background: var(--c-surface-2); opacity: 0.5; }
+
+/* How much claim credit is in hand, how much of it this settlement spends.
+   d20 — a credit may now be spent in parts, so "remaining" is a real figure
+   rather than always equal to the claim. */
+.credit-bar {
+  border: 1px solid var(--c-ok); background: var(--c-ok-soft); padding: var(--sp-2) var(--sp-3);
+  border-radius: var(--radius-sm); display: flex; flex-direction: column; gap: 2px;
+}
+.credit-bar .ln { display: flex; justify-content: space-between; gap: var(--sp-2); font-size: 11.5px; }
+.credit-bar .ln .mono { font-weight: 700; }
+.credit-bar.spent { border-color: var(--c-danger); background: var(--c-danger-soft); }
+.credit-bar .who { font-size: 10.5px; color: var(--c-ink-soft); }
+.split-line {
+  display: flex; justify-content: space-between; gap: var(--sp-2);
+  font-size: 12px; padding: 3px 0; border-bottom: 1px solid var(--c-border);
+}
+.split-line .mono { font-weight: 700; }
+.split-line.tot { border-bottom: none; border-top: 1px solid var(--c-ink); padding-top: 5px; font-weight: 700; }
+.tgt-row .l { min-width: 0; }
+.tgt-row .l .t { font-size: 12.5px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tgt-row .l .m { font-size: 10.5px; color: var(--c-ink-faint); }
+.tgt-row input {
+  font-family: var(--font-mono); font-size: 13px; font-weight: 700; width: 100%; text-align: right;
+  padding: 4px 6px; border: 1px solid var(--c-border-strong); border-radius: var(--radius-sm);
+  background: var(--c-surface); color: var(--c-ink);
+}
+.tgt-row.over input { border-color: var(--c-danger); background: var(--c-danger-soft); }
+
+/* When the selection is legal for neither action, the track says which and
+   why, instead of leaving two greyed buttons and a tooltip to explain it. */
+.blocked { border-left: 3px solid var(--c-danger); background: var(--c-danger-soft); padding: var(--sp-3); }
+.blocked .t { font-size: 13px; font-weight: 700; color: var(--c-danger); }
+.blocked .m { font-size: 11.5px; color: var(--c-ink-soft); margin-top: 3px; }
+.zero-ok { border-left: 3px solid var(--c-ok); background: var(--c-ok-soft); padding: var(--sp-3); }
+.zero-ok .t { font-size: 13px; font-weight: 700; color: var(--c-ok); }
+.zero-ok .m { font-size: 11.5px; color: var(--c-ink-soft); margin-top: 3px; }
+
+/* Mock-only. Stands in for a state change this mock does not persist. */
+.toast {
+  position: absolute; left: 50%; transform: translateX(-50%); top: 70px; z-index: 20;
+  background: var(--c-ink); color: #fff; padding: 7px 14px; border-radius: var(--radius-sm);
+  font-family: var(--font-mono); font-size: 12px; font-weight: 600; pointer-events: none;
+  box-shadow: 0 4px 14px rgba(17,17,17,0.22); max-width: 70%; text-align: center;
+}
+
+/* ---- notes below the screen ---- */
+.notes { margin-top: var(--sp-6); display: grid; grid-template-columns: repeat(auto-fit, minmax(330px, 1fr)); gap: var(--sp-5); }
+.note h2 {
+  font-family: var(--font-narrow); font-size: 13px; font-weight: 700; letter-spacing: 0.1em;
+  text-transform: uppercase; color: var(--c-ink-faint); margin: 0 0 var(--sp-3);
+  padding-bottom: 5px; border-bottom: 1px solid var(--c-border-strong);
+}
+.note p, .note li, .note dd { font-size: 13.5px; color: var(--c-ink-soft); }
+.note p { margin: 0 0 var(--sp-3); }
+.note strong { color: var(--c-ink); }
+.note dl { margin: 0; display: flex; flex-direction: column; gap: var(--sp-3); }
+.note dt { font-weight: 700; color: var(--c-ink); font-size: 13.5px; }
+.note dd { margin: 2px 0 0; }
+.note ul { margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 6px; }
+.cite { font-family: var(--font-mono); font-size: 11.5px; color: var(--c-ink-faint); }
+.warnbox { border-left: 3px solid var(--c-accent); background: var(--c-accent-soft); padding: var(--sp-3) var(--sp-4); margin-bottom: var(--sp-3); }
+.warnbox p:last-child { margin-bottom: 0; }
+.note.wide { grid-column: 1 / -1; }
+table.props { width: 100%; border-collapse: collapse; }
+table.props th {
+  font-family: var(--font-narrow); font-weight: 700; font-size: 10px; letter-spacing: 0.08em;
+  text-transform: uppercase; color: var(--c-ink-faint); text-align: left;
+  padding: 5px var(--sp-3) 5px 0; border-bottom: 1px solid var(--c-ink); vertical-align: bottom;
+}
+table.props td { padding: 8px var(--sp-3) 8px 0; border-bottom: 1px solid var(--c-border); font-size: 13px; color: var(--c-ink-soft); vertical-align: top; }
+table.props td:first-child { white-space: nowrap; font-weight: 700; color: var(--c-ink); }
+
+@media (prefers-reduced-motion: no-preference) {
+  .frame { transition: grid-template-columns 160ms ease; }
+}
+@media (max-width: 1180px) {
+  .frame, .frame.slab-shut { grid-template-columns: 52px minmax(0, 1fr); grid-template-rows: minmax(0, 1fr) auto; }
+  .slab { grid-row: 1 / -1; }
+  .slab-open-only { display: none !important; }
+  .slab-strip { display: flex !important; }
+  .main { grid-column: 2; grid-row: 1; }
+  /* 58dvh, the same as Customers, Suppliers and On Order, and for the same
+     reason: this track also carries two fixed bands above its scroll. */
+  .acct { grid-column: 2; grid-row: 2; border-left: none; border-top: 2px solid var(--c-ink); max-height: 58dvh; }
+  .waiting, .acct-head { padding: var(--sp-2) var(--sp-4); }
+  .figure { font-size: 34px; }
+  .figure-sub { display: none; }
+  .acct-foot .primary { height: 48px; font-size: 16px; }
+}
+</style>
+<div class="page">
+
+  <div class="retired-banner">
+    <strong>This mock is retired.</strong> It was the design artifact for the Accounts Payable review and has been
+    overtaken by the built screen — <code>prototype/src/screens/AccountsPayable.tsx</code>, implementing
+    <strong>M-05 d17–d33</strong>. It is kept as the record of the review that produced those decisions, not as a
+    statement of how the screen works.
+    <span>The largest divergence: this draws a <strong>credit box per Invoice</strong>. <strong>d33</strong> retired
+    that reading — the Manager chooses <em>which</em> Invoices by ticking them, and the credit fills the set. Also
+    stale here: <strong>d32</strong> (a reversal is cleared, never settled), <strong>d31</strong> (struck), and
+    <strong>E-04 d20</strong> (a claim counts at what the memo grants).</span>
+    <span>The decisions themselves are in <code>docs/flows/M-05-accounts-payable.md</code>; the schema they imply is
+    <code>docs/architecture.md</code> §2.8 and §5.</span>
+  </div>
+
+  <header class="masthead">
+    <div>
+      <h1>Accounts Payable, in three tracks</h1>
+      <p>M-05 laid out the way Sell, Find, Receive, Customers, Suppliers and On&nbsp;Order already are — a retractable slab on the left, the work in the middle, the thing you are acting on pinned to the right. Layout mock, not working code. All three modals go away: <strong>Record payment</strong> and <strong>Clear selected</strong> become the right track's reading of <em>the selection</em>, and <strong>Create new</strong> becomes its third state. Since the first pass: <strong>one selection settles anything</strong> — invoices, credit memos, claims, placeholders, in any mix — paid Invoices <strong>stay readable</strong> and name what settled them, every Invoice row <strong>opens in Receiving</strong>, a credit and a cheque <strong>settle in one act with a split you choose</strong>, there is a <strong>Due column</strong> — which needed payment terms that existed nowhere on record — a recorded payment can be <strong>voided</strong>, which turns out to mean an Invoice can stop being immutable, and a claim credit now goes out <strong>whole</strong> with any excess coming back as its own artifact — which is how "the supplier owes us" finally gets modelled.</p>
+    </div>
+    <span class="stamp">branch AccountsPayable-UI</span>
+    <span class="stamp retired">retired — superseded by the built screen</span>
+  </header>
+
+  <div class="controls">
+    <span class="lab">Mock controls</span>
+    <button class="toggle" id="t-slab" aria-pressed="true">Slab open</button>
+    <span class="ctl-sep"></span>
+    <span class="lab">Try</span>
+    <button class="toggle" id="t-pay">Settle two invoices</button>
+    <button class="toggle" id="t-clear">Claim + its credit</button>
+    <button class="toggle" id="t-bad">A bad mix</button>
+    <button class="toggle" id="t-settled">A settled invoice</button>
+    <span class="ctl-sep"></span>
+    <span class="xsmall muted">Everything is live: search, chips, sort, scoping, selection, the credit/money split, Clear, Create new, Open in Receiving. Today is <span class="mono">13/09/2026</span>. <strong>FAB1</strong> has $12.40 of claim credit and an invoice 16 days past due; <strong>CRAT</strong> is Prepaid and owes anyway.</span>
+  </div>
+
+  <div class="screen" style="position:relative">
+
+    <div class="toast" id="toast" hidden></div>
+
+    <div class="band">
+      <div class="wordmark"><span class="dot"></span>WAX WORKS</div>
+      <div class="mode">FIND</div>
+      <div class="mode">SELL</div>
+      <div class="mode">RECEIVE</div>
+      <div class="mode on">MORE</div>
+      <div class="who">
+        <span class="xsmall muted">Signed in</span>
+        <span class="small" style="font-weight:600">R. Duval · Manager</span>
+      </div>
+    </div>
+
+    <div class="frame" id="frame">
+
+      <!-- ============ TRACK 1 — the payables slab ============ -->
+      <nav class="slab" aria-label="What the store owes">
+
+        <div class="slab-strip" id="strip" hidden>
+          <button class="rail-ico" id="strip-expand" title="Open the list" aria-expanded="false" aria-label="Expand the payables list">&#10217;</button>
+          <button class="rail-ico" id="strip-new" title="Create a ledger entry by hand" aria-label="Create new ledger entry">&#65291;</button>
+          <button class="rail-ico" id="strip-credit" title="Credits waiting to be applied" aria-label="Credits waiting to be applied">
+            &#8681;<span class="rail-badge ok" id="strip-badge">1</span>
+          </button>
+          <div class="rail-sep"></div>
+          <div class="strip-stack" id="strip-stack"></div>
+          <div class="strip-lab">owed to</div>
+        </div>
+
+        <div class="slab-open-only" id="slab-open">
+          <div class="slab-head">
+            <span class="lab">Owed</span>
+            <button class="rail-ico" id="slab-collapse" title="Collapse — the ledger takes the width" aria-label="Collapse the list">&#10216;</button>
+          </div>
+
+          <div class="slab-total" id="slab-total"></div>
+
+          <div class="slab-acts">
+            <button class="btn ink" id="new-btn">&#65291; Create new</button>
+          </div>
+
+          <div class="slab-search">
+            <input type="search" id="q" placeholder="name &middot; short code &middot; account #" aria-label="Look up any supplier">
+            <span class="hint">The lookup reaches <strong>any</strong> Supplier, balance or no balance <span class="cite">(M-05 step 1)</span> — to read their history, or to log a new entry against them. No scan box: nothing in accounts payable has a barcode on it.</span>
+          </div>
+
+          <div class="chips" id="chips"></div>
+
+          <div class="sortbar">
+            <span class="lab">Sort</span>
+            <select id="sort">
+              <option value="name">Supplier name</option>
+              <option value="balance">Balance &mdash; largest first</option>
+              <option value="oldest">Oldest unpaid item</option>
+            </select>
+          </div>
+
+          <div class="slab-list" id="slab-list"></div>
+        </div>
+      </nav>
+
+      <!-- ============ TRACK 2 — the combined ledger, or the card registry ==== -->
+      <section class="main">
+        <div class="main-head">
+          <div style="min-width:0">
+            <h2 id="main-title">&mdash;</h2>
+            <div class="badges" id="main-badges"></div>
+          </div>
+          <div class="head-acts" id="main-acts"></div>
+        </div>
+        <div class="list-scroll" id="ledger"></div>
+      </section>
+
+      <!-- ============ TRACK 3 — the supplier, the selection, or the entry ==== -->
+      <aside class="acct" aria-label="The supplier, or what you have selected">
+        <div style="display:flex;flex-direction:column;min-height:0;flex:1" id="right"></div>
+      </aside>
+
+    </div>
+  </div>
+
+  <div class="notes">
+
+    <section class="note wide">
+      <h2>What M-05 now says</h2>
+      <div class="warnbox">
+        <p><strong>The layout needs no decisions.</strong> Three tracks, a retractable slab and a sticky right column are how this app already works — E-05 d29 by way of E-02 d38, E-07 d17, M-01 d17, and most recently M-02 d31 for Order Processing. Folding the three modals into track 3 changes no behaviour: <em>Record payment</em>, <em>Clear selected</em> and <em>Create new</em> do exactly what <span class="cite">d4, d5, d12&ndash;d16</span> already say, in a place that does not cover the ledger they are about.</p>
+        <p><strong>Seven rows were appended, and one of them reverses a considered decision.</strong> <span class="cite">d18</span> supersedes <span class="cite">d11</span>, which says in as many words that a claim credit &ldquo;isn't earmarked to one Invoice the Manager picks&rdquo; — that was not a misreading or a slip, it was deliberate, and <span class="cite">types.ts:257</span> encodes it. The rest extend rather than reverse: the remit-to address, the one-action settlement, partial credit (which d18 forces), settled Invoices staying readable, and payment terms in two other flows. All seven are written in — M-05 d17&ndash;d21, M-01 d19, E-02 d45 — with d11 struck through in place and the prose it contradicted corrected rather than left to drift.</p>
+        <p><strong>What this is worth.</strong> Not tidiness. Today the Manager ticks rows and then guesses which of two buttons will light up, with the reason hidden in a <code>title</code> attribute. Here <strong>the right track reads the selection back</strong> — what it sums to, which action it is legal for, and why the other one is not. The failure this prevents is the one M-05 d15 is most exposed to: <em>Clear</em> is manual reconciliation with no undo described anywhere in the flow, and a selection that does not sum to zero should be refused out loud rather than silently.</p>
+      </div>
+
+      <table class="props">
+        <tr><th style="width:104px">Recorded row</th><th>Wording</th></tr>
+        <tr>
+          <td>M-05 d17 <span class="badge ok">recorded</span></td>
+          <td><strong>The Supplier's billing address is displayed on the accounts payable screen as the remit-to address, alongside the payment being recorded.</strong> <strong>Extends</strong> the M-01 d13 line inherited into this flow, which captures a billing address and notes that nothing here consumes it. Recording a payment is the moment the store asks &ldquo;where does the cheque go&rdquo;, and the answer is already on file one screen away. It is <em>display only</em>: nothing is printed, addressed, or sent, and M-01 remains the only place the address is edited. <em>Accepted consequence:</em> a stale billing address now looks authoritative at the moment it is most likely to be acted on, and nothing on this screen can tell that it is stale — the Supplier card is still the only place it is maintained.</td>
+        </tr>
+        <tr>
+          <td>M-05 d18 <span class="badge danger">supersedes d11</span></td>
+          <td><strong>The Manager chooses which outstanding Invoices a Credited claim's amount is applied to, and how much lands on each.</strong> <strong>Supersedes decision 11</strong> in full: the automatic oldest-received-first distribution is retired, not kept as a default. d11 was itself a clarification of d6&ndash;d7, and reversing it restores d7's plain reading — a claim is applied <em>against Invoices</em> from the same supplier, now with the Manager saying which. <em>Why the reversal is cheap:</em> the model already stores credits per Invoice — <span class="cite">architecture.md:184</span> derives an Invoice's balance from <code>ap_payments</code> plus credited SupplierClaims, and <code>Invoice.creditsApplied</code> exists. d11 constrained <strong>who decides the split</strong>, never whether a split could be recorded; this is a policy and UI change, not a schema change. <em>Accepted consequence:</em> every credit application is now a decision, including the trivial one where there is a single outstanding Invoice and no judgement to exercise. The screen does not pre-fill a suggested split, because a pre-filled split is d11 wearing a disguise — and one nobody would check.</td>
+        </tr>
+        <tr>
+          <td>M-05 d19 <span class="badge ok">recorded</span></td>
+          <td><strong>A claim credit and a payment may settle the same Invoices in one action, producing one PaymentBatch whose targets carry which kind each was.</strong> <strong>Extends decisions 6 and 16</strong>, and contradicts neither: d6 already says a credit &ldquo;settles a balance the same way a payment does&rdquo;, and d16 already says one Record Payment produces one batch covering &ldquo;whatever mix of Invoices and manual entries it paid&rdquo;. That a credit could be one of the things in the mix was never addressed either way — the two being separate acts was an omission, not a position. The Manager settles $68.65 as $12.40 of credit and $56.25 by cheque, once, and the batch says so. <em>Accepted consequence:</em> a batch can now have a zero money half — a credit-only settlement — for which no payment reference exists, so the reference stops being unconditionally required and becomes required only when money actually moves.</td>
+        </tr>
+        <tr>
+          <td>M-05 d20 <span class="badge danger">superseded by d24</span></td>
+          <td><del><strong>A Credited claim's amount may be spent in parts, across several settlements, until it is exhausted.</strong></del> <strong>Superseded within hours of being written.</strong> It was drafted as forced by d18 &mdash; if the Manager sets the amounts, a remainder is unavoidable. That was true only because d18 let the Manager choose the <em>total</em>. <span class="cite">d23</span> removed that, and <span class="cite">d24</span> then made a claim binary again. Kept here because the reasoning is instructive: <em>a decision can be forced by another decision that is itself the thing worth changing.</em></td>
+        </tr>
+        <tr>
+          <td>M-05 d21 <span class="badge ok">recorded</span></td>
+          <td><strong>A settled Invoice remains readable on this screen, in a band separate from the outstanding list, and names the PaymentBatch or batches that settled it.</strong> <strong>Extends step 5 and decision 16.</strong> Step 5 says a fully-paid Invoice &ldquo;leaves the outstanding list <em>for payment history</em>&rdquo; — it names where the Invoice goes, not that it stops being visible, and this honours it by putting it somewhere that is explicitly not the outstanding list. d16 made history browsable in one direction only (a batch, opened to see its targets); the reverse — an Invoice, saying what paid it — was unaddressed. <em>Accepted consequence:</em> the ledger grows without bound, so the band is collapsed by default and carries a count rather than rows.</td>
+        </tr>
+        <tr>
+          <td>M-05 d22 <span class="badge ok">recorded</span></td>
+          <td><strong>A PaymentBatch can be voided, whole, by a Manager &mdash; never edited and never deleted.</strong> The void is appended against the original, which stays in the ledger as the record of what was recorded at the time (<span class="cite">E-02 d23</span>'s pattern; the lexicon reserves <em>delete</em> for drafts and <em>void</em> for finalized artifacts). It reverses every target: money returns to the balance owing, claim credit returns to that claim's <strong>remaining</strong> &mdash; <span class="cite">d20</span> is what makes that expressible, since without a partial model a credit could only be returned in full. <strong>Whole or not at all</strong>, because <span class="cite">d16</span> made the batch the unit of the act. <em>Accepted consequence, and the significant one:</em> an Invoice taken back out of <strong>Paid</strong> returns to <strong>Finalized</strong> and becomes correctable again, so immutability <span class="cite">(E-02 d40, A-33)</span> means <em>immutable while paid</em>, not <em>immutable forever</em>. <strong>A-33 needs the amendment appended.</strong></td>
+        </tr>
+        <tr>
+          <td>M-05 d23 <span class="badge ok">recorded</span></td>
+          <td><strong>The Manager chooses the distribution of a claim credit, never its total.</strong> <strong>Amends d18</strong>, which left both to them. A credit goes out <em>in full</em>, or to the limit of what the supplier is owed, whichever is smaller. d18's objection survives untouched &mdash; the system still does not decide which Invoices a credit hits &mdash; but letting the <em>total</em> be smaller made under-application an everyday outcome, and the running remainder and its invariant existed only to carry that case. <em>Accepted consequence:</em> a Manager who wants to hold part of a credit back for a future invoice cannot.</td>
+        </tr>
+        <tr>
+          <td>M-05 d24 <span class="badge danger">supersedes d20</span></td>
+          <td><strong>A Credited claim is applied whole or not at all; an excess over what is owed is emitted as a separate remainder Credit.</strong> Two things fall out that are worth more than the tidiness. It gives <strong>"the supplier owes us money" an artifact for the first time</strong> &mdash; the hole behind three of this flow's open questions, each of which ended in some version of <em>a credit in the store's favour that nothing models</em>. And it <strong>retires a money invariant that had no enforcement point</strong>: a claim with a running remainder needs <code>sum(applications) &le; amount</code> held under a row lock in both the apply and void paths, or two concurrent settlements each spend the last of it. A binary claim needs a status check. <em>Accepted consequence:</em> a void must withdraw the remainder too, and refuse where it has already been cleared.</td>
+        </tr>
+        <tr>
+          <td>M-05 d25 <span class="badge ok">recorded</span></td>
+          <td><strong>A remainder Credit is its own kind of artifact, not a manual ledger entry, and a supplier balance may go negative because of one.</strong> It is <strong>not</strong> covered by <span class="cite">d12</span>, whose defining characteristic is that a manual entry is "not sourced from Receiving or Supplier Claims" &mdash; a remainder is sourced from a claim by construction, and filing it as a Create-new Credit would have quietly retired the distinction d12 exists to draw. It behaves as <span class="cite">d14</span> says a Credit does: it reduces the balance the moment it is emitted, and is therefore never allocated again. <em>Accepted consequence:</em> a Supplier's balance can now read <strong>below zero</strong>, which nothing in this flow, M-01 or the architecture previously contemplated &mdash; so every surface reporting a balance has to render a negative rather than clamp it.</td>
+        </tr>
+        <tr>
+          <td>M-05 d26 <span class="badge ok">recorded</span></td>
+          <td><strong>A Credited claim counts against the balance from the moment it is Credited, exactly as a manual Credit does.</strong> Corrects a reading this screen had been carrying: a Credited claim sat outside the balance until applied, while a manual Credit reduced it on entry &mdash; the same thing, a credit memo the store holds, behaving two ways depending on which door it came in by. The line is <strong>agreed versus not yet agreed</strong>, not claim versus entry. A Pending claim and a Claim placeholder stay outside <span class="cite">(d14, unchanged)</span>. <em>Accepted consequence:</em> a balance can read negative purely because a large claim was accepted, before anyone has done anything &mdash; which is the point. You find out by looking, not by attempting a settlement and being surprised.</td>
+        </tr>
+        <tr>
+          <td>M-05 d27 <span class="badge accent">fixes a real bug</span></td>
+          <td><strong>The selection is the unit of settlement, and any unsettled row may be in it.</strong> One rule: <strong>credits in the selection attach to the debits in the selection; whatever cannot attach stays as it was; Claim placeholders retire contributing nothing; money covers the shortfall.</strong> <strong>Extends d15 rather than replacing it</strong> &mdash; clearing is now the case where the selection holds no debit, so there is nothing to consume the credit against, it <em>stays counted</em> exactly as d15 requires, and no money moves. This retired an <em>invented</em> restriction, not a decision: the screen had been refusing any selection that was neither payable-only nor entries-summing-to-zero, which no row asked for and which <span class="cite">d16</span>'s "whatever mix of Invoices and manual entries it paid" already contradicted. <em>Accepted consequence:</em> a placeholder can be retired by including it in a settlement &mdash; a Manager deciding to stop chasing it. It moves no money, but it is a real disposal.</td>
+        </tr>
+        <tr>
+          <td>M-05 d28 <span class="badge warn">generalises d24</span></td>
+          <td><strong>Every credit consumed by a settlement is consumed whole; whatever cannot attach comes back as a remainder Credit.</strong> Extends d24 from Credited claims to <em>every</em> credit, for the reason d24 already gave: a credit consumed in part carries a running remainder, and bounding one needs a lock on both the consuming and the reversing path. <em>Accepted consequence:</em> settling a $20.00 Invoice against a $34.00 Credit produces a $14.00 remainder rather than leaving the original at $14.00 &mdash; the ledger grows a row where it used to mutate one. That is the trade the house pattern makes everywhere, and it is what keeps a void able to put things back exactly.</td>
+        </tr>
+        <tr>
+          <td>M-01 d19 <span class="badge ok">recorded</span></td>
+          <td><strong>A Supplier carries payment terms — Net 15 / 30 / 45 / 60, On receipt, COD, or Prepaid — as the default terms for Invoices received from them.</strong> <strong>New field, constraining nothing existing.</strong> It is not <em>Cancel-by</em>, which this card already carries and which is an <em>ordering</em> figure: days from order-placed to auto-cancel an unfulfilled order. Nothing on this card, or anywhere else, recorded when a bill is due before this. <em>Accepted consequence:</em> <strong>Prepaid and COD are not aging terms</strong> and the field quietly admits two different kinds of thing. A Prepaid Supplier that nevertheless carries an outstanding balance is either a data-entry error or a real exception, and that is left open in M-05 rather than answered here — the mock surfaces it as an anomaly rather than choosing.</td>
+        </tr>
+        <tr>
+          <td>E-02 d45 <span class="badge ok">recorded</span></td>
+          <td><strong>An Invoice carries its own payment terms, defaulted from the Supplier and overridable at receiving, and a due date derived as invoice date + terms.</strong> <strong>Extends decision 2</strong>, which captures both the invoice date and the received date but says nothing about which governs payment timing. <strong>Net-N runs from the invoice date</strong>: the supplier's clock starts when they bill, and the due date has to agree with the statement it will be reconciled against. The Invoice's own terms win over the Supplier's, because the paperwork in hand is the agreement. <em>Accepted consequence:</em> stock that sat in transit arrives with part of its window already spent, and a slow enough shipment can be received <strong>already overdue</strong> — correct, and the screen should show it that way rather than granting a grace period from the received date.</td>
+        </tr>
+      </table>
+    </section>
+
+    <section class="note">
+      <h2>What each track is for</h2>
+      <dl>
+        <dt>Left &mdash; the payables slab (retractable)</dt>
+        <dd>The store-wide figure at the top, then the lookup, then the chips, then the sort, then <strong>who is owed</strong>. Two controls that do different jobs and look different: <strong>chips filter the list</strong> (their counts are suppliers), <strong>a supplier row scopes</strong> the middle to that supplier's ledger. The lookup is not a filter of the list — it reaches <em>any</em> Supplier including one with no payables at all, which is step 1's explicit requirement and the only way to start a <em>Create new</em> against a supplier you have never owed. Shut, a 52px strip carries Create new, a credits badge, and the suppliers tiled by their short code.</dd>
+        <dt>Middle &mdash; the combined ledger</dt>
+        <dd>Decision 3's one list &mdash; Invoices, Claims and manual entries together, because what is owed is the net of both. A real table rather than On&nbsp;Order's row grid: six money columns that have to line up is what this screen is <em>for</em>. Each row is a selection, not a navigation.</dd>
+        <dt>Right &mdash; the selection (sticky)</dt>
+        <dd>Three states, in strict priority: <strong>the new entry</strong> you are composing, else <strong>the selection</strong> you have ticked, else <strong>the supplier's standing</strong>. All three modals collapse into it.</dd>
+      </dl>
+    </section>
+
+    <section class="note">
+      <h2>Why the right track is the selection</h2>
+      <p>On&nbsp;Order's track 3 is <em>the line</em>; Customers' is <em>the customer</em>. The equivalent here is not one row &mdash; it is <strong>however many rows you have ticked</strong>, because every action in M-05 acts on a set. A payment covers a mix <span class="cite">(d16)</span>; clearing needs at least two <span class="cite">(d15)</span>; applying a credit spreads across all of them <span class="cite">(d11)</span>.</p>
+      <p>So the track reads the set back and names the one action it is legal for. <strong>Ticked invoices</strong> &rarr; per-target amounts, method, reference, date. <strong>Ticked entries summing to zero</strong> &rarr; clear, with d15's &ldquo;this changes nothing about the balance&rdquo; said where you can read it. <strong>Anything else</strong> &rarr; a red block that says the sum and what is wrong with it. The two disabled buttons and their tooltips go away.</p>
+    </section>
+
+    <section class="note">
+      <h2>The bands, and the ones still not drawn</h2>
+      <p>On&nbsp;Order bands its list on d19's overdue grouping. The equivalent line through a payables ledger is <span class="cite">d14</span>: a <strong>Claim placeholder does not move the balance</strong> until it is cleared against a matching Credit. Today that is a word in a Status column; here it is a band, and the figures above and below it mean different things. <span class="cite">d21</span> adds a fourth &mdash; settled Invoices, collapsed, naming what paid them.</p>
+      <p><strong>There are still no aging bands, now for a better reason.</strong> The <em>column</em> is here, because terms make a due date computable. The <em>buckets</em> are not, because M-05 words its open question as one about aging's <em>home</em> &mdash; here, or a general reporting surface &mdash; and 30/60/90 drawn on this screen answers that by drawing it. A per-row fact and a report are different things, and only the first is a layout decision.</p>
+    </section>
+
+    <section class="note">
+      <h2>Why aging was stuck, and on what</h2>
+      <p>M-05's aging question reads as though it were a reporting choice. It is not: <strong>nothing anywhere records when a bill is due.</strong> The Supplier's complete field table <span class="cite">(M-01:22&ndash;40)</span> has no payment terms, and the field that looks like it &mdash; <strong>Cancel-by</strong> <span class="cite">(M-01:31)</span> &mdash; is explicitly &ldquo;days from order-placed to auto-cancel if unfulfilled&rdquo;, an <em>ordering</em> figure. The Invoice carries an invoice date and a received date <span class="cite">(E-02 d2)</span> and no due date.</p>
+      <p>So &ldquo;30/60/90+ days <strong>overdue</strong>&rdquo; &mdash; M-05's own words &mdash; could not be computed at all. Days-since-invoice could, and that is what the first pass of this mock showed; but days outstanding is not days overdue, and presenting one as the other is the kind of plausible figure that gets acted on. <strong>The open question should say it is blocked on a field two other flows own</strong> — which is why the proposal above lands in M-01 and E-02 before it lands here.</p>
+      <p>Two things the terms decision must settle rather than assume, both visible on screen: net-N runs from the <strong>invoice date</strong>, so a slow shipment can be received already overdue; and <strong>Prepaid and COD are not aging terms at all</strong> &mdash; Crate Digger is Prepaid and owes $42.00 anyway, which the right track flags as an anomaly instead of quietly rendering a due date for it.</p>
+    </section>
+
+    <section class="note">
+      <h2>One settlement, two tenders</h2>
+      <p>Superseding d11 is the interesting half, but the half that removes the most friction is <span class="cite">d19</span>. Before it, settling an Invoice partly by credit was <em>two</em> acts producing <em>two</em> artifacts, and the ledger showed no sign they were the same event.</p>
+      <p>Now a target row has two fields, <strong>credit</strong> and <strong>money</strong>, and the foot names the split before you commit. One PaymentBatch carries both, tagged. Placing credit on a row pushes that row's money down so the two never add past its balance &mdash; that is arithmetic, not a suggested split, and d18's objection was to the system choosing <em>which</em> Invoices a credit lands on, which it still does not.</p>
+      <p><strong>What you cannot do is choose how much of the credit to spend</strong> <span class="cite">(d23)</span>. The bar reports what goes out and what is still to place, and the settlement refuses until the total is exact. Tick too little to absorb it and it says how much more to tick. A manual <strong>Credit</strong> and a <strong>remainder Credit</strong> are both unallocatable here for the same reason: <span class="cite">d14</span> and <span class="cite">d25</span> make them net on creation, so spending them again would count them twice.</p>
+      </section>
+
+<section class="note">
+      <h2>Voiding, and what it costs</h2>
+      <p>A payment recorded in error is <strong>voided</strong> <span class="cite">(d22)</span>, never edited and never deleted &mdash; the house pattern for reversing anything finalized <span class="cite">(E-02 d23)</span>. The batch stays in history, struck through, as the record of what was recorded at the time.</p>
+      <p><strong>Whole or not at all.</strong> <span class="cite">d16</span> made the PaymentBatch the unit of the act &mdash; one cheque covering four Invoices is one thing that happened. Voiding one target out of it would leave a batch describing a settlement that never took place in that shape, which is the thing d16 exists to prevent. A partly-wrong payment is voided and re-recorded.</p>
+      <p><strong>The expensive part is not the money.</strong> Reversing balances is arithmetic; <span class="cite">d20</span>'s partial model already lets the claim credit go back where it came from, which is why the mock records <em>which</em> claim funded each credit target rather than drawing from an anonymous pool. What is expensive is that an Invoice can now stop being <strong>Paid</strong> &mdash; and immutability attaches at paid <span class="cite">(E-02 d40, A-33)</span>. So a frozen document can be unfrozen, and <em>immutable</em> has quietly come to mean <em>immutable while paid</em>. The confirmation names the invoices this will unfreeze before you press it, rather than reporting it afterwards.</p>
+      <p>The alternative was worse: an Invoice left locked while carrying a balance it owes, with nothing able to correct the error the void exists to correct. <strong>A-33 needs an amendment appended</strong> &mdash; that is an architecture decision, not this branch's to write.</p>
+    </section>
+
+    <section class="note">
+      <h2>The round trip back to Receiving</h2>
+      <p>Every Invoice row carries a link to its receiving document, and <strong>the verb changes rather than the link disappearing</strong>: <em>Open in Receiving</em> while it is correctable, <em>View in Receiving</em> once it is paid.</p>
+      <p>This needed no decision at all &mdash; it is an affordance for a round trip four documents already describe. <span class="cite">E-02 d4</span> and <span class="cite">d40</span>, <span class="cite">architecture A-33</span> and the <span class="cite">lexicon's</span> entry for <em>immutable</em> all say the same thing: a finalized Invoice stays correctable until a Manager marks it paid <em>here</em>, and marking it paid is what freezes it. Accounts payable is one end of that round trip and had no way to walk it.</p>
+      <p>Manual entries carry no such link. They are not sourced from Receiving <span class="cite">(d12)</span>, and accounts payable never creates a Receiving Invoice <span class="cite">(d9)</span> — so there is nothing at the other end.</p>
+    </section>
+
+    <section class="note">
+      <h2>A thing the bands turned up</h2>
+      <p>In the screen as it stands the ledger's <strong>Balance</strong> column does not add up to the <strong>owed</strong> badge above it, and it cannot, because the column means two different things depending on the row.</p>
+      <p>A Credited-but-unapplied Supplier Claim renders as <code>-amount</code> at <span class="cite">screens/AccountsPayable.tsx:140</span>, and a Claim placeholder renders its signed face value at <span class="cite">screens/AccountsPayable.tsx:149</span> — but the net owed is computed from <code>invoiceBalance</code> plus <code>payableEntryContribution</code>, and <em>neither</em> of those rows contributes to it <span class="cite">(lib/totals.ts:150, :194)</span>. The figures are each defensible on their own; the column is not, because it mixes &ldquo;what this contributes&rdquo; with &ldquo;what this is worth for clearing&rdquo;.</p>
+      <p><strong>The code is right and the layout was hiding it.</strong> M-05 step 6 has the Manager mark a claim <em>Credited</em> and then <em>apply</em> it, as two acts; <span class="cite">d14</span> keeps a placeholder out of the balance entirely. Three bands, each with its own subtotal, make the table sum to the headline again &mdash; which is why this mock draws them, and why the fix is layout rather than arithmetic. <em>Not a decision: a reading of d6, d11 and d14 that the current screen does not make visible.</em></p>
+    </section>
+
+    <section class="note">
+      <h2>Why gift cards moved into the slab</h2>
+      <p>Today the registry is a full-width table under the supplier grid, which reads as an afterthought bolted to a screen about suppliers. But <span class="cite">d10</span> puts it here for a reason that is structural: it is <strong>money owed</strong>, and so is everything else in the slab. Making it the last destination in that list &mdash; under a rule, tiled in black so it never reads as a Supplier &mdash; says what d10 means without adding a word to the flow.</p>
+      <p>Selecting it scopes the middle track to the registry and the right track to the total liability. Nothing about it is editable here: loading and redeeming happen at the till <span class="cite">(E-05)</span>, and this is the register, not the mechanism.</p>
+    </section>
+
+    <section class="note">
+      <h2>Two totals, not one</h2>
+      <p>The slab's store-wide figure is <strong>one line per currency</strong>, not a sum. M-05 requires a Supplier's currency to carry through, with the store-currency equivalent shown at the configured rate &mdash; and that rate lives in <span class="cite">M-06</span>, which is not built. Adding CAD 282.45 to USD 23.75 would be inventing an exchange rate in the one place on the screen most likely to be read as authoritative.</p>
+      <p>When M-06 lands, this becomes a single figure with the per-currency lines beneath it. Until then the honest shape is the one that cannot be wrong. The same restraint applies inside a foreign-currency supplier's ledger, where the caveat sits in track 3 rather than a fabricated conversion sitting in the table.</p>
+    </section>
+
+    <section class="note">
+      <h2>The bug that found the model</h2>
+      <p>Ticking an Invoice and a credit memo together used to produce <em>&ldquo;Neither action is legal here.&rdquo;</em> That refusal was not a decision. It came from this screen splitting one selection into two competing modes &mdash; payables-only settles, entries-summing-to-zero clears, anything else refused &mdash; and no row ever asked for it. <span class="cite">d3</span> had said the opposite from the very first decision made about this screen: the list is <em>one combined list, because what is owed is the net of both</em>.</p>
+      <p>The fix was not a third mode. It was noticing that <strong>one rule produces all of them</strong>: credits attach to the debits beside them, what cannot attach stays as it was, placeholders retire at nothing, money covers the rest. Clearing stops being a separate button and becomes the case where you ticked no debit &mdash; nothing to attach to, so the credit stays counted, which is <span class="cite">d15</span> word for word.</p>
+      <p>The double-count I had been guarding against turned out not to exist. Applying a credit does not reduce the balance; it changes what the credit is <em>attached to</em>. An Invoice of $68.65 against a $34.00 Credit is $34.65 owed, and settling both with $34.65 moves the balance by exactly the money that left. A credit only counts twice if it lingers as a standing reducer <em>and</em> is spent separately &mdash; which consuming it in the same act is what prevents.</p>
+    </section>
+
+    <section class="note">
+      <h2>When the credit is bigger than the debt</h2>
+      <p>This is the case that took three tries to get right, and the mock shows it on <strong>Vinyl Revival</strong>: a $220.00 claim against $146.00 outstanding.</p>
+      <p>The first answer was d11's &mdash; distribute automatically, oldest first, absorb the remainder on the last Invoice. The second was <span class="cite">d20</span>'s &mdash; let the claim carry a running remainder. Both put the leftover <em>inside</em> something: an Invoice that did not earn it, or a claim that then needed an invariant nobody had anywhere to enforce.</p>
+      <p><span class="cite">d24</span> and <span class="cite">d25</span> put it in the open instead. The claim is consumed whole, $146.00 lands, and <strong>$74.00 comes back as a row in the ledger</strong>. The balance reads <strong>&minus;$74.00</strong>, in the store's favour, which is simply the truth. Nothing is hidden in a field, there is no running total to bound, and applying a claim is a status flip rather than a lock.</p>
+      <p>The top slot of track 3 reports what is in hand before you start, and says plainly when a credit is larger than everything owed &mdash; because that is the case where applying it changes what the supplier relationship <em>is</em>, not just what it costs.</p>
+      </section>
+
+    <section class="note">
+      <h2>What is mock data</h2>
+      <p>The prototype's seed carries two open Invoices, one Credited claim and one Adjustment &mdash; enough to prove the store works, not enough to show a layout. This mock adds, <strong>for display only</strong>: a second F.A.B. invoice carrying a partial payment (so d4 has something to show), a Claim placeholder and the Credit that matches it (so d14's band and d15's clearing have rows), one consignment Supplier, <em>Vinyl Revival</em>, so M-01's consignment flag and <span class="cite">d13</span>'s type default are visible, and a <strong>$220.00 claim against Vinyl Revival's $146.00</strong> so the d24/d25 case &mdash; a credit larger than everything owed &mdash; can actually be walked rather than described.</p>
+      <p>None of that is a proposal about seed data. When this is built, the screen should render whatever the store holds, including the empty cases &mdash; which is why the settled supplier, the zero-balance card, and the reachable-but-inactive <em>Walk-in / trade-in</em> are all still in here.</p>
+    </section>
+
+    <section class="note">
+      <h2>Open, and deliberately left open</h2>
+      <ul>
+        <li><strong>A cross-supplier view.</strong> On&nbsp;Order's slab has a permanent <em>Everything on order</em> first row. This one has no equivalent, on purpose. A combined ledger implies a payment run across suppliers, and both <span class="cite">d7</span> (a claim applies only within one supplier) and <span class="cite">d16</span>'s PaymentBatch are supplier-scoped as written. Building the view first and discovering the model second is the wrong order. <strong>Recorded as an open question, not designed around.</strong></li>
+        <li><strong>Aging buckets.</strong> The column is answered; <em>where the 30/60/90 report lives</em> is not, and this screen does not decide it.</li>
+        <li><strong>Overpayment.</strong> Typing more than an Invoice's balance is still refused here. <span class="cite">d25</span> now gives money in the store's favour an artifact and lets a balance go negative, so the machinery to answer this exists &mdash; whether an overpayment should <em>emit</em> a remainder Credit the way an excess claim credit does is the obvious reading, and is not yet decided.</li>
+        <li><strong>What a remainder Credit clears against.</strong> <span class="cite">d25</span> retires a remainder using <span class="cite">d15</span>'s clearing, but d15 takes manual ledger entries only and needs the set to sum to zero. A remainder absorbed by subsequent <em>Invoices</em> has no entry to pair with. The mock therefore leaves a remainder row unselectable, which is honest rather than final: it nets correctly either way, so this is about how it leaves the list, not about the arithmetic.</li>
+        <li><strong>Undoing a clear.</strong> <span class="cite">d22</span> answered the payment side; this one is still open. <span class="cite">d15</span> says nothing is deleted and both entries stay as history, but not whether a Manager who cleared the wrong pair can un-clear them &mdash; and clearing has no artifact of its own to void the way a PaymentBatch does.</li>
+        <li><strong>Prepaid and COD.</strong> Whether a Prepaid Supplier can carry a balance at all is behaviour M-01 d19 has to answer. The mock shows the anomaly and declines to resolve it.</li>
+        <li><strong>Terms on a manual entry.</strong> A hand-entered Invoice or Consignment defaults to the Supplier's terms here, which is a <em>proposal inside a proposal</em> &mdash; <span class="cite">d12</span> says a manual entry is a lump not sourced from Receiving, and whether it should inherit terms at all is undecided.</li>
+        <li><strong>Who the reference belongs to.</strong> <span class="cite">d5</span> makes the payment reference free text because the bank statement is the reconciliation surface. Whether the screen should warn on a duplicate reference within one supplier is not decided, and is left alone.</li>
+        <li><strong>Currency movement.</strong> An invoice raised at one rate and paid at another is M-05's own open question. The composer records the amount in the supplier's currency and says nothing more.</li>
+        <li><strong>PRD §4 drift, found while checking this.</strong> <span class="cite">PRD:119</span> still defines <strong>APPayment</strong> as &ldquo;a payment recorded against a supplier Invoice&rdquo; &mdash; singular and Invoice-scoped. <span class="cite">M-05 d16</span> replaced that with PaymentBatch and §4 never received the amendment. Not this branch's to fix; it belongs in <code>/spec-audit</code>.</li>
+      </ul>
+    </section>
+
+  </div>
+</div>
+<script>
+/* ======================================================================
+ * Mock behaviour. Enough to argue about the layout, and no more.
+ *
+ * Balance rules follow the prototype's lib/totals.ts and M-05's own wording
+ * rather than being re-derived here:
+ *   - an Invoice's balance is amount less payments AND credits applied (d8)
+ *   - a Claim placeholder never counts until cleared (d14)
+ *   - a Credit lands the moment it is entered; an Adjustment goes either way
+ *     at the Manager's choice (d14)
+ *
+ * The claim-credit rules here are d18 as amended by d23, plus d24 and d25:
+ *   d18 supersedes d11 — the Manager picks which Invoices a claim credit
+ *       lands on. d11's automatic oldest-first distribution is retired.
+ *   d23 amends d18 — the Manager picks the DISTRIBUTION, never the TOTAL.
+ *       A credit goes out in full, or to the limit of what is owed.
+ *   d24 supersedes d20 — a claim is applied WHOLE or not at all. No running
+ *       remainder, so no `sum(applications) <= amount` invariant to enforce.
+ *   d25 the excess over what is owed is emitted as a REMAINDER CREDIT, its
+ *       own artifact (not a d12 manual entry), and the balance may go
+ *       negative because of one.
+ *   d19 a credit and a payment settle in ONE action, one PaymentBatch.
+ *
+ * Payment terms (M-01 d19) and the Invoice's own terms and derived due date
+ * (E-02 d45) are what make the Due column possible at all.
+ * Net-N runs from the INVOICE date, not the received date.
+ * ====================================================================== */
+
+var TODAY = new Date(2026, 8, 13); // 13/09/2026
+var r2 = function (n) { return Math.round(n * 100) / 100; };
+var $ = function (id) { return document.getElementById(id); };
+var esc = function (s) {
+  return String(s).replace(/[&<>"]/g, function (c) {
+    return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c];
+  });
+};
+var money = function (n, cur) {
+  var s = (n < 0 ? '-' : '') + '$' + Math.abs(r2(n)).toFixed(2);
+  return cur && cur !== 'CAD' ? s + ' ' + cur : s;
+};
+var toDate = function (iso) { var p = iso.split('-'); return new Date(+p[0], +p[1] - 1, +p[2]); };
+var days = function (iso) { return Math.round((TODAY - toDate(iso)) / 86400000); };
+var addDays = function (iso, n) {
+  var d = toDate(iso); d.setDate(d.getDate() + n);
+  return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+};
+
+/* ---- Payment terms. M-01 d19 puts this on the Supplier, E-02 d45
+       carries it onto the Invoice. Nothing on record today has any of it —
+       Supplier.cancelByDays is an ORDERING field and says so. ---- */
+var TERMS = {
+  net15: { label: 'Net 15', days: 15 },
+  net30: { label: 'Net 30', days: 30 },
+  net45: { label: 'Net 45', days: 45 },
+  net60: { label: 'Net 60', days: 60 },
+  receipt: { label: 'On receipt', days: 0 },
+  cod: { label: 'COD', immediate: true },
+  prepaid: { label: 'Prepaid', immediate: true },
+};
+var TERM_KEYS = ['net15', 'net30', 'net45', 'net60', 'receipt', 'cod', 'prepaid'];
+
+/* ---- Suppliers. The first three and WALK are the prototype's seed; `terms`
+       is the field M-01 d19 adds, and did not exist before this branch. ---- */
+var SUPPLIERS = [
+  { id: 'fab', code: 'FAB1', name: 'F.A.B. Distribution', acct: 'WW-4471', cur: 'CAD', cons: false, terms: 'net30',
+    billing: ['PO Box 4471, Station A', 'Toronto, ON', 'Canada'] },
+  { id: 'indie', code: 'INDI', name: 'Indie Direct Supply', acct: '9927-A', cur: 'USD', cons: false, terms: 'net60',
+    billing: ['118 W 22nd St', 'New York, NY', 'United States'] },
+  { id: 'crate', code: 'CRAT', name: 'Crate Digger Wholesale', acct: 'CD-118', cur: 'CAD', cons: false, terms: 'prepaid',
+    billing: ['77 Avenue Mozart Est', 'Montréal, QC', 'Canada'] },
+  { id: 'vinyl', code: 'VRVL', name: 'Vinyl Revival Consignment', acct: 'VR-06', cur: 'CAD', cons: true, terms: 'cod',
+    billing: ['904 Rue Ontario Est', 'Montréal, QC', 'Canada'], mock: true },
+  { id: 'walkin', code: 'WALK', name: 'Walk-in / trade-in', acct: '', cur: 'CAD', cons: false, terms: 'prepaid', billing: null },
+];
+var supBy = function (id) { for (var i = 0; i < SUPPLIERS.length; i++) if (SUPPLIERS[i].id === id) return SUPPLIERS[i]; return null; };
+
+/* ---- The ledger. `mock:true` marks a row this file invented to show a
+       state the seed has no example of. `invDate` is the supplier's own
+       invoice date (E-02 d2 captures it); `date` is the received date. ---- */
+var ITEMS = [
+  /* Net 30 from 29/07 — genuinely overdue, and the ordinary case the Due
+     column is for. The two seeded invoices below are both still inside
+     their window, which is exactly why the gap was invisible. */
+  { key: 'iv-54902', sup: 'fab', kind: 'invoice', type: 'Invoice', ref: '54902', invDate: '2026-07-29', date: '2026-07-31', amount: 96.40, paid: 0, credited: 0, po: 'PO-1160', mock: true },
+  { key: 'iv-55021', sup: 'fab', kind: 'invoice', type: 'Invoice', ref: '55021', invDate: '2026-08-27', date: '2026-08-28', amount: 68.65, paid: 0, credited: 0, po: 'PO-1188' },
+  { key: 'iv-55188', sup: 'fab', kind: 'invoice', type: 'Invoice', ref: '55188', invDate: '2026-09-03', date: '2026-09-04', amount: 214.20, paid: 100, credited: 0, po: 'PO-1204', mock: true },
+  { key: 'cl-9', sup: 'fab', kind: 'claim', type: 'Credit', ref: '#9 · CM-2201', date: '2026-09-03', amount: 12.40, reason: 'Received damaged — Kind of Blue, qty 1' },
+  { key: 'en-claim', sup: 'fab', kind: 'entry', type: 'Claim', ref: 'Claim 11 — short shipped', date: '2026-09-08', amount: 34.00, mock: true },
+  { key: 'en-credit', sup: 'fab', kind: 'entry', type: 'Credit', ref: 'CM-2244', date: '2026-09-11', amount: 34.00, mock: true },
+
+  { key: 'iv-3390', sup: 'indie', kind: 'invoice', type: 'Invoice', ref: '3390', invDate: '2026-08-30', date: '2026-08-31', amount: 17.25, paid: 0, credited: 0, po: 'PO-1191' },
+  { key: 'en-adj', sup: 'indie', kind: 'entry', type: 'Adjustment', ref: 'Freight correction — INDI-3390', date: '2026-09-02', amount: 6.50, dir: 'increase' },
+
+  /* Prepaid, and yet sitting unpaid for 26 days — the anomaly the Due column
+     exists to make visible, and one the current screen cannot express. */
+  { key: 'iv-cd801', sup: 'crate', kind: 'invoice', type: 'Invoice', ref: 'CD-801', invDate: '2026-08-18', date: '2026-08-19', amount: 42.00, paid: 0, credited: 0, po: 'PO-1179', mock: true },
+  /* Already settled — the band that used to be invisible. */
+  { key: 'iv-cd777', sup: 'crate', kind: 'invoice', type: 'Invoice', ref: 'CD-777', invDate: '2026-08-18', date: '2026-08-19', amount: 20.00, paid: 20.00, credited: 0, po: null },
+
+  { key: 'en-cons', sup: 'vinyl', kind: 'entry', type: 'Consignment', ref: 'CS-0912', date: '2026-09-09', amount: 146.00, paid: 0, mock: true },
+  /* Bigger than everything Vinyl Revival is owed ($146.00), so applying it
+     leaves $74.00 with nowhere to land — the d24/d25 case, and the only way
+     to see a supplier balance go below zero. */
+  { key: 'cl-14', sup: 'vinyl', kind: 'claim', type: 'Credit', ref: '#14 · VR-CM-88', date: '2026-09-10', claimed: 228.00, amount: 220.00, reason: 'Whole carton water-damaged in transit — 12 copies', shortfall: 'they deducted $8.00 return freight', mock: true },
+];
+
+var BATCHES = [
+  { id: 'b2', sup: 'fab', method: 'Cheque', ref: 'Cheque 1041', date: '2026-09-08', by: 'R. Duval',
+    targets: [{ key: 'iv-55188', label: 'Invoice 55188', amount: 100.00, kind: 'payment' }], mock: true },
+  { id: 'b1', sup: 'crate', method: 'EFT', ref: 'EFT-88214', date: '2026-08-20', by: 'R. Duval',
+    targets: [{ key: 'iv-cd777', label: 'Invoice CD-777', amount: 20.00, kind: 'payment' }] },
+];
+
+var CARDS = [
+  { code: 'GC-4417', bal: 25.00, customer: 'Ramona Vasquez', issued: '2026-06-14', used: '2026-08-22' },
+  { code: 'GC-2039', bal: 60.00, customer: null, issued: '2026-08-30', used: null, mock: true },
+  { code: 'GC-8890', bal: 0, customer: null, issued: '2026-09-02', used: null },
+];
+
+var PAYMENT_METHODS = ['Cheque', 'Credit card', 'EFT', 'Cash'];
+var ENTRY_TYPES = ['Invoice', 'Claim', 'Credit', 'Adjustment', 'Consignment'];
+
+/* ---- derived ---- */
+function live(it) {
+  if (it.cleared || it.clearedNote) return false;   // retired from attention (d15)
+  if (it.kind === 'claim' && it.applied) return false;
+  if (it.kind === 'remainder' && it.consumedAt) return false;
+  if (it.kind === 'entry' && it.type === 'Credit' && it.consumedAt) return false;
+  return true;
+}
+function itemsFor(sid) { return ITEMS.filter(function (i) { return i.sup === sid && live(i); }); }
+/* Two different questions, and d15 is why they are not the same one.
+   `itemsFor` is what still NEEDS ATTENTION. `countedFor` is what the BALANCE
+   is made of, and a cleared Credit stays in it: "a Claim was never counted; a
+   Credit already was, and stays counted". */
+function countedFor(sid) {
+  /* A CLEARED credit stays counted - d15 says so in as many words. A CONSUMED
+     credit does not: it has moved onto an Invoice, and counting it here as
+     well is the double-count everything else is arranged to avoid. */
+  return ITEMS.filter(function (i) {
+    return i.sup === sid && !i.consumedAt && !(i.kind === 'claim' && i.applied);
+  });
+}
+/* d24 — a claim is binary. No running remainder, so nothing to bound and
+   nothing to lock: "is this claim applied" is a status check. */
+function claimsInHand(sid) {
+  return ITEMS.filter(function (i) { return i.sup === sid && i.kind === 'claim' && !i.applied; });
+}
+
+function isPayable(it) {
+  if (it.kind === 'invoice') return true;
+  if (it.kind === 'claim' || it.kind === 'remainder') return false;
+  return it.type === 'Invoice' || it.type === 'Consignment' || (it.type === 'Adjustment' && it.dir !== 'decrease');
+}
+/* Invoice-shaped: the things a bill is due on, and the only things that can
+   carry payment terms (E-02 d45). */
+function isBill(it) {
+  return it.kind === 'invoice' || (it.kind === 'entry' && (it.type === 'Invoice' || it.type === 'Consignment'));
+}
+/* d30 - a reversal is an Adjustment the SYSTEM posted, not one a Manager typed.
+   Same carve-out d25 gives the remainder: sourced from a void by construction,
+   so it is not a d12 manual entry even though it shares the type. */
+function isReversal(it) { return it.kind === 'reversal'; }
+function isRemainder(it) { return it.kind === 'remainder'; }
+/* What the row is worth for CLEARING — its signed face value (d15). */
+function signedOf(it) {
+  if (it.kind === 'claim') return -it.amount;
+  if (it.kind === 'remainder') return -it.amount;
+  /* Anything PAYABLE nets off what has been settled against it, and that has
+     to be tested before the type branches below - a reversal (d30) and an
+     increasing Adjustment are both payable, and returning their face amount
+     regardless of what was paid leaves them contributing forever. */
+  if (isPayable(it)) return r2(it.amount - (it.paid || 0) - (it.credited || 0));
+  if (it.type === 'Credit') return -it.amount;
+  if (it.type === 'Adjustment') return -it.amount;   // only decreasing ones reach here
+  return it.amount;                                  // a Claim placeholder: face value (d29)
+}
+function balanceOf(it) {
+  /* d26 - a Credited claim counts from the moment it is Credited, exactly
+     as a manual Credit does. The line is agreed-vs-not-agreed, not
+     claim-vs-entry, so only a Claim PLACEHOLDER stays outside (d14). */
+  if (it.kind === 'entry' && it.type === 'Claim') return 0;
+  return signedOf(it);
+}
+function paidOf(it) {
+  if (it.kind === 'claim' || it.kind === 'remainder' || !isPayable(it)) return null;
+  return r2((it.paid || 0) + (it.credited || 0));
+}
+function bandOf(it) {
+  if (it.kind === 'claim') return 'counted';       // d26 - a credit memo is a credit
+  if (it.kind === 'remainder') return 'counted';   // d25 — it has already netted
+  if (it.kind === 'reversal') return 'counted';    // d30 — and so has its reversal
+  if (it.kind === 'entry' && it.type === 'Claim') return 'uncounted';
+  if (isPayable(it) && balanceOf(it) <= 0.005 && ((it.paid || 0) + (it.credited || 0)) > 0.005) return 'settled';
+  return 'counted';
+}
+
+/* ---- terms and the due date (M-01 d19, E-02 d45). Net-N runs
+       from the INVOICE date: the supplier's clock starts when they bill you.
+       Accepted consequence, and visible on CD-801 below — stock that sat in
+       transit arrives with part of its window already gone. ---- */
+function termsOf(it) {
+  if (!isBill(it)) return null;
+  return it.terms || (supBy(it.sup) || {}).terms || null;
+}
+function dueOf(it) {
+  var t = termsOf(it);
+  if (!t) return null;
+  var spec = TERMS[t];
+  if (spec.immediate) return { immediate: true, label: spec.label, terms: t, own: !!it.terms };
+  return { date: addDays(it.invDate || it.date, spec.days), label: spec.label, terms: t, own: !!it.terms };
+}
+/* Days past due. Negative means not yet due. Null when there is no due date. */
+function agingOf(it) {
+  var d = dueOf(it);
+  if (!d || !isPayable(it) || balanceOf(it) <= 0.005) return null;
+  if (d.immediate) return { immediate: true, over: days(it.date), label: d.label };
+  return { over: days(d.date), date: d.date, label: d.label };
+}
+function isOverdue(it) {
+  var a = agingOf(it);
+  return !!a && (a.immediate ? a.over > 0 : a.over > 0);
+}
+
+function netOf(sid) {
+  return r2(countedFor(sid).reduce(function (s, i) { return s + balanceOf(i); }, 0));
+}
+function creditPool(sid) {
+  return r2(claimsInHand(sid).reduce(function (s, i) { return s + i.amount; }, 0));
+}
+/* d23 — the cap on what can go out is what the SUPPLIER is owed, not what is
+   ticked. d25 — anything above that cap becomes a remainder Credit. */
+function owedTotal(sid) {
+  return r2(openInvoicesOf(sid).reduce(function (s, i) { return s + balanceOf(i); }, 0));
+}
+/* d27 - a row is a DEBIT if it is something owed, a CREDIT if it is in the
+   store's favour, and a Claim placeholder is neither: it contributes nothing
+   to the money, ever, which is what makes it safe to tick. */
+function isDebit(it) { return (isPayable(it) || isReversal(it)) && balanceOf(it) > 0.005; }
+function isCredit(it) { return balanceOf(it) < -0.005; }
+function isPlaceholder(it) { return it.kind === 'entry' && it.type === 'Claim'; }
+function uncountedOf(sid) {
+  return r2(itemsFor(sid).filter(function (i) { return bandOf(i) === 'uncounted'; })
+    .reduce(function (s, i) { return s + signedOf(i); }, 0));
+}
+function openInvoicesOf(sid) {
+  return itemsFor(sid).filter(function (i) { return isPayable(i) && balanceOf(i) > 0.005; })
+    .sort(function (a, b) { return a.date < b.date ? -1 : 1; });
+}
+function overdueOf(sid) { return openInvoicesOf(sid).filter(isOverdue); }
+function worstOverdue(sid) {
+  var o = overdueOf(sid).map(function (i) { return agingOf(i).over; });
+  return o.length ? Math.max.apply(null, o) : null;
+}
+function clearedContribOf(sid) {
+  return r2(ITEMS.filter(function (i) { return i.sup === sid && (i.cleared || i.clearedNote); })
+    .reduce(function (s, i) { return s + balanceOf(i); }, 0));
+}
+function settledOf(sid) { return itemsFor(sid).filter(function (i) { return bandOf(i) === 'settled'; }); }
+/* A voided batch settled nothing, so it never names itself on a paid row. It
+   stays in history under its own heading instead (d22). */
+function batchesFor(key) {
+  return BATCHES.filter(function (b) {
+    return !b.voided && b.targets.some(function (t) { return t.key === key; });
+  });
+}
+function activity() {
+  return SUPPLIERS.filter(function (s) {
+    return ITEMS.some(function (i) { return i.sup === s.id; }) || BATCHES.some(function (b) { return b.sup === s.id; });
+  });
+}
+function dotOf(sid) {
+  if (overdueOf(sid).length) return 'late';
+  if (creditPool(sid) > 0.005) return 'credit';
+  if (uncountedOf(sid) > 0.005) return 'claim';
+  return netOf(sid) > 0.005 ? 'owed' : 'settled';
+}
+
+/* ---- state ---- */
+var S = {
+  slab: true, scope: 'fab', q: '', chip: 'all', sort: 'name',
+  sel: {}, mode: null, openBatch: null, showSettled: false, confirmVoid: null,
+  pay: null, entry: null,
+};
+var selKeys = function () { return Object.keys(S.sel).filter(function (k) { return S.sel[k]; }); };
+var selItems = function () { return selKeys().map(function (k) { return ITEMS.filter(function (i) { return i.key === k; })[0]; }).filter(Boolean); };
+
+function toast(msg) {
+  var t = $('toast');
+  t.textContent = msg; t.hidden = false;
+  clearTimeout(toast._h);
+  toast._h = setTimeout(function () { t.hidden = true; }, 4200);
+}
+
+/* ====================== TRACK 1 ====================== */
+var CHIPS = [
+  { k: 'all', label: 'All' },
+  { k: 'overdue', label: 'Overdue', hot: true },
+  { k: 'owed', label: 'Owed' },
+  { k: 'credit', label: 'Credit to spend', good: true },
+  { k: 'claims', label: 'Claims open' },
+  { k: 'foreign', label: 'Foreign' },
+  { k: 'settled', label: 'Settled' },
+];
+function chipMatch(k, s) {
+  if (k === 'all') return true;
+  if (k === 'overdue') return overdueOf(s.id).length > 0;
+  if (k === 'owed') return netOf(s.id) > 0.005;
+  if (k === 'credit') return creditPool(s.id) > 0.005;
+  if (k === 'claims') return uncountedOf(s.id) > 0.005;
+  if (k === 'foreign') return s.cur !== 'CAD';
+  if (k === 'settled') return netOf(s.id) <= 0.005;
+  return true;
+}
+function searched() {
+  var q = S.q.trim().toLowerCase();
+  if (!q) return null;
+  return SUPPLIERS.filter(function (s) {
+    return s.name.toLowerCase().indexOf(q) >= 0 || s.code.toLowerCase().indexOf(q) >= 0 ||
+      (s.acct || '').toLowerCase().indexOf(q) >= 0;
+  });
+}
+function slabRows() {
+  var found = searched();
+  if (found) return found;
+  return activity().filter(function (s) { return chipMatch(S.chip, s); }).sort(function (a, b) {
+    if (S.sort === 'balance') return netOf(b.id) - netOf(a.id) || a.name.localeCompare(b.name);
+    if (S.sort === 'overdue') {
+      var wa = worstOverdue(a.id), wb = worstOverdue(b.id);
+      if (wa == null && wb == null) return a.name.localeCompare(b.name);
+      if (wa == null) return 1; if (wb == null) return -1;
+      return wb - wa;
+    }
+    return a.name.localeCompare(b.name);
+  });
+}
+
+function renderTotal() {
+  var byCur = {};
+  activity().forEach(function (s) { byCur[s.cur] = r2((byCur[s.cur] || 0) + netOf(s.id)); });
+  var curs = Object.keys(byCur).sort();
+  var gc = r2(CARDS.reduce(function (n, c) { return n + c.bal; }, 0));
+  var late = activity().reduce(function (n, s) { return n + overdueOf(s.id).length; }, 0);
+  var h = '';
+  curs.forEach(function (c, i) {
+    h += '<div class="tot"><span class="lab">' + (i === 0 ? 'Owed to suppliers' : '&nbsp;') + '</span>' +
+      '<span class="v' + (i ? ' sub' : '') + '">' + esc(money(byCur[c], c)) + '</span></div>';
+  });
+  h += '<div class="tot" style="margin-top:6px"><span class="lab">Gift cards</span>' +
+    '<span class="v sub">' + esc(money(gc)) + '</span></div>';
+  if (late) {
+    h += '<div class="tot" style="margin-top:6px"><span class="lab" style="color:var(--c-danger)">Past due</span>' +
+      '<span class="v sub" style="color:var(--c-danger)">' + late + ' item' + (late === 1 ? '' : 's') + '</span></div>';
+  }
+  h += '<span class="hint">One line per currency, never a sum &mdash; the store-currency rate that would let these be added lives in M-06, which is not built.</span>';
+  $('slab-total').innerHTML = h;
+}
+
+function renderChips() {
+  var base = activity();
+  $('chips').innerHTML = CHIPS.map(function (c) {
+    var n = base.filter(function (s) { return chipMatch(c.k, s); }).length;
+    return '<button class="chip' + (c.good ? ' good' : '') + (c.hot ? ' hot' : '') + (S.chip === c.k ? ' on' : '') + '"' +
+      ' data-chip="' + c.k + '"' + (c.k !== 'all' && n === 0 ? ' disabled' : '') + '>' +
+      esc(c.label) + ' <span class="count">' + n + '</span></button>';
+  }).join('');
+}
+
+function supRow(s, cls) {
+  var net = netOf(s.id), cred = creditPool(s.id);
+  var open = itemsFor(s.id).filter(function (i) { return bandOf(i) !== 'settled'; }).length;
+  var late = overdueOf(s.id), worst = worstOverdue(s.id);
+  var meta = '<span class="st-dot ' + dotOf(s.id) + '"></span> ' + esc(s.code) +
+    ' · ' + esc(TERMS[s.terms].label) +
+    (s.cur !== 'CAD' ? ' · ' + esc(s.cur) : '') +
+    (s.cons ? ' · consignment' : '') +
+    (open ? ' · ' + open + ' open' : ' · nothing open');
+  var key = late.length ? worst + 'd past due' : (cred > 0.005 ? money(cred) + ' credit' : (net > 0.005 ? 'owing' : 'settled'));
+  var kcls = late.length ? ' late' : (cred > 0.005 ? ' good' : '');
+  return '<button class="sup' + (s.cons ? ' cons' : '') + (S.scope === s.id ? ' on' : '') +
+    (cls || '') + '" data-sup="' + s.id + '">' +
+    '<span class="code">' + esc(s.code) + '</span>' +
+    '<span class="t">' + esc(s.name) + '</span>' +
+    '<span class="m">' + meta + '</span>' +
+    '<span class="n' + (net > 0.005 ? (late.length ? ' late' : '') : ' nil') + '">' + esc(money(net, s.cur)) + '</span>' +
+    '<span class="k' + kcls + '">' + esc(key) + '</span>' +
+    '</button>';
+}
+
+function renderSlab() {
+  renderTotal(); renderChips();
+  var mixed = new Set(activity().map(function (s) { return s.cur; })).size > 1;
+  var warn = $('sort-warn');
+  if (!warn) {
+    warn = document.createElement('span');
+    warn.id = 'sort-warn'; warn.className = 'xsmall muted';
+    warn.style.cssText = 'display:block;padding:0 var(--sp-3) 6px;font-size:10.5px;border-bottom:1px solid var(--c-border-strong)';
+    $('sort').closest('.sortbar').after(warn);
+  }
+  warn.hidden = !(S.sort === 'balance' && mixed);
+  warn.innerHTML = 'Ordering CAD and USD figures against each other &mdash; the same M-06 gap the total above refuses to paper over.';
+
+  var found = searched(), h = '';
+  if (found) {
+    h += '<div class="slab-band"><span class="lab">Lookup</span><span class="xsmall muted">' +
+      found.length + ' match' + (found.length === 1 ? '' : 'es') + ' · any supplier, balance or not</span></div>';
+    if (!found.length) h += '<div class="slab-empty">No supplier matches &ldquo;' + esc(S.q.trim()) + '&rdquo;.</div>';
+    found.forEach(function (s) {
+      var inactive = !activity().some(function (a) { return a.id === s.id; });
+      h += supRow(s, inactive ? ' dim' : '');
+    });
+    if (found.some(function (s) { return !activity().some(function (a) { return a.id === s.id; }); })) {
+      h += '<div class="slab-empty" style="padding:var(--sp-3)">Dimmed suppliers have no payables at all. They are reachable so history can be read, and so a <strong>Create new</strong> can be logged against them <span class="cite">(step 1)</span>.</div>';
+    }
+  } else {
+    var rows = slabRows();
+    var owed = rows.filter(function (s) { return netOf(s.id) > 0.005; });
+    var settled = rows.filter(function (s) { return netOf(s.id) <= 0.005; });
+    if (owed.length) {
+      h += '<div class="slab-band"><span class="lab">Outstanding</span><span class="xsmall muted">' + owed.length + '</span></div>';
+      owed.forEach(function (s) { h += supRow(s); });
+    }
+    if (settled.length) {
+      h += '<div class="slab-band"><span class="lab">Settled &mdash; no balance owing</span><span class="xsmall muted">' + settled.length + '</span></div>';
+      settled.forEach(function (s) { h += supRow(s, ' dim'); });
+    }
+    if (!rows.length) h += '<div class="slab-empty">No supplier matches this filter.</div>';
+    var gc = r2(CARDS.reduce(function (n, c) { return n + c.bal; }, 0));
+    h += '<button class="sup gc' + (S.scope === 'cards' ? ' on' : '') + '" data-sup="cards">' +
+      '<span class="code">&#9733;</span>' +
+      '<span class="t">Gift card liability</span>' +
+      '<span class="m">Owed to customers, not to a supplier · ' + CARDS.filter(function (c) { return c.bal > 0; }).length + ' live</span>' +
+      '<span class="n">' + esc(money(gc)) + '</span><span class="k">outstanding</span></button>';
+  }
+  $('slab-list').innerHTML = h;
+
+  $('strip-stack').innerHTML = activity().map(function (s) {
+    return '<button class="tile' + (S.scope === s.id ? ' on' : '') + '" data-sup="' + s.id + '" title="' +
+      esc(s.name + ' — ' + money(netOf(s.id), s.cur)) + '">' + esc(s.code) +
+      '<span class="st-dot ' + dotOf(s.id) + '"></span></button>';
+  }).join('') +
+    '<button class="tile gc' + (S.scope === 'cards' ? ' on' : '') + '" data-sup="cards" title="Gift card liability">&#9733;</button>';
+  var credits = activity().filter(function (s) { return creditPool(s.id) > 0.005; }).length;
+  $('strip-badge').textContent = credits;
+  $('strip-credit').hidden = credits === 0;
+}
+
+/* ====================== TRACK 2 ====================== */
+var BANDS = [
+  { k: 'counted', lab: 'Counted &mdash; this is the balance', say: 'These rows sum to the figure on the right.' },
+  { k: 'avail', lab: 'Credit in hand, not yet spent', say: 'Spend it against Invoices you pick, in whatever split you choose (d18, d20).' },
+  { k: 'uncounted', lab: 'Not counted until cleared', say: 'A Claim placeholder moves nothing until it is cleared against a matching Credit (d14).' },
+  { k: 'settled', lab: 'Settled &mdash; paid in full', say: 'Off the outstanding list (step 5), still readable, and naming what settled it.' },
+];
+
+/* Only a bill has a due date. A Claim, a Credit or an Adjustment is not one,
+   and an empty cell says that better than the words "no terms" do. */
+function dueCell(it) {
+  var d = dueOf(it);
+  if (!d) return '<span class="due none">&mdash;</span>';
+  var a = agingOf(it);
+  if (d.immediate) {
+    return '<span class="due' + (a && a.over > 0 ? ' over' : ' none') + '">' + esc(d.label) + '</span>' +
+      (a ? '<span class="terms">' + (a.over > 0 ? a.over + 'd unpaid' : 'due now') + '</span>' : '');
+  }
+  if (!a) return '<span class="due none">' + esc(d.date) + '</span><span class="terms">' + esc(d.label) + '</span>';
+  var cls = a.over > 0 ? ' over' : (a.over > -7 ? ' soon' : '');
+  var say = a.over > 0 ? a.over + 'd over' : a.over === 0 ? 'due today' : 'in ' + (-a.over) + 'd';
+  return '<span class="due' + cls + '">' + esc(a.date) + '</span>' +
+    '<span class="terms' + (d.own ? ' inherited' : '') + '">' + esc(d.label) + ' · ' + say + '</span>';
+}
+
+function recLink(it) {
+  if (it.kind !== 'invoice') return '';
+  var paid = bandOf(it) === 'settled';
+  return '<button class="rec-link' + (paid ? ' locked' : '') + '" data-rec="' + it.key + '" title="' +
+    (paid ? 'Paid, so immutable — amendments are E-04 (E-02 d40, A-33)' : 'Correctable until it is marked paid (E-02 d4, d40)') + '">' +
+    (paid ? 'View in Receiving' : 'Open in Receiving') + '</button>';
+}
+
+function ledgerRow(it, cur) {
+  var bal = balanceOf(it), paid = paidOf(it), band = bandOf(it);
+  var shown = band === 'uncounted' ? signedOf(it) : (band === 'avail' ? -it.amount : bal);
+  var amount = it.kind === 'claim' ? it.amount : it.amount;
+  /* d27 - any unsettled row may be ticked. The old rule allowed only payable
+     rows and manual entries, which is why a Credited claim could not be
+     selected at all and an Invoice + Credit was refused. */
+  var selectable = band !== 'settled' && (isDebit(it) || isCredit(it) || isPlaceholder(it) || isReversal(it));
+  var cls = 'lr' + (S.sel[it.key] ? ' on' : '') + (selectable ? '' : ' locked') +
+    (isOverdue(it) ? ' over' : '') + (band === 'settled' ? ' settled' : '') +
+    (it.kind === 'remainder' ? ' remainder' : '');
+  var status = it.kind === 'reversal' ? 'Reverses a remainder' :
+    it.kind === 'remainder' ? 'Credit in our favour' :
+    (it.kind === 'claim' && it.claimed && it.claimed > it.amount + 0.005) ? 'Credited short' :
+    it.kind === 'claim' ? 'Credited' :
+    (it.kind === 'entry' && it.type === 'Claim') ? 'Awaiting credit' :
+      band === 'settled' ? 'Paid' :
+        (isPayable(it) ? ((it.paid || it.credited) ? 'Part paid' : 'Open') : 'Applied');
+  var numCls = shown < -0.005 ? ' cr' : (Math.abs(shown) <= 0.005 ? ' nil' : '');
+  var by = '';
+  if (band === 'settled') {
+    var bs = batchesFor(it.key);
+    by = bs.length
+      ? '<span class="paid-by">' + bs.map(function (b) { return esc(b.date) + ' · ' + esc(b.method) + ' <span class="mono">' + esc(b.ref) + '</span>'; }).join('<br>') + '</span>'
+      : '<span class="paid-by">settled by credit only</span>';
+  }
+  return '<tr class="' + cls + '" data-row="' + it.key + '"' + (selectable ? ' tabindex="0"' : '') + '>' +
+    '<td>' + (selectable ? '<input type="checkbox"' + (S.sel[it.key] ? ' checked' : '') + ' data-cb="' + it.key + '" aria-label="Select ' + esc(it.type + ' ' + it.ref) + '">' : '') + '</td>' +
+    '<td>' + esc(it.type) +
+    (it.kind === 'reversal' ? '<span class="sub">reversal of a remainder &mdash; posted by a void (d30)</span>'
+      : it.kind === 'remainder' ? '<span class="sub">remainder &mdash; not a manual entry (d25)</span>'
+      : it.kind === 'entry' ? '<span class="sub">entered by hand</span>'
+      : (it.po ? '<span class="sub">' + esc(it.po) + '</span>' : '')) + '</td>' +
+    '<td><span class="ref">' + esc(it.ref) + '</span>' + (it.reason ? '<span class="sub">' + esc(it.reason) + '</span>' : '') +
+    (it.claimed && it.claimed > it.amount + 0.005
+      ? '<span class="sub" style="color:var(--c-warn)">claimed ' + esc(money(it.claimed)) + ', credited ' + esc(money(it.amount)) +
+        (it.shortfall ? ' — ' + esc(it.shortfall) : '') + ' <span class="cite">(E-04 d20)</span></span>'
+      : '') + '</td>' +
+    '<td><span class="num">' + esc(it.invDate || it.date) + '</span><span class="age">' + days(it.invDate || it.date) + ' days</span></td>' +
+    '<td>' + dueCell(it) + '</td>' +
+    '<td class="r"><span class="num">' + esc(money(amount, cur)) + '</span></td>' +
+    '<td class="r"><span class="num' + (paid ? '' : ' nil') + '">' + (paid == null ? '&mdash;' : esc(money(paid, cur))) + '</span></td>' +
+    '<td class="r"><span class="num bal' + numCls + '">' + esc(money(shown, cur)) + '</span></td>' +
+    '<td><span class="st-txt">' + esc(status) + '</span>' + by + recLink(it) + '</td>' +
+    '</tr>';
+}
+
+function renderMain() {
+  if (S.scope === 'cards') return renderCards();
+  var s = supBy(S.scope);
+  $('main-title').textContent = s.name;
+  var net = netOf(s.id), cred = creditPool(s.id), n = selKeys().length, late = overdueOf(s.id);
+  var b = '<span class="badge ' + (net > 0.005 ? 'ink' : 'ok') + '">' + esc(money(net, s.cur)) + (net > 0.005 ? ' owed' : ' — settled') + '</span>';
+  b += '<span class="badge mono">' + esc(s.code) + (s.acct ? ' · ' + esc(s.acct) : '') + '</span>';
+  b += '<span class="badge">' + esc(TERMS[s.terms].label) + '</span>';
+  if (late.length) b += '<span class="badge danger">' + late.length + ' past due</span>';
+  if (s.cur !== 'CAD') b += '<span class="badge warn">' + esc(s.cur) + '</span>';
+  if (s.cons) b += '<span class="badge">consignment</span>';
+  if (cred > 0.005) b += '<span class="badge ok">' + esc(money(cred)) + ' credit in hand</span>';
+  if (n) b += '<span class="badge accent">' + n + ' selected</span>';
+  $('main-badges').innerHTML = b;
+  $('main-acts').innerHTML = n
+    ? '<button class="btn sm" id="unsel">Clear selection</button>'
+    : '<button class="btn sm" id="new-btn-2">&#65291; Create new</button>';
+
+  var items = itemsFor(s.id);
+  var h = '';
+  if (!items.length) {
+    h = '<div class="grp"><span class="lab">Nothing outstanding</span></div>' +
+      '<div style="padding:var(--sp-6) var(--sp-4);text-align:center;color:var(--c-ink-faint);font-size:12.5px">' +
+      'Nothing outstanding for ' + esc(s.name) + '.<br>Use <strong>Create new</strong> to log an Invoice, Claim, Credit, Adjustment or Consignment by hand ' +
+      '<span class="cite">(d12)</span>, or finalize an Invoice in Receiving.</div>';
+  } else {
+    BANDS.forEach(function (band) {
+      var rows = items.filter(function (i) { return bandOf(i) === band.k; })
+        .sort(function (a, b2) { return (a.invDate || a.date) < (b2.invDate || b2.date) ? -1 : 1; });
+      if (band.k === 'settled') {
+        if (!rows.length) return;
+        h += '<div class="grp settled"><span class="lab">' + band.lab + '</span>' +
+          '<span class="say">' + band.say + '</span>' +
+          '<button class="btn sm" data-act="toggle-settled">' + (S.showSettled ? 'Hide' : 'Show') + ' ' + rows.length + '</button></div>';
+        if (!S.showSettled) return;
+      } else {
+        if (!rows.length && !(band.k === 'counted' && Math.abs(clearedContribOf(s.id)) > 0.005)) return;
+        var sub = r2(rows.reduce(function (t, i) {
+          return t + (band.k === 'uncounted' ? signedOf(i) : (band.k === 'avail' ? -i.amount : balanceOf(i)));
+        }, 0));
+        var say = band.say, retired = 0;
+        if (band.k === 'counted') {
+          retired = clearedContribOf(s.id);
+          sub = r2(sub + retired);
+          if (Math.abs(retired) > 0.005) {
+            say = 'Includes ' + money(retired, s.cur) + ' from entries already cleared and retired from this list &mdash; a cleared Credit stays counted <span class="cite">(d15)</span>.';
+          }
+        }
+        h += '<div class="grp' + (band.k === 'uncounted' ? ' uncounted' : '') + '">' +
+          '<span class="lab">' + band.lab + '</span>' +
+          '<span class="say">' + say + ' &nbsp;<span class="mono" style="font-weight:700">' + esc(money(sub, s.cur)) + '</span></span></div>';
+      }
+      h += '<table class="ledger"><thead><tr>' +
+        '<th></th><th>Type</th><th>Reference</th><th>Invoiced</th><th>Due</th>' +
+        '<th class="r">Amount</th><th class="r">Paid / netted</th><th class="r">Balance</th><th>Status</th>' +
+        '</tr></thead><tbody>' +
+        rows.map(function (i) { return ledgerRow(i, s.cur); }).join('') +
+        '</tbody></table>';
+    });
+  }
+  $('ledger').innerHTML = h;
+}
+
+function renderCards() {
+  $('main-title').textContent = 'Gift card liability';
+  var tot = r2(CARDS.reduce(function (n, c) { return n + c.bal; }, 0));
+  $('main-badges').innerHTML = '<span class="badge ink">' + esc(money(tot)) + ' outstanding</span>' +
+    '<span class="badge">' + CARDS.filter(function (c) { return c.bal > 0; }).length + ' live of ' + CARDS.length + '</span>' +
+    '<span class="badge">owed to customers</span>';
+  $('main-acts').innerHTML = '';
+  $('ledger').innerHTML =
+    '<div class="grp"><span class="lab">The registry</span><span class="say">Loading and redeeming happen at the till <span class="cite">(E-05)</span> &mdash; this is the register, not the mechanism.</span></div>' +
+    '<table class="ledger"><thead><tr><th></th><th>Code</th><th>Customer</th><th>Issued</th><th>Last used</th><th class="r">Balance</th><th></th></tr></thead><tbody>' +
+    CARDS.map(function (c) {
+      return '<tr class="lr locked"><td></td>' +
+        '<td><span class="ref">' + esc(c.code) + '</span></td>' +
+        '<td>' + (c.customer ? esc(c.customer) : '<span class="muted">&mdash; not associated</span>') + '</td>' +
+        '<td><span class="num">' + esc(c.issued) + '</span></td>' +
+        '<td>' + (c.used ? '<span class="num">' + esc(c.used) + '</span>' : '<span class="muted">never</span>') + '</td>' +
+        '<td class="r"><span class="num bal' + (c.bal > 0 ? '' : ' nil') + '">' + esc(money(c.bal)) + '</span></td>' +
+        '<td>' + (c.bal > 0 ? '' : '<span class="muted xsmall">not yet loaded</span>') + '</td></tr>';
+    }).join('') + '</tbody></table>';
+}
+
+/* ====================== TRACK 3 ====================== */
+function rightKey() {
+  return S.scope + '|' + (S.mode || '-') + '|' + selKeys().sort().join(',') + '|' + S.openBatch + '|' + S.confirmVoid + '|' + renderRight.gen;
+}
+renderRight.gen = 0;
+
+function renderRight(force) {
+  var k = rightKey();
+  if (!force && k === renderRight.last) return;
+  renderRight.last = k;
+  if (S.mode === 'new') return rightNew();
+  if (selKeys().length) return rightSelection();
+  if (S.scope === 'cards') return rightCards();
+  return rightSupplier();
+}
+
+function batchHtml(sid) {
+  var bs = BATCHES.filter(function (b) { return b.sup === sid; });
+  if (!bs.length) return '<div class="sec-empty">No payment recorded yet.</div>';
+  return bs.map(function (b) {
+    var tot = r2(b.targets.reduce(function (n, t) { return n + t.amount; }, 0));
+    var cr = r2(b.targets.filter(function (t) { return t.kind === 'credit'; }).reduce(function (n, t) { return n + t.amount; }, 0));
+    var open = S.openBatch === b.id;
+    /* d22 — what the void will hand back, computed before it is pressed. An
+       Invoice that stops being paid is the consequence worth naming, so the
+       confirmation names it rather than reporting it afterwards. */
+    var unfreeze = !b.voided ? b.targets.filter(function (t) { return t.kind === 'payment' || t.kind === 'credit'; })
+      .map(function (t) { return ITEMS.filter(function (i) { return i.key === t.key; })[0]; })
+      .filter(function (i, n, arr) { return i && i.kind === 'invoice' && bandOf(i) === 'settled' && arr.indexOf(i) === n; }) : [];
+    return '<div class="batch' + (b.voided ? ' voided' : '') + '"><button class="batch-head" data-batch="' + b.id + '" aria-expanded="' + open + '">' +
+      '<span class="l">' + esc(b.date) + ' &mdash; ' + (cr > 0.005 && tot - cr <= 0.005 ? 'credit only' : esc(b.method) + ' <span class="mono">' + esc(b.ref) + '</span>') + '</span>' +
+      '<span class="badge ' + (b.voided ? 'danger' : 'ok') + '">' + (b.voided ? 'voided' : esc(money(tot))) + '</span></button>' +
+      (open ? '<div class="batch-body">' +
+        b.targets.map(function (t) {
+          return '<div class="tgt"><span>' + (t.kind === 'credit' ? '↳ credit — ' : '') + esc(t.label) + '</span><span class="mono">' + esc(money(t.amount)) + '</span></div>';
+        }).join('') +
+        (cr > 0.005 ? '<div class="by">' + money(cr) + ' of this was claim credit, ' + money(tot - cr) + ' was money <span class="cite">(d19)</span>.</div>' : '') +
+        '<div class="by">Recorded by ' + esc(b.by) + ' · one batch, however many targets it settled <span class="cite">(d16)</span></div>' +
+        (b.voided
+          ? '<div class="by" style="color:var(--c-danger)"><strong>Voided</strong> ' + esc(b.voided.at) + ' by ' + esc(b.voided.by) +
+            '. The batch is kept as the record of what was recorded at the time &mdash; never deleted, never edited <span class="cite">(d22)</span>.</div>'
+          : (S.confirmVoid === b.id
+            ? '<div class="void-ask"><div class="t">Void this payment?</div>' +
+              '<div class="m">' + (voidBlocker(b)
+                ? '<strong>Refused:</strong> ' + esc(voidBlocker(b)) + ' <span class="cite">(d25)</span>. Reverse that first.'
+                : 'Hands back ' + esc(money(r2(tot - cr))) + ' to the balances it settled and returns the credit to un-consumed, <strong>whole</strong> <span class="cite">(d24)</span>.' +
+                  (b.remainder ? ' The remainder it emitted is <strong>not deleted</strong> — a reversing Adjustment is appended against it, so this void cannot refuse whatever became of it since <span class="cite">(d30)</span>.' : '') +
+                  ' All of it or none of it &mdash; a batch is the unit <span class="cite">(d16, d22)</span>.') +
+              (unfreeze.length ? '<br><br><strong>' + unfreeze.map(function (i) { return esc('Invoice ' + i.ref); }).join(', ') + '</strong> ' +
+                (unfreeze.length === 1 ? 'returns' : 'return') + ' to <strong>Finalized</strong> and ' + (unfreeze.length === 1 ? 'becomes' : 'become') +
+                ' correctable in Receiving again &mdash; immutability attaches at <em>paid</em> <span class="cite">(E-02 d40, A-33)</span>.' : '') +
+              '</div><div class="void-acts"><button class="btn sm" data-act="void-no">Keep it</button>' +
+              '<button class="btn sm danger" data-act="void-yes" data-vid="' + b.id + '"' + (voidBlocker(b) ? ' disabled' : '') + '>Void</button></div></div>'
+            : '<button class="btn sm danger" style="margin-top:6px" data-act="void-ask" data-vid="' + b.id + '">Void this payment</button>')) +
+        '</div>' : '') +
+      '</div>';
+  }).join('');
+}
+
+function rightSupplier() {
+  var s = supBy(S.scope);
+  var net = netOf(s.id), cred = creditPool(s.id), unc = uncountedOf(s.id);
+  var open = openInvoicesOf(s.id), late = overdueOf(s.id), worst = worstOverdue(s.id);
+  var settled = settledOf(s.id);
+
+  var h = '<div class="waiting' + (cred > 0.005 ? ' live' : '') + '">' +
+    '<span class="lab">Credit in hand<span class="mono">' + (cred > 0.005 ? esc(money(cred)) : '') + '</span></span>';
+  if (cred > 0.005) {
+    var cl = itemsFor(s.id).filter(function (i) { return i.kind === 'claim'; })[0];
+    h += '<div class="w-name">Claim ' + esc(cl.ref) + '</div>' +
+      '<div class="w-sub">' + esc(cl.reason || '') + '</div>' +
+      (cl.claimed && cl.claimed > cl.amount + 0.005
+        ? '<div class="w-sub" style="color:var(--c-warn)">Claimed ' + esc(money(cl.claimed)) + ', credited ' + esc(money(cl.amount)) +
+          '. The <strong>credit memo</strong> is the point of truth, not the claim' + (cl.shortfall ? ' — ' + esc(cl.shortfall) : '') +
+          ' <span class="cite">(E-04 d20)</span>.</div>'
+        : '') +
+      (creditPool(s.id) > owedTotal(s.id) + 0.005
+        ? '<div class="w-sub">Larger than the <strong>' + esc(money(owedTotal(s.id), s.cur)) + '</strong> outstanding &mdash; applying it returns ' +
+          esc(money(r2(creditPool(s.id) - owedTotal(s.id)), s.cur)) + ' as a remainder Credit <span class="cite">(d25)</span>.</div>'
+        : '') +
+      '<button class="btn ink sm" style="margin-top:8px;justify-content:center" data-act="spend">Apply it in a settlement</button>' +
+      '<div class="caveat"><strong>d18 supersedes d11</strong>: you pick which Invoices it lands on, not the system. <strong>d23 amends d18</strong>: you do not pick the <em>total</em> &mdash; it goes out in full, or to the limit of what is owed. <strong>d24</strong>: whole or not at all, never part-applied.</div>';
+  } else {
+    h += '<div class="w-name none">No claim credit in hand.</div>' +
+      '<div class="w-sub">Claims arrive here already raised, sent and carrying Pending or Credited <span class="cite">(from E-04)</span>.</div>';
+  }
+  h += '</div>';
+
+  /* The figure stays black even when something is past due: only part of the
+     balance is late, and colouring the whole of it red overstates that. The
+     overdue figure gets its own line underneath instead. */
+  var lateSum = r2(late.reduce(function (n, i) { return n + balanceOf(i); }, 0));
+  h += '<div class="acct-head">' +
+    '<div class="figure' + (net > 0.005 ? '' : (net < -0.005 ? ' cr' : ' nil')) + '">' + esc(money(net, s.cur)) + '</div>' +
+    '<div class="figure-say">' + (net > 0.005 ? 'owed to ' + esc(s.name) : net < -0.005 ? 'in the store&rsquo;s favour' : 'nothing owing') + '</div>' +
+    (late.length
+      ? '<div class="figure-say" style="color:var(--c-danger)">of which <strong>' + esc(money(lateSum, s.cur)) + '</strong> is past due &mdash; ' +
+        late.length + ' item' + (late.length === 1 ? '' : 's') + ', worst ' + worst + 'd</div>'
+      : '') +
+    '<div class="figure-sub">Derived from amounts less payments and credits &mdash; never edited directly <span class="cite">(d8)</span>.</div>' +
+    '</div><div class="rule"></div>';
+
+  h += '<div class="acct-mid">';
+  h += '<div class="sec"><span class="lab">Standing</span><div class="standing">' +
+    '<div class="stat"><span class="v">' + open.length + '</span><span class="k">open, payable</span></div>' +
+    '<div class="stat"><span class="v' + (late.length ? ' un' : ' nil') + '" style="' + (late.length ? 'color:var(--c-danger)' : '') + '">' +
+    (worst == null ? '—' : worst + 'd') + '</span><span class="k">worst past due</span></div>' +
+    '<div class="stat"><span class="v' + (cred > 0.005 ? ' cr' : ' nil') + '">' + esc(money(cred)) + '</span><span class="k">credit in hand</span></div>' +
+    '<div class="stat"><span class="v' + (unc > 0.005 ? ' un' : ' nil') + '">' + esc(money(unc)) + '</span><span class="k">claims not counted</span></div>' +
+    '<div class="stat span"><span class="v">' + esc(TERMS[s.terms].label) + '</span><span class="k">payment terms &mdash; from the invoice date</span></div>' +
+    '</div>' +
+    '<div class="caveat prop">Terms come from <strong>M-01 d19</strong> on the Supplier and <strong>E-02 d45</strong> on the Invoice. Neither existed before this branch, which is why M-05&rsquo;s aging question could not be answered.</div>';
+  if (s.cur !== 'CAD') {
+    h += '<div class="caveat warn">Invoiced in ' + esc(s.cur) + '. No store-currency equivalent is shown: M-05 requires it at the configured rate, and that rate lives in <span class="cite">M-06</span>, which is not built.</div>';
+  }
+  if (s.cons) {
+    h += '<div class="caveat">Carries the consignment flag, so an Invoice entered for them defaults to type <strong>Consignment</strong> <span class="cite">(d13)</span>.</div>';
+  }
+  if (TERMS[s.terms].immediate && open.length) {
+    h += '<div class="caveat warn"><strong>' + esc(TERMS[s.terms].label) + '</strong>, and yet something is outstanding. Whether a prepaid Supplier can carry a balance at all is behaviour the terms decision has to answer &mdash; the mock shows it rather than hiding it.</div>';
+  }
+  h += '</div>';
+
+  if (s.billing) {
+    h += '<div class="sec"><span class="lab">Remit to</span>' +
+      '<div class="small">' + s.billing.map(esc).join('<br>') + '</div>' +
+      '<div class="caveat prop"><strong>M-05 d17.</strong> M-01 d13 captured this address and recorded that nothing consumed it; this is what now does. Display only &mdash; edited on the Supplier card.</div></div>';
+  }
+
+  h += '<div class="sec"><span class="lab">Payment history</span>' + batchHtml(s.id) +
+    (settled.length ? '<div class="caveat">' + settled.length + ' Invoice' + (settled.length === 1 ? ' is' : 's are') + ' settled and still readable in the ledger &mdash; each row names what paid it <span class="cite">(d21)</span>.</div>' : '') +
+    '</div>';
+  h += '</div>';
+
+  h += '<div class="acct-foot">' +
+    '<button class="btn ink primary" data-act="new">&#65291; Create new entry</button>' +
+    '<div class="foot-sub">' + (open.length
+      ? 'To settle, tick what the payment covers in the ledger.'
+      : 'Nothing payable to tick &mdash; a settlement needs an open Invoice or entry.') + '</div>' +
+    '</div>';
+  $('right').innerHTML = h;
+}
+
+function rightCards() {
+  var tot = r2(CARDS.reduce(function (n, c) { return n + c.bal; }, 0));
+  $('right').innerHTML =
+    '<div class="waiting"><span class="lab">Owed to</span>' +
+    '<div class="w-name">Customers, not suppliers</div>' +
+    '<div class="w-sub">Registered here rather than buried in settings, because it is money the store owes <span class="cite">(d10)</span>.</div></div>' +
+    '<div class="acct-head"><div class="figure">' + esc(money(tot)) + '</div>' +
+    '<div class="figure-say">outstanding gift-card liability</div>' +
+    '<div class="figure-sub">The sum of every card carrying a balance.</div></div><div class="rule"></div>' +
+    '<div class="acct-mid">' +
+    '<div class="sec"><span class="lab">Standing</span><div class="standing">' +
+    '<div class="stat"><span class="v">' + CARDS.filter(function (c) { return c.bal > 0; }).length + '</span><span class="k">cards with a balance</span></div>' +
+    '<div class="stat"><span class="v">' + CARDS.filter(function (c) { return c.customer; }).length + '</span><span class="k">tied to a customer</span></div>' +
+    '</div></div>' +
+    '<div class="sec"><span class="lab">What is not here</span>' +
+    '<div class="caveat warn">M-05 asks the registry for issue date and last-used date. The prototype&rsquo;s GiftCard record carries <strong>code, balance and an optional customer only</strong> &mdash; the two date columns are mocked here and would need the record widening before this is built.</div>' +
+    '<div class="caveat">No terms and no due date: a gift card is owed on demand, so nothing ages.</div></div>' +
+    '</div>' +
+    '<div class="acct-foot"><div class="foot-sub">A register has no primary action.</div></div>';
+}
+
+/* ---- the settlement composer (d18 + d19) ---- */
+function payTotals() {
+  if (!S.pay) return { cred: 0, pay: 0, tot: 0 };
+  var c = 0, p = 0;
+  Object.keys(S.pay.pay).forEach(function (k) { p += parseFloat(S.pay.pay[k]) || 0; });
+  Object.keys(S.pay.cred).forEach(function (k) { c += parseFloat(S.pay.cred[k]) || 0; });
+  return { cred: r2(c), pay: r2(p), tot: r2(c + p) };
+}
+/* d23 - the total is not the Manager's to choose. Applying a credit spends it
+   in full, or to the limit of what the supplier is owed, whichever is smaller.
+   The Manager decides only WHERE it lands. */
+function creditPlan() {
+  var items = selItems();
+  var debits = items.filter(isDebit);
+  var credits = items.filter(isCredit);
+  var holds = items.filter(isPlaceholder);
+  var debitTotal = r2(debits.reduce(function (n, i) { return n + balanceOf(i); }, 0));
+  var creditTotal = r2(credits.reduce(function (n, i) { return n - balanceOf(i); }, 0));
+  /* d27 - credits attach to the debits in the same selection. What cannot
+     attach stays as it was; d28 then makes the unattached part of a consumed
+     credit come back as a remainder rather than a partial row. */
+  var attach = r2(Math.min(creditTotal, debitTotal));
+  return {
+    items: items, debits: debits, credits: credits, holds: holds,
+    debitTotal: debitTotal, creditTotal: creditTotal,
+    attach: attach,
+    money: r2(debitTotal - attach),
+    remainder: r2(creditTotal - attach),
+    isClearing: debits.length === 0 && (credits.length + holds.length) > 0
+  };
+}
+function payProblems() {
+  var s = supBy(S.scope), tt = payTotals(), plan = creditPlan(), out = [];
+  if (plan.isClearing) return out;               // nothing to get wrong: no money moves
+  if (!plan.debits.length) { out.push('Nothing ticked that is owed.'); return out; }
+  if (Math.abs(tt.cred - plan.attach) > 0.005) {
+    out.push('Place exactly ' + money(plan.attach, s.cur) + ' of credit - ' +
+      (tt.cred < plan.attach ? money(r2(plan.attach - tt.cred), s.cur) + ' still to place'
+                             : money(r2(tt.cred - plan.attach), s.cur) + ' over') +
+      '. The total is not yours to choose (d23).');
+  }
+  plan.debits.forEach(function (i) {
+    var c = parseFloat(S.pay.cred[i.key]) || 0, p = parseFloat(S.pay.pay[i.key]) || 0;
+    if (r2(c + p) > balanceOf(i) + 0.005) {
+      out.push(i.type + ' ' + i.ref + ': ' + money(r2(c + p), s.cur) + ' against a balance of ' + money(balanceOf(i), s.cur) + '.');
+    }
+  });
+  if (tt.pay > 0.005 && !S.pay.ref.trim()) out.push('A reference is required for the money half - it is what reconciles against the statement (d5).');
+  return out;
+}
+
+function rightSelection() {
+  var s = supBy(S.scope), plan = creditPlan();
+  var sig = selKeys().sort().join(',');
+  if (!S.pay || S.pay.for !== sig) {
+    S.pay = { for: sig, method: 'Cheque', ref: '', date: '2026-09-13', pay: {}, cred: {} };
+    plan.debits.forEach(function (i) { S.pay.pay[i.key] = balanceOf(i).toFixed(2); S.pay.cred[i.key] = '0.00'; });
+  }
+  var tt = payTotals(), probs = payProblems();
+
+  var h = '<div class="waiting"><span class="lab">Selected<span class="mono">' + plan.items.length + '</span></span>' +
+    '<div class="w-name">' + (plan.isClearing ? 'Clearing \u2014 no money moves' : 'Settling') + '</div>' +
+    '<div class="w-sub">' + esc(s.name) + '</div></div>';
+
+  /* d27 - a selection with no debit has nothing for its credits to attach to,
+     so they stay counted and only the placeholders retire. That is d15's
+     clearing, arrived at by the general rule rather than a separate button. */
+  if (plan.isClearing) {
+    h += '<div class="acct-head"><div class="figure nil">' + esc(money(0)) + '</div>' +
+      '<div class="figure-say">nothing ticked is owed</div>' +
+      '<div class="figure-sub">So there is nothing for a credit to attach to <span class="cite">(d27)</span>.</div>' +
+      '</div><div class="rule"></div>';
+    h += '<div class="acct-mid">' +
+      '<div class="zero-ok"><div class="t">The balance does not move</div>' +
+      '<div class="m">' + (plan.credits.length ? 'The credit was already counted and <strong>stays counted</strong> \u2014 it is not consumed, because there is no debit here to consume it against. ' : '') +
+      (plan.holds.length ? 'The placeholder was never counted and retires. ' : '') +
+      'Both stay in the ledger as history <span class="cite">(d15, d27)</span>.</div></div>' +
+      '<div class="sec"><span class="lab">Retiring</span>' +
+      plan.items.map(function (i) {
+        return '<div class="tgt-row" style="grid-template-columns:minmax(0,1fr) auto"><div class="l">' +
+          '<div class="t">' + esc(i.type + ' \u2014 ' + i.ref) + '</div>' +
+          '<div class="m">' + (isPlaceholder(i) ? 'never counted' : 'already counted, stays counted') + '</div></div>' +
+          '<span class="num mono" style="font-weight:700">' + esc(money(balanceOf(i), s.cur)) + '</span></div>';
+      }).join('') + '</div>' +
+      '<div class="sec"><div class="caveat warn">M-05 does not say whether a clearing can be reversed, so this mock does not offer it and does not promise it.</div></div>' +
+      '</div>';
+    h += '<div class="acct-foot">' +
+      '<button class="btn ink primary" data-act="clear">Clear these ' + plan.items.length + '</button>' +
+      '<button class="btn ghost secondary" data-act="unsel">Cancel</button>' +
+      '<div class="foot-sub">Tick something that is owed to turn this into a settlement.</div>' +
+      '</div>';
+    $('right').innerHTML = h;
+    return;
+  }
+
+  h += '<div class="acct-head"><div class="figure" id="pay-fig">' + esc(money(tt.tot, s.cur)) + '</div>' +
+    '<div class="figure-say" id="pay-say">' + esc(money(tt.cred, s.cur)) + ' credit + ' + esc(money(tt.pay, s.cur)) + ' money</div>' +
+    '<div class="figure-sub">One <strong>PaymentBatch</strong> carrying both kinds of target <span class="cite">(d16, d19)</span>. Nothing instructs a bank \u2014 this is recording, not executing.</div>' +
+    '</div><div class="rule"></div>';
+
+  h += '<div class="acct-mid">';
+
+  // what the selection comes to
+  h += '<div class="sec"><span class="lab">What this selection comes to</span>' +
+    '<div class="split-line"><span>Owed \u2014 ' + plan.debits.length + ' item' + (plan.debits.length === 1 ? '' : 's') + '</span><span class="mono">' + esc(money(plan.debitTotal, s.cur)) + '</span></div>' +
+    (plan.credits.length
+      ? '<div class="split-line"><span>Credit ticked \u2014 ' + plan.credits.length + '</span><span class="mono">&minus;' + esc(money(plan.creditTotal, s.cur)) + '</span></div>'
+      : '') +
+    (plan.holds.length
+      ? '<div class="split-line"><span>Claim placeholders \u2014 ' + plan.holds.length + '</span><span class="mono">' + esc(money(0)) + '</span></div>'
+      : '') +
+    '<div class="split-line tot"><span>To pay</span><span class="mono" id="sp-tot">' + esc(money(plan.money, s.cur)) + '</span></div>' +
+    (plan.holds.length ? '<div class="caveat">A Claim placeholder contributes <strong>nothing to the money</strong>, ever <span class="cite">(d27)</span>. Ticking it retires it \u2014 a decision to stop chasing it.</div>' : '') +
+    (plan.remainder > 0.005 ? '<div class="caveat warn">' + esc(money(plan.remainder, s.cur)) + ' of credit cannot attach to anything ticked. It comes back as a <strong>remainder Credit</strong> and stays in the store&rsquo;s favour <span class="cite">(d25, d28)</span>.</div>' : '') +
+    '</div>';
+
+  h += '<div class="sec"><span class="lab">Place the credit, then the money</span>' +
+    plan.debits.map(function (i) {
+      var a = agingOf(i);
+      return '<div class="tgt-row dual" data-tgt="' + i.key + '"><div class="l">' +
+        '<div class="t">' + esc(i.type + ' ' + i.ref) + '</div>' +
+        '<div class="m">balance ' + esc(money(balanceOf(i), s.cur)) + (a ? ' \u00b7 ' + (a.immediate ? esc(a.label) : (a.over > 0 ? a.over + 'd over' : 'in ' + (-a.over) + 'd')) : '') + '</div></div>' +
+        '<div class="inp"><span class="tag cr">credit</span><input type="number" step="0.01" min="0" class="cr" value="' + esc(S.pay.cred[i.key]) + '" data-cred="' + i.key + '"' + (plan.attach > 0.005 ? '' : ' disabled') + ' aria-label="Credit against ' + esc(i.ref) + '"></div>' +
+        '<div class="inp"><span class="tag">money</span><input type="number" step="0.01" min="0" value="' + esc(S.pay.pay[i.key]) + '" data-amt="' + i.key + '" aria-label="Payment against ' + esc(i.ref) + '"></div>' +
+        '</div>';
+    }).join('') +
+    (plan.attach > 0.005
+      ? '<div class="credit-bar" id="cbar"><div class="ln"><span>Credit to place</span><span class="mono" id="cbar-apply">' + esc(money(plan.attach, s.cur)) + '</span></div>' +
+        '<div class="ln"><span>Still to place</span><span class="mono" id="cbar-left">' + esc(money(r2(plan.attach - tt.cred), s.cur)) + '</span></div>' +
+        '<div class="who">You choose <strong>where</strong> it lands <span class="cite">(d18)</span>, never <strong>how much</strong> <span class="cite">(d23)</span>. Nothing is pre-filled.</div></div>'
+      : '<div class="caveat">No credit ticked, so this settlement is money only. Tick a Credit or a Credited claim to net it off.</div>') +
+    '<div class="caveat">Partial <em>payment</em> is supported <span class="cite">(d4)</span>; partial <em>credit</em> is not <span class="cite">(d24, d28)</span>.</div>' +
+    '</div>';
+
+  h += '<div class="sec"><span class="lab">How the money half was paid</span>' +
+    '<div class="f2"><label class="f"><span class="lab">Method</span><select data-pf="method">' +
+    PAYMENT_METHODS.map(function (m) { return '<option' + (S.pay.method === m ? ' selected' : '') + '>' + m + '</option>'; }).join('') +
+    '</select></label>' +
+    '<label class="f"><span class="lab">Date</span><input type="date" value="' + esc(S.pay.date) + '" data-pf="date"></label></div>' +
+    '<label class="f mono-in"><span class="lab">Reference</span>' +
+    '<input type="text" value="' + esc(S.pay.ref) + '" data-pf="ref" placeholder="Cheque 101">' +
+    '<span class="hint">Free text, on purpose <span class="cite">(d5)</span>. Required only where money actually moves <span class="cite">(d19)</span>.</span></label>' +
+    '<div class="caveat">Recorded by <strong>R. Duval</strong>, captured automatically <span class="cite">(d5)</span>.</div>' +
+    '</div>';
+
+  if (s.billing) {
+    h += '<div class="sec"><span class="lab">Remit to</span><div class="small">' + s.billing.map(esc).join('<br>') + '</div>' +
+      '<div class="caveat prop"><strong>M-05 d17</strong> &mdash; display only, edited on the Supplier card.</div></div>';
+  }
+
+  h += '<div id="pay-probs">' + (probs.length ? '<div class="blocked"><div class="t">Not ready</div><div class="m">' + probs.map(esc).join('<br>') + '</div></div>' : '') + '</div>';
+  h += '</div>';
+
+  h += '<div class="acct-foot">' +
+    '<button class="btn accent primary" data-act="pay" id="pay-btn"' + (probs.length ? ' disabled' : '') + '>Settle ' + esc(money(tt.tot, s.cur)) + '</button>' +
+    '<button class="btn ghost secondary" data-act="unsel">Cancel</button>' +
+    '<div class="foot-sub" id="pay-sub">Anything ticked that reaches zero leaves the outstanding list and stays readable below it <span class="cite">(step 5, d21)</span>.</div>' +
+    '</div>';
+  $('right').innerHTML = h;
+}
+
+function rightNew() {
+  var s = supBy(S.scope === 'cards' ? 'fab' : S.scope);
+  if (!S.entry) S.entry = { type: s.cons ? 'Consignment' : 'Invoice', ref: '', date: '2026-09-13', sub: '', tax: '0', fr: '0', misc: '0', dir: 'increase', terms: s.terms };
+  var e = S.entry;
+  var tot = r2((parseFloat(e.sub) || 0) + (parseFloat(e.tax) || 0) + (parseFloat(e.fr) || 0) + (parseFloat(e.misc) || 0));
+  var signed = e.type === 'Credit' ? -tot : e.type === 'Claim' ? 0 : e.type === 'Adjustment' ? (e.dir === 'decrease' ? -tot : tot) : tot;
+  var billish = e.type === 'Invoice' || e.type === 'Consignment';
+
+  var h = '<div class="waiting"><span class="lab">Creating</span>' +
+    '<div class="w-name">A ledger entry, by hand</div>' +
+    '<div class="w-sub">Against ' + esc(s.name) + '</div></div>';
+  h += '<div class="acct-head"><div class="figure' + (tot > 0 ? (signed < 0 ? ' cr' : '') : ' nil') + '" id="new-fig">' + esc(money(signed, s.cur)) + '</div>' +
+    '<div class="figure-say" id="new-say">' + (e.type === 'Claim' ? 'placeholder — moves nothing yet' : signed < 0 ? 'reduces what is owed' : 'increases what is owed') + '</div>' +
+    '<div class="figure-sub">A lump subtotal/tax/freight/misc &mdash; never itemized against an InventoryItem <span class="cite">(d12)</span>.</div>' +
+    '</div><div class="rule"></div>';
+  h += '<div class="acct-mid">' +
+    '<div class="sec"><label class="f"><span class="lab">Type</span><select data-ef="type">' +
+    ENTRY_TYPES.map(function (t) { return '<option' + (e.type === t ? ' selected' : '') + '>' + t + '</option>'; }).join('') + '</select>' +
+    (s.cons ? '<span class="hint">Defaulted to <strong>Consignment</strong>: this Supplier carries the consignment flag <span class="cite">(d13)</span>.</span>' : '') +
+    '</label>';
+  if (e.type === 'Adjustment') {
+    h += '<label class="f"><span class="lab">Direction</span><select data-ef="dir">' +
+      '<option value="increase"' + (e.dir === 'increase' ? ' selected' : '') + '>Increases what is owed</option>' +
+      '<option value="decrease"' + (e.dir === 'decrease' ? ' selected' : '') + '>Decreases what is owed</option></select>' +
+      '<span class="hint">The Manager&rsquo;s choice at entry <span class="cite">(d14)</span>.</span></label>';
+  }
+  h += '<label class="f"><span class="lab">Reference</span><input type="text" value="' + esc(e.ref) + '" data-ef="ref" placeholder="a bill #, memo #, or note"></label>' +
+    '<label class="f"><span class="lab">' + (billish ? 'Invoice date' : 'Date') + '</span><input type="date" value="' + esc(e.date) + '" data-ef="date"></label>';
+  if (billish) {
+    h += '<label class="f"><span class="lab">Payment terms</span><select data-ef="terms">' +
+      TERM_KEYS.map(function (k) { return '<option value="' + k + '"' + (e.terms === k ? ' selected' : '') + '>' + TERMS[k].label + '</option>'; }).join('') +
+      '</select><span class="hint">Defaulted from ' + esc(s.name) + '&rsquo;s <strong>' + esc(TERMS[s.terms].label) + '</strong> and overridable here &mdash; the paperwork wins <span class="cite">(E-02 d45)</span>. Due ' +
+      (TERMS[e.terms].immediate ? '<strong>on receipt</strong>' : '<strong>' + esc(addDays(e.date, TERMS[e.terms].days)) + '</strong>') + '.</span></label>';
+  }
+  h += '</div>';
+  h += '<div class="sec"><span class="lab">Amounts</span><div class="f2">' +
+    '<label class="f mono-in"><span class="lab">Subtotal</span><input type="number" step="0.01" min="0" value="' + esc(e.sub) + '" data-ef="sub"></label>' +
+    '<label class="f mono-in"><span class="lab">Tax</span><input type="number" step="0.01" min="0" value="' + esc(e.tax) + '" data-ef="tax"></label>' +
+    '<label class="f mono-in"><span class="lab">Freight</span><input type="number" step="0.01" min="0" value="' + esc(e.fr) + '" data-ef="fr"></label>' +
+    '<label class="f mono-in"><span class="lab">Misc</span><input type="number" step="0.01" min="0" value="' + esc(e.misc) + '" data-ef="misc"></label>' +
+    '</div>';
+  h += '<div class="caveat" id="new-caveat">' + entryCaveat(e.type) + '</div></div>';
+  h += '<div class="caveat">Not sourced from Receiving or Supplier Claims. The stock, claim or credit behind the number is treated as inventory unlinked to items &mdash; a deliberate shortcut, not a replacement for either <span class="cite">(d12)</span>.</div>';
+  h += '</div>';
+  h += '<div class="acct-foot">' +
+    '<button class="btn accent primary" data-act="add" id="add-btn"' + (tot > 0 ? '' : ' disabled') + '>Add ' + esc(e.type) + '</button>' +
+    '<button class="btn ghost secondary" data-act="cancel-new">Cancel</button>' +
+    '<div class="foot-sub" id="new-sub">' + (tot > 0 ? 'Total ' + esc(money(tot, s.cur)) : 'An amount is needed.') + '</div>' +
+    '</div>';
+  $('right').innerHTML = h;
+}
+
+function entryCaveat(t) {
+  if (t === 'Claim') return 'A <strong>Claim</strong> is a placeholder &mdash; logged before the supplier&rsquo;s credit memo is in hand. It does not affect the balance at all until it is cleared against a matching Credit <span class="cite">(d14)</span>.';
+  if (t === 'Credit') return 'A <strong>Credit</strong> always reduces the balance, the moment it is entered <span class="cite">(d14)</span>. It nets at the supplier level and is therefore not allocatable to an Invoice in a settlement.';
+  if (t === 'Adjustment') return 'An <strong>Adjustment</strong> moves the balance either way &mdash; the Manager&rsquo;s choice at entry <span class="cite">(d14)</span>.';
+  if (t === 'Consignment') return 'The same default a real Receiving Invoice gets for a consignment Supplier <span class="cite">(d13)</span>.';
+  return 'An <strong>Invoice</strong> entered by hand is owed immediately. Accounts payable never creates a <em>Receiving</em> Invoice &mdash; it consumes those <span class="cite">(d9)</span>.';
+}
+
+/* ====================== render + events ====================== */
+function render() {
+  $('frame').classList.toggle('slab-shut', !S.slab);
+  $('slab-open').hidden = !S.slab;
+  $('strip').hidden = S.slab;
+  $('t-slab').setAttribute('aria-pressed', String(S.slab));
+  renderSlab(); renderMain(); renderRight();
+}
+function bump() { renderRight.gen++; }
+
+function setScope(id) {
+  S.scope = id; S.sel = {}; S.mode = null; S.pay = null; S.entry = null; S.openBatch = null;
+  bump(); render();
+}
+
+document.addEventListener('click', function (ev) {
+  var t = ev.target, el;
+  if (!t.closest) return;
+
+  if ((el = t.closest('[data-rec]'))) {
+    var it = ITEMS.filter(function (i) { return i.key === el.getAttribute('data-rec'); })[0];
+    var paid = bandOf(it) === 'settled';
+    toast(paid
+      ? 'Would open /receiving/' + it.key + ' read-only — a paid Invoice is immutable (E-02 d40, A-33); amendments are E-04.'
+      : 'Would open /receiving/' + it.key + ' — correctable until it is marked paid here (E-02 d4, d40).');
+    return;
+  }
+  if ((el = t.closest('[data-sup]'))) { setScope(el.getAttribute('data-sup')); return; }
+  if ((el = t.closest('[data-chip]'))) {
+    var c = el.getAttribute('data-chip');
+    S.chip = (S.chip === c && c !== 'all') ? 'all' : c;
+    renderSlab(); return;
+  }
+  if ((el = t.closest('[data-batch]'))) {
+    var b = el.getAttribute('data-batch');
+    S.openBatch = S.openBatch === b ? null : b;
+    S.confirmVoid = null;
+    renderRight(true); return;
+  }
+  if (t.closest('#slab-collapse')) { S.slab = false; render(); return; }
+  if (t.closest('#strip-expand')) { S.slab = true; render(); setTimeout(function () { $('q').focus(); }, 0); return; }
+  if (t.closest('#strip-credit')) {
+    var wc = activity().filter(function (s) { return creditPool(s.id) > 0.005; });
+    if (wc.length) { S.slab = true; setScope(wc[0].id); }
+    return;
+  }
+  if (t.closest('#new-btn, #new-btn-2, #strip-new')) {
+    if (S.scope === 'cards') { toast('Gift cards are not a supplier — pick one first.'); return; }
+    S.sel = {}; S.mode = 'new'; S.entry = null; bump(); render(); return;
+  }
+  if (t.closest('#unsel')) { S.sel = {}; S.pay = null; bump(); render(); return; }
+
+  if ((el = t.closest('[data-act]'))) {
+    var act = el.getAttribute('data-act');
+    if (act === 'new') { S.sel = {}; S.mode = 'new'; S.entry = null; bump(); render(); return; }
+    if (act === 'unsel') { S.sel = {}; S.pay = null; bump(); render(); return; }
+    if (act === 'cancel-new') { S.mode = null; S.entry = null; bump(); render(); return; }
+    if (act === 'toggle-settled') { S.showSettled = !S.showSettled; renderMain(); return; }
+    if (act === 'spend') {
+      S.sel = {};
+      itemsFor(S.scope).filter(isCredit).forEach(function (i) { S.sel[i.key] = true; });
+      openInvoicesOf(S.scope).forEach(function (i) { S.sel[i.key] = true; });
+      S.mode = null; S.pay = null; bump(); render();
+      toast('Every open Invoice ticked. Type the split you want — nothing is distributed for you (d18).');
+      return;
+    }
+    if (act === 'pay') { doPay(); return; }
+    if (act === 'clear') { doClear(); return; }
+    if (act === 'add') { doAdd(); return; }
+    if (act === 'void-ask') { S.confirmVoid = el.getAttribute('data-vid'); renderRight(true); return; }
+    if (act === 'void-no') { S.confirmVoid = null; renderRight(true); return; }
+    if (act === 'void-yes') { doVoid(el.getAttribute('data-vid')); return; }
+  }
+
+  if ((el = t.closest('[data-row]'))) {
+    var k = el.getAttribute('data-row');
+    var item = ITEMS.filter(function (i) { return i.key === k; })[0];
+    if (!item) return;
+    if (bandOf(item) === 'settled') return;
+    if (!(isDebit(item) || isCredit(item) || isPlaceholder(item) || isReversal(item))) return;
+    if (S.sel[k]) delete S.sel[k]; else S.sel[k] = true;
+    S.mode = null; bump(); render();
+  }
+});
+
+document.addEventListener('keydown', function (ev) {
+  if (ev.key !== 'Enter' && ev.key !== ' ') return;
+  var el = ev.target.closest && ev.target.closest('[data-row]');
+  if (!el) return;
+  ev.preventDefault(); el.click();
+});
+
+function refreshPay() {
+  var s = supBy(S.scope), tt = payTotals(), probs = payProblems(), plan = creditPlan();
+  var set = function (id, v) { var n = $(id); if (n) n.textContent = v; };
+  set('pay-fig', money(tt.tot, s.cur));
+  set('pay-say', money(tt.cred, s.cur) + ' credit + ' + money(tt.pay, s.cur) + ' money');
+  set('cbar-apply', money(plan.attach, s.cur));
+  set('cbar-left', money(r2(plan.attach - tt.cred), s.cur));
+  if ($('cbar')) $('cbar').classList.toggle('spent', Math.abs(tt.cred - plan.attach) > 0.005);
+  plan.debits.forEach(function (i) {
+    var row = document.querySelector('[data-tgt="' + i.key + '"]');
+    if (!row) return;
+    var c = parseFloat(S.pay.cred[i.key]) || 0, p = parseFloat(S.pay.pay[i.key]) || 0;
+    row.classList.toggle('over', r2(c + p) > balanceOf(i) + 0.005);
+  });
+  if ($('pay-probs')) {
+    $('pay-probs').innerHTML = probs.length
+      ? '<div class="blocked"><div class="t">Not ready</div><div class="m">' + probs.map(esc).join('<br>') + '</div></div>' : '';
+  }
+  if ($('pay-btn')) {
+    $('pay-btn').textContent = 'Settle ' + money(tt.tot, s.cur);
+    $('pay-btn').disabled = probs.length > 0;
+  }
+}
+
+document.addEventListener('input', function (ev) {
+  var t = ev.target, el;
+  if (t.id === 'q') { S.q = t.value; renderSlab(); return; }
+  if ((el = t.closest('[data-amt]'))) { S.pay.pay[el.getAttribute('data-amt')] = el.value; refreshPay(); return; }
+  if ((el = t.closest('[data-cred]'))) {
+    var ck = el.getAttribute('data-cred');
+    S.pay.cred[ck] = el.value;
+    /* Credit placed on a row reduces the money asked of that row, so the two
+       never add up past its balance. This is arithmetic, not a suggested
+       split - d18's objection was to the system choosing WHICH Invoices a
+       credit lands on, and it still does not choose. The Manager can take the
+       money down further for a partial payment (d4); it is only pushed down
+       when it would otherwise overflow. */
+    var row = ITEMS.filter(function (i) { return i.key === ck; })[0];
+    if (row) {
+      var cap = r2(Math.max(0, balanceOf(row) - (parseFloat(el.value) || 0)));
+      if ((parseFloat(S.pay.pay[ck]) || 0) > cap + 0.005) {
+        S.pay.pay[ck] = cap.toFixed(2);
+        var mi = document.querySelector('[data-amt="' + ck + '"]');
+        if (mi) mi.value = S.pay.pay[ck];
+      }
+    }
+    refreshPay(); return;
+  }
+  if (t.closest('[data-usecred]')) {
+    S.pay.useCredit = t.checked;
+    if (!t.checked) Object.keys(S.pay.cred).forEach(function (k) { S.pay.cred[k] = '0.00'; });
+    bump(); renderRight(true); return;
+  }
+  if ((el = t.closest('[data-pf]'))) { S.pay[el.getAttribute('data-pf')] = el.value; refreshPay(); return; }
+  if ((el = t.closest('[data-ef]'))) {
+    var f = el.getAttribute('data-ef');
+    S.entry[f] = el.value;
+    if (f === 'type' || f === 'dir' || f === 'terms' || f === 'date') { bump(); renderRight(true); return; }
+    var e = S.entry, s3 = supBy(S.scope);
+    var tot3 = r2((parseFloat(e.sub) || 0) + (parseFloat(e.tax) || 0) + (parseFloat(e.fr) || 0) + (parseFloat(e.misc) || 0));
+    var signed = e.type === 'Credit' ? -tot3 : e.type === 'Claim' ? 0 : e.type === 'Adjustment' ? (e.dir === 'decrease' ? -tot3 : tot3) : tot3;
+    $('new-fig').textContent = money(signed, s3.cur);
+    $('new-fig').className = 'figure' + (tot3 > 0 ? (signed < 0 ? ' cr' : '') : ' nil');
+    $('new-say').textContent = e.type === 'Claim' ? 'placeholder — moves nothing yet' : signed < 0 ? 'reduces what is owed' : 'increases what is owed';
+    $('add-btn').disabled = !(tot3 > 0);
+    $('new-sub').textContent = tot3 > 0 ? 'Total ' + money(tot3, s3.cur) : 'An amount is needed.';
+  }
+});
+
+document.addEventListener('change', function (ev) {
+  var el = ev.target.closest && ev.target.closest('[data-pf], [data-ef]');
+  if (el && el.tagName === 'SELECT') el.dispatchEvent(new Event('input', { bubbles: true }));
+});
+
+$('sort').addEventListener('change', function () { S.sort = this.value; renderSlab(); });
+$('t-slab').addEventListener('click', function () { S.slab = !S.slab; render(); });
+
+$('t-pay').addEventListener('click', function () {
+  setScope('fab'); S.sel = { 'iv-55021': true, 'iv-55188': true }; bump(); render();
+});
+$('t-clear').addEventListener('click', function () {
+  setScope('fab'); S.sel = { 'en-claim': true, 'en-credit': true }; bump(); render();
+});
+$('t-bad').addEventListener('click', function () {
+  setScope('fab'); S.sel = { 'iv-55021': true, 'en-credit': true, 'cl-9': true }; bump(); render();
+});
+$('t-settled').addEventListener('click', function () {
+  setScope('crate'); S.showSettled = true; renderMain();
+});
+
+/* ---- actions. The mock mutates its own arrays; nothing persists. ---- */
+function doPay() {
+  var s = supBy(S.scope), plan = creditPlan(), tt = payTotals(), tgts = [];
+  var consumed = [], remainderKey = null;
+
+  plan.debits.forEach(function (i) {
+    var c = parseFloat(S.pay.cred[i.key]) || 0, p = parseFloat(S.pay.pay[i.key]) || 0;
+    if (c > 0.005) {
+      i.credited = r2((i.credited || 0) + c);
+      tgts.push({ key: i.key, label: i.type + ' ' + i.ref, amount: c, kind: 'credit' });
+    }
+    if (p > 0.005) {
+      i.paid = r2((i.paid || 0) + p);
+      tgts.push({ key: i.key, label: i.type + ' ' + i.ref, amount: p, kind: 'payment' });
+    }
+  });
+
+  /* d28 - every credit ticked is consumed WHOLE, claim or manual or remainder
+     alike. Nothing carries a partial state, so there is no running total to
+     bound under a lock. d25 - what could not attach comes back as its own
+     artifact instead of hiding inside the credit it came from. */
+  plan.credits.forEach(function (cr) {
+    consumed.push(cr);
+    if (cr.kind === 'claim') cr.applied = true;
+    else cr.consumedAt = S.pay.date;
+  });
+  if (plan.remainder > 0.005) {
+    remainderKey = 'rem-' + Date.now();
+    ITEMS.push({
+      key: remainderKey, sup: s.id, kind: 'remainder', type: 'Credit',
+      ref: 'Remainder of ' + consumed.map(function (c) { return c.ref; }).join(', '),
+      date: S.pay.date, amount: plan.remainder,
+      fromCredits: consumed.map(function (c) { return c.key; })
+    });
+  }
+
+  /* d27 - a placeholder contributes nothing and simply retires. */
+  var retired = plan.holds.length;
+  plan.holds.forEach(function (hd) { hd.cleared = true; });
+
+  BATCHES.unshift({
+    id: 'b' + Date.now(), sup: s.id, method: S.pay.method, ref: S.pay.ref.trim() || '\u2014',
+    date: S.pay.date, by: 'R. Duval', targets: tgts,
+    credits: consumed.map(function (c) { return c.key; }),
+    holds: plan.holds.map(function (hd) { return hd.key; }),
+    remainder: remainderKey
+  });
+
+  var closed = plan.debits.filter(function (i) { return balanceOf(i) <= 0.005; }).length;
+  S.sel = {}; S.pay = null; bump(); render();
+  toast(money(tt.tot, s.cur) + ' settled as one batch \u2014 ' + money(tt.cred, s.cur) + ' credit, ' +
+    money(tt.pay, s.cur) + ' money' + (closed ? ', ' + closed + ' now paid in full' : '') +
+    (retired ? ', ' + retired + ' placeholder' + (retired === 1 ? '' : 's') + ' retired' : '') +
+    (remainderKey ? '. ' + money(plan.remainder, s.cur) + ' of credit had nowhere to attach and came back as a remainder Credit (d25).' : '.'));
+}
+/* d22 — void the batch WHOLE. Every target is reversed: money back to the
+   balance owing, credit back to the claim that funded it. The batch itself is
+   never deleted and never edited; the void is appended against it. */
+/* d30 - a void never refuses and never deletes. Where the batch emitted a
+   remainder, the void APPENDS a reversing Adjustment of equal and opposite
+   amount, which restores the Supplier's balance whether or not the remainder
+   still exists. So there is no chain to walk and no blocker to compute. */
+function voidBlocker() { return null; }
+function doVoid(id) {
+  var b = BATCHES.filter(function (x) { return x.id === id; })[0];
+  if (!b || b.voided) return;
+  var blocked = voidBlocker(b);
+  if (blocked) {
+    toast('Cannot void: ' + blocked + ' (d25). Reverse that first.');
+    S.confirmVoid = null; renderRight(true); return;
+  }
+
+  var sid = b.sup, before = netOf(sid), unfroze = [];
+  b.targets.forEach(function (tg) {
+    var it = ITEMS.filter(function (i) { return i.key === tg.key; })[0];
+    if (!it) return;
+    var wasSettled = bandOf(it) === 'settled';
+    if (tg.kind === 'payment') it.paid = r2((it.paid || 0) - tg.amount);
+    else it.credited = r2((it.credited || 0) - tg.amount);
+    if (wasSettled && bandOf(it) !== 'settled' && it.kind === 'invoice' && unfroze.indexOf(it.ref) < 0) unfroze.push(it.ref);
+  });
+  (b.credits || b.claims || []).forEach(function (k) {
+    var cr = ITEMS.filter(function (i) { return i.key === k; })[0];
+    if (!cr) return;
+    if (cr.kind === 'claim') cr.applied = false;   // d24/d28 - back whole
+    else delete cr.consumedAt;
+  });
+  (b.holds || []).forEach(function (k) {
+    var hd = ITEMS.filter(function (i) { return i.key === k; })[0];
+    if (hd) hd.cleared = false;
+  });
+  if (b.remainder) {
+    var rem = ITEMS.filter(function (i) { return i.key === b.remainder; })[0];
+    if (rem) {
+      ITEMS.push({
+        key: 'rev-' + Date.now(), sup: sid, kind: 'reversal', type: 'Adjustment',
+        ref: 'Reversal of ' + rem.ref, date: '2026-09-13', amount: rem.amount,
+        dir: 'increase', reversalOf: rem.key, fromVoid: b.id
+      });
+    }
+  }
+
+  b.voided = { at: '2026-09-13', by: 'R. Duval' };
+  S.confirmVoid = null; S.sel = {}; S.pay = null;
+  bump(); render();
+  toast('Payment voided. Balance ' + money(before, supBy(sid).cur) + ' \u2192 ' + money(netOf(sid), supBy(sid).cur) +
+    ((b.credits || b.claims || []).length ? '. Credit back in hand, whole (d24, d28)' : '') +
+    (b.remainder ? '. A reversing Adjustment was appended against its remainder \u2014 nothing was deleted, and the two net to zero for clearing (d30)' : '') +
+    (unfroze.length ? '. Invoice ' + unfroze.join(', ') + ' back to Finalized and correctable again (E-02 d40, A-33)' : '') + '.');
+}
+
+function doClear() {
+  /* d27 - the no-debit case. Credits STAY COUNTED because there is nothing to
+     consume them against (d15's exact words); placeholders retire. The balance
+     does not move, and nothing is deleted. */
+  var items = selItems(), n = items.length, sid = S.scope, before = netOf(sid);
+  items.forEach(function (i) { if (isPlaceholder(i)) i.cleared = true; else i.clearedNote = true; });
+  S.sel = {}; bump(); render();
+  toast(n + ' retired against each other. Balance unchanged at ' +
+    money(netOf(sid), supBy(sid).cur) + ' \u2014 a credit already counted and stays counted (d15, d27)' +
+    (Math.abs(before - netOf(sid)) > 0.005 ? ' \u2014 BUG' : '') + '.');
+}
+function doAdd() {
+  var s = supBy(S.scope), e = S.entry;
+  var tot = r2((parseFloat(e.sub) || 0) + (parseFloat(e.tax) || 0) + (parseFloat(e.fr) || 0) + (parseFloat(e.misc) || 0));
+  var billish = e.type === 'Invoice' || e.type === 'Consignment';
+  ITEMS.push({
+    key: 'en-' + Date.now(), sup: s.id, kind: 'entry', type: e.type,
+    ref: e.ref.trim() || '—', date: e.date, invDate: billish ? e.date : undefined,
+    amount: tot, dir: e.type === 'Adjustment' ? e.dir : undefined,
+    terms: billish ? e.terms : undefined, paid: 0,
+  });
+  S.mode = null; S.entry = null; bump(); render();
+  toast(e.type + ' of ' + money(tot, s.cur) + ' added' + (e.type === 'Claim' ? ' — not counted until cleared (d14).' : '.'));
+}
+
+render();
+setTimeout(function () { var q = $('q'); if (q) q.focus(); }, 0);
+</script>

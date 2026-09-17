@@ -1,7 +1,11 @@
-import type { Invoice, Supplier } from "../data/types";
-import { figureField, numericOnly } from "../lib/fields";
+import { useState } from "react";
+import { PAYMENT_METHODS, PAYMENT_TERMS } from "../data/types";
+import type { Invoice, InvoiceCharge, PaymentMethod, PaymentTerms, Supplier, TaxType } from "../data/types";
+import { figureField, moneyOnly } from "../lib/fields";
 import { money } from "../lib/money";
-import { round2 } from "../lib/totals";
+import { dueFor } from "../lib/payables";
+import { invoiceIsPaid, round2 } from "../lib/totals";
+import { useApp } from "../store/AppStore";
 
 // Track 3 (E-02 d38) — the till's money track doing the receiving job.
 //
@@ -35,10 +39,15 @@ export function ReceiveReconcile({
   onSaveUpdates,
   onPrintAllLabels,
   mintedCount,
+  taxTypes,
 }: {
   invoice: Invoice;
   supplier: Supplier;
-  onPatchTotals: (patch: Partial<Pick<Invoice, "statedSubtotal" | "tax" | "freight" | "misc">>) => void;
+  onPatchTotals: (
+    patch: Partial<Pick<Invoice, "statedSubtotal" | "freight" | "charges" | "invoiceDate" | "paymentTerms" | "paymentMethod">>,
+  ) => void;
+  /** d53 — what a charge may be labelled is a property of the store. */
+  taxTypes: TaxType[];
   derivedSubtotal: number;
   mismatch: boolean;
   totalRaw: string;
@@ -57,7 +66,10 @@ export function ReceiveReconcile({
 }) {
   // Paid is the only state that locks (d40). Finalize makes stock sellable;
   // it does not close the paperwork.
-  const locked = invoice.status === "Paid";
+  // A-41 — the write path asks the seam, not a stored flag. A-33b makes paid
+  // derived, so this releases on its own if the settlement is ever voided.
+  const ap = useApp();
+  const locked = invoiceIsPaid(invoice, ap.paymentBatches, ap.batchVoids);
   const copies = invoice.lines.reduce((n, l) => n + l.qty, 0);
   const statedDelta = round2(derivedSubtotal - invoice.statedSubtotal);
 
@@ -111,11 +123,22 @@ export function ReceiveReconcile({
 
         <div className="recv-sec">
           <span className="lab">Theirs — off the paperwork</span>
-          <PaperworkFields invoice={invoice} locked={locked} onPatch={onPatchTotals} />
+          <PaperworkFields invoice={invoice} locked={locked} onPatch={onPatchTotals} taxTypes={taxTypes} />
           <div className={"totals-row recv-delta" + (mismatch ? " warn" : " ok")}>
             <span className="xsmall">Difference</span>
             <strong className="num">{money(statedDelta)}</strong>
           </div>
+        </div>
+
+        {/* E-02 d45, d47 — read off their paperwork like the figures above, and
+            defaulted from the Supplier (M-01 d19, d20) so the common case is
+            already right. Overridable because the paperwork in hand is the
+            agreement: an extra 30 days on one shipment is a property of that
+            shipment, not of the relationship. The due date is DERIVED and is
+            the only basis on which M-05 can call anything overdue. */}
+        <div className="recv-sec">
+          <span className="lab">Terms — how this one gets paid</span>
+          <InvoiceTerms invoice={invoice} supplier={supplier} locked={locked} onPatch={onPatchTotals} />
         </div>
 
         <div className="recv-sec">
@@ -126,7 +149,7 @@ export function ReceiveReconcile({
               {...figureField}
               disabled={locked}
               value={totalRaw}
-              onChange={(e) => onTotalRawChange(numericOnly(e.target.value, true))}
+              onChange={(e) => onTotalRawChange(moneyOnly(e.target.value, true))}
               aria-label="Invoice total — ±2% free, beyond raises a review flag"
             />
           </div>
@@ -298,34 +321,249 @@ function Verdict({
   );
 }
 
-function PaperworkFields({
+function InvoiceTerms({
   invoice,
+  supplier,
   locked,
   onPatch,
 }: {
   invoice: Invoice;
+  supplier: Supplier;
   locked: boolean;
-  onPatch: (patch: Partial<Pick<Invoice, "statedSubtotal" | "tax" | "freight" | "misc">>) => void;
+  onPatch: (patch: Partial<Pick<Invoice, "invoiceDate" | "paymentTerms" | "paymentMethod">>) => void;
 }) {
-  const fields: { key: "statedSubtotal" | "tax" | "freight" | "misc"; label: string }[] = [
-    { key: "statedSubtotal", label: "Stated subtotal" },
-    { key: "tax", label: "Tax" },
-    { key: "freight", label: "Freight" },
-    { key: "misc", label: "Miscellaneous" },
-  ];
+  const terms = invoice.paymentTerms ?? supplier.paymentTerms;
+  const method = invoice.paymentMethod ?? supplier.defaultPaymentMethod;
+  const due = dueFor(terms, invoice.invoiceDate, new Date());
+  const inherited = (own: unknown) => (own == null ? " recv-inherited" : "");
+
   return (
     <>
-      {fields.map(({ key, label }) => (
-        <label className="recv-entry" key={key}>
-          <span>{label}</span>
-          <input
-            {...figureField}
-            disabled={locked}
-            value={invoice[key]}
-            onChange={(e) => onPatch({ [key]: Number(numericOnly(e.target.value)) || 0 })}
-          />
+      {/* Editable here, and it belongs here rather than beside the figures:
+          this is the date the due date below is derived from (d45), so the
+          correction and its consequence sit together.
+
+          Correctable until the Invoice is paid, which is d40's window and what
+          `locked` already tracks. It no longer moves the ledger either way —
+          architecture A-71 dates the journal by the finalize, which the system
+          stamps — so fixing a mistyped date is now purely a payables
+          correction, which is the only thing it was ever meant to be.
+
+          `type="date"`, like every other date in this app: a value that is not
+          one calendar day compares against nothing else in the system. */}
+      <label className="field">
+        <span>Invoice date</span>
+        <input
+          type="date"
+          disabled={locked}
+          value={invoice.invoiceDate}
+          onChange={(e) => onPatch({ invoiceDate: e.target.value })}
+        />
+        <span className="hint">Off their paperwork. The due date below follows it.</span>
+      </label>
+      <label className={"field" + inherited(invoice.paymentTerms)}>
+        <span>
+          Payment terms
+          {invoice.paymentTerms == null && supplier.paymentTerms && (
+            <span className="recv-from">from {supplier.shortName}</span>
+          )}
+        </span>
+        <select
+          value={terms ?? ""}
+          disabled={locked}
+          onChange={(e) => onPatch({ paymentTerms: (e.target.value || undefined) as PaymentTerms | undefined })}
+        >
+          <option value="">— not set —</option>
+          {PAYMENT_TERMS.map((v) => (
+            <option key={v} value={v}>
+              {v}
+            </option>
+          ))}
+        </select>
+      </label>
+
+      <label className={"field" + inherited(invoice.paymentMethod)}>
+        <span>
+          Payment method
+          {invoice.paymentMethod == null && supplier.defaultPaymentMethod && (
+            <span className="recv-from">from {supplier.shortName}</span>
+          )}
+        </span>
+        <select
+          value={method ?? ""}
+          disabled={locked}
+          onChange={(e) => onPatch({ paymentMethod: (e.target.value || undefined) as PaymentMethod | undefined })}
+        >
+          <option value="">— not set —</option>
+          {PAYMENT_METHODS.map((v) => (
+            <option key={v} value={v}>
+              {v}
+            </option>
+          ))}
+        </select>
+      </label>
+
+      <div className="totals-row">
+        <span className="xsmall">Due</span>
+        <strong className="num">
+          {due.dueDate ?? (terms ? terms : "—")}
+        </strong>
+      </div>
+      <span className="hint">
+        {due.dueDate ? (
+          <>
+            Derived from the <strong>invoice date</strong> ({invoice.invoiceDate}) plus the terms — never the received
+            date (d45). This is the only thing that lets Accounts Payable call a balance overdue.
+          </>
+        ) : terms && !invoice.invoiceDate ? (
+          <>
+            No <strong>invoice date</strong> on this invoice, so there is nothing for <strong>{terms}</strong> to run
+            from and nothing ages in Accounts Payable (d45). Add the date off the paperwork and the due date follows.
+          </>
+        ) : terms ? (
+          <>
+            <strong>{terms}</strong> produces no due date, so nothing on these terms ages in Accounts Payable.
+          </>
+        ) : (
+          <>No terms, so no due date and nothing to age against. Set a default on the Supplier card to stop having to
+          pick one each time.</>
+        )}
+      </span>
+    </>
+  );
+}
+
+/**
+ * A figure field that can actually be typed into.
+ *
+ * `numericOnly` deliberately lets partial input through — `""`, `"12."` and
+ * `"-"` are all things a value passes through on the way to being a number.
+ * That only survives if something holds the partial string: binding the input
+ * straight back to the model runs `Number("4.")` → `4` → renders `"4"`, and
+ * **the decimal point is erased on the keystroke that typed it**, so `4.24`
+ * cannot be entered at all.
+ *
+ * So the raw text lives here until blur, and the model gets the number on every
+ * keystroke — the same split the invoice Total already uses with `totalRaw`,
+ * which is why that one field was typable and these were not.
+ */
+function FigureInput({
+  value,
+  disabled,
+  onCommit,
+  label,
+}: {
+  value: number;
+  disabled: boolean;
+  onCommit: (n: number) => void;
+  label?: string;
+}) {
+  const [raw, setRaw] = useState<string | null>(null);
+  return (
+    <input
+      {...figureField}
+      disabled={disabled}
+      aria-label={label}
+      value={raw ?? String(value)}
+      onChange={(e) => {
+        const next = moneyOnly(e.target.value);
+        setRaw(next);
+        onCommit(Number(next) || 0);
+      }}
+      // Hand the field back to the model, so it shows the stored figure rather
+      // than whatever was mid-typing.
+      onBlur={() => setRaw(null)}
+    />
+  );
+}
+
+function PaperworkFields({
+  invoice,
+  locked,
+  onPatch,
+  taxTypes,
+}: {
+  invoice: Invoice;
+  locked: boolean;
+  onPatch: (patch: Partial<Pick<Invoice, "statedSubtotal" | "freight" | "charges">>) => void;
+  /** The store's tax types, which decide what a charge can be labelled (d53). */
+  taxTypes: TaxType[];
+}) {
+  const setCharge = (id: string, patch: Partial<InvoiceCharge>) =>
+    onPatch({ charges: invoice.charges.map((c) => (c.id === id ? { ...c, ...patch } : c)) });
+
+  const labelFor = (c: InvoiceCharge) =>
+    c.kind === "misc"
+      ? "Miscellaneous"
+      : (taxTypes.find((t) => t.code === c.taxCode)?.name ?? `Tax ${c.taxCode ?? "?"}`);
+
+  return (
+    <>
+      <label className="recv-entry">
+        <span>Stated subtotal</span>
+        <FigureInput
+          value={invoice.statedSubtotal}
+          disabled={locked}
+          onCommit={(n) => onPatch({ statedSubtotal: n })}
+        />
+      </label>
+
+      {/* d53 — each charge carries its own label, and the label is what picks
+          its ledger account: a tax row to that type's Input Tax Credit account
+          (M-07 d5), Miscellaneous to the reserved misc account (d23).
+
+          The rows for the taxes the store pays are here already, seeded from
+          its default tax group — a Quebec shop opens on GST and QST, an Alberta
+          one on GST — so copying an invoice across is reading figures rather
+          than deciding anything.
+
+          **No picker and nothing to add.** Seeding the rows from the group left
+          nothing for a picker to choose — every tax the store pays already has
+          its own row, so naming one again would only make a second row summing
+          into the same account. What is left is the slot Miscellaneous always
+          was, so it sits below them, always there, for whatever a supplier
+          billed that has no row of its own — including a tax the store has no
+          type for. */}
+      {invoice.charges.filter((c) => c.kind === "tax").map((c) => (
+        <label className="recv-entry" key={c.id}>
+          <span>{labelFor(c)}</span>
+          <FigureInput value={c.amount} disabled={locked} onCommit={(n) => setCharge(c.id, { amount: n })} />
         </label>
       ))}
+
+      <label className="recv-entry">
+        <span>Freight</span>
+        <FigureInput value={invoice.freight} disabled={locked} onCommit={(n) => onPatch({ freight: n })} />
+      </label>
+
+      {invoice.charges.filter((c) => c.kind === "misc").map((c) => (
+        <label className="recv-entry" key={c.id}>
+          <span>{labelFor(c)}</span>
+          <FigureInput value={c.amount} disabled={locked} onCommit={(n) => setCharge(c.id, { amount: n })} />
+        </label>
+      ))}
+
+      {/* Always present, whether or not the invoice has ever carried one — so
+          the form reads the same on an invoice opened today and one opened
+          before charges were a list. The charge is created on first edit
+          rather than seeded at zero, which keeps `charges` a record of what the
+          supplier actually billed. */}
+      {!invoice.charges.some((c) => c.kind === "misc") && (
+        <label className="recv-entry">
+          <span>Miscellaneous</span>
+          <FigureInput
+            value={0}
+            disabled={locked}
+            onCommit={(n) =>
+              onPatch({
+                charges: [...invoice.charges, { id: `chg-misc-${invoice.charges.length}`, kind: "misc", amount: n }],
+              })
+            }
+          />
+        </label>
+      )}
+
+
     </>
   );
 }

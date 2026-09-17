@@ -1,15 +1,21 @@
+import { cellFor, resolveLineTax, roundHalfAwayFromZero, taxTotal } from "./tax";
 import { isOpenOrderLine } from "./orderLines";
 import type {
+  ClaimVoid,
   InventoryItem,
   Invoice,
   PayableEntry,
   PaymentBatch,
+  PaymentBatchVoid,
+  PayableTargetKind,
   PendingOrderLine,
   Sale,
   SaleLine,
   Supplier,
   SupplierClaim,
-  TaxLine,
+  TaxComponent,
+  TaxType,
+  TaxGroupCell,
   Tender,
 } from "../data/types";
 
@@ -17,9 +23,31 @@ export const lineGross = (l: SaleLine): number => l.qty * l.price;
 export const lineNet = (l: SaleLine): number =>
   l.qty * l.price * (1 - l.discountPct / 100);
 
-export function lineTax(l: SaleLine, taxLines: TaxLine[]): number {
-  const tl = taxLines.find((t) => t.id === l.taxLineId);
-  return lineNet(l) * (tl ? tl.rate : 0);
+// M-06 d14's two coordinates, gathered so no caller invents its own lookup.
+// `groupId` is the Customer's tax group or the store's default; `at` is the
+// moment the money moves (A-57), which is what decides WHICH rate applies
+// (A-58) when a pending change is queued.
+export interface TaxContext {
+  types: TaxType[];
+  cells: TaxGroupCell[];
+  groupId: string;
+  at: string;
+}
+
+// The line's tax, per type.
+//
+// A SNAPSHOT WINS. A-57 takes the tax snapshot at tender, so a completed Sale
+// reports what it actually charged even after a rate changes — that is the
+// whole reason no rate-history table is needed. While the Sale is open there
+// is no snapshot and the screen computes live, which is correct rather than a
+// fallback: nothing has been collected yet.
+export function lineTaxComponents(l: SaleLine, ctx: TaxContext): TaxComponent[] {
+  if (l.tax) return l.tax;
+  return resolveLineTax(lineNet(l), cellFor(ctx.cells, ctx.groupId, l.productTaxCode), ctx.types, ctx.at);
+}
+
+export function lineTax(l: SaleLine, ctx: TaxContext): number {
+  return taxTotal(lineTaxComponents(l, ctx));
 }
 
 export interface SaleTotals {
@@ -27,16 +55,29 @@ export interface SaleTotals {
   discount: number; // total discount given
   tax: number;
   grand: number;
+  // Per type, because M-03 d13 reports per type and d15 splits by rate. A
+  // single figure is what the flat model could give and is the reason it had
+  // to go.
+  taxByType: { code: string; name: string; ratePpm: number; amount: number }[];
 }
 
-export function saleTotals(sale: Sale, taxLines: TaxLine[]): SaleTotals {
+export function saleTotals(sale: Sale, ctx: TaxContext): SaleTotals {
   let subtotal = 0;
   let discount = 0;
   let tax = 0;
+  // Keyed by type AND rate, so a period spanning a rate change splits itself
+  // (M-03 d15) instead of blending two rates into one line.
+  const byType = new Map<string, { code: string; name: string; ratePpm: number; amount: number }>();
   for (const l of sale.lines) {
     subtotal += lineNet(l);
     discount += lineGross(l) - lineNet(l);
-    tax += lineTax(l, taxLines);
+    for (const c of lineTaxComponents(l, ctx)) {
+      tax += c.amount;
+      const key = `${c.code}:${c.ratePpm}`;
+      const seen = byType.get(key);
+      if (seen) seen.amount = round2(seen.amount + c.amount);
+      else byType.set(key, { ...c });
+    }
   }
   const grand = subtotal + tax;
   return {
@@ -44,16 +85,46 @@ export function saleTotals(sale: Sale, taxLines: TaxLine[]): SaleTotals {
     discount: round2(discount),
     tax: round2(tax),
     grand: round2(grand),
+    taxByType: [...byType.values()],
   };
 }
 
+/**
+ * Everything that moved through the till on this Sale, pay-outs included.
+ *
+ * This is the figure a **void** needs — "how much is still unaccounted for" —
+ * because a pay-out is cash that genuinely left the drawer and putting the
+ * Sale away does not put the money back.
+ */
 export const tenderedTotal = (sale: Sale): number =>
   round2(sale.tenders.reduce((s, t) => s + t.amount, 0));
 
-export const balanceDue = (sale: Sale, taxLines: TaxLine[]): number =>
-  round2(saleTotals(sale, taxLines).grand - tenderedTotal(sale));
+/**
+ * What has been put toward **settling this Sale**, which is not the same thing
+ * — E-05 d35.
+ *
+ * **A pay-out funds itself.** d16 calls it *cash removed from the till for an
+ * expense*, and step 15 settles a counter buy by *"tendering it back as
+ * negative cash"*: money leaving the drawer is the whole of the movement, not
+ * half of one. Counting it toward the Sale left a $20 pay-out reading as $20
+ * still owing, so the till demanded an offsetting tender to clear it — and the
+ * Sale then recorded $20 of cash that never came in.
+ *
+ * `Account Balance (add)` deliberately stays counted, because it genuinely IS
+ * funded by another tender: the customer hands over cash to put on their
+ * account, and the two halves are both real. A pay-out has no such second half.
+ * The drawer is the second half.
+ */
+export const tenderedTowardSale = (sale: Sale): number =>
+  round2(sale.tenders.reduce((s, t) => (t.type === "Pay-out" ? s : s + t.amount), 0));
 
-export const round2 = (n: number): number => Math.round(n * 100) / 100;
+export const balanceDue = (sale: Sale, ctx: TaxContext): number =>
+  round2(saleTotals(sale, ctx).grand - tenderedTowardSale(sale));
+
+// A-47 — half AWAY FROM ZERO, not Math.round's half-up, so a negative-quantity
+// Return line rounds symmetrically to the Sale that produced it (A-49 names
+// exactly this case). One rounding rule governs the whole money path.
+export const round2 = roundHalfAwayFromZero;
 
 /**
  * What one tender does to a Customer's A/R balance, signed the way E-07 d4
@@ -70,9 +141,43 @@ export function customerBalanceDelta(tender: Pick<Tender, "type" | "amount" | "a
   return tender.accountDirection === "add" ? Math.abs(tender.amount) : -tender.amount;
 }
 
-// ---- Stock math (E-04): on hand is derived from sellable copies ----
-export const onHand = (recordId: string, inv: InventoryItem[]): number =>
+// ---- Stock math (E-04 d2, architecture §5.1) ----
+
+/**
+ * §5.1's FIRST TERM on its own: the copies the store physically holds.
+ *
+ * Not the on-hand figure, and the difference matters. "Is there one on the
+ * shelf I can sell you" is this question; "what do we own, net of what we have
+ * already sold and not received" is `onHand` below. A Record can hold a copy
+ * and still be net negative.
+ */
+export const copiesPresent = (recordId: string, inv: InventoryItem[]): number =>
   inv.filter((i) => i.recordId === recordId && (i.status === "sellable" || i.status === "held")).length;
+
+/**
+ * Oversold copies still owed — minted straight from a Sale before any Invoice
+ * line backed them (E-02 d21) and not yet reconciled (E-04 d19).
+ */
+export const oversoldCopies = (recordId: string, inv: InventoryItem[]): InventoryItem[] =>
+  inv.filter((i) => i.recordId === recordId && i.oversold && !i.oversoldReconciledAt);
+
+export const oversoldOutstanding = (recordId: string, inv: InventoryItem[]): number =>
+  oversoldCopies(recordId, inv).length;
+
+/**
+ * On hand, **derived and able to go negative** — architecture §5.1, verbatim:
+ *
+ *     on_hand = count(items where status in ('sellable','held'))
+ *             - count(items where origin = 'oversold' and reconciled_at is null)
+ *
+ * The second term was missing, so this returned a figure that could never go
+ * below zero while being printed under the label "On hand (derived)". §5.1 and
+ * A-20a exist precisely so it can: a genuinely negative count is the whole
+ * point of E-02 d21's negative inventory, and clamping it at the first term
+ * hid the debt on every screen that asked.
+ */
+export const onHand = (recordId: string, inv: InventoryItem[]): number =>
+  copiesPresent(recordId, inv) - oversoldOutstanding(recordId, inv);
 
 export const availableOnHand = (recordId: string, inv: InventoryItem[]): number =>
   inv.filter((i) => i.recordId === recordId && i.status === "sellable").length;
@@ -124,42 +229,119 @@ export function isFollowUpOverdue(
 // applied credits, entry amounts), never edited directly (decision 8).
 export const invoiceTotal = (iv: Invoice): number => {
   const derivedSubtotal = round2(iv.lines.reduce((sum, l) => sum + l.cost * l.qty, 0));
-  return iv.totalOverride ?? round2(derivedSubtotal + iv.tax + iv.freight + iv.misc);
+  return iv.totalOverride ?? round2(derivedSubtotal + iv.freight + invoiceChargesTotal(iv));
 };
+
+/**
+ * E-02 d53 — the charges, summed. Three readings of one list, because three
+ * different things want three different slices of it.
+ */
+export const invoiceChargesTotal = (iv: Pick<Invoice, "charges">): number =>
+  round2(iv.charges.reduce((sum, c) => sum + c.amount, 0));
+
+/**
+ * Inbound tax. **Never part of cost of goods** (E-02 d34, A-29) — GST and QST
+ * are Input Tax Credits, a receivable from the government rather than a cost of
+ * the goods.
+ */
+export const invoiceTaxTotal = (iv: Pick<Invoice, "charges">): number =>
+  round2(iv.charges.reduce((sum, c) => (c.kind === "tax" ? sum + c.amount : sum), 0));
+
+/** Inbound tax, per type — which is what M-07 d5 needs and a flat figure could not give. */
+export const invoiceTaxByType = (iv: Pick<Invoice, "charges">): { taxCode: string; amount: number }[] => {
+  const by = new Map<string, number>();
+  for (const c of iv.charges) {
+    if (c.kind !== "tax" || !c.taxCode) continue;
+    by.set(c.taxCode, round2((by.get(c.taxCode) ?? 0) + c.amount));
+  }
+  return [...by.entries()].map(([taxCode, amount]) => ({ taxCode, amount }));
+};
+
+/** Everything billed that was not tax. **Does** reach cost of goods (A-29). */
+export const invoiceMiscTotal = (iv: Pick<Invoice, "charges">): number =>
+  round2(iv.charges.reduce((sum, c) => (c.kind === "misc" ? sum + c.amount : sum), 0));
 
 export const claimTotal = (c: SupplierClaim): number =>
   round2(c.lines.reduce((sum, l) => sum + l.cost * l.qty, 0));
 
-// Every PaymentBatch that put money toward one target ("invoice" + its id,
-// or "entry" + its id) — batches live at the top level (one row per
-// Record-Payment action, M-05 decision), not nested under what they paid.
-const targetPaidToDate = (kind: "invoice" | "entry", id: string, batches: PaymentBatch[]): number =>
+// ---- Accounts payable (M-05), as decided in d16-d30 and architecture A-36/A-37 ----
+//
+// The whole of this section exists so that ONE derivation answers "what is
+// owed", and both the Accounts Payable screen and the Supplier card read it.
+// Two copies of this arithmetic would drift, and the figure they disagreed
+// about would be money.
+
+/** A void is its own artifact (d22, A-33a), so a batch is live until one names it. */
+export const batchIsVoided = (b: PaymentBatch, voids: PaymentBatchVoid[]): boolean =>
+  voids.some((v) => v.batchId === b.id);
+
+export const liveBatches = (batches: PaymentBatch[], voids: PaymentBatchVoid[]): PaymentBatch[] =>
+  batches.filter((b) => !batchIsVoided(b, voids));
+
+/**
+ * Everything a target has received from live batches — BOTH kinds. d19 put
+ * money and claim credit in one batch, and d26 means an attached credit
+ * settles an Invoice exactly as money does.
+ */
+const settledAgainst = (
+  kind: PayableTargetKind,
+  id: string,
+  batches: PaymentBatch[],
+  voids: PaymentBatchVoid[],
+): number =>
   round2(
-    batches
+    liveBatches(batches, voids)
       .flatMap((b) => b.targets)
       .filter((t) => t.kind === kind && t.id === id)
       .reduce((sum, t) => sum + t.amount, 0),
   );
 
-// A claim's credit isn't earmarked to one Invoice (decision 11) — it's
-// distributed across several by AppStore's applyClaimCredit, which is why
-// creditsApplied lives on the Invoice rather than being looked up by claim.
-export const invoicePaidToDate = (iv: Invoice, batches: PaymentBatch[]): number =>
-  round2(targetPaidToDate("invoice", iv.id, batches) + iv.creditsApplied.reduce((sum, c) => sum + c.amount, 0));
+export const invoicePaidToDate = (iv: Invoice, batches: PaymentBatch[], voids: PaymentBatchVoid[]): number =>
+  settledAgainst("invoice", iv.id, batches, voids);
 
-export const invoiceBalance = (iv: Invoice, batches: PaymentBatch[]): number =>
-  round2(invoiceTotal(iv) - invoicePaidToDate(iv, batches));
+export const invoiceBalance = (iv: Invoice, batches: PaymentBatch[], voids: PaymentBatchVoid[]): number =>
+  round2(invoiceTotal(iv) - invoicePaidToDate(iv, batches, voids));
 
-// ---- Accounts payable — manual ledger entries (M-05 "Create new") ----
-// The unsigned face value: what the Manager typed in, always a plain
-// positive dollar figure regardless of which way the entry moves the balance.
+/**
+ * A-33b: `paid` is DERIVED, never stored. Finalized, balance at or below
+ * zero, and at least one settlement actually landed on it. The third clause
+ * is load-bearing — without it a zero-total Invoice would be born immutable
+ * and could never be corrected, which is the failure A-33 exists to prevent.
+ */
+export const invoiceIsPaid = (iv: Invoice, batches: PaymentBatch[], voids: PaymentBatchVoid[]): boolean =>
+  !!iv.finalizedAt &&
+  invoiceBalance(iv, batches, voids) <= 0.005 &&
+  invoicePaidToDate(iv, batches, voids) > 0.005;
+
+/**
+ * M-05 d37 — an Invoice is frozen while ANY non-voided PaymentBatch targets
+ * it. Amends E-02 d40, which made it correctable "until paid".
+ *
+ * `invoiceIsPaid` already refused every edit to a FULLY paid Invoice (A-41).
+ * The gap was the PARTLY paid one: not paid, therefore correctable, therefore
+ * amendable while money stood against it — and d22's void would then return
+ * that money to a target that no longer said what it said. Forcing the order
+ * removes the case: void the payment, correct, re-record (d40 pre-fills the
+ * re-record so the retyping is not punitive).
+ *
+ * Same shape as A-33's "paid blocks the edit" and A-66's "banked blocks the
+ * undo": a change is refused while something downstream depends on it, and
+ * permitted the moment that dependency is lifted.
+ */
+export const invoiceIsFrozen = (iv: Invoice, batches: PaymentBatch[], voids: PaymentBatchVoid[]): boolean =>
+  !!iv.finalizedAt && invoicePaidToDate(iv, batches, voids) > 0.005;
+
+// ---- manual ledger entries (d12) and the artifacts that look like them ----
+
+/** The unsigned face value: what was typed, always positive. */
 export const payableEntryTotal = (e: PayableEntry): number => round2(e.subtotal + e.tax + e.freight + e.misc);
 
-// The signed amount an entry contributes: positive increases what's owed,
-// negative decreases it. Claim is deliberately excluded from balance sums
-// entirely (see sumOutstandingForSupplier) even though it carries a sign
-// here — a positive Claim is what lets it net to zero against the negative
-// Credit that eventually replaces it, for the manual "Clear" tool.
+/**
+ * d29 — a Claim placeholder carries TWO figures. This is the face one, which
+ * is what d15's sum-to-zero test reads. Its contribution to the balance is
+ * zero, and that is `payableEntryContribution` below. On one figure d14, d15
+ * and d27 cannot all hold.
+ */
 export function payableEntrySignedAmount(e: PayableEntry): number {
   const total = payableEntryTotal(e);
   switch (e.type) {
@@ -172,28 +354,109 @@ export function payableEntrySignedAmount(e: PayableEntry): number {
   }
 }
 
-// Only Invoice/Consignment/Adjustment-that-increases are ever "paid down" —
-// a Credit already fully lands the moment it's created, and a Claim doesn't
-// count toward anything until Cleared, so neither has a balance of its own.
+/** Only these are ever paid down. A Credit lands whole; a placeholder never lands. */
 export const payableEntryIsPayable = (e: PayableEntry): boolean =>
   e.type === "Invoice" || e.type === "Consignment" || (e.type === "Adjustment" && e.adjustmentDirection !== "decrease");
 
-export const payableEntryPaidToDate = (e: PayableEntry, batches: PaymentBatch[]): number =>
-  targetPaidToDate("entry", e.id, batches);
+export const payableEntryPaidToDate = (e: PayableEntry, batches: PaymentBatch[], voids: PaymentBatchVoid[]): number =>
+  settledAgainst("entry", e.id, batches, voids);
 
-export const payableEntryBalance = (e: PayableEntry, batches: PaymentBatch[]): number =>
-  round2(payableEntryTotal(e) - payableEntryPaidToDate(e, batches));
+export const payableEntryBalance = (e: PayableEntry, batches: PaymentBatch[], voids: PaymentBatchVoid[]): number =>
+  round2(payableEntryTotal(e) - payableEntryPaidToDate(e, batches, voids));
 
-// What the entry currently contributes to the Supplier's total balance —
-// 0 for a Claim (never counts, Cleared or not); the full signed amount for
-// a Credit or a decrease Adjustment (already fully in effect the moment
-// it's created, nothing to pay down); the remaining balance for a payable
-// type as it gets paid off. Being Cleared doesn't change this — clearing is
-// bookkeeping tidiness (see PayableEntry.clearedWith), not a reversal.
-export function payableEntryContribution(e: PayableEntry, batches: PaymentBatch[]): number {
+// ---- credits: what counts, and whether it has been spent ----
+
+/** E-04 d20 — the memo is the point of truth, not the claim. */
+export const claimCreditAmount = (c: SupplierClaim): number =>
+  round2(c.creditedAmount ?? claimTotal(c));
+
+/**
+ * d26 — the line is AGREED vs not yet agreed, not claim vs manual entry.
+ * A Credited claim counts; a Pending one and a Claim placeholder do not.
+ *
+ * A plain status read, and architecture A-46 is why it is allowed to be one
+ * again. A-44 had made a void a second terminal mechanism, so this function
+ * took the void rows to keep a voided claim out of the balance. E-04 d29 turns
+ * a void into a REVERSAL that returns the claim to unsent — status `Pending`,
+ * no sent date — so it fails this test on the status alone. Carrying the
+ * parameter now would be a guard against something that can no longer happen.
+ */
+export const claimIsAgreed = (c: SupplierClaim): boolean => c.status === "Credited";
+
+/**
+ * A-37, as restated by A-69 — consumed is DERIVED from a live BATCH naming
+ * this credit, not from a target naming it. No `applied`, no `consumed_at`:
+ * d22's void un-consumes it by the absence of that batch, with nothing to flip.
+ *
+ * Reading it off targets was the shape A-69 retires. It could not answer for a
+ * credit that was ticked but never drawn down — no target named it, so it read
+ * as un-consumed while a remainder had already been emitted for its full value,
+ * and the balance moved by money nobody paid (M-05 d26).
+ */
+export const creditIsConsumed = (
+  creditId: string,
+  batches: PaymentBatch[],
+  voids: PaymentBatchVoid[],
+): boolean =>
+  liveBatches(batches, voids).some((b) => b.credits.some((c) => c.creditId === creditId));
+
+/**
+ * What an entry contributes to the Supplier's balance right now.
+ * A Claim placeholder: nothing, ever (d14, d27).
+ * A Credit: its full negative value until it is CONSUMED — being *cleared*
+ * does not change this, because d15 says a cleared Credit stays counted.
+ */
+export function payableEntryContribution(
+  e: PayableEntry,
+  batches: PaymentBatch[],
+  voids: PaymentBatchVoid[],
+): number {
   if (e.type === "Claim") return 0;
-  if (payableEntryIsPayable(e)) return payableEntryBalance(e, batches);
-  return payableEntrySignedAmount(e);
+  if (payableEntryIsPayable(e)) return payableEntryBalance(e, batches, voids);
+  if (e.type === "Credit") return creditIsConsumed(e.id, batches, voids) ? 0 : payableEntrySignedAmount(e);
+  return payableEntrySignedAmount(e); // a decreasing Adjustment: lands whole, never attachable
+}
+
+export interface PayablesInput {
+  invoices: Invoice[];
+  payableEntries: PayableEntry[];
+  claims: SupplierClaim[];
+  paymentBatches: PaymentBatch[];
+  batchVoids: PaymentBatchVoid[];
+  // E-04 d27 / architecture A-44. A claim is finished by a STATUS (Abandoned)
+  // or by the presence of a ROW here (voided), and A-44 records the cost of
+  // that: any query remembering only the first counts voided claims as live.
+  // This is the second half, carried so `claimIsAgreed` can consult both.
+  claimVoids: ClaimVoid[];
+}
+
+/**
+ * A-36's four terms, and the ONE place they live. Every one earns its place:
+ * drop any and one of M-05's worked examples breaks.
+ *
+ * At the SUPPLIER level a credit reduces the balance whether it is attached
+ * or not, and attaching is a re-labelling — which is why d26 can say
+ * "applying a credit never moves the balance" and be arithmetically true.
+ * At the INVOICE level only an attached credit reduces that Invoice.
+ *
+ * May be negative (d25): the supplier owes the store. Nothing clamps it.
+ */
+export function supplierBalance(supplierId: string, input: PayablesInput): number {
+  const { invoices, payableEntries, claims, paymentBatches: b, batchVoids: v } = input;
+
+  const fromInvoices = invoices
+    .filter((iv) => iv.supplierId === supplierId && iv.status !== "Draft")
+    .reduce((sum, iv) => sum + invoiceBalance(iv, b, v), 0);
+
+  const fromEntries = payableEntries
+    .filter((e) => e.supplierId === supplierId)
+    .reduce((sum, e) => sum + payableEntryContribution(e, b, v), 0);
+
+  const fromClaims = claims
+    .filter((c) => c.supplierId === supplierId && claimIsAgreed(c) && !creditIsConsumed(c.id, b, v))
+    .reduce((sum, c) => sum - claimCreditAmount(c), 0);
+
+  return round2(fromInvoices + fromEntries + fromClaims);
 }
 
 // Every separator currently in use across a Supplier's still-pending lines

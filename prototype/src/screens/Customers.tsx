@@ -20,6 +20,7 @@ import { customerFacts, customerMatches, waitingCount } from "../lib/customerFac
 import { saleTotals } from "../lib/totals";
 import { readStored, writeStored } from "../lib/tillMemory";
 import { useApp } from "../store/AppStore";
+import { useActor } from "../components/Identify";
 
 // E-07 Customers, laid out as the till's three tracks (d17): the slab you look
 // in, the card you opened, and the account. The frame is pinned to the viewport
@@ -36,6 +37,7 @@ const RECENT_MAX = 9;
 
 export function Customers() {
   const app = useApp();
+  const withActor = useActor();
   const nav = useNavigate();
   const { customerId } = useParams();
 
@@ -63,7 +65,7 @@ export function Customers() {
       sales: app.sales,
       pendingOrders: app.pendingOrders,
       invoices: app.invoices,
-      taxLines: app.taxLines,
+      taxCtx: app.taxCtxFor(null),
       records: app.records,
     }),
     [app.sales, app.pendingOrders, app.invoices, app.taxLines, app.records],
@@ -81,9 +83,9 @@ export function Customers() {
       app.customers.map((c) => ({
         customer: c,
         waiting: waitingCount(c, app.sales),
-        thisYear: thisYearSpend(c, app.sales, app.taxLines),
+        thisYear: thisYearSpend(c, app.sales, app.taxCtxFor(null)),
       })),
-    [app.customers, app.sales, app.taxLines],
+    [app.customers, app.sales, app.taxTypes, app.taxGroupCells],
   );
 
   const searched = useMemo(
@@ -147,17 +149,21 @@ export function Customers() {
   const startNew = (presetName?: string) =>
     setDraft({ ...blankCustomer, name: presetName ?? "" });
 
-  const addDraft = () => {
-    if (!draft) return;
-    const id = app.addCustomer({
-      ...draft,
-      name: draft.name.trim(),
-      accountNumber: draft.accountNumber.trim(),
+  // Tier 2 (E-01 d5): prompts only when no session is open. Adding a
+  // Customer is an attributed action, and d12 leaves the back office covered
+  // by the session rather than prompting per action.
+  const addDraft = () =>
+    withActor("New customer", () => {
+      if (!draft) return;
+      const id = app.addCustomer({
+        ...draft,
+        name: draft.name.trim(),
+        accountNumber: draft.accountNumber.trim(),
+      });
+      setDraft(null);
+      setQuery("");
+      select(id);
     });
-    setDraft(null);
-    setQuery("");
-    select(id);
-  };
 
   const canAdd =
     Boolean(draft?.name.trim()) &&
@@ -221,7 +227,7 @@ export function Customers() {
 function thisYearSpend(
   customer: Customer,
   sales: ReturnType<typeof useApp>["sales"],
-  taxLines: ReturnType<typeof useApp>["taxLines"],
+  taxCtx: Parameters<typeof saleTotals>[1],
 ): number {
   const year = new Date().getFullYear();
   return sales
@@ -233,5 +239,5 @@ function thisYearSpend(
         !s.isReturn &&
         Number(s.createdAt.slice(0, 4)) === year,
     )
-    .reduce((n, s) => n + saleTotals(s, taxLines).grand, 0);
+    .reduce((n, s) => n + saleTotals(s, taxCtx).grand, 0);
 }

@@ -138,23 +138,27 @@ export function CustomerAccount({
             </span>
           </label>
           <label className="field">
-            <span>Default tax line</span>
+            <span>
+              Tax group — one of the two axes (M-06 d14)
+            </span>
             <select
-              value={customer.defaultTaxLineId ?? ""}
+              value={customer.taxGroupId ?? ""}
               onChange={(e) =>
-                app.updateCustomer(customer.id, { defaultTaxLineId: e.target.value || undefined })
+                app.updateCustomer(customer.id, { taxGroupId: e.target.value || undefined })
               }
             >
-              <option value="">— none (uses the item's) —</option>
-              {app.taxLines.map((t) => (
-                <option key={t.id} value={t.id}>
-                  {t.name}
-                </option>
-              ))}
+              {/* Absent is not an override: the store's default group applies.
+                  Tax never resolves from the Customer alone — the product's
+                  tax code is the other coordinate, and neither wins. */}
+              <option value="">— the store's default —</option>
+              {app.taxGroups
+                .filter((g) => g.active)
+                .map((g) => (
+                  <option key={g.id} value={g.id}>
+                    {g.shortName} — {g.description}
+                  </option>
+                ))}
             </select>
-            <span className="hint">
-              Overrides the item's tax line at the till when set (d7).
-            </span>
           </label>
         </div>
 

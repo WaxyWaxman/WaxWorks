@@ -6,6 +6,7 @@ import type { InventoryItem, RecordEntry } from "../data/types";
 import { money } from "../lib/money";
 import type { StockFacts } from "../lib/stockState";
 import { STOCK_LABEL } from "../lib/stockState";
+import { genreNameFor, sectionLabelFor } from "../lib/taxonomy";
 import { useApp } from "../store/AppStore";
 
 // Track 2 of Find: the Record you picked (E-04's titlecard, minus the stock
@@ -68,11 +69,10 @@ export function FindSelection({
             <span className="badge">
               {record.year} · {record.country}
             </span>
-            <span className="badge">{record.section}</span>
+            <span className="badge">{sectionLabelFor(app.genres, app.sections, record.genreId)}</span>
             {record.stickyPrice && (
               <span className="badge warn">sticky {money(record.stickyPrice)} (New)</span>
             )}
-            {record.catalogOnly && <span className="badge">catalog only</span>}
             {/* A pinned selection that has fallen out of the results leaves the
                 slab with no highlighted row. Say so rather than let the list
                 look broken. */}
@@ -93,13 +93,6 @@ export function FindSelection({
       </div>
 
       <div className="find-scroll">
-        {record.catalogOnly && (
-          <div className="callout">
-            This is a <strong>catalog match we don’t hold</strong>. Acting on it — ordering,
-            stocking, editing — pulls it into the local catalog and prompts for store-specific
-            fields (supplier, Section). <em>(E-03 decision 6.)</em>
-          </div>
-        )}
 
         <section className="find-sect">
           <div className="head">
@@ -110,7 +103,41 @@ export function FindSelection({
             <Fact k="Label / cat. no." v={`${record.label} · ${record.catalogNo}`} />
             <Fact k="Format" v={record.format} />
             <Fact k="Year / country" v={`${record.year} · ${record.country}`} />
-            <Fact k="Genre / Section" v={`${record.genre} · ${record.section}`} />
+            <Fact
+              k="Genre / Section"
+              v={`${genreNameFor(app.genres, record.genreId)} · ${sectionLabelFor(app.genres, app.sections, record.genreId)}`}
+            />
+            {/* A-61 — the tags this Record was ADOPTED under, the matched
+                one marked. What makes "why did it land here" answerable,
+                which is the whole reason the snapshot exists. Marked by the
+                MAP's match rather than the operator's choice, so where the
+                map resolved nothing nothing is credited. Display only —
+                never read by the money path, which goes through the genre. */}
+            <Fact
+              k="Provider tags"
+              v={
+                record.providerTags?.length ? (
+                  <>
+                    {record.providerTags.map((t) => (
+                      <span
+                        key={t.tag}
+                        className={t.matched ? "badge warn" : "badge"}
+                        style={{ marginRight: 4 }}
+                        title={
+                          t.matched
+                            ? "The tag the genre map matched (A-61)"
+                            : "Carried by the release; not what decided the genre"
+                        }
+                      >
+                        {t.tag} · {t.votes}
+                      </span>
+                    ))}
+                  </>
+                ) : (
+                  "— (none carried at adoption)"
+                )
+              }
+            />
             <Fact
               k="Manufacturer UPC"
               v={<span className="mono">{record.manufacturerUpc ?? "— (none on sleeve)"}</span>}

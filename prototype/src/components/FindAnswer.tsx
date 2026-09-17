@@ -1,10 +1,12 @@
 import { useState } from "react";
-import { ManagerOverride } from "./ManagerOverride";
+import { ManagerAuthorize } from "./ManagerAuthorize";
 import { OrderModal } from "./OrderModal";
 import { ReserveModal } from "./ReserveModal";
 import type { RecordEntry } from "../data/types";
 import { agoLabel, type StockFacts } from "../lib/stockState";
 import { backroomCount } from "../lib/totals";
+import { OversoldList } from "./OversoldList";
+import { oversoldCopies } from "../lib/totals";
 import { useApp } from "../store/AppStore";
 
 // Track 3 of Find: the answer to the question the customer actually asked.
@@ -28,9 +30,7 @@ export function FindAnswer({
 
   const backroom = backroomCount(record.id, app.inventory);
   const sellable = app.inventory.filter((i) => i.recordId === record.id && i.status === "sellable");
-  const outstandingOversold = app.inventory.filter(
-    (i) => i.recordId === record.id && i.oversold && !i.oversoldReconciledAt,
-  );
+  const outstandingOversold = oversoldCopies(record.id, app.inventory);
   const belowMin = facts.onHand < record.minOnHand;
 
   // AVAILABLE, not on hand — the figure you can actually promise someone. A
@@ -58,7 +58,13 @@ export function FindAnswer({
           <Tot k="In backroom" v={backroom} />
           <Tot k="Minimum on hand" v={record.minOnHand} />
           {outstandingOversold.length > 0 && (
-            <Tot k="Oversold, unreconciled" v={outstandingOversold.length} danger />
+            <>
+              <Tot k="Oversold, unreconciled" v={outstandingOversold.length} danger />
+              {/* The copies themselves, not just how many. Which Sale a
+                  deficit came from is the next question anyone asks, and it
+                  was only answerable on the Receiving titlecard until now. */}
+              <OversoldList copies={outstandingOversold} />
+            </>
           )}
         </div>
 
@@ -149,7 +155,7 @@ export function FindAnswer({
         <OrderModal record={record} onClose={() => setOrdering(false)} onDone={onStatus} />
       )}
       {adjusting && (
-        <ManagerOverride
+        <ManagerAuthorize
           reason={`Force ${outstandingOversold.length} outstanding oversold cop${outstandingOversold.length === 1 ? "y" : "ies"} of ${record.artist} — ${record.title} back to zero. Use this only when there's no incoming shipment to explain the deficit — receiving matching stock reconciles it automatically instead.`}
           onCancel={() => setAdjusting(false)}
           onConfirm={(by) => {

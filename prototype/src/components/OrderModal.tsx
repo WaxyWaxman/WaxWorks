@@ -3,13 +3,15 @@ import type { InventoryItem, RecordEntry } from "../data/types";
 import { money } from "../lib/money";
 import { separatorCounts } from "../lib/totals";
 import { useApp } from "../store/AppStore";
+import { useActor } from "./Identify";
 import { Modal } from "./Modal";
 import { SeparatorSelect } from "./SeparatorSelect";
 
 // A Record's current shelf price — the sticky price for New stock, else
 // whatever an existing (unsold) copy is priced at. Just a default; freely
-// overridden below.
-function defaultSellPrice(record: RecordEntry, inventory: InventoryItem[]): number {
+// overridden below. Exported because the bulk sheet needs the same default
+// for the same reason (M-02 step 2), and two copies of it would drift.
+export function defaultSellPrice(record: RecordEntry, inventory: InventoryItem[]): number {
   if (record.stickyPrice) return record.stickyPrice;
   const copy = inventory.find((i) => i.recordId === record.id && i.status !== "sold");
   return copy?.price ?? 0;
@@ -28,6 +30,7 @@ export function OrderModal({
   onDone: (confirmation: string) => void;
 }) {
   const app = useApp();
+  const withActor = useActor();
   const [supplierId, setSupplierId] = useState(record.preferredSupplierId ?? app.suppliers[0]?.id ?? "");
   const [separator, setSeparator] = useState<string | undefined>(undefined);
   const [qty, setQty] = useState(1);
@@ -40,7 +43,9 @@ export function OrderModal({
   const followUpDays = followUpRaw.trim() ? Math.max(0, Number(followUpRaw) || 0) : undefined;
   const ready = !!supplierId && qty >= 1 && sellPrice > 0;
 
-  const commit = () => {
+  // Tier 2 (d5).
+  const commit = () =>
+    withActor("Raise order line", () => {
     if (!ready) return;
     app.raisePendingOrderLine({
       recordId: record.id,
@@ -56,7 +61,7 @@ export function OrderModal({
         `${qty}× ${record.artist} — ${record.title} at ${money(sellPrice)}. Process it from Order Processing when ready.`,
     );
     onClose();
-  };
+  });;
 
   return (
     <Modal

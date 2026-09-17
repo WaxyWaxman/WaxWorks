@@ -8,6 +8,9 @@ stay with `/spec-audit`.
 
     python scripts/check_docs.py
 
+Only the repository's own tracked markdown is linted -- never a stray worktree
+checkout or other untracked tree that happens to sit under the repo root.
+
 Exit code 1 if any ERROR is found; warnings do not fail the build.
 """
 
@@ -15,6 +18,7 @@ from __future__ import annotations
 
 import os
 import re
+import subprocess
 import sys
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -56,12 +60,56 @@ def norm_status(raw: str) -> str:
     return re.split(r"\s+[-—–]+\s+", value)[0].strip()
 
 
-def all_markdown() -> list[str]:
+IGNORED_DIRS = {".git", "node_modules", "dist", ".vite"}
+IGNORED_PREFIXES = (".claude/worktrees/",)
+
+
+def tracked_markdown() -> list[str] | None:
+    """Markdown files git knows about, or None if git cannot answer.
+
+    The index is the definition of "the repo's own documents". Anything
+    untracked or ignored -- notably the stray worktree checkouts under
+    .claude/worktrees/, each carrying its own copy of docs/ -- is not ours to
+    lint, and linting it made the gate fail for reasons unrelated to the
+    change under review.
+    """
+    try:
+        out = subprocess.run(
+            ["git", "-C", ROOT, "ls-files", "-z", "--", "*.md"],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.DEVNULL,
+            check=True,
+        ).stdout
+    except (OSError, subprocess.SubprocessError):
+        return None
+    paths = [
+        os.path.join(ROOT, entry.replace("/", os.sep))
+        for entry in out.decode("utf-8").split("\0")
+        if entry
+    ]
+    # A tracked-but-deleted file is a different problem; skip rather than crash.
+    return sorted(p for p in paths if os.path.isfile(p))
+
+
+def walked_markdown() -> list[str]:
+    """Fallback for a tarball or a machine without git: walk, minus the strays."""
     found = []
     for base, dirs, files in os.walk(ROOT):
-        dirs[:] = [d for d in dirs if d not in {".git", "node_modules"}]
+        dirs[:] = [
+            d
+            for d in dirs
+            if d not in IGNORED_DIRS
+            and not rel(os.path.join(base, d)).startswith(IGNORED_PREFIXES)
+            # a nested checkout or worktree carries its own .git file or dir
+            and not os.path.exists(os.path.join(base, d, ".git"))
+        ]
         found += [os.path.join(base, n) for n in files if n.endswith(".md")]
     return sorted(found)
+
+
+def all_markdown() -> list[str]:
+    tracked = tracked_markdown()
+    return tracked if tracked else walked_markdown()
 
 
 # --------------------------------------------------------------------------
@@ -250,15 +298,17 @@ if arch_ids:
 # 5. Relative links resolve
 # --------------------------------------------------------------------------
 
+PLACEHOLDER_RE = re.compile(r"<[^>]+>")
+
 for path in MD_FILES:
-    if rel(path).startswith("docs/templates/"):
-        continue  # placeholder targets are intentional
     base = os.path.dirname(path)
     for lineno, line in enumerate(read(path).splitlines(), 1):
         for target in LINK_RE.findall(line):
             target = target.strip()
             if target.startswith(("http://", "https://", "mailto:", "#")):
                 continue
+            if PLACEHOLDER_RE.search(target):
+                continue  # `<file>.md` in a template -- a slot, not a link
             target = target.split("#")[0]
             if not target:
                 continue

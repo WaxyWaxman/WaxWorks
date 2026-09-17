@@ -2,7 +2,7 @@
 
 **Actor:** Employee
 **Status:** Specified
-**Related:** [E-05 Point of Sale](E-05-sell-a-record.md) · [E-07 Manage customers](E-07-manage-customers.md)
+**Related:** [E-05 Point of Sale](E-05-sell-a-record.md) · [E-07 Manage customers](E-07-manage-customers.md) · [M-07 Chart of accounts](M-07-chart-of-accounts.md)
 
 **Job:** As an employee, I need to take back a sold record and refund or exchange it.
 
@@ -53,6 +53,19 @@ This is a policy choice, not a technical limitation — the system records who p
 - Returns are lines on a Sale, not a separate document type. All E-05 tender behavior, including split tender, applies.
 - Line values are snapshotted at time of sale, so a linked Return can show what the copy actually sold for even if the catalog has since changed.
 
+**From [M-06](M-06-settings.md) and [architecture](../architecture.md) A-57:**
+
+- **A Return's tax is resolved at today's rate**, not the linked Sale's (decision 13). The refund *amount* still defaults to the original line price (decision 5) — the two behave differently on purpose.
+
+**From [M-06](M-06-settings.md):**
+
+- **A line in a Section flagged `returnable = false` cannot be returned** ([M-06](M-06-settings.md) d30). This is **not** a gate and does not amend decision 3 — Returns stay ungated, with no receipt, no time limit and no approval, for everything else. It is a property of what is being sold: a gift card load returned under decision 3's terms is a cash-out dressed as a refund. Unwinding one is a **void of the original Sale** ([E-05](E-05-sell-a-record.md) d31) while that is still possible, and a Manager and an [M-05](M-05-accounts-payable.md) adjustment afterwards.
+
+**From [M-07](M-07-chart-of-accounts.md):**
+
+- **A Return produces journal lines like any Sale**, through the close it lands in ([M-07](M-07-chart-of-accounts.md) d7). Because inventory is **perpetual** ([M-07](M-07-chart-of-accounts.md) d2), a returned copy moves its own cost back out of cost of goods and into Inventory — the reverse of what selling it did, at the figure that copy carried, never a recomputed one.
+- **A Section that has been deactivated still resolves** ([M-07](M-07-chart-of-accounts.md) d18), so a Return of a copy filed in a retired Section posts where it always did rather than failing.
+
 ---
 
 ## Resolved decisions
@@ -71,6 +84,7 @@ This is a policy choice, not a technical limitation — the system records who p
 | 10 | **Void refuses while any returned copy is routed.** A Return can be voided on [E-05](E-05-sell-a-record.md) decision 31's terms — the refund off it first — but only while its stock is still unrouted. A routed copy is already back on the shelf, re-graded, or written off, and putting it back is a different operation from voiding the paperwork. Consequence being fixed: Void reverted every line's copy to sellable regardless of sign, so voiding a Return would have put copies on the floor the store never took in — and released a held copy outright. Void now only gives back what the Sale consumed (lines with a positive quantity), which is the test the tender step already used |
 | 11 | **A finished Return appears in the till rail's Recent alongside Sales.** It carries a transaction number like any other tendered document, and the commonest reason to go hunting for one is the refund that just went out. Badged as a Return and shown at its negative amount, because the number alone gives no clue which way the money went |
 | 12 | **The returned copy is found by lookup, not chosen from a list of every copy in the building.** Scanning the copy's own sticker resolves it outright — the counter path. Otherwise the catalogue is searched and the matching copies shown with their grade, barcode, price and current state. Deliberately not the till's Lookup ([E-05](E-05-sell-a-record.md)), which filters to sellable copies: that is exactly backwards here, since a copy coming back is normally one the store already sold, so this searches every copy and shows its state rather than hiding it |
+| 13 | **A Return charges today's tax rate and never reaches back to the rate the original Sale collected.** A Return is a Sale with negative lines (step 1), so its tax resolves the way any line's does, at the rate in force when the money moves ([architecture](../architecture.md) A-57). **Charging the original rate was considered and rejected** — it is the more orthodox answer, but it needs a linked Sale to read the rate from, and decision 3 deliberately allows a Return with no receipt, no Customer and no link at all (step 3). That would mean a today's-rate fallback anyway, and a shop with two tax rules for the same counter action will apply the wrong one. Note this differs from the **refund amount**, which *does* default to the linked Sale's line price (decision 5): price is what was agreed with this customer, tax is what is owed to an authority today. *Accepted consequence, and it is real money:* a Return crossing a rate change refunds tax at a rate the store never collected on that item, so the customer is out or up by the delta and the store absorbs it. The books stay consistent — the negative line carries today's rate into today's period and [M-03](M-03-daily-summary.md) sums snapshotted per-line figures — so this is a small bounded difference rather than an integrity problem, bounded by how rarely rates change multiplied by how rarely a return crosses one |
 
 ---
 

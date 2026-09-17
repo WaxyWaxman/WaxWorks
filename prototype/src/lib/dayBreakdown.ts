@@ -1,5 +1,6 @@
-import type { InventoryItem, RecordEntry, Sale, TaxLine } from "../data/types";
-import { lineNet, lineTax, onHand, round2 } from "./totals";
+import type { Genre, InventoryItem, RecordEntry, Sale, SectionRow } from "../data/types";
+import { sectionRowFor } from "./taxonomy";
+import { lineNet, lineTaxComponents, onHand, round2, type TaxContext } from "./totals";
 
 // M-03 — the same breakdown backs both View Subtotal (read-only) and Total
 // Today's Sales (which also closes the batch). Sales/tender/tax/section
@@ -18,6 +19,19 @@ export interface DayBreakdown {
   // ways and netting a day's top-ups against its draw-downs under one row
   // reports $0 for two real movements (M-03 d14).
   byTender: { label: string; amount: number }[];
+  /**
+   * The day's cash movement, net of what left the drawer — M-03 d16.
+   *
+   * `null` where nothing cash-shaped happened at all, so the tape carries no
+   * line rather than a misleading `$0.00`.
+   *
+   * **A subtotal, not a movement**, which is why it is its own field and not a
+   * row in `byTender`: anything summing that list would double-count it. d14's
+   * rule that the tender column reports every movement rather than a net figure
+   * is unaffected — both movements are still there, and this is read beside
+   * them.
+   */
+  cashNet: number | null;
   byTaxLine: { name: string; amount: number }[];
   // Money that came through a tender without being a sale, so the tender
   // column can be reconciled against net sales instead of silently
@@ -30,11 +44,21 @@ export interface DayBreakdown {
   belowMin: { recordId: string; label: string; onHand: number; minOnHand: number }[];
 }
 
+// The two labels the cash subtotal is built from. Named rather than typed
+// inline because the subtotal and the rows have to agree, and a typo in one of
+// them would silently drop a movement out of the total.
+const CASH = "Cash";
+const CASH_PAYOUTS = "Cash — pay-outs";
+
 export function computeDayBreakdown(
   sales: Sale[],
   records: RecordEntry[],
-  taxLines: TaxLine[],
+  taxCtx: TaxContext,
   inventory: InventoryItem[],
+  // M-06 d31 — a Record's Section is derived through its genre's required
+  // parent, so the breakdown needs the taxonomy rather than a field.
+  genres: Genre[],
+  sections: SectionRow[],
 ): DayBreakdown {
   // Returns belong in the close (M-03 d7, E-06 d8): a Return is a Current
   // transaction like any other, and excluding the document meant a $50 cash
@@ -65,11 +89,30 @@ export function computeDayBreakdown(
       const net = round2(lineNet(l));
       if (l.qty >= 0) grossSales += net;
       else returnsAmount += net;
-      const label = recordFor(l.recordId)?.section ?? "Non-tracked";
-      sectionAmounts.set(label, round2((sectionAmounts.get(label) ?? 0) + net));
-      const tl = taxLines.find((t) => t.id === l.taxLineId);
-      const tax = round2(lineTax(l, taxLines));
-      if (tax !== 0) taxAmounts.set(tl?.name ?? "Unknown", round2((taxAmounts.get(tl?.name ?? "Unknown") ?? 0) + tax));
+      // d17, d31 — every sellable thing carries a genre, so both kinds of
+      // line resolve the same way and there is no generic bucket left: an
+      // item line through its Record, a non-tracked line through the genre
+      // on the line itself. A genre that resolves to no Section buckets
+      // under the em dash rather than being filed somewhere plausible, so a
+      // taxonomy gap stays visible in the one report that would hide it.
+      const genreId = l.kind === "item" ? recordFor(l.recordId)?.genreId : l.genreId;
+      const section = sectionRowFor(genres, sections, genreId);
+      // d20 — whether a Section enters revenue reporting is a property of
+      // the Section, not a special case hard-coded for gift cards. Off keeps
+      // it out of *By Section* entirely.
+      if (section?.countsAsRevenue !== false) {
+        const label = section?.name ?? "—";
+        sectionAmounts.set(label, round2((sectionAmounts.get(label) ?? 0) + net));
+      }
+      // M-03 d13 reports per tax TYPE, and d15 splits by RATE where a period
+      // spans a change — so the key is both. A normal period has one rate per
+      // type and reads exactly as it did; the split appears only when more
+      // than one rate actually contributed, which is the day it matters.
+      for (const c of lineTaxComponents(l, taxCtx)) {
+        if (c.amount === 0 && !c.ratePpm) continue;
+        const label = c.ratePpm === 0 ? `${c.name} (0%)` : `${c.name} (${c.ratePpm / 10000}%)`;
+        taxAmounts.set(label, round2((taxAmounts.get(label) ?? 0) + c.amount));
+      }
     }
   }
 
@@ -81,10 +124,21 @@ export function computeDayBreakdown(
       // customer paying onto their account and a customer spending the
       // credit are opposite movements that happen to share a type. Reported
       // separately so a day that did $100 of each doesn't read as $0.
+      //
+      // A PAY-OUT is reported against CASH (M-03 d16), because that is the
+      // tender it moved through: the section above says returns and pay-outs
+      // appear as negative amounts *against the tender they moved through*,
+      // and E-05 d16 says it plainly — "a negative cash line in the M-03
+      // close". Under its own `Pay-out` label, a day with no cash sales
+      // carried no cash line at all, and the $20 that left the drawer read as
+      // a category of its own rather than as cash going out. A cash refund was
+      // already right: it is a negative `Cash` tender and always netted here.
       const label =
-        t.type === "Account Balance"
-          ? `Account Balance (${t.accountDirection === "add" ? "added" : "drawn"})`
-          : t.type;
+        t.type === "Pay-out"
+          ? CASH_PAYOUTS
+          : t.type === "Account Balance"
+            ? `Account Balance (${t.accountDirection === "add" ? "added" : "drawn"})`
+            : t.type;
       tenderAmounts.set(label, round2((tenderAmounts.get(label) ?? 0) + t.amount));
       if (t.type === "Pay-out") {
         payouts.push({ saleLabel: sale.saleNumber ? `#${sale.saleNumber}` : "—", note: t.note ?? "", amount: t.amount });
@@ -111,6 +165,10 @@ export function computeDayBreakdown(
     netSales: round2(grossSales + returnsAmount),
     bySection: [...sectionAmounts.entries()].map(([label, amount]) => ({ label, amount })),
     byTender: [...tenderAmounts.entries()].map(([label, amount]) => ({ label, amount })),
+    cashNet:
+      tenderAmounts.has(CASH) || tenderAmounts.has(CASH_PAYOUTS)
+        ? round2((tenderAmounts.get(CASH) ?? 0) + (tenderAmounts.get(CASH_PAYOUTS) ?? 0))
+        : null,
     byTaxLine: [...taxAmounts.entries()].map(([name, amount]) => ({ name, amount })),
     giftCardsLoaded,
     voidCount,

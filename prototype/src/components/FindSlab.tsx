@@ -1,18 +1,33 @@
 import { useEffect, useRef } from "react";
 import { BarcodeInput } from "./BarcodeInput";
-import type { RecordEntry } from "../data/types";
+import type { ReleaseCacheEntry, RecordEntry } from "../data/types";
+import { ChevronLeft, ChevronRight } from "./Chevrons";
 import {
   STOCK_HEADING,
   STOCK_LABEL,
   STOCK_STATES,
   type StockFacts,
   type StockState,
+  stampAgo,
 } from "../lib/stockState";
 
-export interface Hit {
-  record: RecordEntry;
-  facts: StockFacts;
-}
+// E-03 d18 — a result is either one of OUR Records or a catalog-provider
+// match we have not adopted. They are genuinely different things: a release
+// has no genre, no Section and no stock, because there is nothing for those
+// to sit on until adoption (architecture A-6). The union says so rather than
+// a flag on RecordEntry pretending one type is both.
+export type Hit =
+  | { kind: "record"; record: RecordEntry; facts: StockFacts }
+  | { kind: "release"; release: ReleaseCacheEntry };
+
+export const hitId = (h: Hit): string => (h.kind === "record" ? h.record.id : h.release.id);
+
+// d17 — an unadopted match holds no copies and has no history, so it bands
+// as *never stocked* exactly like a title the shop adopted and never ordered.
+// d17 accepts that they read identically; the tell is genre, which a release
+// cannot carry.
+export const hitState = (h: Hit): StockState =>
+  h.kind === "record" ? h.facts.state : "never";
 
 // The finding slab (E-03). Open it is the search box, the state filters and
 // the ranked result list; shut it is a 52px strip carrying the result count
@@ -28,6 +43,7 @@ export function FindSlab({
   onOpenChange,
   term,
   onTermChange,
+  onSubmit,
   onScan,
   providerDown,
   hits,
@@ -42,6 +58,8 @@ export function FindSlab({
   onOpenChange: (open: boolean) => void;
   term: string;
   onTermChange: (term: string) => void;
+  // E-03 d21 — Enter is what says "and look outside".
+  onSubmit: () => void;
   onScan: (code: string) => void;
   /** The catalog provider is unreachable — said out loud, never silently (E-03 d8). */
   providerDown: boolean;
@@ -51,7 +69,7 @@ export function FindSlab({
   onFilterChange: (filter: StockState | null) => void;
   selectedId?: string;
   onSelect: (recordId: string) => void;
-  recent: Hit[];
+  recent: { record: RecordEntry; facts: StockFacts }[];
 }) {
   const searchRef = useRef<HTMLInputElement>(null);
 
@@ -71,10 +89,10 @@ export function FindSlab({
             type="button"
             className="rail-ico accent"
             onClick={() => onOpenChange(true)}
-            aria-label={`Open search (${hits.length} results)`}
-            title="Open search — the results are still in there"
+            aria-label={`Expand search (${hits.length} results)`}
+            title="Expand — the search and its results are still in there"
           >
-            🔍
+            <ChevronRight />
             {hits.length > 0 && <span className="rail-badge">{hits.length}</span>}
           </button>
           <div className="rail-sep" />
@@ -114,18 +132,25 @@ export function FindSlab({
           aria-label="Collapse search"
           title="Collapse — the selection takes the width"
         >
-          ⟨
+          <ChevronLeft />
         </button>
       </div>
 
       <div className="slab-search">
+        {/* d21 — the local catalog answers as this is typed; the catalog
+            provider answers only on Enter. A usability decision that happens
+            to solve a rate limit, rather than a debounce timer in disguise:
+            the operator knows which kind of search they asked for. */}
         <input
           ref={searchRef}
           type="search"
           value={term}
           onChange={(e) => onTermChange(e.target.value)}
-          aria-label="Search — artist, title, label, catalog no., genre, Section, UPC"
-          placeholder="artist · title · label · cat. no. · Section · UPC"
+          onKeyDown={(e) => {
+            if (e.key === "Enter") onSubmit();
+          }}
+          aria-label="Search — artist, title, label, catalog no., genre, Section, UPC. Enter also searches the catalog provider"
+          placeholder="artist · title · label · cat. no. · Section · UPC — Enter to search the provider"
         />
         {/* A scanned barcode resolves directly rather than running a keyword
             search (E-03 decision 9). */}
@@ -178,29 +203,31 @@ function SlabList({
   selectedId?: string;
   onSelect: (recordId: string) => void;
 }) {
-  const shown = filter ? hits.filter((h) => h.facts.state === filter) : hits;
+  const shown = filter ? hits.filter((h) => hitState(h) === filter) : hits;
   if (shown.length === 0) {
     return <div className="slab-empty">Nothing matches that search in this band.</div>;
   }
 
   return (
     <>
-      {shown.map(({ record: r, facts }, i) => {
-        const startsBand = i === 0 || shown[i - 1].facts.state !== facts.state;
+      {shown.map((h, i) => {
+        const state = hitState(h);
+        const startsBand = i === 0 || hitState(shown[i - 1]) !== state;
+        const r = h.kind === "record" ? h.record : h.release;
         return (
-          <div key={r.id}>
+          <div key={hitId(h)}>
             {startsBand && (
               <div className="slab-band">
-                <span className={"stock-chip " + facts.state}>
-                  <span className={"stock-dot " + facts.state} />
-                  {STOCK_HEADING[facts.state]}
+                <span className={"stock-chip " + state}>
+                  <span className={"stock-dot " + state} />
+                  {STOCK_HEADING[state]}
                 </span>
               </div>
             )}
             <button
               type="button"
-              className={"hit" + (r.id === selectedId ? " on" : "")}
-              onClick={() => onSelect(r.id)}
+              className={"hit" + (hitId(h) === selectedId ? " on" : "")}
+              onClick={() => onSelect(hitId(h))}
             >
               <span className="art">{r.art}</span>
               <span style={{ minWidth: 0 }}>
@@ -211,7 +238,20 @@ function SlabList({
                   {r.label} · {r.catalogNo} · {r.year}
                 </span>
               </span>
-              <span className="n">{countFor(facts)}</span>
+              <span className="n">
+                {/* A release has no copies to count and no history to stamp.
+                    Nothing is added to say so: the band already reads *never
+                    stocked*, and d17 settles that an adopted-never-stocked
+                    title and an untouched match read alike. */}
+                {h.kind === "record" && countFor(h.facts)}
+                {/* E-03 d12 — the recency stamp, per row. It answers the
+                    reorder question d7 left open: a title stocked three times
+                    and sold out of reads differently from one that sat, and
+                    that comparison happens in the LIST, not after selecting. */}
+                {h.kind === "record" && stampAgo(h.facts) && (
+                  <small className="ago">{stampAgo(h.facts)}</small>
+                )}
+              </span>
             </button>
           </div>
         );
@@ -226,7 +266,7 @@ function SlabList({
 // raised into a supplier stream with no PO number yet (M-02 d1).
 function countFor(facts: StockFacts) {
   if (facts.available > 0) return <>{facts.available}<small>available</small></>;
-  if (facts.onHand > 0) return <>{facts.onHand}<small>all held</small></>;
+  if (facts.held > 0) return <>{facts.held}<small>all held</small></>;
   if (facts.onOrder > 0) return <>{facts.onOrder}<small>on order</small></>;
   if (facts.raised > 0) return <>{facts.raised}<small>pending</small></>;
   return <>—<small>none</small></>;

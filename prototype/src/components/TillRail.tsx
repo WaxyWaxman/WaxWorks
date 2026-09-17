@@ -4,7 +4,9 @@ import type { Sale } from "../data/types";
 import { money } from "../lib/money";
 import { saleTotals } from "../lib/totals";
 import { useApp } from "../store/AppStore";
+import { useIdentify } from "./Identify";
 import { HoldsModal, OtherFunctionsModal, SearchModal } from "./TillFunctions";
+import { ChevronLeft, ChevronRight } from "./Chevrons";
 
 // The till rail (E-05 d30). Closed it is a 52px strip of the things you
 // START — new sale, new return, holds, past sales. Open it is a drawer of
@@ -40,16 +42,6 @@ function saveRailOpen(open: boolean) {
 
 const ICON = { width: 19, height: 19, viewBox: "0 0 24 24", fill: "none", stroke: "currentColor" } as const;
 
-const ChevronRight = () => (
-  <svg {...ICON} strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-    <path d="M9 5l7 7-7 7" />
-  </svg>
-);
-const ChevronLeft = () => (
-  <svg {...ICON} strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-    <path d="M15 5l-7 7 7 7" />
-  </svg>
-);
 const Plus = () => (
   <svg {...ICON} strokeWidth="2" strokeLinecap="round" aria-hidden="true">
     <path d="M12 5v14M5 12h14" />
@@ -76,6 +68,7 @@ const Magnifier = () => (
 
 export function TillRail({ activeSaleId }: { activeSaleId?: string }) {
   const app = useApp();
+  const identify = useIdentify();
   const nav = useNavigate();
   const [open, setOpen] = useState(loadRailOpen);
   // The rail owns its own functions rather than asking the screen to host
@@ -118,13 +111,36 @@ export function TillRail({ activeSaleId }: { activeSaleId?: string }) {
     .slice(0, 6);
   const inFlight = openSales.length + openReturns.length;
 
-  const newSale = () => nav(`/sell/${app.newSale()}`);
-  const newReturn = () => nav(`/return/${app.newSale({ isReturn: true })}`);
+  // E-01 d12 and d15 — opening a Sale prompts for initials EVERY time, session
+  // or not, because at the counter the person ringing changes constantly and a
+  // Sale's attribution is the thing worth being sure of.
+  //
+  // A Return is NOT a second case (d15): a Return IS a Sale with negative
+  // lines (E-06 steps 1-2), so it gets this same prompt rather than one of its
+  // own. Listing it separately described a prompt nothing ever reached.
+  const newSale = () =>
+    identify.request({
+      reason: "New sale",
+      always: true,
+      onOk: (u) => {
+        app.identify(u.id);
+        nav(`/sell/${app.newSale()}`);
+      },
+    });
+  const newReturn = () =>
+    identify.request({
+      reason: "New return",
+      always: true,
+      onOk: (u) => {
+        app.identify(u.id);
+        nav(`/return/${app.newSale({ isReturn: true })}`);
+      },
+    });
 
   // A sale number is only findable if you already know it; the name is what
   // staff actually remember. Walk-ins say so rather than leaving a gap.
   const whoFor = (s: Sale) => app.customerFor(s.customerId)?.name ?? "Walk-in";
-  const totalFor = (s: Sale) => saleTotals(s, app.taxLines).grand;
+  const totalFor = (s: Sale) => saleTotals(s, app.taxCtxFor(s)).grand;
 
   const pick = (s: Sale) => {
     nav(s.isReturn ? `/return/${s.id}` : `/sell/${s.id}`);

@@ -1,0 +1,1707 @@
+<title>On Order, Three Tracks</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700;800&family=Archivo+Narrow:wght@600;700&display=swap">
+<style>
+/*
+ * M-02 Phase 3 — What's on Order, re-laid as the till's three tracks.
+ *
+ * Palette, type and structural class names are lifted from
+ * design/suppliers-ui-mock.html and design/customers-ui-mock.html verbatim.
+ * This mock adds no colour and no new skeleton of its own, on purpose: On
+ * Order should read as the same screen as Customers, Find, Receive and
+ * Suppliers, doing a different errand.
+ *
+ * PROPOSED — NOT RATIFIED. The bulk-entry track needs decision rows appended
+ * to M-02 before it is built; the notes under the screen say which and why.
+ */
+:root {
+  --c-bg: #f1f1ef;
+  --c-surface: #ffffff;
+  --c-surface-2: #f7f7f5;
+  --c-ink: #111111;
+  --c-ink-soft: #55554f;
+  --c-ink-faint: #8a8a84;
+  --c-border: #e4e4e0;
+  --c-border-strong: #ccccc7;
+  --c-accent: #d64500;
+  --c-accent-ink: #ffffff;
+  --c-accent-soft: #fff4ee;
+  --c-ok: #1f6b3f;
+  --c-ok-soft: #eaf3ed;
+  --c-warn: #8a6a1a;
+  --c-warn-soft: #fbf4e4;
+  --c-danger: #c0392b;
+  --c-danger-soft: #fdf3f1;
+
+  --font-sans: "Archivo", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Helvetica, sans-serif;
+  --font-narrow: "Archivo Narrow", "Archivo", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: ui-monospace, "SF Mono", "Cascadia Mono", "Roboto Mono", Menlo, Consolas, monospace;
+
+  --sp-1: 4px; --sp-2: 8px; --sp-3: 12px; --sp-4: 16px; --sp-5: 24px; --sp-6: 32px;
+  --radius-sm: 2px;
+}
+
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+body {
+  margin: 0; background: var(--c-bg); color: var(--c-ink);
+  font-family: var(--font-sans); font-size: 14px; line-height: 1.45;
+  -webkit-font-smoothing: antialiased;
+}
+.page { max-width: 1580px; margin: 0 auto; padding: var(--sp-6) var(--sp-5) 96px; }
+
+/* ---- page furniture (not part of the app) ---- */
+.masthead { display: flex; align-items: flex-end; gap: var(--sp-5); flex-wrap: wrap; margin-bottom: var(--sp-4); }
+.masthead h1 { font-size: 30px; letter-spacing: -0.03em; margin: 0 0 2px; line-height: 1.05; }
+.masthead p { margin: 0; color: var(--c-ink-soft); max-width: 70ch; font-size: 14.5px; }
+.stamp {
+  font-family: var(--font-narrow); font-weight: 700; font-size: 11px; letter-spacing: 0.12em;
+  text-transform: uppercase; color: var(--c-ink-faint); border: 1px solid var(--c-border-strong);
+  padding: 3px 8px; white-space: nowrap;
+}
+.stamp.live { color: var(--c-accent); border-color: var(--c-accent); }
+
+.controls {
+  display: flex; align-items: center; gap: var(--sp-2); flex-wrap: wrap;
+  border: 1px solid var(--c-border-strong); background: var(--c-surface);
+  padding: var(--sp-2) var(--sp-3); margin-bottom: var(--sp-3);
+}
+.controls .lab { margin-right: var(--sp-1); }
+.toggle {
+  font: inherit; font-size: 12.5px; font-weight: 600; cursor: pointer;
+  border: 1px solid var(--c-border-strong); background: var(--c-surface-2);
+  color: var(--c-ink-soft); padding: 5px 10px; border-radius: var(--radius-sm);
+}
+.toggle:hover { border-color: var(--c-ink); color: var(--c-ink); }
+.toggle[aria-pressed="true"] { background: var(--c-ink); border-color: var(--c-ink); color: #fff; }
+.toggle:disabled { opacity: 0.4; cursor: not-allowed; }
+.toggle:focus-visible, .rail-ico:focus-visible, .chip:focus-visible, .po:focus-visible,
+.tile:focus-visible, .lrow:focus-visible {
+  outline: 2px solid var(--c-accent); outline-offset: 2px;
+}
+.ctl-sep { width: 1px; align-self: stretch; background: var(--c-border-strong); margin: 0 var(--sp-2); }
+
+/* ---- the app frame ---- */
+.screen {
+  border: 1px solid var(--c-ink); background: var(--c-surface);
+  height: clamp(660px, 86dvh, 920px);
+  display: flex; flex-direction: column; overflow: hidden;
+}
+.band {
+  flex: none; height: 58px; display: flex; align-items: stretch;
+  background: var(--c-surface); border-bottom: 2px solid var(--c-ink);
+}
+.band .wordmark {
+  width: 168px; display: flex; align-items: center; gap: var(--sp-2); padding-left: 18px;
+  font-weight: 800; font-size: 16px; letter-spacing: 0.02em; border-right: 1px solid var(--c-border-strong);
+}
+.band .wordmark .dot { width: 10px; height: 10px; border-radius: 50%; background: var(--c-accent); }
+.band .mode {
+  flex: 1; display: flex; align-items: center; justify-content: center;
+  font-size: 14px; font-weight: 600; letter-spacing: 0.05em; color: var(--c-ink-soft);
+  border-right: 1px solid var(--c-border-strong);
+}
+.band .mode.on { background: var(--c-ink); color: #fff; font-weight: 800; }
+.band .who {
+  width: 172px; display: flex; flex-direction: column; justify-content: center;
+  padding-left: 16px; border-left: 1px solid var(--c-border-strong);
+}
+
+.lab {
+  font-family: var(--font-narrow); font-weight: 700; font-size: 11px; letter-spacing: 0.1em;
+  text-transform: uppercase; color: var(--c-ink-faint);
+}
+.xsmall { font-size: 11px; }
+.small { font-size: 12.5px; }
+.muted { color: var(--c-ink-faint); }
+.mono { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+
+/* Three tracks. The same 320 / 1fr / 344 skeleton as .cust-frame and
+   .find-frame — this screen earns no special width. */
+.frame {
+  flex: 1; min-height: 0; display: grid;
+  grid-template-columns: 320px minmax(0, 1fr) 344px;
+}
+.frame.slab-shut { grid-template-columns: 52px minmax(0, 1fr) 344px; }
+
+/* ============ TRACK 1 — the order slab ============ */
+.slab {
+  border-right: 1px solid var(--c-border-strong); background: var(--c-surface-2);
+  display: flex; flex-direction: column; min-height: 0; min-width: 0;
+}
+.slab-head {
+  flex: none; display: flex; align-items: center; gap: var(--sp-2);
+  padding: var(--sp-2) var(--sp-2) var(--sp-2) var(--sp-3);
+  border-bottom: 1px solid var(--c-border-strong);
+}
+.slab-head .lab { flex: 1; }
+.rail-ico {
+  position: relative; width: 38px; height: 38px; flex: none; padding: 0; cursor: pointer;
+  display: grid; place-items: center; font-size: 15px; line-height: 1;
+  border: 1px solid var(--c-border-strong); background: var(--c-surface);
+  color: var(--c-ink); border-radius: var(--radius-sm);
+}
+.rail-ico:hover { border-color: var(--c-ink); }
+.rail-badge {
+  position: absolute; top: -6px; right: -6px; min-width: 16px; height: 16px; padding: 0 4px;
+  background: var(--c-ink); color: #fff; border-radius: 8px;
+  font-family: var(--font-mono); font-size: 10px; font-weight: 700;
+  display: grid; place-items: center; line-height: 1;
+}
+.rail-badge.hot { background: var(--c-danger); }
+.rail-sep { width: 24px; height: 1px; background: var(--c-border-strong); flex: none; }
+
+.slab-open-only { display: flex; flex-direction: column; min-height: 0; flex: 1; }
+.slab-acts { flex: none; display: flex; gap: var(--sp-2); padding: var(--sp-3) var(--sp-3) 0; }
+.slab-acts .btn { flex: 1; justify-content: center; }
+.slab-search {
+  flex: none; padding: var(--sp-3); display: flex; flex-direction: column; gap: 6px;
+  border-bottom: 1px solid var(--c-border-strong);
+}
+.slab-search input {
+  font: inherit; font-size: 15px; font-weight: 600; width: 100%;
+  border: 2px solid var(--c-ink); background: var(--c-surface); color: var(--c-ink);
+  padding: 7px 10px; border-radius: var(--radius-sm);
+}
+.slab-search input::placeholder { color: var(--c-border-strong); font-weight: 400; }
+.slab-search .hint { font-size: 10.5px; color: var(--c-ink-faint); }
+/* The scan box is a peer of the search box here, not a control tucked under
+   it — a barcode is how you look up the line in your hand. */
+.scanbox {
+  display: flex; gap: 6px; align-items: center;
+}
+.scanbox input {
+  font-family: var(--font-mono); font-size: 12.5px; font-weight: 600; flex: 1; min-width: 0;
+  border: 1px dashed var(--c-border-strong); background: var(--c-surface); color: var(--c-ink);
+  padding: 5px 8px; border-radius: var(--radius-sm);
+}
+.scanbox input:focus { outline: 2px solid var(--c-accent); outline-offset: -1px; border-style: solid; }
+
+.chips { display: flex; flex-wrap: wrap; gap: var(--sp-1); align-items: center; padding: var(--sp-2) var(--sp-3); border-bottom: 1px solid var(--c-border-strong); }
+.chip {
+  font: inherit; font-size: 11.5px; font-weight: 600; cursor: pointer;
+  border: 1px solid var(--c-border-strong); background: var(--c-surface); color: var(--c-ink-soft);
+  padding: 3px 7px; border-radius: var(--radius-sm); display: inline-flex; gap: 5px; align-items: center;
+}
+.chip .count { font-family: var(--font-mono); font-size: 10.5px; color: var(--c-ink-faint); }
+.chip:hover { border-color: var(--c-ink); color: var(--c-ink); }
+.chip.on { background: var(--c-ink); border-color: var(--c-ink); color: #fff; }
+.chip.on .count { color: #d5d5d1; }
+.chip:disabled { opacity: 0.4; cursor: not-allowed; }
+.chip.hot { border-color: var(--c-danger); color: var(--c-danger); }
+.chip.hot .count { color: var(--c-danger); }
+.chip.hot.on { background: var(--c-danger); border-color: var(--c-danger); color: #fff; }
+.chip.hot.on .count { color: #fbdcd7; }
+
+.sortbar {
+  flex: none; display: flex; align-items: center; gap: var(--sp-2);
+  padding: 6px var(--sp-3); border-bottom: 1px solid var(--c-border-strong);
+}
+.sortbar select {
+  font: inherit; font-size: 11.5px; font-weight: 600; flex: 1; padding: 3px 6px;
+  border: 1px solid var(--c-border-strong); background: var(--c-surface); color: var(--c-ink);
+  border-radius: var(--radius-sm);
+}
+
+.slab-list { flex: 1; min-height: 0; overflow-y: auto; }
+.slab-band {
+  position: sticky; top: 0; z-index: 1; background: var(--c-surface-2);
+  border-bottom: 1px solid var(--c-border-strong);
+  padding: var(--sp-3) var(--sp-3) var(--sp-2);
+  display: flex; align-items: baseline; justify-content: space-between; gap: var(--sp-2);
+}
+.slab-empty { padding: var(--sp-5) var(--sp-3); color: var(--c-ink-faint); font-size: 12.5px; text-align: center; }
+
+/* One PurchaseOrder. The same skeleton as Suppliers' .sup and Find's .hit:
+   a tile, two rows of text, one right-hand figure. The tile carries the PO
+   number's tail, because the PO number is this row's identity — and for an
+   externally placed order it is the SUPPLIER's reference, not ours. */
+.po {
+  display: grid; grid-template-columns: 44px minmax(0, 1fr) auto; gap: 1px var(--sp-3);
+  align-items: baseline; width: 100%; text-align: left; cursor: pointer;
+  padding: var(--sp-2) var(--sp-3); border: none; border-bottom: 1px solid var(--c-border);
+  border-left: 3px solid transparent; background: var(--c-surface); font: inherit; color: var(--c-ink);
+}
+.po:hover { background: var(--c-surface-2); }
+.po.on { border-left-color: var(--c-accent); box-shadow: inset 0 0 0 1px var(--c-ink); }
+.po .code {
+  grid-column: 1; grid-row: 1 / -1; align-self: center;
+  width: 44px; height: 34px; display: grid; place-items: center;
+  border: 1px solid var(--c-border); background: var(--c-surface-2);
+  font-family: var(--font-mono); font-size: 11px; font-weight: 700;
+  color: var(--c-ink-soft);
+}
+.po.ext .code { border-style: dashed; border-color: var(--c-ink-faint); }
+.po .t { grid-column: 2; grid-row: 1; font-size: 12.5px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.po .m { grid-column: 2; grid-row: 2; font-size: 11px; color: var(--c-ink-faint); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.po .n {
+  grid-column: 3; grid-row: 1; font-family: var(--font-mono); font-size: 12.5px; font-weight: 700;
+  text-align: right; font-variant-numeric: tabular-nums; color: var(--c-ink-soft); white-space: nowrap;
+}
+.po .k {
+  grid-column: 3; grid-row: 2; text-align: right; white-space: nowrap;
+  font-family: var(--font-narrow); font-size: 9px; font-weight: 700;
+  letter-spacing: 0.05em; text-transform: uppercase; color: var(--c-ink-faint);
+}
+.po .n.late { color: var(--c-danger); }
+
+/* The permanent first row. Scoping to a PO is useful, but step 9 says this
+   screen lists lines oldest first ACROSS everything — so the cross-PO view is
+   never something you have to find your way back to. */
+.po.all { background: var(--c-surface-2); border-bottom: 2px solid var(--c-ink); }
+.po.all .code { border: 1px solid var(--c-ink); background: var(--c-ink); color: #fff; font-size: 13px; }
+
+.st-dot { width: 9px; height: 9px; border-radius: 50%; flex: none; display: inline-block; vertical-align: middle; }
+.st-dot.late { background: var(--c-danger); }
+.st-dot.back { background: var(--c-warn); }
+.st-dot.ship { background: var(--c-ok); }
+.st-dot.plain { background: var(--c-border-strong); }
+
+/* the 52px shut strip */
+.slab-strip {
+  height: 100%; display: flex; flex-direction: column; align-items: center;
+  gap: var(--sp-2); padding: var(--sp-2) 0; min-height: 0;
+}
+.strip-stack { flex: 1; min-height: 0; overflow-y: auto; scrollbar-width: none; display: flex; flex-direction: column; align-items: center; gap: 6px; }
+.strip-stack::-webkit-scrollbar { display: none; }
+.tile {
+  position: relative; width: 38px; height: 38px; flex: none; padding: 0; cursor: pointer;
+  display: grid; place-items: center; border: 1px solid var(--c-border-strong);
+  border-radius: var(--radius-sm); background: var(--c-surface); color: var(--c-ink-soft);
+  font-family: var(--font-mono); font-size: 10.5px; font-weight: 700;
+}
+.tile:hover { border-color: var(--c-ink); }
+.tile.on { border-color: var(--c-ink); box-shadow: inset 3px 0 0 var(--c-accent); color: var(--c-ink); }
+.tile .st-dot { position: absolute; bottom: -3px; right: -3px; border: 2px solid var(--c-surface-2); width: 11px; height: 11px; }
+.strip-lab {
+  font-family: var(--font-narrow); font-size: 8.5px; font-weight: 700; letter-spacing: 0.12em;
+  text-transform: uppercase; color: var(--c-border-strong); writing-mode: vertical-rl; padding: var(--sp-1) 0;
+}
+
+/* ============ TRACK 2 — the lines ============ */
+.main { display: flex; flex-direction: column; min-width: 0; min-height: 0; background: var(--c-surface); }
+.main-head {
+  flex: none; display: flex; align-items: flex-start; gap: var(--sp-3); flex-wrap: wrap;
+  padding: var(--sp-3) var(--sp-4); border-bottom: 2px solid var(--c-ink);
+}
+.main-head h2 { margin: 0; font-size: 27px; letter-spacing: -0.025em; line-height: 1.1; }
+.main-head .badges { display: flex; flex-wrap: wrap; gap: var(--sp-2); margin-top: 6px; align-items: center; }
+.head-acts { margin-left: auto; display: flex; gap: var(--sp-2); align-items: center; }
+
+.badge {
+  display: inline-flex; align-items: center; gap: 4px; font-family: var(--font-narrow);
+  font-size: 10.5px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase;
+  border: 1px solid var(--c-border-strong); color: var(--c-ink-soft); padding: 1px 6px; background: var(--c-surface);
+}
+.badge.ok { color: var(--c-ok); border-color: var(--c-ok); background: var(--c-ok-soft); }
+.badge.warn { color: var(--c-warn); border-color: var(--c-warn); background: var(--c-warn-soft); }
+.badge.danger { color: var(--c-danger); border-color: var(--c-danger); background: var(--c-danger-soft); }
+.badge.ink { color: #fff; background: var(--c-ink); border-color: var(--c-ink); }
+.badge.accent { color: var(--c-accent); border-color: var(--c-accent); background: var(--c-accent-soft); }
+.badge.mono { font-family: var(--font-mono); text-transform: none; letter-spacing: 0; font-weight: 600; }
+
+.btn {
+  display: inline-flex; align-items: center; gap: 6px; cursor: pointer; font: inherit;
+  font-size: 13px; font-weight: 600; padding: 6px 12px; border-radius: var(--radius-sm);
+  border: 1px solid var(--c-border-strong); background: var(--c-surface); color: var(--c-ink);
+}
+.btn:hover { border-color: var(--c-ink); }
+.btn.ink { background: var(--c-ink); border-color: var(--c-ink); color: #fff; }
+.btn.accent { background: var(--c-accent); border-color: var(--c-accent); color: var(--c-accent-ink); }
+.btn.ghost { border-color: transparent; background: transparent; color: var(--c-ink-soft); }
+.btn.danger { color: var(--c-danger); border-color: var(--c-border-strong); }
+.btn.danger:hover { border-color: var(--c-danger); background: var(--c-danger-soft); }
+.btn.sm { font-size: 11.5px; padding: 3px 8px; }
+.btn:disabled { opacity: 0.45; cursor: not-allowed; }
+
+.list-scroll { flex: 1; min-height: 0; overflow-y: auto; }
+
+/* The overdue group's header. d19 — overdue-first is a fixed GROUPING, not a
+   sort of its own, so it gets a band rather than silently reordered rows. */
+.grp {
+  position: sticky; top: 0; z-index: 1;
+  display: flex; align-items: baseline; justify-content: space-between; gap: var(--sp-2);
+  padding: var(--sp-2) var(--sp-4); background: var(--c-surface-2);
+  border-bottom: 1px solid var(--c-border-strong); border-top: 1px solid var(--c-border-strong);
+}
+.grp.late { background: var(--c-danger-soft); border-color: var(--c-danger); }
+.grp.late .lab { color: var(--c-danger); }
+.grp:first-child { border-top: none; }
+
+/* One order line. A button, because it opens in track 3 — the same move
+   Suppliers' in-flight rows make. */
+.lrow {
+  display: grid; grid-template-columns: 46px minmax(0, 1fr) auto auto; gap: 2px var(--sp-3);
+  align-items: baseline; width: 100%; text-align: left; cursor: pointer; font: inherit; color: var(--c-ink);
+  padding: var(--sp-2) var(--sp-4); background: var(--c-surface);
+  border: none; border-bottom: 1px solid var(--c-border); border-left: 3px solid transparent;
+}
+.lrow:hover { background: var(--c-surface-2); }
+.lrow.on { border-left-color: var(--c-accent); box-shadow: inset 0 0 0 1px var(--c-ink); }
+.lrow .age {
+  grid-column: 1; grid-row: 1 / -1; align-self: center; text-align: right;
+  font-family: var(--font-mono); font-size: 15px; font-weight: 700; font-variant-numeric: tabular-nums;
+  color: var(--c-ink-faint); line-height: 1;
+}
+.lrow.late .age { color: var(--c-danger); }
+.lrow .age em { display: block; font-style: normal; font-family: var(--font-narrow); font-size: 8.5px; letter-spacing: 0.08em; text-transform: uppercase; margin-top: 2px; }
+.lrow .t { grid-column: 2; grid-row: 1; font-size: 13.5px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.lrow .m { grid-column: 2; grid-row: 2; font-size: 11px; color: var(--c-ink-faint); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.lrow .q { grid-column: 3; grid-row: 1 / -1; align-self: center; text-align: right; white-space: nowrap; }
+.lrow .q .v { font-family: var(--font-mono); font-size: 14px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.lrow .q .k { font-family: var(--font-narrow); font-size: 8.5px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--c-ink-faint); display: block; }
+.lrow .s { grid-column: 4; grid-row: 1 / -1; align-self: center; width: 104px; text-align: right; }
+.lrow .who { color: var(--c-accent); font-weight: 600; }
+
+/* ============ TRACK 3 — the line ============ */
+.acct {
+  border-left: 1px solid var(--c-border-strong); background: var(--c-surface);
+  display: flex; flex-direction: column; min-height: 0;
+}
+
+/* Who is waiting takes the top slot, for the reason Waiting does on the
+   Customer card and in-flight does on the Supplier card: it is the only thing
+   here that a PERSON is owed. A late line nobody is waiting on is a supplier
+   problem; a late line with a name on it is a phone call. */
+.waiting {
+  flex: none; border-bottom: 1px solid var(--c-border); background: var(--c-surface-2);
+  padding: var(--sp-3) var(--sp-4);
+}
+.waiting.live { background: var(--c-accent-soft); box-shadow: inset 3px 0 0 var(--c-ink); }
+.waiting.none { color: var(--c-ink-faint); }
+.waiting .lab { display: flex; align-items: baseline; justify-content: space-between; gap: var(--sp-2); }
+.w-name { font-size: 15px; font-weight: 700; margin-top: 2px; }
+.w-sub { font-size: 11px; color: var(--c-ink-soft); margin-top: 1px; }
+
+.acct-head { flex: none; padding: var(--sp-3) var(--sp-4); }
+.figure { font-size: 46px; font-weight: 800; line-height: 1; letter-spacing: -0.035em; font-variant-numeric: tabular-nums; }
+.figure.late { color: var(--c-danger); }
+.figure.soon { color: var(--c-warn); }
+.figure.small { font-size: 24px; font-weight: 700; }
+.figure-say { margin-top: 4px; font-size: 13px; font-weight: 600; }
+.figure-sub { margin-top: 2px; font-size: 11px; color: var(--c-ink-faint); }
+.rule { flex: none; height: 2px; background: var(--c-ink); }
+
+.acct-mid { flex: 1; min-height: 0; overflow-y: auto; padding: var(--sp-3) var(--sp-4); display: flex; flex-direction: column; gap: var(--sp-4); }
+.sec { display: flex; flex-direction: column; gap: 6px; }
+.standing { display: grid; grid-template-columns: 1fr 1fr; gap: var(--sp-2) var(--sp-3); }
+.stat { display: flex; flex-direction: column; gap: 1px; }
+.stat .v { font-family: var(--font-mono); font-size: 17px; font-weight: 700; font-variant-numeric: tabular-nums; line-height: 1.1; }
+.stat .k { font-family: var(--font-narrow); font-size: 9.5px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--c-ink-faint); }
+.stat.span { grid-column: 1 / -1; border-top: 1px solid var(--c-border); padding-top: 6px; }
+.stat.span .v { font-size: 14px; }
+.stat .v.part { color: var(--c-warn); }
+
+/* The line's own log (d23), on the floor of the track — the same place
+   History sits on the Customer card and the Log sits on the Supplier card.
+   It is the answer to "when did this become backordered", and today it is
+   buried inside a modal you have to open to read. */
+.logline {
+  display: grid; grid-template-columns: 74px minmax(0, 1fr); gap: var(--sp-2);
+  padding: 5px 0; border-bottom: 1px solid var(--c-border); font-size: 11.5px;
+}
+.logline .at { font-family: var(--font-mono); font-size: 10.5px; color: var(--c-ink-faint); }
+.sec-empty { font-size: 11.5px; color: var(--c-ink-faint); padding: 4px 0; }
+.caveat { font-size: 10.5px; color: var(--c-ink-faint); border-left: 2px solid var(--c-border-strong); padding-left: 7px; margin-top: 2px; }
+
+.acct-foot { flex: none; border-top: 2px solid var(--c-ink); padding: var(--sp-3) var(--sp-4); display: flex; flex-direction: column; gap: 6px; }
+.acct-foot .primary { justify-content: center; height: 56px; font-size: 18px; font-weight: 800; text-align: center; line-height: 1.15; }
+.acct-foot .secondary { justify-content: center; height: 36px; }
+.foot-sub { font-size: 11px; color: var(--c-ink-faint); text-align: center; }
+
+/* ============ BULK ENTRY — a MODE of tracks 2 and 3, not a fourth column ===
+   The right track never stops meaning the same thing: what is true about
+   whatever is in the middle, and the one action to take on it. In entry mode
+   the middle is the sheet you are filling and the right is that batch's
+   standing. That is why this is a mode rather than a panel bolted into the
+   ledger — a 344px column is a bad place to scan twenty records into. */
+.entry-head { background: var(--c-accent-soft); }
+.entry-scroll { flex: 1; min-height: 0; overflow-y: auto; padding: var(--sp-4); display: flex; flex-direction: column; gap: var(--sp-5); }
+.group { display: flex; flex-direction: column; gap: var(--sp-3); }
+.group > .group-head {
+  display: flex; align-items: baseline; justify-content: space-between; gap: var(--sp-3);
+  border-bottom: 1px solid var(--c-border-strong); padding-bottom: var(--sp-1);
+}
+.grid2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: var(--sp-3) var(--sp-4); }
+.f { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.f.wide { grid-column: 1 / -1; }
+.f input, .f select {
+  font: inherit; font-size: 14px; font-weight: 600; width: 100%; padding: 6px 9px;
+  border: 1px solid var(--c-border-strong); background: var(--c-surface); color: var(--c-ink);
+  border-radius: var(--radius-sm);
+}
+.f input:focus, .f select:focus { outline: 2px solid var(--c-accent); outline-offset: -1px; }
+.f .hint { font-size: 10.5px; color: var(--c-ink-faint); }
+.f .lab { display: flex; align-items: center; gap: 5px; }
+.f.bad input { border-color: var(--c-danger); background: var(--c-danger-soft); }
+.f .err { font-size: 10.5px; color: var(--c-danger); font-weight: 600; }
+.f.mono-in input { font-family: var(--font-mono); }
+
+/* The destination chooser. Two real options side by side rather than a
+   checkbox, because the two routes differ in fields, gate and consequence —
+   a tickbox would understate that (d28). */
+.dest { display: grid; grid-template-columns: 1fr 1fr; gap: var(--sp-2); }
+.dest-opt {
+  display: flex; flex-direction: column; gap: 3px; text-align: left; cursor: pointer; font: inherit;
+  border: 1px solid var(--c-border-strong); background: var(--c-surface); color: var(--c-ink);
+  padding: var(--sp-3); border-radius: var(--radius-sm);
+}
+.dest-opt:hover { border-color: var(--c-ink); }
+.dest-opt[aria-pressed="true"] { border-color: var(--c-ink); box-shadow: inset 3px 0 0 var(--c-accent); background: var(--c-surface-2); }
+.dest-opt:disabled { opacity: 0.4; cursor: not-allowed; }
+.dest-opt:focus-visible { outline: 2px solid var(--c-accent); outline-offset: 2px; }
+.dest-opt .dt { font-size: 13.5px; font-weight: 700; }
+.dest-opt .dm { font-size: 11px; color: var(--c-ink-soft); line-height: 1.35; }
+
+/* The scan sheet. Big box, cursor lives in it, everything else already set. */
+.sheet-scan {
+  display: flex; flex-direction: column; gap: 6px;
+  border: 2px solid var(--c-ink); background: var(--c-surface-2); padding: var(--sp-3);
+}
+.sheet-scan input {
+  font-family: var(--font-mono); font-size: 17px; font-weight: 700; width: 100%;
+  border: 1px solid var(--c-border-strong); background: var(--c-surface); color: var(--c-ink);
+  padding: 8px 10px; border-radius: var(--radius-sm);
+}
+.sheet-scan input:focus { outline: 2px solid var(--c-accent); outline-offset: -1px; }
+.samples { display: flex; flex-wrap: wrap; gap: 5px; align-items: center; }
+
+table.sheet { width: 100%; border-collapse: collapse; }
+table.sheet thead th {
+  font-family: var(--font-narrow); font-weight: 700; font-size: 10px; letter-spacing: 0.08em;
+  text-transform: uppercase; color: var(--c-ink-faint); text-align: left;
+  padding: 5px var(--sp-2) 5px 0; border-bottom: 1px solid var(--c-ink); white-space: nowrap;
+}
+table.sheet td { padding: 5px var(--sp-2) 5px 0; border-bottom: 1px solid var(--c-border); font-size: 13px; vertical-align: middle; }
+table.sheet td.r, table.sheet th.r { text-align: right; padding-right: 0; }
+table.sheet .empty { color: var(--c-ink-faint); font-size: 12.5px; padding: var(--sp-4) 0; }
+table.sheet input.qty {
+  font: inherit; font-family: var(--font-mono); font-size: 13px; font-weight: 700; width: 52px;
+  padding: 2px 5px; border: 1px solid var(--c-border-strong); border-radius: var(--radius-sm); text-align: right;
+}
+table.sheet .newly { animation: flash 900ms ease-out; }
+
+/* d29 — a mark, never a block. It names the existing line, because "you have
+   one of these on order" is only actionable if you can see WHICH and how old. */
+.dupe {
+  display: block; font-size: 10.5px; color: var(--c-warn); font-weight: 600; margin-top: 1px;
+}
+.dupe .mono { font-weight: 700; }
+table.sheet tr.has-dupe td { background: var(--c-warn-soft); }
+
+/* Discard asks first and says what it is about to destroy (d30). */
+.confirm {
+  position: absolute; inset: 0; z-index: 30; display: grid; place-items: center;
+  background: rgba(17,17,17,0.42); padding: var(--sp-5);
+}
+.confirm-box {
+  background: var(--c-surface); border: 1px solid var(--c-ink); max-width: 400px;
+  padding: var(--sp-4); box-shadow: 0 8px 28px rgba(17,17,17,0.3);
+}
+.confirm-box h3 { margin: 0 0 var(--sp-2); font-size: 18px; letter-spacing: -0.02em; }
+.confirm-box p { margin: 0 0 var(--sp-3); font-size: 13px; color: var(--c-ink-soft); }
+.confirm-acts { display: flex; gap: var(--sp-2); justify-content: flex-end; }
+
+/* The slab advertises an open draft, so "leave open" is never "lose it". */
+.resume { box-shadow: inset 3px 0 0 var(--c-accent); }
+@keyframes flash { from { background: var(--c-accent-soft); } to { background: transparent; } }
+@media (prefers-reduced-motion: reduce) { table.sheet .newly { animation: none; } }
+
+/* Mock-only. Stands in for a navigation this mock cannot perform. */
+.toast {
+  position: absolute; left: 50%; transform: translateX(-50%); top: 70px; z-index: 20;
+  background: var(--c-ink); color: #fff; padding: 7px 14px; border-radius: var(--radius-sm);
+  font-family: var(--font-mono); font-size: 12px; font-weight: 600; pointer-events: none;
+  box-shadow: 0 4px 14px rgba(17,17,17,0.22); max-width: 70%; text-align: center;
+}
+
+/* ---- notes below the screen ---- */
+.notes { margin-top: var(--sp-6); display: grid; grid-template-columns: repeat(auto-fit, minmax(330px, 1fr)); gap: var(--sp-5); }
+.note h2 {
+  font-family: var(--font-narrow); font-size: 13px; font-weight: 700; letter-spacing: 0.1em;
+  text-transform: uppercase; color: var(--c-ink-faint); margin: 0 0 var(--sp-3);
+  padding-bottom: 5px; border-bottom: 1px solid var(--c-border-strong);
+}
+.note p, .note li, .note dd { font-size: 13.5px; color: var(--c-ink-soft); }
+.note p { margin: 0 0 var(--sp-3); }
+.note strong { color: var(--c-ink); }
+.note dl { margin: 0; display: flex; flex-direction: column; gap: var(--sp-3); }
+.note dt { font-weight: 700; color: var(--c-ink); font-size: 13.5px; }
+.note dd { margin: 2px 0 0; }
+.note ul { margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 6px; }
+.note ol { margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: 6px; }
+.cite { font-family: var(--font-mono); font-size: 11.5px; color: var(--c-ink-faint); }
+.warnbox { border-left: 3px solid var(--c-accent); background: var(--c-accent-soft); padding: var(--sp-3) var(--sp-4); margin-bottom: var(--sp-3); }
+.warnbox p:last-child { margin-bottom: 0; }
+.note.wide { grid-column: 1 / -1; }
+table.props { width: 100%; border-collapse: collapse; }
+table.props th {
+  font-family: var(--font-narrow); font-weight: 700; font-size: 10px; letter-spacing: 0.08em;
+  text-transform: uppercase; color: var(--c-ink-faint); text-align: left;
+  padding: 5px var(--sp-3) 5px 0; border-bottom: 1px solid var(--c-ink); vertical-align: bottom;
+}
+table.props td { padding: 8px var(--sp-3) 8px 0; border-bottom: 1px solid var(--c-border); font-size: 13px; color: var(--c-ink-soft); vertical-align: top; }
+table.props td:first-child { white-space: nowrap; font-weight: 700; color: var(--c-ink); }
+
+@media (prefers-reduced-motion: no-preference) {
+  .frame { transition: grid-template-columns 160ms ease; }
+}
+@media (max-width: 1180px) {
+  .frame, .frame.slab-shut { grid-template-columns: 52px minmax(0, 1fr); grid-template-rows: minmax(0, 1fr) auto; }
+  .slab { grid-row: 1 / -1; }
+  .slab-open-only { display: none !important; }
+  .slab-strip { display: flex !important; }
+  .main { grid-column: 2; grid-row: 1; }
+  /* 58dvh, the same as Customers and Suppliers, and for the same reason: this
+     track also has two fixed bands above the scroll — Waiting and the age. */
+  .acct { grid-column: 2; grid-row: 2; border-left: none; border-top: 2px solid var(--c-ink); max-height: 58dvh; }
+  .waiting, .acct-head { padding: var(--sp-2) var(--sp-4); }
+  .figure { font-size: 34px; }
+  .figure-sub { display: none; }
+  .acct-foot .primary { height: 48px; font-size: 16px; }
+  .lrow .s { width: 88px; }
+}
+</style>
+
+<div class="page">
+
+  <header class="masthead">
+    <div>
+      <h1>What's on Order, in three tracks</h1>
+      <p>M-02 Phase 3 laid out the way Sell, Find, Receive, Customers and Suppliers already are — a retractable slab on the left, the work in the middle, the thing you are acting on pinned to the right. Layout mock, not working code. The two modals go away: <strong>Set status</strong> and <strong>Re-flag</strong> become the right track, which is also where the line's log finally becomes readable. <strong>Bulk entry</strong> is a second mode of the middle track, with <em>two destinations</em> — raise as pending, or record as already placed. M-02 d25&ndash;d28 are recorded.</p>
+    </div>
+    <span class="stamp">branch WhatsOnOrder-UI</span>
+    <span class="stamp live">decisions recorded — M-02 d25–d30</span>
+  </header>
+
+  <div class="controls">
+    <span class="lab">Mock controls</span>
+    <button class="toggle" id="t-slab" aria-pressed="true">Slab open</button>
+    <span class="ctl-sep"></span>
+    <span class="lab">Mode</span>
+    <button class="toggle mode-btn" data-mode="track" aria-pressed="true">Tracking</button>
+    <button class="toggle mode-btn" data-mode="entry" aria-pressed="false">Bulk entry</button>
+    <span class="ctl-sep"></span>
+    <span class="lab">Viewer</span>
+    <button class="toggle role-btn" data-role="manager" aria-pressed="true">Manager</button>
+    <button class="toggle role-btn" data-role="employee" aria-pressed="false">Employee</button>
+    <span class="ctl-sep"></span>
+    <span class="xsmall muted">Search, scan, chips, sort, PO scoping and line selection are all live. Today is <span class="mono">12/09/2026</span>. Try scanning <span class="mono">075992511018</span>.</span>
+  </div>
+
+  <div class="screen" style="position:relative">
+
+    <div class="toast" id="toast" hidden></div>
+
+    <div class="band">
+      <div class="wordmark"><span class="dot"></span>WAX WORKS</div>
+      <div class="mode">FIND</div>
+      <div class="mode">SELL</div>
+      <div class="mode">RECEIVE</div>
+      <div class="mode on">MORE</div>
+      <div class="who">
+        <span class="xsmall muted">Signed in</span>
+        <span class="small" style="font-weight:600">R. Duval · Manager</span>
+      </div>
+    </div>
+
+    <div class="frame" id="frame">
+
+      <!-- ============ TRACK 1 — the order slab ============ -->
+      <nav class="slab" aria-label="Purchase orders">
+
+        <div class="slab-strip" id="strip" hidden>
+          <button class="rail-ico" id="strip-expand" title="Open the list" aria-expanded="false">⟩</button>
+          <button class="rail-ico" id="strip-new" title="Record an order placed elsewhere">＋</button>
+          <button class="rail-ico" title="Overdue lines">
+            ⏱<span class="rail-badge hot" id="strip-badge">4</span>
+          </button>
+          <div class="rail-sep"></div>
+          <div class="strip-stack" id="strip-stack"></div>
+          <div class="strip-lab">open POs</div>
+        </div>
+
+        <div class="slab-open-only" id="slab-open">
+          <div class="slab-head">
+            <span class="lab">On order</span>
+            <button class="rail-ico" id="slab-collapse" title="Collapse — the lines take the width">⟨</button>
+          </div>
+
+          <div class="slab-acts">
+            <button class="btn ink" id="new-btn">＋ Order placed elsewhere</button>
+            <button class="btn accent resume" id="resume-btn" hidden></button>
+          </div>
+
+          <div class="slab-search">
+            <input type="search" id="q" placeholder="artist · title · cat no. · PO · supplier" aria-label="Search on-order lines">
+            <div class="scanbox">
+              <span class="lab" style="flex:none">Scan</span>
+              <input type="text" id="scan" placeholder="barcode" aria-label="Scan a barcode to filter">
+            </div>
+            <span class="hint">Search and scan both filter the lines <span class="cite">(M-02 step 10)</span>. A scan that matches no catalogue UPC falls back to a keyword.</span>
+          </div>
+
+          <div class="chips" id="chips"></div>
+
+          <div class="sortbar">
+            <span class="lab">Sort</span>
+            <select id="sort">
+              <option value="age">Age — oldest first</option>
+              <option value="title">Title</option>
+              <option value="artist">Artist</option>
+            </select>
+          </div>
+
+          <div class="slab-list" id="slab-list"></div>
+        </div>
+      </nav>
+
+      <!-- ============ TRACK 2 — the lines, or the entry sheet ============ -->
+      <section class="main">
+
+        <!-- --- tracking mode --- -->
+        <div id="track-mode" style="display:flex;flex-direction:column;min-height:0;flex:1">
+          <div class="main-head">
+            <div style="min-width:0">
+              <h2 id="main-title">Everything on order</h2>
+              <div class="badges" id="main-badges"></div>
+            </div>
+            <div class="head-acts" id="main-acts"></div>
+          </div>
+          <div class="list-scroll" id="lines"></div>
+        </div>
+
+        <!-- --- bulk-entry mode --- -->
+        <div id="entry-mode" hidden style="display:flex;flex-direction:column;min-height:0;flex:1;position:relative">
+          <div class="main-head entry-head">
+            <div style="min-width:0">
+              <h2>Record an order placed elsewhere</h2>
+              <div class="badges" id="e-badges"></div>
+            </div>
+            <div class="head-acts">
+              <button class="btn sm" id="entry-leave">← Leave open</button>
+              <button class="btn sm danger" id="entry-discard">Discard batch</button>
+            </div>
+          </div>
+
+          <div class="confirm" id="discard-confirm" hidden>
+            <div class="confirm-box">
+              <h3>Discard this batch?</h3>
+              <p id="discard-say"></p>
+              <p class="xsmall muted">Leaving it open instead keeps every line and puts it back on the slab, where you can pick it up after you have served whoever just walked up <span class="cite">(d30)</span>.</p>
+              <div class="confirm-acts">
+                <button class="btn" id="discard-no">Keep it open</button>
+                <button class="btn danger" id="discard-yes">Discard</button>
+              </div>
+            </div>
+          </div>
+
+          <div class="entry-scroll">
+            <div class="group">
+              <div class="group-head">
+                <span class="lab">Where these lines go</span>
+                <span class="xsmall muted">Chosen here, not at the foot — so no field on screen is about to be discarded <span class="cite">(d28)</span></span>
+              </div>
+              <div class="dest">
+                <button class="dest-opt" data-dest="pending">
+                  <span class="dt">Raise as pending</span>
+                  <span class="dm">Joins this supplier's pending pile to be processed and sent the normal way. Plain Phase 1 <span class="cite">(d1)</span> — an Employee may do this.</span>
+                </button>
+                <button class="dest-opt" data-dest="placed">
+                  <span class="dt">Already placed elsewhere</span>
+                  <span class="dm">The order went out on their website or over the phone. Born placed, carrying their reference <span class="cite">(d25)</span>. Manager-only.</span>
+                </button>
+              </div>
+              <div class="xsmall muted" id="dest-say" style="margin-top:-4px"></div>
+
+              <div class="group-head" style="margin-top:var(--sp-2)">
+                <span class="lab">The order</span>
+                <span class="xsmall muted">Set once, stamped on every line below</span>
+              </div>
+              <div class="grid2">
+                <label class="f">
+                  <span class="lab">Supplier</span>
+                  <select id="e-sup"></select>
+                  <span class="hint" id="e-sup-hint"></span>
+                </label>
+                <label class="f mono-in" id="e-po-f">
+                  <span class="lab">Their PO / order reference</span>
+                  <input type="text" id="e-po" placeholder="IDS-88214">
+                  <span class="hint">Free-text, need not be numeric <span class="cite">(d16)</span>. Leave blank to mint our next one. Auto-numbering skips whatever you type here.</span>
+                  <span class="err" id="e-po-err" hidden></span>
+                </label>
+                <label class="f" id="e-date-f">
+                  <span class="lab">Placed on</span>
+                  <input type="date" id="e-date" value="2026-09-12">
+                  <span class="hint"><strong>Not today by default in real use.</strong> You ordered on their site days ago; stamping <em>now</em> would start the follow-up window late and put the line in the wrong place in an age sort <span class="cite">(d8, d18, d19)</span>.</span>
+                </label>
+                <label class="f">
+                  <span class="lab">Follow-up flag — days</span>
+                  <input type="number" id="e-flag" value="14" min="0">
+                  <span class="hint">Every line carries one <span class="cite">(d8)</span>. Counted from <em>Placed on</em>, not from now.</span>
+                </label>
+                <label class="f mono-in" id="e-sep-f">
+                  <span class="lab">Ordering separator</span>
+                  <input type="text" id="e-sep" maxlength="1" placeholder="blank">
+                  <span class="hint">One optional letter, splitting this supplier's pending lines into independently sendable streams <span class="cite">(d3)</span>. Blank joins the regular pile. Landing on a separator already in use prompts to merge <span class="cite">(d17)</span>.</span>
+                </label>
+                <div class="f wide" id="e-caveat-f">
+                  <span class="lab">What this destination changes</span>
+                  <div class="caveat" style="margin-top:0" id="e-caveat"></div>
+                </div>
+              </div>
+            </div>
+
+            <div class="group">
+              <div class="group-head">
+                <span class="lab">Add the lines</span>
+                <span class="xsmall muted">Scan, or type a catalogue number</span>
+              </div>
+              <div class="sheet-scan">
+                <input type="text" id="e-scan" placeholder="scan a barcode…" aria-label="Scan to add a line">
+                <div class="samples">
+                  <span class="lab" style="flex:none">Try</span>
+                  <button class="chip" data-code="081227971609">081227971609</button>
+                  <button class="chip" data-code="075992511018">075992511018</button>
+                  <button class="chip" data-code="888751545519">888751545519</button>
+                  <button class="chip" data-code="060758004321">060758004321</button>
+                  <button class="chip" data-code="4AD-0317">4AD-0317 <span class="count">cat no.</span></button>
+                  <button class="chip" data-code="9999999999999">9999999999999 <span class="count">no match</span></button>
+                </div>
+              </div>
+              <table class="sheet">
+                <thead>
+                  <tr><th style="width:56px">Qty</th><th>Item</th><th>Cat no.</th><th class="r">Sell price</th><th class="r" style="width:34px"></th></tr>
+                </thead>
+                <tbody id="e-body"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ============ TRACK 3 — the line, or the batch ============ -->
+      <aside class="acct" aria-label="The selected line">
+        <div style="display:flex;flex-direction:column;min-height:0;flex:1" id="right"></div>
+      </aside>
+
+    </div>
+  </div>
+
+  <div class="notes">
+
+    <section class="note wide">
+      <h2>What M-02 now says</h2>
+      <div class="warnbox">
+        <p><strong>The layout needs no decisions.</strong> Three tracks, a retractable slab and a sticky right column are how this app already works — E-05 d29 by way of E-02 d38, E-07 d17 and M-01 d17. Folding the two modals into track 3 changes no behaviour: <em>Set status</em> and <em>Re-flag</em> do exactly what <span class="cite">d12, d22, d8, d18</span> already say, in a place that does not cover the table.</p>
+        <p><strong>Bulk entry took four rows, and every one is an extension rather than a supersession.</strong> M-02 d1 says ordering is two-stage — Employees raise pending lines, Managers process them into POs. A line recorded as already placed is <strong>born placed</strong> and never passes through Phase 1; d1 does not forbid that, it never contemplated it. <strong>d28 is the one that came out of review</strong>, and it makes the sheet better than the version that went in: the same scan sheet also raises <em>pending</em> lines, which is plain Phase 1 by another door and therefore needs <em>less</em> justification than d25's route, not more.</p>
+        <p><strong>What it is worth.</strong> Not paperwork tidiness. <span class="cite">d20</span> makes a receiving scan attach automatically to a matching PO line for that supplier and carry its expected cost and quantity forward. Without these lines on file, a box from a website order arrives as a <em>cold invoice</em> — fully supported <span class="cite">(E-02:17)</span>, but every line is priced and picked by hand. With them, it receives like any other PO. That is the argument, and it is a receiving argument, not an ordering one.</p>
+      </div>
+
+      <table class="props">
+        <tr><th style="width:104px">Proposed row</th><th>Wording</th></tr>
+        <tr>
+          <td>M-02 d25</td>
+          <td><strong>An order placed outside the system may be recorded directly as placed lines, without passing through Phase 1.</strong> <strong>Extends decision 1</strong>, which describes how an order <em>leaves</em> through the system and was written before ordering on a supplier's website was a case anyone had to enter afterwards — <code>Their Website</code> is one of M-01's <em>Order via</em> values and Indie Direct Supply is seeded with it. The lines carry the supplier's own reference as the PO number, which d16 already permits (free-text, need not be numeric, and auto-numbering skips it). The separator is not offered: d3's streams are a property of the pending pile, and these lines were never in one. Recording is <strong>manager-only</strong> — the lexicon defines a PurchaseOrder as a Manager-created reorder. <em>Accepted consequence:</em> nothing verifies that the order was really placed, so a mistyped reference is a PO that will never be received against and will sit on this screen ageing until someone cancels it.</td>
+        </tr>
+        <tr>
+          <td>M-02 d26</td>
+          <td><strong>A recorded-elsewhere order carries the date it was actually placed, not the date it was typed.</strong> The follow-up window <span class="cite">(d8)</span> runs from that date, the age column and age sort <span class="cite">(step 9)</span> read from it, and d19's overdue grouping therefore lands correctly on the first render. Stamping <em>now</em> would make a nine-day-old order look new, which is precisely the failure this screen exists to prevent. <em>Accepted consequence:</em> a line can be <strong>overdue the moment it is entered</strong> — correct, and the screen should show it that way rather than hiding it for a grace period.</td>
+        </tr>
+        <tr>
+          <td>M-02 d27</td>
+          <td><strong>Recording an order queues the catalogue metadata prefetch, the same as processing a stream does.</strong> Step 8 says prefetch is queued <em>on placement</em>; this is a placement. Without it, the one case bulk entry exists to serve — receiving a box against a website order — is also the case that misses locally on every scan and falls back to live lookup <span class="cite">(M-02 Inherited, A-12a)</span>. <em>Not a new obligation</em>, an explicit reading of step 8 for a placement route it predates.</td>
+        </tr>
+        <tr>
+          <td>M-02 d28 <span class="badge ok">recorded</span></td>
+          <td><strong>The bulk entry sheet has two destinations, chosen at its head: raise the lines as <em>pending</em>, or record them as already <em>placed</em> (d25).</strong> Three things follow from the choice rather than being separately configurable. The <strong>separator</strong> is offered only for pending — d3's streams are a property of the pending pile, and a line born placed was never in one. The <strong>PO reference and placed-on date</strong> are offered only for placed. And the <strong>gate differs</strong>: raising pending lines is an Employee action <span class="cite">(d1)</span>, recording a PurchaseOrder is manager-only <span class="cite">(lexicon)</span> — toggle the viewer above and watch the placed option go away. The destination sits at the head rather than as a second button at the foot so no field on screen is ever about to be silently discarded. Switching keeps whatever is already scanned. <em>Accepted consequence:</em> the sheet has no stock context, so bulk raising can create a second pending line for a title already on order.</td>
+        </tr>
+      </table>
+    </section>
+
+    <section class="note">
+      <h2>What each track is for</h2>
+      <dl>
+        <dt>Left — the order slab (retractable)</dt>
+        <dd>Search and scan at the top, then the chips, then the sort, then <strong>the open POs</strong>. Two controls that do different jobs and look different: <strong>chips filter lines</strong> (their counts are lines), <strong>a PO row scopes</strong> the middle to that order (its figure is that order's outstanding lines). <em>Everything on order</em> is a permanent first row, not a state you have to find your way back to — step 9 says this screen lists lines oldest first <em>across</em> everything, and a slab that made you pick a PO first would quietly retire that. Shut, a 52px strip carries the new-order button, an overdue badge, and the POs tiled by their number's tail.</dd>
+        <dt>Middle — the lines</dt>
+        <dd>The table, essentially as it is, with the overdue group banded rather than silently floated to the top — d19 calls overdue-first a fixed <em>grouping</em>, so it should look like one. Each row is a button. Age is the first column and the biggest thing in the row, because age is what this screen is about.</dd>
+        <dt>Right — the line (sticky)</dt>
+        <dd>Who is waiting, how old it is, what it is, what has happened to it, and the one thing to do next. Both modals collapse into it.</dd>
+      </dl>
+    </section>
+
+    <section class="note">
+      <h2>Why "who is waiting" outranks the age</h2>
+      <p>Same reason Waiting outranks the balance on the Customer card <span class="cite">(E-07 d19, E-05 d7)</span> and in-flight outranks A/P on the Supplier card. A late line nobody is waiting on is a supplier problem you get to when you get to it. A late line with a customer's name on it is <strong>a phone call you owe a person</strong>, and d8 says the follow-up flag is used for exactly that — "to chase the supplier <em>and</em> to warn a waiting customer".</p>
+      <p>The band is also the tie back to E-07: a customer-attached line's status is read on the Customer's card <span class="cite">(M-02 Inherited, E-07 d19)</span>. Same fact, two screens; this is the one where you can act on it.</p>
+    </section>
+
+    <section class="note">
+      <h2>The foot is a ladder</h2>
+      <p>E-07 d20 made the Customer card's primary action a ladder, and M-01 followed it. Here, with a line selected:</p>
+      <ol>
+        <li><strong>Re-flag</strong> — the line is overdue. Chasing it is the errand, and d18 makes that a fresh <span class="mono">today + n</span> window rather than an extension of a deadline already in the past.</li>
+        <li><strong>Set status</strong> — not overdue. Shipped with their date, Backordered, or Cancelled <span class="cite">(d12, d22)</span>. The other of the two rides underneath as the secondary.</li>
+      </ol>
+      <p>With <em>no</em> line selected, the foot belongs to the scope instead — <strong>Bulk status update</strong> and <strong>Void this PO</strong> for a scoped order, both recorded in M-02's <em>Cancelling and unwinding</em> table and neither of which has a home in the current screen. On <em>Everything</em>, the foot is the new-order button.</p>
+      <p>Every one of them carries d10's warning where it is read rather than where it is filed: <strong>none of this tells the supplier anything.</strong></p>
+    </section>
+
+    <section class="note">
+      <h2>The log stops being a secret</h2>
+      <p>d23 says every status change is logged on the line — when, what it moved from and to, who did it — because "when did this become backordered" is a question somebody asks a week later. Today that log is <strong>inside the Set status modal</strong>: to read the history you have to open the thing that changes it, which is the wrong door, and you cannot read it next to the line's figures at all.</p>
+      <p>In the right track it sits on the floor of the scroll, the same place History sits on the Customer card <span class="cite">(E-07 d16)</span> and the Log on the Supplier card <span class="cite">(M-01 d4)</span>. Receipt writes to the same log <span class="cite">(d23)</span>, so a part-received line reads as one sequence — which is the only way "2 of 5" ever explains itself.</p>
+    </section>
+
+    <section class="note">
+      <h2>Why bulk entry is a mode, not a panel</h2>
+      <p>Your instinct to put it on the right was the right question and, I think, the wrong slot. The right track on every screen in this app means one thing: <strong>the standing state of whatever is in the middle, and the one action to take on it.</strong> An unrelated entry form parked there would be the first time it meant something else — and 344px is a bad place to scan twenty records into.</p>
+      <p>As a <em>mode</em>, the rule holds in both states. The middle becomes the sheet you are filling; the right becomes that batch's standing — supplier, reference, lines, units, retail, estimated cost against the supplier's minimum — and the foot becomes <em>Place n lines</em>. Nothing about what a track means has to change.</p>
+      <p>It also answers the thing you were unsure about. <strong>Create-new-order does not belong here</strong>, and you were right to doubt it: raising a line is Phase 1, it happens from the titlecard where you can see stock and price <span class="cite">(E-04, M-02 step 1)</span>, and duplicating it here would be a second door to a decided flow. Bulk entry is not that door — it is a different errand that happens to end in the same place.</p>
+    </section>
+
+    <section class="note">
+      <h2>What the estimated cost is, and is not</h2>
+      <p>The batch figure applies the Supplier's <strong>Discount</strong> to the sell total, which is what M-02 step 4 says estimated cost is. Two things it does not know, both worth saying on the screen rather than discovering at receiving:</p>
+      <ul>
+        <li><strong>It is not what you will be invoiced.</strong> Freight, tax and misc stay at Invoice level and are never allocated to items <span class="cite">(E-02:100)</span>. The estimate is goods only.</li>
+        <li><strong>Discount is the margin field</strong> — there is no separate one <span class="cite">(M-01 d7 superseded)</span> — so a wrong discount on the Supplier card makes every estimate here wrong in the same direction. Setting it is manager-only <span class="cite">(M-01 d11, E-02 d44, A-28a)</span>; reading it is not <span class="cite">(M-01 d16)</span>.</li>
+      </ul>
+      <p>The minimum-order readiness line is shown for the same reason M-02 step 4 shows it on the processing screen — except here it is <em>informational only</em>, because the order has already been placed. Nothing gates on it. A batch below the supplier's minimum is a fact about an order that already exists.</p>
+    </section>
+
+    <section class="note">
+      <h2>Two destinations, one sheet</h2>
+      <p>The sheet was built for orders placed on a supplier's website. The obvious next question — <em>why can't it also raise a normal order?</em> — turns out to have a better answer than "it can't". <strong>Raising pending lines in bulk is plain Phase 1.</strong> d1 says Employees raise pending lines; steps 1&ndash;3 describe the titlecard door without ever making it the only one. The pending destination needs <em>less</em> justification than the placed one.</p>
+      <p><strong>It also gives the separator its job back.</strong> The first pass said the separator had no work here, and for the placed route that is still true — d3's streams are a property of the <em>pending</em> pile. A bulk-raised pending batch is exactly such a stream. So the field is not a special case: it appears when the destination is pending and is absent when it is placed, which is the field working as specified.</p>
+      <p><strong>Why the choice is at the head, not a second button at the foot.</strong> The two routes need different fields. A foot-level <em>add to pending</em> would silently discard a PO reference and a placed-on date you had already typed — and an order somebody believes is placed, sitting quietly in the pending pile, is a worse failure than any keystroke it saves. At the head the fields follow the choice, the foot button says exactly what will happen, and the scan-first-decide-after instinct survives: flip the toggle whenever you like, the lines stay.</p>
+      <p><strong>The gate falls out for free.</strong> A PurchaseOrder is manager-created; a pending line is not. So an Employee is offered one destination and a Manager both — two routes that genuinely differ rather than one route with a switch.</p>
+    </section>
+
+    <section class="note">
+      <h2>Leaving is not discarding</h2>
+      <p><strong>Cancel was one button doing two jobs.</strong> It read as destructive and behaved as <em>back</em> — it dropped you on the on-order list and the batch went with it, unannounced. Either meaning is defensible; having both in one control is not, and the failure is silent in both directions: you press it meaning <em>back</em> and lose a stack, or you press it meaning <em>throw this away</em> and it quietly survives.</p>
+      <p>So there are two controls. <strong>← Leave open</strong> keeps every line and hands you back the on-order screen. <strong>Discard batch</strong> asks first, and the question names what it is about to destroy — <em>"3 lines (7 units) will be thrown away"</em> — because a confirmation that does not say what it costs is a dialog people learn to dismiss. Discarding an <em>empty</em> batch asks nothing: there is nothing to lose, and a prompt that always answers itself is how people stop reading prompts.</p>
+      <p><strong>Leaving only works if you can get back.</strong> An open batch is announced where you left from: the slab's action button becomes <em>↩ Resume batch — 3 lines</em>, and the shut strip's tile carries the count. That is the half your instinct was pointing at, and it is the half that makes <em>leave</em> safe — a batch you can leave but cannot find again is a batch you have lost.</p>
+      <p>The shape is not new. <span class="cite">E-02 d4</span> already says a draft Invoice is <strong>"draft-persisted and resumable; deletable before finalize"</strong>, for exactly this reason: a stack half scanned at the counter gets interrupted by whoever walks up next. An order draft is that same thing on the ordering side, so <strong>d30 borrows the shape rather than inventing one</strong>.</p>
+      <p><strong>It comes with a bill, and the bill is paid in M-01.</strong> Anything that persists can be forgotten, and a forgotten draft going stale in silence is precisely what M-01 d14's in-flight band exists to catch — which is why an open order draft now joins that band as a fourth kind, alongside draft Invoices, open POs and Pending claims. That commitment is written into <em>M-01's</em> Inherited section, not left sitting in M-02 where the screen that has to honour it would never see it.</p>
+    </section>
+
+    <section class="note">
+      <h2>The mark, and why it never blocks</h2>
+      <p>d28 left the sheet blind: no on hand, no minimum on hand, no sight of an existing line. d29 gives back the one piece that actually costs money to miss — <strong>this title is already outstanding with this supplier</strong> — and gives it back as a <em>mark</em>.</p>
+      <p><strong>Not a block, because the sheet cannot know whether the duplicate is a mistake.</strong> Ordering more of something already on order is ordinary when the first order is late, short, or backordered <span class="cite">(d12)</span>. A block would refuse a legitimate order with no way through, and the workaround people find for that is to stop using the sheet.</p>
+      <p>So the mark <strong>names the line</strong> — <em>"Already on order — IDS-88213, ordered, 9d, 3 outstanding"</em> — rather than showing a warning triangle. A bare "duplicate!" tells you to go somewhere else and look it up; the PO number, the state and the age let you decide where you stand. The batch panel counts how many are marked, so a long sheet does not hide them below the fold.</p>
+      <p><strong>What stays open:</strong> whether the titlecard route shows the same mark. It has the stock context this sheet lacks, so it <em>can</em> — but nothing says it does, and a shop that learns to trust the mark in one place will be surprised by its absence in the other. Recorded as an open question on M-02 rather than assumed.</p>
+    </section>
+
+    <section class="note">
+      <h2>Whose currency each figure is in</h2>
+      <p>The first draft of this mock printed the retail total in the Supplier's currency. That is wrong, and M-01 d14 already says so: <strong>"a foreign-currency Supplier shows its own currency; the store equivalent needs the configured rate <span class="cite">(M-06)</span> and is not invented."</strong> The rule cuts both ways — ours is not to be shown as theirs either.</p>
+      <p>So: <strong>sell price and retail are ours, always CAD</strong>, because a sell price is a shelf price. <strong>Estimated cost is also CAD</strong>, because M-02 step 4 derives it from our retail less their discount — it is a store-currency number that happens to approximate a foreign invoice. Indie Direct Supply will invoice in <span class="mono">USD</span>, the screen says so, and <strong>nothing here converts</strong>. The prototype is already honest about this in Accounts Payable <span class="cite">(prototype.md:161)</span>; this screen should not be the one that starts inventing rates.</p>
+      <p><strong>One gap fell out of fixing it.</strong> M-01 gives a Supplier's minimum order amount a <em>basis</em> — Net or Retail — but <strong>no currency</strong>. Indie's minimum of 250 is therefore a bare number, and the mock shows it bare rather than picking a currency for it. Small, and only informational on this screen, but it is a real unstated field on a screen where it <em>does</em> gate <span class="cite">(M-02 step 4)</span>.</p>
+    </section>
+
+    <section class="note">
+      <h2>Open, and deliberately left open</h2>
+      <ul>
+        <li><strong>A reference that collides with one of ours.</strong> <code>poNumberTaken</code> exists <span class="cite">(AppStore.tsx:687)</span> and the field rejects a duplicate — but d16 only says auto-numbering <em>skips</em> a manually entered number. Whether a collision should be refused outright or merged into the existing PO is not decided, and this mock refuses it without claiming that is the answer.</li>
+        <li><strong>Duplicate raising.</strong> d28's accepted consequence: the sheet cannot see stock or existing lines, so nothing stops a second pending line for a title already on order. Whether it should warn — and whether that warning blocks or merely marks — is now an open question on M-02. It is <em>adjacent to</em> the duplicate-suppression half of <em>Reorder suggestion</em>, which is about generated suggestions rather than a person scanning a stack.</li>
+        <li><strong>A scan that matches nothing.</strong> The record has to exist before a line can point at it. Whether bulk entry can mint a Record inline or must send you to E-04 first is undecided; the mock says so and stops.</li>
+        <li><strong>Customer attachment on a bulk line.</strong> d13 creates a Held Sale on receipt of a customer-attached line. Nothing says an entered-after-the-fact line cannot carry one, and it plainly could — but the whole point of this sheet is speed, and a per-line customer picker is the slowest field there is. Left off, and named here rather than quietly dropped.</li>
+        <li><strong>Order acknowledgements</strong> <span class="cite">(M-02, open)</span> is untouched. Recording an order placed elsewhere is not the same as knowing the supplier has it.</li>
+      </ul>
+    </section>
+
+  </div>
+</div>
+
+<script>
+// ---------------------------------------------------------------------------
+// Seed. Suppliers match prototype/src/data/seed.ts; the orders are invented for
+// the mock. Today is fixed so the ages and overdue states are stable.
+// ---------------------------------------------------------------------------
+const TODAY = new Date("2026-09-12T10:00:00");
+const DAY = 86400000;
+
+const SUPPLIERS = {
+  fab:   { code: "FAB1", name: "F.A.B. Distribution",    via: "Rep",           disc: 60, minQty: 25, minAmt: 0,   cur: "CAD" },
+  indi:  { code: "INDI", name: "Indie Direct Supply",    via: "Their Website", disc: 50, minQty: 0,  minAmt: 250, cur: "USD" },
+  crat:  { code: "CRAT", name: "Crate Digger Wholesale", via: "Email",         disc: 40, minQty: 10, minAmt: 0,   cur: "CAD" },
+};
+
+// The catalogue, only as much of it as a scan needs to resolve.
+const CATALOG = [
+  { id: "r1",  artist: "Joni Mitchell", title: "Blue",                          cat: "ASYL-1003",   upc: "081227971609", price: 34.99 },
+  { id: "r2",  artist: "Prince",        title: "Purple Rain",                   cat: "WB-25110",    upc: "075992511018", price: 39.99 },
+  { id: "r3",  artist: "Miles Davis",   title: "Kind of Blue",                  cat: "CL-1355",     upc: "888751545519", price: 32.50 },
+  { id: "r4",  artist: "Talk Talk",     title: "Spirit of Eden",                cat: "EMI-3479",    upc: "",             price: 44.00 },
+  { id: "r5",  artist: "Patti Smith",   title: "Horses",                        cat: "ARI-4066",    upc: "060758004321", price: 29.99 },
+  { id: "r6",  artist: "Nina Simone",   title: "Pastel Blues",                  cat: "PHIL-600187", upc: "",             price: 36.00 },
+  { id: "r7",  artist: "The Clash",     title: "London Calling",                cat: "CBS-88478",   upc: "",             price: 42.00 },
+  { id: "r8",  artist: "Aphex Twin",    title: "Selected Ambient Works 85–92",  cat: "AMB-3922",    upc: "",             price: 38.00 },
+  { id: "r9",  artist: "Björk",         title: "Homogenic",                     cat: "ONE-LP-7",    upc: "",             price: 35.00 },
+  { id: "r10", artist: "Big Thief",     title: "Dragon New Warm Mountain",      cat: "4AD-0317",    upc: "",             price: 46.00 },
+  { id: "r11", artist: "Alvvays",       title: "Blue Rev",                      cat: "POLY-0221",   upc: "",             price: 33.99 },
+  { id: "r12", artist: "Yo La Tengo",   title: "I Can Hear the Heart",          cat: "MAT-OLE-222", upc: "",             price: 41.50 },
+];
+const rec = (id) => CATALOG.find((r) => r.id === id);
+
+// Placed order lines. `recv` is what has been taken in against the line across
+// every Invoice (E-02 d30) — derived in the real thing, seeded here.
+const LINES = [
+  { id: "l1",  po: "PO-1042", sup: "fab",  rid: "r1",  qty: 3, recv: 0, placed: "2026-08-22", flagDays: 14, flagAt: "2026-08-22",
+    log: [["22/08 09:14", "Placed on PO-1042 by R. Duval"]] },
+  { id: "l2",  po: "PO-1042", sup: "fab",  rid: "r2",  qty: 2, recv: 0, placed: "2026-08-22", flagDays: 14, flagAt: "2026-08-22",
+    status: "Backordered", cust: "Maya Okonkwo",
+    log: [["22/08 09:14", "Placed on PO-1042 by R. Duval"], ["01/09 16:22", "Ordered → Backordered by T. Mensah — rep says label reprint, no date given"]] },
+  { id: "l3",  po: "PO-1042", sup: "fab",  rid: "r3",  qty: 5, recv: 2, placed: "2026-08-22", flagDays: 21, flagAt: "2026-08-22",
+    log: [["22/08 09:14", "Placed on PO-1042 by R. Duval"], ["04/09 11:40", "2 of 5 received against Invoice FAB-77120 by T. Mensah"]] },
+  { id: "l4",  po: "PO-1042", sup: "fab",  rid: "r4",  qty: 1, recv: 0, placed: "2026-08-22", flagDays: 21, flagAt: "2026-08-22",
+    status: "Shipped", expected: "15/09/2026",
+    log: [["22/08 09:14", "Placed on PO-1042 by R. Duval"], ["08/09 08:55", "Ordered → Shipped by R. Duval — their expected date 15/09/2026"]] },
+
+  { id: "l5",  po: "PO-1044", sup: "crat", rid: "r5",  qty: 2, recv: 0, placed: "2026-09-02", flagDays: 7,  flagAt: "2026-09-02",
+    cust: "Errol Vance",
+    log: [["02/09 14:02", "Placed on PO-1044 by R. Duval"]] },
+  { id: "l6",  po: "PO-1044", sup: "crat", rid: "r6",  qty: 1, recv: 0, placed: "2026-09-02", flagDays: 14, flagAt: "2026-09-02",
+    log: [["02/09 14:02", "Placed on PO-1044 by R. Duval"]] },
+  { id: "l7",  po: "PO-1044", sup: "crat", rid: "r7",  qty: 4, recv: 0, placed: "2026-09-02", flagDays: 14, flagAt: "2026-09-02",
+    status: "Shipped", expected: "16/09/2026",
+    log: [["02/09 14:02", "Placed on PO-1044 by R. Duval"], ["09/09 10:11", "Ordered → Shipped by T. Mensah — their expected date 16/09/2026"]] },
+
+  { id: "l8",  po: "PO-1045", sup: "fab",  rid: "r8",  qty: 2, recv: 0, placed: "2026-09-08", flagDays: 14, flagAt: "2026-09-08",
+    log: [["08/09 09:30", "Placed on PO-1045 by R. Duval"]] },
+  { id: "l9",  po: "PO-1045", sup: "fab",  rid: "r9",  qty: 1, recv: 0, placed: "2026-09-08", flagDays: 10, flagAt: "2026-09-08",
+    cust: "Sofia Brandt",
+    log: [["08/09 09:30", "Placed on PO-1045 by R. Duval"]] },
+
+  // Placed on the supplier's website, recorded here afterwards — the case the
+  // bulk-entry mode exists for. Indie Direct Supply's Order via IS Their Website.
+  { id: "l10", po: "IDS-88213", sup: "indi", rid: "r10", qty: 3, recv: 0, placed: "2026-09-03", flagDays: 14, flagAt: "2026-09-03", ext: true,
+    log: [["04/09 17:45", "Recorded as placed on IDS-88213 by R. Duval — ordered 03/09 on their website"]] },
+  { id: "l11", po: "IDS-88213", sup: "indi", rid: "r11", qty: 2, recv: 0, placed: "2026-09-03", flagDays: 14, flagAt: "2026-09-03", ext: true,
+    log: [["04/09 17:45", "Recorded as placed on IDS-88213 by R. Duval — ordered 03/09 on their website"]] },
+  { id: "l12", po: "IDS-88213", sup: "indi", rid: "r12", qty: 1, recv: 0, placed: "2026-09-03", flagDays: 7, flagAt: "2026-09-03", ext: true,
+    cust: "Devi Ramaswamy",
+    log: [["04/09 17:45", "Recorded as placed on IDS-88213 by R. Duval — ordered 03/09 on their website"]] },
+];
+
+// ---------------------------------------------------------------------------
+// Derivations. Everything the real screen computes rather than stores.
+// ---------------------------------------------------------------------------
+const dayOf = (iso) => new Date(iso + "T10:00:00");
+const daysBetween = (a, b) => Math.round((b - a) / DAY);
+const ageOf = (l) => daysBetween(dayOf(l.placed), TODAY);
+const outstanding = (l) => Math.max(0, l.qty - l.recv);                      // E-02 d30
+const dueAt = (l) => (l.flagDays == null ? null : dayOf(l.flagAt).getTime() + l.flagDays * DAY); // d18
+const overdueBy = (l) => { const d = dueAt(l); return d == null ? 0 : Math.floor((TODAY - d) / DAY); };
+const isLate = (l) => l.status !== "Cancelled" && overdueBy(l) > 0;          // d19
+
+// The one label a line wears (lib/orderLines.ts). A set status wins over a
+// derived one, except that receipt is counted and wins over everything.
+function stateOf(l) {
+  if (l.status === "Cancelled") return "Cancelled";
+  if (l.recv >= l.qty) return "Received";
+  if (l.recv > 0) return "Part received";
+  if (l.status) return l.status;
+  return l.po ? "Ordered" : "Pending";
+}
+const toneOf = (s) => ({ Backordered: "warn", Cancelled: "danger", Shipped: "ok", "Part received": "warn" }[s] || "");
+const dotOf = (l) => (isLate(l) ? "late" : l.status === "Backordered" ? "back" : l.status === "Shipped" ? "ship" : "plain");
+// M-01 d14 — a foreign-currency Supplier shows its OWN currency, and the store
+// equivalent "needs the configured rate (M-06) and is not invented". So: sell
+// price and retail are OURS and always store currency; only a figure the
+// SUPPLIER will invoice wears theirs. Nothing here converts between them.
+const STORE_CUR = "CAD";
+const money = (n, cur) => (cur === "USD" ? "US$" : "$") + n.toFixed(2);
+const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+
+// ---------------------------------------------------------------------------
+// State
+// ---------------------------------------------------------------------------
+const S = {
+  mode: "track",
+  slabOpen: true,
+  q: "",
+  chip: "all",
+  sort: "age",
+  scope: "all",        // "all" | a PO number
+  sel: null,           // selected line id
+  role: "manager",
+  entry: { sup: "indi", dest: "placed", po: "", sep: "", date: "2026-09-12", flag: 14, lines: [], err: "" },
+  lastAdded: null,
+};
+
+const $ = (id) => document.getElementById(id);
+
+function toast(msg) {
+  const t = $("toast");
+  t.textContent = msg;
+  t.hidden = false;
+  clearTimeout(toast._t);
+  toast._t = setTimeout(() => (t.hidden = true), 2600);
+}
+
+// Search is over everything the row can show, plus what a scan fills the box
+// with — so a scanned line and a typed one find the same row.
+function matches(l, q) {
+  if (!q) return true;
+  const r = rec(l.rid), s = SUPPLIERS[l.sup];
+  return [r.artist, r.title, r.artist + " — " + r.title, r.cat, r.upc, l.po, s.name, s.code]
+    .filter(Boolean).some((f) => String(f).toLowerCase().includes(q));
+}
+
+const CHIPS = [
+  { k: "all",   label: "All" },
+  { k: "late",  label: "Overdue", hot: true, test: isLate },
+  { k: "ship",  label: "Shipped",     test: (l) => l.status === "Shipped" },
+  { k: "back",  label: "Backordered", test: (l) => l.status === "Backordered" },
+  { k: "part",  label: "Part rec'd",  test: (l) => l.recv > 0 && l.recv < l.qty },
+  { k: "cust",  label: "Waiting",     test: (l) => Boolean(l.cust) },
+];
+
+/** Lines surviving search + chip. The PO scope is applied after, so the chip
+    counts describe the whole file rather than the current scope — otherwise a
+    chip reading 3 can filter to nothing. */
+function searched() {
+  const q = S.q.trim().toLowerCase();
+  return LINES.filter((l) => outstanding(l) > 0 && l.status !== "Cancelled" && matches(l, q));
+}
+function chipped(rows) {
+  const c = CHIPS.find((x) => x.k === S.chip);
+  return c && c.test ? rows.filter(c.test) : rows;
+}
+function scoped(rows) {
+  return S.scope === "all" ? rows : rows.filter((l) => l.po === S.scope);
+}
+
+const cmp = (a, b) => {
+  if (S.sort === "age") return dayOf(a.placed) - dayOf(b.placed);
+  const ra = rec(a.rid), rb = rec(b.rid);
+  return S.sort === "title" ? ra.title.localeCompare(rb.title) : ra.artist.localeCompare(rb.artist);
+};
+
+/** d19 — overdue is a fixed GROUPING, and each group is sorted by whatever the
+    current sort is. Not a separate sort mode. */
+function grouped(rows) {
+  return { late: rows.filter(isLate).sort(cmp), rest: rows.filter((l) => !isLate(l)).sort(cmp) };
+}
+
+function openPOs() {
+  const live = searched();
+  const seen = new Map();
+  for (const l of LINES) {
+    if (outstanding(l) <= 0 || l.status === "Cancelled") continue;
+    if (!seen.has(l.po)) seen.set(l.po, { po: l.po, sup: l.sup, ext: l.ext, lines: [], oldest: l.placed });
+    const g = seen.get(l.po);
+    g.lines.push(l);
+    if (dayOf(l.placed) < dayOf(g.oldest)) g.oldest = l.placed;
+    g.matched = g.lines.some((x) => live.includes(x));
+  }
+  return [...seen.values()].sort((a, b) => dayOf(a.oldest) - dayOf(b.oldest));
+}
+
+// ---------------------------------------------------------------------------
+// Render — track 1
+// ---------------------------------------------------------------------------
+function renderChips() {
+  const base = searched();
+  $("chips").innerHTML = CHIPS.map((c) => {
+    const n = c.test ? base.filter(c.test).length : base.length;
+    const on = S.chip === c.k;
+    return `<button class="chip${c.hot ? " hot" : ""}${on ? " on" : ""}" data-chip="${c.k}"${n === 0 && c.test ? " disabled" : ""}>${c.label}<span class="count">${n}</span></button>`;
+  }).join("");
+}
+
+function renderSlabList() {
+  const pos = openPOs();
+  const all = searched();
+  const lateAll = all.filter(isLate).length;
+
+  let html = `
+    <button class="po all${S.scope === "all" ? " on" : ""}" data-po="all">
+      <span class="code">ALL</span>
+      <span class="t">Everything on order</span>
+      <span class="m">${pos.length} open PO${pos.length === 1 ? "" : "s"} · oldest ${ageOf([...all].sort(cmp)[0] || all[0] || { placed: "2026-09-12" })}d</span>
+      <span class="n${lateAll ? " late" : ""}">${all.length}</span>
+      <span class="k">${lateAll ? lateAll + " overdue" : "lines"}</span>
+    </button>`;
+
+  for (const g of pos) {
+    const s = SUPPLIERS[g.sup];
+    const late = g.lines.filter(isLate).length;
+    const tail = g.po.split("-").pop().slice(-4);
+    const dim = !g.matched ? ' style="opacity:.42"' : "";
+    html += `
+      <button class="po${g.ext ? " ext" : ""}${S.scope === g.po ? " on" : ""}" data-po="${esc(g.po)}"${dim}>
+        <span class="code">${esc(tail)}</span>
+        <span class="t">${esc(g.po)}${g.ext ? ' <span class="badge mono" style="font-size:9px;padding:0 3px">their ref</span>' : ""}</span>
+        <span class="m"><span class="st-dot ${late ? "late" : g.lines.some((l) => l.status === "Backordered") ? "back" : g.lines.every((l) => l.status === "Shipped") ? "ship" : "plain"}"></span> ${esc(s.code)} · ${ageOf({ placed: g.oldest })}d old</span>
+        <span class="n${late ? " late" : ""}">${g.lines.length}</span>
+        <span class="k">${late ? late + " overdue" : "lines"}</span>
+      </button>`;
+  }
+  $("slab-list").innerHTML = html;
+
+  // the shut strip
+  $("strip-badge").textContent = lateAll;
+  $("strip-stack").innerHTML = pos.map((g) => {
+    const late = g.lines.filter(isLate).length;
+    return `<button class="tile${S.scope === g.po ? " on" : ""}" data-po="${esc(g.po)}" title="${esc(g.po)}">${esc(g.po.split("-").pop().slice(-4))}<span class="st-dot ${late ? "late" : "plain"}"></span></button>`;
+  }).join("");
+}
+
+// ---------------------------------------------------------------------------
+// Render — track 2 (tracking)
+// ---------------------------------------------------------------------------
+function lineRow(l) {
+  const r = rec(l.rid), s = SUPPLIERS[l.sup], st = stateOf(l), out = outstanding(l);
+  const late = isLate(l), by = overdueBy(l), due = dueAt(l);
+  const followUp = late
+    ? `<span class="badge danger">Overdue ${by}d</span>`
+    : due == null ? `<span class="xsmall muted">no flag</span>`
+    : `<span class="xsmall muted">chase in ${Math.ceil((due - TODAY) / DAY)}d</span>`;
+  return `
+    <button class="lrow${late ? " late" : ""}${S.sel === l.id ? " on" : ""}" data-line="${l.id}">
+      <span class="age">${ageOf(l)}<em>days</em></span>
+      <span class="t">${esc(r.artist)} — ${esc(r.title)}</span>
+      <span class="m">${esc(s.code)} · <span class="mono">${esc(l.po)}</span> · ${esc(r.cat)}${l.cust ? ` · <span class="who">${esc(l.cust)} waiting</span>` : ""}${l.expected ? ` · due ${esc(l.expected)}` : ""}</span>
+      <span class="q"><span class="v">${out}</span><span class="k">${out !== l.qty ? "of " + l.qty : "outst."}</span></span>
+      <span class="s"><span class="badge ${toneOf(st)}">${st}</span><br>${followUp}</span>
+    </button>`;
+}
+
+function renderLines() {
+  const rows = scoped(chipped(searched()));
+  const { late, rest } = grouped(rows);
+  const scopeName = S.scope === "all" ? "Everything on order" : S.scope;
+
+  $("main-title").textContent = scopeName;
+
+  const badges = [];
+  if (S.scope === "all") {
+    badges.push(`<span class="badge mono">${rows.length} line${rows.length === 1 ? "" : "s"}</span>`);
+    badges.push(`<span class="badge">${rows.reduce((n, l) => n + outstanding(l), 0)} units outstanding</span>`);
+  } else {
+    const g = openPOs().find((x) => x.po === S.scope);
+    const s = SUPPLIERS[g.sup];
+    badges.push(`<span class="badge ink">${esc(s.name)}</span>`);
+    badges.push(`<span class="badge mono">placed ${ageOf({ placed: g.oldest })}d ago</span>`);
+    if (g.ext) badges.push(`<span class="badge accent">recorded — placed on their website</span>`);
+  }
+  if (late.length) badges.push(`<span class="badge danger">${late.length} overdue</span>`);
+  if (S.chip !== "all") badges.push(`<span class="badge accent">filtered — ${CHIPS.find((c) => c.k === S.chip).label}</span>`);
+  $("main-badges").innerHTML = badges.join("");
+
+  $("main-acts").innerHTML = S.scope === "all"
+    ? ""
+    : `<button class="btn sm" data-act="bulk">Bulk status</button><button class="btn sm danger" data-act="void">Void PO</button>`;
+
+  let html = "";
+  if (!rows.length) {
+    html = `<div class="slab-empty" style="padding-top:var(--sp-6)">Nothing on order matching this.</div>`;
+  } else {
+    if (late.length) {
+      html += `<div class="grp late"><span class="lab">Past their follow-up flag</span><span class="xsmall mono">${late.length}</span></div>` + late.map(lineRow).join("");
+    }
+    if (rest.length) {
+      html += `<div class="grp"><span class="lab">${late.length ? "Still within the flag" : "On order"}</span><span class="xsmall mono">${rest.length}</span></div>` + rest.map(lineRow).join("");
+    }
+  }
+  $("lines").innerHTML = html;
+}
+
+// ---------------------------------------------------------------------------
+// Render — track 3
+// ---------------------------------------------------------------------------
+function renderRight() {
+  if (S.mode === "entry") return renderBatch();
+  const l = LINES.find((x) => x.id === S.sel);
+  return l ? renderLine(l) : renderScope();
+}
+
+function renderLine(l) {
+  const r = rec(l.rid), s = SUPPLIERS[l.sup], st = stateOf(l), out = outstanding(l);
+  const late = isLate(l), by = overdueBy(l), due = dueAt(l);
+
+  const waiting = l.cust
+    ? `<div class="waiting live">
+         <div class="lab"><span>Waiting on this</span><span class="xsmall mono">${late ? "overdue " + by + "d" : "within flag"}</span></div>
+         <div class="w-name">${esc(l.cust)}</div>
+         <div class="w-sub">${late ? "Past the flag — d8 says this window is for warning them as well as chasing the supplier." : "Their card reads this line's status too " + "(E-07 d19)."}</div>
+       </div>`
+    : `<div class="waiting none">
+         <div class="lab"><span>Waiting on this</span></div>
+         <div class="w-name" style="font-size:13px;font-weight:600">Nobody — floor stock</div>
+         <div class="w-sub">No customer attached, so no Held Sale is created on receipt <span class="cite">(d13)</span>.</div>
+       </div>`;
+
+  const figClass = late ? "late" : st === "Shipped" ? "" : due != null && due - TODAY < 3 * DAY ? "soon" : "";
+  const figure = late
+    ? `<div class="figure late">${by}</div><div class="figure-say">days past the flag</div>
+       <div class="figure-sub">Flagged for ${l.flagDays}d on ${new Date(dayOf(l.flagAt)).toLocaleDateString("en-GB")}. Nothing chases it but you.</div>`
+    : `<div class="figure ${figClass}">${ageOf(l)}</div><div class="figure-say">days on order</div>
+       <div class="figure-sub">${due == null ? "No follow-up flag set." : "Chase again in " + Math.ceil((due - TODAY) / DAY) + " days."}</div>`;
+
+  const foot = late
+    ? { primary: "Re-flag — chase again", secondary: "Set status", sub: "Re-flag sets a fresh today + n window, not an extension of a deadline already past (d18)." }
+    : { primary: "Set status", secondary: "Re-flag", sub: "Shipped carries their expected date. Nothing verifies it — a date that passes is a prompt to chase (d22)." };
+
+  $("right").innerHTML = `
+    ${waiting}
+    <div class="acct-head">
+      <div class="lab">${late ? "Overdue" : "Age"}</div>
+      ${figure}
+    </div>
+    <div class="rule"></div>
+    <div class="acct-mid">
+      <div class="sec">
+        <span class="lab">The line</span>
+        <div style="font-size:15px;font-weight:700;line-height:1.2">${esc(r.artist)} — ${esc(r.title)}</div>
+        <div class="xsmall muted mono">${esc(r.cat)}${r.upc ? " · " + esc(r.upc) : " · no barcode"}</div>
+        <div class="badges" style="margin-top:4px"><span class="badge ${toneOf(st)}">${st}</span>${l.ext ? '<span class="badge accent">their reference</span>' : ""}${l.expected ? `<span class="badge mono">due ${esc(l.expected)}</span>` : ""}</div>
+      </div>
+
+      <div class="sec">
+        <span class="lab">Standing</span>
+        <div class="standing">
+          <div class="stat"><span class="v">${l.qty}</span><span class="k">Ordered</span></div>
+          <div class="stat"><span class="v ${l.recv ? "part" : ""}">${l.recv}</span><span class="k">Received</span></div>
+          <div class="stat"><span class="v">${out}</span><span class="k">Outstanding</span></div>
+          <div class="stat"><span class="v">${money(l.sellOverride ?? r.price, STORE_CUR)}</span><span class="k">Sell price</span></div>
+          <div class="stat span"><span class="v mono">${esc(l.po)}</span><span class="k">${esc(s.name)} · ${esc(s.via)}</span></div>
+        </div>
+        ${l.recv ? `<div class="caveat">Outstanding is counted off the Invoice lines pointing back here, across every Invoice <span class="cite">(E-02 d30)</span> — not stored on the line.</div>` : ""}
+        ${s.cur !== STORE_CUR ? `<div class="caveat">Sell price is ours, in ${STORE_CUR}. ${esc(s.name)} invoices in <strong>${esc(s.cur)}</strong>; converting needs M-06's rate and is not invented here <span class="cite">(M-01 d14)</span>.</div>` : ""}
+      </div>
+
+      <div class="sec">
+        <span class="lab">History</span>
+        <div>${l.log.map(([at, text]) => `<div class="logline"><span class="at">${esc(at)}</span><span>${esc(text)}</span></div>`).join("")}</div>
+        <span class="xsmall muted">Every status change and every receipt, one sequence <span class="cite">(d23)</span>.</span>
+      </div>
+    </div>
+    <div class="acct-foot">
+      <button class="btn accent primary" data-act="primary">${foot.primary}</button>
+      <div class="foot-sub">${foot.sub}</div>
+      <button class="btn secondary" data-act="secondary">${foot.secondary}</button>
+      <button class="btn ghost secondary danger" data-act="cancel-line">Cancel this line</button>
+      <div class="foot-sub">Cancelling tells the supplier nothing — somebody still has to call them <span class="cite">(d10)</span>. The line is never deleted <span class="cite">(d21)</span>.</div>
+    </div>`;
+}
+
+function renderScope() {
+  const rows = scoped(chipped(searched()));
+  const late = rows.filter(isLate);
+  const units = rows.reduce((n, l) => n + outstanding(l), 0);
+  const retail = rows.reduce((n, l) => n + outstanding(l) * rec(l.rid).price, 0);
+  const waiting = rows.filter((l) => l.cust);
+  const isAll = S.scope === "all";
+  const g = isAll ? null : openPOs().find((x) => x.po === S.scope);
+  const s = g ? SUPPLIERS[g.sup] : null;
+
+  $("right").innerHTML = `
+    <div class="waiting${waiting.length ? " live" : " none"}">
+      <div class="lab"><span>People waiting</span><span class="xsmall mono">${waiting.length}</span></div>
+      ${waiting.length
+        ? waiting.slice(0, 3).map((l) => `<div class="w-name" style="font-size:13px">${esc(l.cust)} <span class="xsmall muted" style="font-weight:400">— ${esc(rec(l.rid).title)}${isLate(l) ? ", overdue " + overdueBy(l) + "d" : ""}</span></div>`).join("")
+        : `<div class="w-name" style="font-size:13px;font-weight:600">Nobody</div>`}
+      ${waiting.length > 3 ? `<div class="w-sub">+${waiting.length - 3} more</div>` : ""}
+    </div>
+    <div class="acct-head">
+      <div class="lab">${late.length ? "Overdue lines" : "Lines on order"}</div>
+      <div class="figure ${late.length ? "late" : ""}">${late.length || rows.length}</div>
+      <div class="figure-say">${late.length ? "past their follow-up flag" : "still expected"}</div>
+      <div class="figure-sub">${late.length ? `of ${rows.length} line${rows.length === 1 ? "" : "s"} · ${units} units outstanding` : `${units} units · ${money(retail, STORE_CUR)} at retail`}</div>
+    </div>
+    <div class="rule"></div>
+    <div class="acct-mid">
+      <div class="sec">
+        <span class="lab">${isAll ? "Across every open PO" : "This order"}</span>
+        <div class="standing">
+          <div class="stat"><span class="v">${rows.length}</span><span class="k">Lines</span></div>
+          <div class="stat"><span class="v">${units}</span><span class="k">Units</span></div>
+          <div class="stat"><span class="v">${money(retail, STORE_CUR)}</span><span class="k">Retail</span></div>
+          <div class="stat"><span class="v">${rows.length ? Math.max(...rows.map(ageOf)) : 0}d</span><span class="k">Oldest</span></div>
+          ${g ? `<div class="stat span"><span class="v mono">${esc(g.po)}</span><span class="k">${esc(s.name)} · ${esc(s.via)}${g.ext ? " · their reference" : ""}</span></div>` : ""}
+        </div>
+      </div>
+      <div class="sec">
+        <span class="lab">Pick a line</span>
+        <div class="sec-empty">Select a line in the middle to set its status, re-flag it, or read its history. The two modals live here now.</div>
+      </div>
+    </div>
+    <div class="acct-foot">
+      ${isAll
+        ? `<button class="btn accent primary" data-act="new">＋ Record an order<br>placed elsewhere</button>
+           <div class="foot-sub">For orders that went out on a supplier's website or over the phone. Proposed — M-02 d25.</div>`
+        : `<button class="btn accent primary" data-act="bulk">Bulk status update</button>
+           <div class="foot-sub">Sets every unreceived line on ${esc(S.scope)} to Cancelled or Backordered at once <span class="cite">(M-02 §Cancelling)</span>.</div>
+           <button class="btn secondary danger" data-act="void">Void ${esc(S.scope)}</button>
+           <div class="foot-sub">Manager-only. Unreceived lines return to pending; a part-received line keeps what arrived and its remainder returns as a new pending line <span class="cite">(d11, d24)</span>. Tells the supplier nothing <span class="cite">(d10)</span>.</div>`}
+    </div>`;
+}
+
+// ---------------------------------------------------------------------------
+// Bulk entry
+// ---------------------------------------------------------------------------
+/**
+ * d29 — the open line this scan would duplicate, or null. Marks, never blocks:
+ * the sheet cannot know whether a duplicate is a mistake, and reordering
+ * something already on order is ordinary when the first order is late or short.
+ */
+function existingOpenLine(rid, sup) {
+  return LINES.find((l) => l.rid === rid && l.sup === sup && outstanding(l) > 0 && l.status !== "Cancelled") || null;
+}
+
+function poTaken(ref) {
+  return LINES.some((l) => l.po.toLowerCase() === ref.trim().toLowerCase());
+}
+
+function renderEntryForm() {
+  const sel = $("e-sup");
+  if (!sel.options.length) {
+    sel.innerHTML = Object.entries(SUPPLIERS).map(([k, s]) => `<option value="${k}">${esc(s.name)} (${esc(s.code)})</option>`).join("");
+  }
+  sel.value = S.entry.sup;
+  const s = SUPPLIERS[S.entry.sup];
+  $("e-sup-hint").innerHTML = `Order via <strong>${esc(s.via)}</strong> · discount ${s.disc}% · ${s.cur}${s.via === "Their Website" ? " — this is the case the sheet exists for." : ""}`;
+
+  // d28 — the gate differs by destination, so an Employee is offered one and a
+  // Manager both. Forcing it here rather than merely disabling the button keeps
+  // the sheet from ever showing fields the viewer could not use.
+  const placed = S.entry.dest === "placed";
+  document.querySelectorAll(".dest-opt").forEach((b) => {
+    const isPlaced = b.dataset.dest === "placed";
+    b.setAttribute("aria-pressed", String(isPlaced === placed));
+    b.disabled = isPlaced && S.role !== "manager";
+  });
+  $("e-po-f").hidden = !placed;
+  $("e-date-f").hidden = !placed;
+  $("e-sep-f").hidden = placed;
+  $("e-badges").innerHTML = placed
+    ? `<span class="badge accent">Recorded as placed <span class="cite">(d25)</span></span><span class="badge ink">Manager only</span>`
+    : `<span class="badge">Raised as pending — plain Phase 1 <span class="cite">(d1)</span></span><span class="badge ok">Employee or Manager</span>`;
+  $("dest-say").innerHTML = placed
+    ? `Nothing is sent: no email, no printable document <span class="cite">(d6)</span>. The order already went out.`
+    : `These join the pending pile. Nothing is sent yet either — a Manager processes the stream and sends it <span class="cite">(step 6)</span>.`;
+  $("e-caveat").innerHTML = placed
+    ? `<strong>No ordering separator.</strong> A separator splits a supplier's <em>pending</em> lines into independently sendable streams <span class="cite">(d3)</span>. These lines were never in a stream — they are born placed — so the field would have no job. <strong>No PO of ours is minted</strong> unless you leave the reference blank.`
+    : `<strong>No PO reference and no placed-on date.</strong> Neither exists yet: a pending line has not been sent anywhere <span class="cite">(d1)</span>, so its age runs from when it was raised and the PO number is assigned when the stream is Processed <span class="cite">(step 7)</span>. <strong>The separator is offered instead</strong> — this batch is exactly the kind of stream d3 exists to keep apart.`;
+
+  $("e-po").value = S.entry.po;
+  $("e-sep").value = S.entry.sep;
+  $("e-date").value = S.entry.date;
+  $("e-flag").value = S.entry.flag;
+  const bad = Boolean(S.entry.err);
+  $("e-po-f").classList.toggle("bad", bad);
+  $("e-po-err").hidden = !bad;
+  $("e-po-err").textContent = S.entry.err;
+
+  $("e-body").innerHTML = S.entry.lines.length
+    ? S.entry.lines.map((row, i) => {
+        const r = rec(row.rid);
+        const dupe = existingOpenLine(row.rid, S.entry.sup);
+        const cls = [S.lastAdded === i ? "newly" : "", dupe ? "has-dupe" : ""].filter(Boolean).join(" ");
+        return `<tr${cls ? ` class="${cls}"` : ""}>
+          <td><input class="qty" type="number" min="1" value="${row.qty}" data-qty="${i}"></td>
+          <td><strong>${esc(r.artist)}</strong> — ${esc(r.title)}${dupe ? `<span class="dupe">Already on order — <span class="mono">${esc(dupe.po)}</span>, ${stateOf(dupe).toLowerCase()}, ${ageOf(dupe)}d, ${outstanding(dupe)} outstanding</span>` : ""}</td>
+          <td class="mono xsmall muted">${esc(r.cat)}</td>
+          <td class="r mono">${money(r.price, STORE_CUR)}</td>
+          <td class="r"><button class="btn sm ghost danger" data-drop="${i}" title="Remove">✕</button></td>
+        </tr>`;
+      }).join("")
+    : `<tr><td colspan="5" class="empty">Nothing added yet. Scan a barcode, or type a catalogue number and press Enter.<br><span class="xsmall">The cursor stays in the box — you should never have to reach for the mouse between copies.</span></td></tr>`;
+  S.lastAdded = null;
+}
+
+function renderBatch() {
+  const s = SUPPLIERS[S.entry.sup];
+  const lines = S.entry.lines;
+  const units = lines.reduce((n, r) => n + r.qty, 0);
+  const retail = lines.reduce((n, r) => n + r.qty * rec(r.rid).price, 0);
+  const cost = retail * (1 - s.disc / 100);
+  const ref = S.entry.po.trim();
+  const placed = S.entry.dest === "placed";
+  const ok = lines.length > 0 && !(placed && S.entry.err);
+
+  // Informational only — the order has already been placed, so nothing gates
+  // on the minimum (M-02 step 4 shows readiness on the PROCESSING screen).
+  const minMet = s.minQty > 0 ? units >= s.minQty : s.minAmt > 0 ? retail >= s.minAmt : null;
+  const minSay = s.minQty > 0 ? `${units} / ${s.minQty} units` : s.minAmt > 0 ? `${money(retail, STORE_CUR)} / ${s.minAmt.toFixed(2)} retail` : "no minimum set";
+
+  const age = daysBetween(dayOf(S.entry.date), TODAY);
+
+  $("right").innerHTML = `
+    <div class="waiting${ok ? " live" : " none"}">
+      <div class="lab"><span>This batch</span><span class="xsmall mono">${lines.length} line${lines.length === 1 ? "" : "s"}</span></div>
+      <div class="w-name">${esc(s.name)}</div>
+      <div class="w-sub">${placed
+        ? `${ref ? `<span class="mono">${esc(ref)}</span> — their reference` : "No reference yet — ours will be minted on placement"} · placed ${age <= 0 ? "today" : age + "d ago"}`
+        : `Pending stream${S.entry.sep.trim() ? ` <span class="mono">${esc(S.entry.sep.trim().toUpperCase())}</span>` : " — regular pile"} · no PO until it is processed`}</div>
+    </div>
+    <div class="acct-head">
+      <div class="lab">Estimated cost</div>
+      <div class="figure${ok ? "" : " small"}">${money(cost, STORE_CUR)}</div>
+      <div class="figure-say">${units} unit${units === 1 ? "" : "s"} · ${money(retail, STORE_CUR)} at retail</div>
+      <div class="figure-sub">Sell total less ${s.disc}% <span class="cite">(M-02 step 4)</span>, in ${STORE_CUR} — it is derived from <em>our</em> retail. Goods only: freight, tax and misc arrive at Invoice level and are never allocated to items <span class="cite">(E-02:100)</span>.${s.cur !== STORE_CUR ? ` <strong>${esc(s.name)} will invoice in ${esc(s.cur)}</strong> — no rate is applied here <span class="cite">(M-01 d14, M-06 d7)</span>.` : ""}</div>
+    </div>
+    <div class="rule"></div>
+    <div class="acct-mid">
+      <div class="sec">
+        <span class="lab">Against their minimum</span>
+        <div class="standing">
+          <div class="stat span"><span class="v" style="font-size:13px">${minSay}</span><span class="k">${minMet == null ? "Nothing to meet" : minMet ? "Met" : "Below — informational only"}</span></div>
+        </div>
+        <div class="caveat">Readiness gates the <em>processing</em> screen <span class="cite">(M-02 step 4, M-01)</span>. It gates nothing here: the order already went out. A batch below the minimum is a fact about an order that exists.${s.minAmt > 0 && s.cur !== STORE_CUR ? ` <strong>Which currency the minimum amount is in is not recorded</strong> — M-01 gives it a <em>basis</em> (Net / Retail) but no currency, so this comparison is unitless and shown bare.` : ""}</div>
+      </div>
+      ${(() => { const d = lines.filter((r) => existingOpenLine(r.rid, S.entry.sup)); return d.length ? `
+      <div class="sec">
+        <span class="lab">Already on order</span>
+        <div class="caveat" style="border-left-color:var(--c-warn);color:var(--c-warn)">${d.length} of these ${d.length === 1 ? "is" : "are"} already outstanding with ${esc(s.name)}. Marked, not blocked — reordering something late or short is ordinary, and only you know which this is <span class="cite">(d29)</span>.</div>
+      </div>` : ""; })()}
+      <div class="sec">
+        <span class="lab">What this does</span>
+        ${placed ? `
+        <div class="logline"><span class="at">1</span><span>Writes ${lines.length || "n"} line${lines.length === 1 ? "" : "s"} already carrying <span class="mono">${esc(ref || "PO-1046")}</span> — born placed, never pending <span class="cite">(d25)</span>.</span></div>
+        <div class="logline"><span class="at">2</span><span>Stamps <span class="mono">${esc(S.entry.date.split("-").reverse().join("/"))}</span> as the placed date, so the follow-up window and the age sort are right from the first render <span class="cite">(d26)</span>.</span></div>
+        <div class="logline"><span class="at">3</span><span>Queues the MusicBrainz metadata prefetch for these titles, so receiving the box hits the local database <span class="cite">(step 8, d27)</span>.</span></div>
+        <div class="logline"><span class="at">4</span><span>Writes the reason into each line's log — “recorded as placed, ordered on their website” <span class="cite">(d23)</span>.</span></div>
+        <div class="logline"><span class="at">5</span><span><strong>Sends nothing.</strong> No email, no printable document <span class="cite">(d6)</span>. The order already went out.</span></div>
+        ` : `
+        <div class="logline"><span class="at">1</span><span>Raises ${lines.length || "n"} <strong>pending</strong> line${lines.length === 1 ? "" : "s"} against ${esc(s.name)}${S.entry.sep.trim() ? `, separator <span class="mono">${esc(S.entry.sep.trim().toUpperCase())}</span>` : ""} — plain Phase 1 <span class="cite">(d1, d28)</span>.</span></div>
+        <div class="logline"><span class="at">2</span><span>They join the pending pile and appear on the <strong>order processing</strong> screen as one stream, grouped by supplier + separator <span class="cite">(d4)</span>.</span></div>
+        <div class="logline"><span class="at">3</span><span><strong>No PO number and no placed date yet</strong> — both are assigned when a Manager Processes the stream <span class="cite">(step 7)</span>.</span></div>
+        <div class="logline"><span class="at">4</span><span>No prefetch yet either: it is queued <em>on placement</em> <span class="cite">(step 8)</span>, which has not happened.</span></div>
+        <div class="logline"><span class="at">5</span><span><strong>Nothing reaches the supplier.</strong> Processing the stream is what sends it <span class="cite">(step 6)</span>.</span></div>
+        `}
+      </div>
+      ${placed ? "" : `<div class="sec"><div class="caveat">This sheet cannot see stock. Unlike the titlecard route it shows no on hand, no minimum on hand and no existing outstanding line, so it can raise a <strong>second</strong> pending line for a title already on order <span class="cite">(d28, accepted consequence)</span>. Whether it should warn is an open question, not a decision.</div></div>`}
+    </div>
+    <div class="acct-foot">
+      <button class="btn accent primary" data-act="place"${ok ? "" : " disabled"}>${placed
+        ? `Place ${lines.length || ""} line${lines.length === 1 ? "" : "s"}<br>on ${esc(ref || "our next PO")}`
+        : `Add ${lines.length || ""} line${lines.length === 1 ? "" : "s"}<br>to the pending pile`}</button>
+      <div class="foot-sub">${placed && S.entry.err ? S.entry.err : !ok ? "Add at least one line." : placed ? "They go straight onto this screen as ordered." : "They go to order processing, not to this screen — nothing is on order until the stream is sent."}</div>
+    </div>`;
+}
+
+// ---------------------------------------------------------------------------
+// Wiring
+// ---------------------------------------------------------------------------
+function render() {
+  $("frame").classList.toggle("slab-shut", !S.slabOpen);
+  $("slab-open").hidden = !S.slabOpen;
+  $("strip").hidden = S.slabOpen;
+  $("t-slab").setAttribute("aria-pressed", String(S.slabOpen));
+
+  // An open draft is announced wherever you are, in both slab states — a batch
+  // you can leave but cannot find again is a batch you have lost (d30).
+  const draftN = S.entry.lines.length;
+  const open = draftN > 0 && S.mode !== "entry";
+  $("resume-btn").hidden = !open;
+  $("new-btn").hidden = open;
+  if (open) $("resume-btn").textContent = `↩ Resume batch — ${draftN} line${draftN === 1 ? "" : "s"}`;
+  $("strip-new").innerHTML = open
+    ? `↩<span class="rail-badge">${draftN}</span>`
+    : "＋";
+  $("strip-new").title = open ? `Resume the open batch — ${draftN} lines` : "Record an order placed elsewhere";
+  document.querySelectorAll(".mode-btn").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.mode === S.mode)));
+  document.querySelectorAll(".role-btn").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.role === S.role)));
+  $("track-mode").hidden = S.mode !== "track";
+  $("entry-mode").hidden = S.mode !== "entry";
+
+  renderChips();
+  renderSlabList();
+  if (S.mode === "track") renderLines(); else renderEntryForm();
+  renderRight();
+}
+
+$("t-slab").onclick = () => { S.slabOpen = !S.slabOpen; render(); };
+$("slab-collapse").onclick = () => { S.slabOpen = false; render(); };
+$("strip-expand").onclick = () => { S.slabOpen = true; render(); };
+document.querySelectorAll(".mode-btn").forEach((b) => (b.onclick = () => { S.mode = b.dataset.mode; render(); }));
+$("new-btn").onclick = $("resume-btn").onclick = $("strip-new").onclick = () => {
+  S.mode = "entry"; S.slabOpen = true; render(); $("e-scan").focus();
+};
+// d30 — two jobs, two controls. Leaving keeps the batch; discarding asks
+// first and names what it is about to destroy.
+$("entry-leave").onclick = () => { S.mode = "track"; render(); };
+$("entry-discard").onclick = () => {
+  const n = S.entry.lines.length;
+  if (!n) { S.mode = "track"; render(); return; }   // nothing to lose, nothing to ask
+  const units = S.entry.lines.reduce((a, r) => a + r.qty, 0);
+  $("discard-say").innerHTML = `<strong>${n} line${n === 1 ? "" : "s"}</strong> (${units} unit${units === 1 ? "" : "s"}) will be thrown away. This cannot be undone.`;
+  $("discard-confirm").hidden = false;
+};
+$("discard-no").onclick = () => { $("discard-confirm").hidden = true; };
+$("discard-yes").onclick = () => {
+  const n = S.entry.lines.length;
+  $("discard-confirm").hidden = true;
+  S.entry = { sup: S.entry.sup, dest: S.entry.dest, po: "", sep: "", date: "2026-09-12", flag: 14, lines: [], err: "" };
+  S.mode = "track";
+  render();
+  toast(`Batch discarded — ${n} line${n === 1 ? "" : "s"} thrown away.`);
+};
+
+$("q").oninput = (e) => { S.q = e.target.value; S.sel = null; render(); };
+$("sort").onchange = (e) => { S.sort = e.target.value; render(); };
+
+// A scan fills the search box with what the ROW shows, so the scanned line and
+// a typed one land on the same result.
+$("scan").onkeydown = (e) => {
+  if (e.key !== "Enter") return;
+  const code = e.target.value.trim();
+  if (!code) return;
+  const r = CATALOG.find((x) => x.upc === code);
+  if (r) { S.q = `${r.artist} — ${r.title}`; $("q").value = S.q; toast(`Matched ${r.artist} — ${r.title} by UPC.`); }
+  else { S.q = code; $("q").value = code; toast(`No catalogue UPC match for "${code}" — filtering as a keyword.`); }
+  e.target.value = "";
+  S.sel = null;
+  render();
+};
+
+$("chips").onclick = (e) => {
+  const b = e.target.closest("[data-chip]");
+  if (!b || b.disabled) return;
+  S.chip = S.chip === b.dataset.chip ? "all" : b.dataset.chip;
+  S.sel = null;
+  render();
+};
+
+$("slab-list").onclick = $("strip-stack").onclick = (e) => {
+  const b = e.target.closest("[data-po]");
+  if (!b) return;
+  S.scope = b.dataset.po;
+  S.sel = null;
+  render();
+};
+
+$("lines").onclick = (e) => {
+  const b = e.target.closest("[data-line]");
+  if (!b) return;
+  S.sel = S.sel === b.dataset.line ? null : b.dataset.line;
+  render();
+};
+
+$("main-acts").onclick = (e) => {
+  const b = e.target.closest("[data-act]");
+  if (b) footAct(b.dataset.act);
+};
+
+$("right").onclick = (e) => {
+  const b = e.target.closest("[data-act]");
+  if (b && !b.disabled) footAct(b.dataset.act);
+};
+
+function footAct(act) {
+  const l = LINES.find((x) => x.id === S.sel);
+  const late = l && isLate(l);
+  const map = {
+    primary: late ? "Re-flag — sets a fresh today + n window (d18)." : "Set status — Shipped with their date, Backordered, or Cancelled (d12, d22).",
+    secondary: late ? "Set status — Shipped, Backordered, Cancelled (d12, d22)." : "Re-flag — fresh today + n window (d18).",
+    "cancel-line": "Cancel — sets the status and warns that the supplier has been told nothing (d10). The line stays on file (d21).",
+    bulk: `Bulk status update on ${S.scope} — every unreceived line to Cancelled or Backordered at once.`,
+    void: `Void ${S.scope} — unreceived lines back to pending, part-received lines split (d11, d24). Manager-only.`,
+    new: "Opens the bulk-entry sheet.",
+    place: "",
+  };
+  if (act === "new") { S.mode = "entry"; render(); $("e-scan").focus(); return; }
+  if (act === "place") return placeBatch();
+  toast(map[act] || act);
+}
+
+// ---- entry-mode wiring ----
+document.querySelectorAll(".role-btn").forEach((b) => (b.onclick = () => {
+  S.role = b.dataset.role;
+  // An Employee cannot record a PurchaseOrder (d28), so the sheet falls back to
+  // the destination they can actually use rather than showing a dead option.
+  if (S.role !== "manager" && S.entry.dest === "placed") S.entry.dest = "pending";
+  render();
+}));
+document.querySelectorAll(".dest-opt").forEach((b) => (b.onclick = () => {
+  if (b.disabled) return;
+  S.entry.dest = b.dataset.dest;   // the scanned lines survive the switch (d28)
+  render();
+}));
+$("e-sep").oninput = (e) => { S.entry.sep = e.target.value; renderBatch(); };
+$("e-sup").onchange = (e) => { S.entry.sup = e.target.value; render(); };
+$("e-po").oninput = (e) => {
+  S.entry.po = e.target.value;
+  const v = e.target.value.trim();
+  S.entry.err = v && poTaken(v) ? `${v} is already in use — auto-numbering skips it (d16), but whether a collision merges or is refused is undecided.` : "";
+  renderEntryForm();
+  renderBatch();
+};
+$("e-date").onchange = (e) => { S.entry.date = e.target.value; render(); };
+$("e-flag").oninput = (e) => { S.entry.flag = Math.max(0, Number(e.target.value) || 0); renderBatch(); };
+
+function addByCode(code) {
+  const c = code.trim();
+  if (!c) return;
+  const r = CATALOG.find((x) => x.upc === c) || CATALOG.find((x) => x.cat.toLowerCase() === c.toLowerCase());
+  if (!r) {
+    toast(`No catalogue match for "${c}". A line must point at a Record — minting one inline is undecided.`);
+    return;
+  }
+  const existing = S.entry.lines.findIndex((x) => x.rid === r.id);
+  if (existing >= 0) { S.entry.lines[existing].qty += 1; S.lastAdded = existing; }
+  else { S.entry.lines.push({ rid: r.id, qty: 1 }); S.lastAdded = S.entry.lines.length - 1; }
+  renderEntryForm();
+  renderBatch();
+}
+
+$("e-scan").onkeydown = (e) => {
+  if (e.key !== "Enter") return;
+  addByCode(e.target.value);
+  e.target.value = "";
+};
+document.querySelectorAll(".samples .chip").forEach((b) => (b.onclick = () => { addByCode(b.dataset.code); $("e-scan").focus(); }));
+
+$("e-body").onclick = (e) => {
+  const d = e.target.closest("[data-drop]");
+  if (!d) return;
+  S.entry.lines.splice(Number(d.dataset.drop), 1);
+  renderEntryForm();
+  renderBatch();
+};
+$("e-body").oninput = (e) => {
+  const q = e.target.closest("[data-qty]");
+  if (!q) return;
+  S.entry.lines[Number(q.dataset.qty)].qty = Math.max(1, Number(q.value) || 1);
+  renderBatch();
+};
+
+function placeBatch() {
+  const s = SUPPLIERS[S.entry.sup];
+  if (S.entry.dest === "pending") {
+    // Pending lines never appear on THIS screen — "on order" is placed AND
+    // still expected. They go to order processing. Saying so is the point.
+    const n = S.entry.lines.length;
+    toast(`${n} pending line${n === 1 ? "" : "s"} raised against ${s.name}${S.entry.sep.trim() ? `, separator ${S.entry.sep.trim().toUpperCase()}` : ""} — waiting on order processing, not on order yet.`);
+    S.entry = { sup: S.entry.sup, dest: "pending", po: "", sep: "", date: "2026-09-12", flag: 14, lines: [], err: "" };
+    S.mode = "track";
+    render();
+    return;
+  }
+  const ref = S.entry.po.trim() || "PO-1046";
+  const stamp = new Date().toLocaleDateString("en-GB", { day: "2-digit", month: "2-digit" }) + " " +
+                new Date().toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" });
+  let n = 0;
+  for (const row of S.entry.lines) {
+    LINES.push({
+      id: "n" + (++n) + Date.now(), po: ref, sup: S.entry.sup, rid: row.rid, qty: row.qty, recv: 0,
+      placed: S.entry.date, flagDays: S.entry.flag, flagAt: S.entry.date, ext: Boolean(S.entry.po.trim()),
+      log: [[stamp, `Recorded as placed on ${ref} by R. Duval — ordered ${S.entry.date.split("-").reverse().join("/")} via ${s.via}`]],
+    });
+  }
+  toast(`${n} line${n === 1 ? "" : "s"} recorded on ${ref}. Metadata prefetch queued.`);
+  S.entry = { sup: S.entry.sup, dest: "placed", po: "", sep: "", date: "2026-09-12", flag: 14, lines: [], err: "" };
+  S.mode = "track";
+  S.scope = ref;
+  render();
+}
+
+render();
+</script>

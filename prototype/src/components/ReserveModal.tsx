@@ -2,6 +2,7 @@ import { useState } from "react";
 import type { InventoryItem, RecordEntry } from "../data/types";
 import { money } from "../lib/money";
 import { useApp } from "../store/AppStore";
+import { useActor } from "./Identify";
 import { Modal } from "./Modal";
 
 // Shared by the titlecard's per-copy Reserve button (one known copy) and the
@@ -21,6 +22,7 @@ export function ReserveModal({
   onDone: (confirmation: string) => void;
 }) {
   const app = useApp();
+  const withActor = useActor();
   const [itemId, setItemId] = useState(initialItemId ?? items[0]?.id ?? "");
   const [customerId, setCustomerId] = useState(app.customers[0]?.id ?? "");
   const [qty, setQty] = useState(1);
@@ -35,7 +37,9 @@ export function ReserveModal({
     (x) => x.state === "Held" && x.customerId === customerId && (x.po ?? "").trim() === poKey,
   );
 
-  const commit = () => {
+  // Tier 2 (d5).
+  const commit = () =>
+    withActor("Put on hold", () => {
     const cust = app.customerFor(customerId);
     const { holdRef } = app.reserve(record.id, itemId, customerId, qty, po);
     onDone(
@@ -43,7 +47,7 @@ export function ReserveModal({
         `${record.artist} — ${record.title} (${item?.grade ?? ""}, qty ${qty}). Open at the till ` +
         `when they're ready to tender.`,
     );
-  };
+  });;
 
   return (
     <Modal

@@ -5,6 +5,8 @@ import { ReceiveReconcile } from "../components/ReceiveReconcile";
 import { OutstandingPanel } from "../components/OutstandingPanel";
 import { ReceiveSlab } from "../components/ReceiveSlab";
 import { TitlecardPanel } from "../components/TitlecardPanel";
+import { AdoptRelease } from "../components/AdoptRelease";
+import { genreNameFor, sectionLabelFor, selectableGenres } from "../lib/taxonomy";
 import {
   GRADES,
   type Grade,
@@ -12,16 +14,19 @@ import {
   type Invoice,
   type InvoiceLine,
   type PendingOrderLine,
+  type ReleaseCacheEntry,
   type RecordEntry,
-  type Section,
   type Supplier,
 } from "../data/types";
 import { readStored, writeStored } from "../lib/tillMemory";
-import { money, roundUpShelf } from "../lib/money";
-import { countField, figureField, integerOnly, numericOnly } from "../lib/fields";
+import { money } from "../lib/money";
+import { priceLine } from "../lib/pricing";
+import { countField, figureField, integerOnly, moneyOnly, numericOnly } from "../lib/fields";
 import { outstandingQty } from "../lib/orderLines";
-import { round2 } from "../lib/totals";
+import { invoiceChargesTotal, invoiceIsPaid, round2 } from "../lib/totals";
+import { storeTaxTypes } from "../lib/tax";
 import { useApp } from "../store/AppStore";
+import { useActor } from "../components/Identify";
 
 // E-02 Receiving, on the till's three-track frame (d38): the worklist slab you
 // pick from, the Invoice, and the reconcile figures. The frame is pinned to the
@@ -229,13 +234,28 @@ function OpenExistingModal({ onClose, onPick }: { onClose: () => void; onPick: (
 
 function NewInvoiceModal({ onClose, onCreated }: { onClose: () => void; onCreated: (id: string) => void }) {
   const app = useApp();
+  const withActor = useActor();
   const [supplierId, setSupplierId] = useState(app.suppliers[0]?.id ?? "");
   const [mode, setMode] = useState<IntakeMode>("New");
   const [invoiceNumber, setInvoiceNumber] = useState("");
-  const [invoiceDate, setInvoiceDate] = useState("");
-  const [receivedDate, setReceivedDate] = useState(new Date().toLocaleDateString("en-CA"));
+  // Both default to TODAY, and `en-CA` is what gives `YYYY-MM-DD` — the one
+  // shape `toCalendarDate` keeps and everything else in the system compares
+  // against.
+  //
+  // The invoice date defaulting is the newer half and is worth saying why:
+  // most stock is received the day the paperwork arrives, so today is right
+  // more often than blank is, and E-02 d45 runs payment terms from this field —
+  // leaving it empty means an Invoice that ages nowhere in Accounts Payable.
+  // It is a DEFAULT and not a constraint: blank stays legal, because a
+  // second-hand intake has no supplier paperwork to copy a date off (d39), and
+  // the Employee clears or changes it off the invoice in hand.
+  //
+  // It no longer touches the ledger either way — architecture A-71 dates an
+  // Invoice's journal by its finalize, which the system stamps.
+  const today = new Date().toLocaleDateString("en-CA");
+  const [invoiceDate, setInvoiceDate] = useState(today);
+  const [receivedDate, setReceivedDate] = useState(today);
   const [statedSubtotal, setStatedSubtotal] = useState("0.00");
-  const [tax, setTax] = useState("0.00");
   const [freight, setFreight] = useState("0.00");
 
   const numKey = invoiceNumber.trim().toLowerCase();
@@ -261,20 +281,51 @@ function NewInvoiceModal({ onClose, onCreated }: { onClose: () => void; onCreate
           <button
             className="btn primary"
             disabled={!canSubmit}
-            onClick={() => {
-              const id = app.startInvoice({
-                supplierId,
-                intakeMode: mode,
-                invoiceNumber: invoiceNumber.trim(),
-                invoiceDate: invoiceDate.trim(),
-                receivedDate: receivedDate.trim(),
-                statedSubtotal: Number(statedSubtotal) || 0,
-                tax: Number(tax) || 0,
-                freight: Number(freight) || 0,
-              });
-              onCreated(id);
-              onClose();
-            }}
+            // Tier 2 (E-01 d5): silent while somebody is signed in, prompts
+            // inline when nobody is. Receiving is covered BY the session
+            // rather than prompting per action (d12) — but with no session
+            // there is nothing covering it.
+            onClick={() =>
+              withActor("New intake", () => {
+                const id = app.startInvoice({
+                  supplierId,
+                  intakeMode: mode,
+                  invoiceNumber: invoiceNumber.trim(),
+                  invoiceDate: invoiceDate.trim(),
+                  receivedDate: receivedDate.trim(),
+                  statedSubtotal: Number(statedSubtotal) || 0,
+                  freight: Number(freight) || 0,
+                  // E-02 d53 — a row per tax the STORE pays, waiting at zero.
+                  //
+                  // Derived from the store's default tax group (M-06 d14), not
+                  // from `taxTypes`: that list holds every Canadian tax so a
+                  // group can be composed per province, so seeding from it puts
+                  // NINE rows on every invoice. The group is what says which
+                  // two this shop actually pays — GST and QST in Quebec, GST
+                  // alone in Alberta.
+                  //
+                  // The Employee copies the figures across on the invoice panel
+                  // beside every other total. Nothing to add and nothing to
+                  // choose, in the common case.
+                  charges: [
+                    ...storeTaxTypes(app.taxTypes, app.taxGroupCells, app.defaultTaxGroup).map((t, i) => ({
+                      id: `chg-${t.code}-${i}`,
+                      kind: "tax" as const,
+                      taxCode: t.code,
+                      amount: 0,
+                    })),
+                    // And the Miscellaneous slot, seeded at zero like the tax
+                    // rows. Seeded rather than created on first edit because a
+                    // row that appears the moment you type into it is a row
+                    // that loses the keystroke: it swaps for the stored one
+                    // mid-entry, and the decimal point goes with it.
+                    { id: "chg-misc", kind: "misc" as const, amount: 0 },
+                  ],
+                });
+                onCreated(id);
+                onClose();
+              })
+            }
           >
             Open invoice
           </button>
@@ -352,13 +403,21 @@ function NewInvoiceModal({ onClose, onCreated }: { onClose: () => void; onCreate
         )}
 
         <div className="grid cols-2">
+          {/* Both are `type="date"`, as everywhere else a date is entered
+              (SettleTrack, TillFunctions, the bulk order sheet): the control
+              hands back one calendar day as `YYYY-MM-DD` and nothing else.
+              Typed free-hand, the invoice date reached the due-date
+              derivation (d45) — and everything else that reads a date off an
+              Invoice — as `DD/MM/YYYY`, which compares against no other date
+              in the system. `startInvoice` normalizes too: this field is not
+              the only way a date could arrive. */}
           <label className="field">
             <span>Invoice date (from paperwork)</span>
-            <input type="text" value={invoiceDate} onChange={(e) => setInvoiceDate(e.target.value)} placeholder="DD/MM/YYYY" />
+            <input type="date" value={invoiceDate} onChange={(e) => setInvoiceDate(e.target.value)} />
           </label>
           <label className="field">
             <span>Received date</span>
-            <input type="text" value={receivedDate} onChange={(e) => setReceivedDate(e.target.value)} />
+            <input type="date" value={receivedDate} onChange={(e) => setReceivedDate(e.target.value)} />
           </label>
         </div>
 
@@ -368,8 +427,8 @@ function NewInvoiceModal({ onClose, onCreated }: { onClose: () => void; onCreate
             <input type="number" step="0.01" value={statedSubtotal} onChange={(e) => setStatedSubtotal(e.target.value)} />
           </label>
           <label className="field">
-            <span>Tax</span>
-            <input type="number" step="0.01" value={tax} onChange={(e) => setTax(e.target.value)} />
+            <span>Freight</span>
+            <input type="number" step="0.01" value={freight} onChange={(e) => setFreight(e.target.value)} />
           </label>
           <label className="field">
             <span>Freight</span>
@@ -394,12 +453,35 @@ function useLinePricing(opts: {
 }) {
   const listPrice = Number(opts.listRaw) || 0;
   const discountPct = Number(opts.discountRaw) || 0;
-  const extPrice = round2(listPrice * (1 - discountPct / 100));
-  const suggested = opts.stickyPrice ?? roundUpShelf(listPrice * (1 + opts.supplier.discountPct / 100));
+  // d53 — the rules live in lib/pricing so they can be exercised without
+  // a screen, and so the margin benchmark cannot drift from the pre-fill.
+  const base = priceLine({
+    listPrice,
+    lineDiscountPct: discountPct,
+    supplierMarkupPct: opts.supplier.discountPct,
+    decidedPrice: opts.stickyPrice,
+  });
+  const suggested = base.prefill;
   const sellPrice = opts.autoAccept ? suggested : Number(opts.sellRaw ?? suggested.toFixed(2)) || 0;
-  const marginPct = sellPrice > 0 ? round2(((sellPrice - extPrice) / sellPrice) * 100) : 0;
-  const belowCost = sellPrice > 0 && sellPrice < extPrice;
-  return { listPrice, discountPct, extPrice, suggested, sellPrice, marginPct, belowCost };
+  const priced = priceLine({
+    listPrice,
+    lineDiscountPct: discountPct,
+    supplierMarkupPct: opts.supplier.discountPct,
+    decidedPrice: opts.stickyPrice,
+    acceptedPrice: sellPrice,
+  });
+  return {
+    listPrice,
+    discountPct,
+    extPrice: priced.cost,
+    suggested,
+    sellPrice,
+    marginPct: priced.marginPct,
+    belowCost: priced.belowCost,
+    thinMargin: priced.thinMargin,
+    targetMarginPct: priced.targetMarginPct,
+    computed: priced.computed,
+  };
 }
 
 function InvoiceEditor({
@@ -415,6 +497,7 @@ function InvoiceEditor({
   // path into the staging card, so picking and scanning cannot drift apart.
   const [stagedOrder, setStagedOrder] = useState<PendingOrderLine | null>(null);
   const app = useApp();
+  const withActor = useActor();
   const invoice = app.invoiceFor(invoiceId)!;
   const supplier = app.supplierFor(invoice.supplierId)!;
 
@@ -431,11 +514,12 @@ function InvoiceEditor({
   // Finalize is about stock, not paperwork — it mints sellable InventoryItems
   // but leaves the Invoice open for correction. Only Paid actually locks it
   // (d40), which is why the scan slab survives Finalized and goes at Paid.
-  const locked = invoice.status === "Paid";
+  // A-41 — ask invoiceIsPaid(), never a stored status (A-33b).
+  const locked = invoiceIsPaid(invoice, app.paymentBatches, app.batchVoids);
 
   const derivedSubtotal = round2(invoice.lines.reduce((sum, l) => sum + l.cost * l.qty, 0));
   const mismatch = Math.abs(derivedSubtotal - invoice.statedSubtotal) > 0.01;
-  const computedTotal = round2(derivedSubtotal + invoice.tax + invoice.freight + invoice.misc);
+  const computedTotal = round2(derivedSubtotal + invoice.freight + invoiceChargesTotal(invoice));
   const [totalOverrideRaw, setTotalOverrideRaw] = useState<string | null>(null);
   const totalRaw = totalOverrideRaw ?? computedTotal.toFixed(2);
   const enteredTotal = Number(totalRaw) || 0;
@@ -460,11 +544,18 @@ function InvoiceEditor({
     return () => window.clearTimeout(t);
   }, [toast]);
 
-  const doFinalize = () => {
+  // Tier 2 (d5). Finalizing turns a draft into what the store owes, so it is attributed even though the scanning before it was covered by the session (d12).
+  const doFinalize = () =>
+    withActor("Finalize invoice", () => {
     if (delta !== 0) app.setInvoiceTotalOverride(invoiceId, enteredTotal);
     const res = app.finalizeInvoice(invoiceId);
     if (res) setFinalizedCount(res.itemCount);
-  };
+    // M-07 d24 — where this system had to GUESS a line's business date, the
+    // substitution has to read as a guess. It balances, so d10's Suspense never
+    // fires and the review queue is never reached; saying it here, at the act,
+    // is what stops a date nobody chose looking like a date someone did.
+    if (res?.unresolved.length) setToast(res.unresolved.join(" · "));
+  });;
 
   const doSaveUpdates = () => {
     if (delta !== 0) app.setInvoiceTotalOverride(invoiceId, enteredTotal);
@@ -681,6 +772,9 @@ function InvoiceEditor({
         onSaveUpdates={doSaveUpdates}
         onPrintAllLabels={printAllLabels}
         mintedCount={mintedCount}
+        // d53 — the store's OWN taxes, not the nine it has configured to
+        // compose other provinces' groups with.
+        taxTypes={storeTaxTypes(app.taxTypes, app.taxGroupCells, app.defaultTaxGroup)}
       />
 
       {removing && (
@@ -824,7 +918,17 @@ function StageCard({
     setLookupOpen(true);
   };
 
-  const { listPrice, discountPct, extPrice, suggested, sellPrice, marginPct, belowCost } =
+  const {
+    listPrice,
+    discountPct,
+    extPrice,
+    suggested,
+    sellPrice,
+    marginPct,
+    belowCost,
+    thinMargin,
+    targetMarginPct,
+  } =
     useLinePricing({
       listRaw,
       discountRaw,
@@ -925,7 +1029,7 @@ function StageCard({
                   <input
                     {...figureField}
                     value={listRaw}
-                    onChange={(e) => setListRaw(numericOnly(e.target.value))}
+                    onChange={(e) => setListRaw(moneyOnly(e.target.value))}
                   />
                   <span className="recv-stage-hint">pre-discount</span>
                 </label>
@@ -946,7 +1050,7 @@ function StageCard({
                     <input
                       {...figureField}
                       value={sellRaw ?? suggested.toFixed(2)}
-                      onChange={(e) => setSellRaw(numericOnly(e.target.value))}
+                      onChange={(e) => setSellRaw(moneyOnly(e.target.value))}
                     />
                   )}
                   <span className="recv-stage-hint">
@@ -999,7 +1103,7 @@ function StageCard({
               <div
                 className={
                   "recv-readout-fig lead" +
-                  (listPrice <= 0 ? " idle" : belowCost ? " bad" : " ok")
+                  (listPrice <= 0 ? " idle" : belowCost ? " bad" : thinMargin ? " warn" : " ok")
                 }
               >
                 <span className="lab">Margin</span>
@@ -1008,6 +1112,19 @@ function StageCard({
                     on every receipt (d13) — until it is, this says so rather
                     than flattering the line. */}
                 <span className="v">{listPrice > 0 ? `${marginPct.toFixed(1)}%` : "—"}</span>
+                {/* d53 — the decided price stands and the margin is complained
+                    about, because overriding it would quietly re-price a record a
+                    customer saw last week. WARNS rather than flags: d35 already
+                    raises a ReviewFlag for below-cost, which is rare and serious,
+                    where a thin margin is neither — a flag on every one would
+                    fill the queue with rows nobody reads (A-48 in reverse). The
+                    benchmark is the Supplier's own Discount field (M-01), so
+                    there is nothing to configure. */}
+                {thinMargin && (
+                  <small className="recv-margin-warn">
+                    under {targetMarginPct.toFixed(1)}% for this supplier
+                  </small>
+                )}
               </div>
               <div className={"recv-readout-fig" + (listPrice > 0 ? "" : " idle")}>
                 <span className="lab">Net · {lineQty} cop{lineQty === 1 ? "y" : "ies"}</span>
@@ -1366,7 +1483,7 @@ function EditLineRow({
           className="inline-num"
           {...figureField}
           value={listRaw}
-          onChange={(e) => setListRaw(numericOnly(e.target.value))}
+          onChange={(e) => setListRaw(moneyOnly(e.target.value))}
           aria-label="List price — pre-discount"
         />
       </td>
@@ -1384,7 +1501,7 @@ function EditLineRow({
           className="inline-num"
           {...figureField}
           value={sellRaw ?? ""}
-          onChange={(e) => setSellRaw(numericOnly(e.target.value))}
+          onChange={(e) => setSellRaw(moneyOnly(e.target.value))}
           aria-label="Sell price"
         />
       </td>
@@ -1455,12 +1572,62 @@ function FindOrCreateRecordModal({
   const app = useApp();
   const [term, setTerm] = useState("");
   const [creating, setCreating] = useState(false);
+  const [adopting, setAdopting] = useState<ReleaseCacheEntry | null>(null);
   const q = term.trim().toLowerCase();
   const results = q
     ? app.records.filter((r) =>
         [r.artist, r.title, r.label, r.catalogNo].some((f) => f.toLowerCase().includes(q)),
       )
     : [];
+
+  // Only releases we have not adopted. Matching on the provider's own
+  // identifier rather than on artist/title, because two pressings of the
+  // same record are two releases and only one of them may be ours.
+  const adopted = new Set(app.records.map((r) => r.manufacturerUpc).filter(Boolean));
+  const providerHits = q
+    ? app.releaseCache.filter(
+        (rel) =>
+          !adopted.has(rel.manufacturerUpc) &&
+          !app.records.some((r) => r.artist === rel.artist && r.title === rel.title) &&
+          [rel.artist, rel.title, rel.label, rel.catalogNo].some((f) =>
+            f.toLowerCase().includes(q),
+          ),
+      )
+    : [];
+
+  // d53 — the map runs FIRST. A hit adopts straight through and never
+  // opens the prompt; only a miss asks, and a tag-less release asks the
+  // same way, differing only in having no map row to offer.
+  const startAdopt = (rel: ReleaseCacheEntry) => {
+    const { match } = app.resolveAdoptionGenre(rel.id);
+    if (match) {
+      const rec = app.adoptRelease(rel.id, match.genreId);
+      if (rec) onPick(rec);
+      return;
+    }
+    setAdopting(rel);
+  };
+
+  if (adopting) {
+    const { unmapped } = app.resolveAdoptionGenre(adopting.id);
+    return (
+      <AdoptRelease
+        release={adopting}
+        unmapped={unmapped}
+        by={app.sessionUser?.initials ?? ""}
+        onAdopted={(rec) => {
+          setAdopting(null);
+          onPick(rec);
+        }}
+        // d55 — Escape abandons the ADOPTION, not just the dialog: no
+        // Record, and the scan that brought us here is discarded.
+        onCancel={() => {
+          setAdopting(null);
+          onClose();
+        }}
+      />
+    );
+  }
 
   return (
     <Modal title="Find or add this title" wide onClose={onClose}>
@@ -1476,7 +1643,6 @@ function FindOrCreateRecordModal({
                 <tr key={r.id}>
                   <td>
                     {r.artist} — {r.title}
-                    {r.catalogOnly && <span className="badge warn" style={{ marginLeft: 6 }}>Catalog match</span>}
                   </td>
                   <td className="small muted">
                     {r.label} · {r.catalogNo}
@@ -1492,6 +1658,60 @@ function FindOrCreateRecordModal({
           </table>
         )}
         {q && results.length === 0 && <p className="small muted">No local match.</p>}
+
+        {/* E-02 step 9's local miss: the catalog provider. A release here is
+            NOT a Record — A-6 puts provider metadata in a cache underneath
+            the per-Store catalog, so it carries TAGS AND NO GENRE. There is no
+            Record for a genre to sit on until adoption (d53), which is also
+            why genre presence is the at-a-glance tell that a row is ours. */}
+        {providerHits.length > 0 && (
+          <>
+            <div className="hr" />
+            <p className="small muted">
+              From the <strong>catalog provider</strong> — not in our catalog yet. Adding one
+              resolves its genre through the map (A-61) and asks only when the map cannot
+              <em> (d53)</em>.
+            </p>
+            <table className="data">
+              <tbody>
+                {providerHits.map((rel) => {
+                  const { match } = app.resolveAdoptionGenre(rel.id);
+                  return (
+                    <tr key={rel.id}>
+                      <td>
+                        {rel.artist} — {rel.title}
+                        <div className="small muted">
+                          {rel.tags?.length
+                            ? rel.tags.map((t) => `${t.tag} (${t.votes})`).join(" \u00b7 ")
+                            : "no provider tags"}
+                        </div>
+                      </td>
+                      <td className="small muted">
+                        {match ? (
+                          <>
+                            {/* Resolved: the map fills it in and nothing is
+                                asked. The matched tag is shown because A-61
+                                snapshots it, so "why did it land here" stays
+                                answerable at the titlecard. */}
+                            {genreNameFor(app.genres, match.genreId)}
+                            <div>via {match.matchedTag}</div>
+                          </>
+                        ) : (
+                          <em>needs a genre</em>
+                        )}
+                      </td>
+                      <td className="num">
+                        <button className="btn sm primary" onClick={() => startAdopt(rel)}>
+                          Add to catalog
+                        </button>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </>
+        )}
 
         <div className="hr" />
         {!creating ? (
@@ -1510,12 +1730,11 @@ function ManualEntryForm({ onCreate }: { onCreate: (rec: RecordEntry) => void })
   const app = useApp();
   const [artist, setArtist] = useState("");
   const [title, setTitle] = useState("");
-  const [genre, setGenre] = useState("");
+  const [genreId, setGenreId] = useState("");
   const [catalogNo, setCatalogNo] = useState("");
   const [label, setLabel] = useState("");
-  const [section, setSection] = useState<Section>("VINYL");
 
-  const ready = artist.trim() && title.trim() && genre.trim() && catalogNo.trim() && label.trim();
+  const ready = artist.trim() && title.trim() && genreId && catalogNo.trim() && label.trim();
 
   return (
     <div className="stack">
@@ -1540,15 +1759,21 @@ function ManualEntryForm({ onCreate }: { onCreate: (rec: RecordEntry) => void })
           <span>Catalog number</span>
           <input type="text" value={catalogNo} onChange={(e) => setCatalogNo(e.target.value)} />
         </label>
+        {/* E-04 — genre is constrained to configured values, never free text,
+            and M-06 d19 omits the shop-internal genres from the picker rather
+            than gating them, so `Freight` is unrepresentable here instead of
+            merely discouraged. There is no Section field: d31 and d32 derive
+            it from the genre's required parent, so choosing the genre has
+            already chosen the Section. */}
         <label className="field">
           <span>Genre</span>
-          <input type="text" value={genre} onChange={(e) => setGenre(e.target.value)} />
-        </label>
-        <label className="field">
-          <span>Section</span>
-          <select value={section} onChange={(e) => setSection(e.target.value as Section)}>
-            <option value="VINYL">VINYL</option>
-            <option value="MERCH">MERCH</option>
+          <select value={genreId} onChange={(e) => setGenreId(e.target.value)}>
+            <option value="">Choose a genre…</option>
+            {selectableGenres(app.genres).map((g) => (
+              <option key={g.id} value={g.id}>
+                {g.name} · {sectionLabelFor(app.genres, app.sections, g.id)}
+              </option>
+            ))}
           </select>
         </label>
       </div>
@@ -1559,10 +1784,9 @@ function ManualEntryForm({ onCreate }: { onCreate: (rec: RecordEntry) => void })
           const id = app.createRecordManual({
             artist: artist.trim(),
             title: title.trim(),
-            genre: genre.trim(),
+            genreId,
             catalogNo: catalogNo.trim(),
             label: label.trim(),
-            section,
           });
           onCreate(app.recordFor(id)!);
         }}

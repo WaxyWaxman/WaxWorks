@@ -81,17 +81,25 @@ const BUILT = [
       "net of both. Record a payment (partial supported, one record per Invoice sharing a reference), " +
       "apply a claim credit, and the gift-card liability registry.",
   },
+  {
+    id: "M-04",
+    to: "/users",
+    title: "Users",
+    blurb:
+      "Add, change role, deactivate, reactivate and correct. Both invariants are enforced in the store, " +
+      "not by disabling buttons — try demoting the last Manager, or giving two active people the same " +
+      "initials. A deactivated user's initials are released, which is why every row shows a name.",
+  },
 ];
 
 const NOT_BUILT = [
   ["E-01", "Authenticate"],
   ["M-03", "Daily summary"],
-  ["M-04", "Manage users"],
   ["M-06", "Configure the store"],
 ];
 
 export function Home() {
-  const { sales, discogsUp, toggleDiscogs } = useApp();
+  const { sales, providerUp, toggleProvider } = useApp();
   const held = sales.filter((s) => s.state === "Held");
   return (
     <div>
@@ -124,16 +132,16 @@ export function Home() {
         </span>
         <span className="right">
           Catalog provider:{" "}
-          <button className="btn sm" onClick={toggleDiscogs}>
-            {discogsUp ? "🟢 up — click to simulate outage" : "🔴 down — click to restore"}
+          <button className="btn sm" onClick={toggleProvider}>
+            {providerUp ? "🟢 up — click to simulate outage" : "🔴 down — click to restore"}
           </button>
         </span>
       </div>
 
       <h2>Walk a flow</h2>
       <div className="flowmap" style={{ marginBottom: "var(--sp-6)" }}>
-        {BUILT.map((f) => (
-          <Link key={f.id} to={f.to} className="flow-card">
+        {BUILT.map((f, i) => (
+          <Link key={i} to={f.to} className="flow-card">
             <span className="fid">{f.id}</span>
             <h3>{f.title}</h3>
             <p>{f.blurb}</p>
