@@ -130,6 +130,15 @@ export function untypeableInOpeningReason(account: GLAccount): string | undefine
   if (account.role === "inventory") {
     return `${account.name} is supplied by the system — on hand × cost (step 3).`;
   }
+  if (account.role === "gift-card-liability") {
+    // _Status: recommended, not yet ratified._ Proposed by the user on
+    // 2026-09-17: the account is system-owned and stays locked. The argument is
+    // d13's, applied to a role d13 does not name — the balance IS the sum of
+    // outstanding gift cards, which E-06 owns, so one typed line breaks that
+    // the first time it happens. It wants a decision row of its own in M-08
+    // rather than living only here. See `untypeableReason` in ledgerPostings.
+    return `${account.name} is kept by the system — gift cards are issued and redeemed, never typed.`;
+  }
   if (account.role === "suspense") {
     // INFERRED. d14 refuses Suspense in an ORDINARY posting and says nothing
     // about the opening position, which is not one. But M-07 d10 is categorical
@@ -277,16 +286,20 @@ export interface OpeningContext {
 /**
  * Step 1 — why the first day may not be this one, or undefined if it may.
  *
- * **Both refusals are the flow's own GUESSES, not decisions.** Step 1 reads
- * *"Guess: it must be a past date and the first day of a month; unconfirmed."*
- * They are implemented because a prototype is where a guess gets looked at, and
- * they are labelled here and in their tests. Neither is settled.
+ * **The books start on any day.** Step 1 carried a guess — *"it must be a past
+ * date and the first day of a month; unconfirmed"* — and the user retired both
+ * halves on 2026-09-17. Neither was ever a decision, so nothing is superseded;
+ * an unconfirmed guess simply stops being implemented.
+ *
+ * Nothing is lost by dropping the future half either, because A-73 already
+ * refuses a posting dated on or before the opening position: books that start
+ * next month are books nothing can be posted to until then, which is visible
+ * and self-correcting rather than silent. And a date bound would be the only
+ * thing in this whole artifact that *was* validated — d26 accepts in terms that
+ * nothing here is checked against the world.
  */
-export function firstDayRefusal(firstDay: string, today: string): string | undefined {
+export function firstDayRefusal(firstDay: string, _today: string): string | undefined {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(firstDay)) return "The books need a first day.";
-  // GUESS, per step 1 — unconfirmed.
-  if (!firstDay.endsWith("-01")) return "The books start on the first day of a month (step 1, a guess).";
-  if (firstDay > today) return "The books start on a past date (step 1, a guess).";
   return undefined;
 }
 

@@ -204,6 +204,25 @@ export function untypeableReason(account: GLAccount): string | undefined {
     case "suspense":
       // d14 — NOT RATIFIED.
       return `${account.name} is cleared by its own act, not by a posting (d14, not ratified).`;
+    case "gift-card-liability":
+      // _Status: recommended, not yet ratified._ Proposed by the user on
+      // 2026-09-17 — a system-owned account that stays locked everywhere.
+      //
+      // **The argument is d13's, applied to a role d13 does not name.** d13
+      // refuses *Accounts payable* because it "is M-05's balance exactly and
+      // permanently" under d7, "and one typed line breaks that invariant on its
+      // first use." A gift card liability is the same shape with E-06 in M-05's
+      // place: the balance IS the sum of what is outstanding on live cards, and
+      // a typed figure makes the books disagree with the cards.
+      //
+      // **What this opens is bigger than one account, and is not decided here.**
+      // d13 named two roles and deliberately PERMITTED a third (Inventory, for
+      // a dead-stock write-down), which reads as a considered list rather than
+      // an exhaustive one. On this argument `customer-credit` (E-07),
+      // `undeposited`, `tax-collected` and `tax-paid` are all the same shape and
+      // none is refused today. Whether d13 is a list or a principle is a
+      // question for the flow, not for this file.
+      return `${account.name} is kept by the system — gift cards are issued and redeemed, never typed.`;
     default:
       return undefined;
   }

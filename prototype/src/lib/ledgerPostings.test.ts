@@ -153,6 +153,23 @@ describe("M-08 d13, d14 — the accounts a Manager may not type into", () => {
     expect(why).toContain("not ratified");
   });
 
+  it("refuses the gift card liability — PROPOSED by the user, not yet a decision", () => {
+    // 2026-09-17. d13's own argument with E-06 in M-05's place: the balance IS
+    // the sum of what is outstanding on live cards, so one typed line makes the
+    // books disagree with the cards. d13 does not name this role, so it wants a
+    // decision of its own rather than living only in this file.
+    const why = untypeableReason(acct("2300", "Gift cards", "gift-card-liability"));
+    expect(why).toContain("kept by the system");
+    expect(why).toContain("never typed");
+  });
+
+  it("still PERMITS the accounts d13 considered and allowed", () => {
+    // The gift card refusal is an addition, not a widening of d13 into every
+    // system-written account. Inventory is the one d13 permitted on purpose.
+    expect(untypeableReason(acct("1200", "Inventory", "inventory"))).toBeUndefined();
+    expect(untypeableReason(acct("2150", "A/P — opening", "accounts-payable-opening"))).toBeUndefined();
+  });
+
   it("offers neither an untypeable account nor a deactivated one, for different reasons", () => {
     // M-06 d9 / M-07 d18 — active governs what is OFFERED and never what
     // resolves. The two filters are not the same rule.
