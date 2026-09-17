@@ -1,6 +1,5 @@
 import type {
   AdjustmentReason,
-  PaymentTerms,
   GLAccount,
   GLMapping,
   Invoice,
@@ -81,12 +80,6 @@ export interface InvoiceJournalInput {
   mappings: GLMapping[];
   /** d17 — the SUPPLIER's currency. A USD Invoice exports as USD lines. */
   currency: string;
-  /**
-   * The RESOLVED payment terms — the Invoice's own, else the Supplier's
-   * (E-02 d45). `Prepaid` is what tells a second-hand intake that the money
-   * already moved, so it owes nobody. See the credit side below.
-   */
-  paymentTerms?: PaymentTerms;
 }
 
 /**
@@ -196,46 +189,23 @@ export function buildInvoiceJournal(input: InvoiceJournalInput): ArtifactJournal
     }
   }
 
-  // The credit side — what the intake owes, and to whom.
+  // Accounts payable — what is owed, tax INCLUDED (A-36: "tax included,
+  // because A-29 takes tax out of cost of goods, not out of what is owed").
+  // Tax is a debit above and sits inside this credit, which is the whole double
+  // entry an Input Tax Credit is: the shop owes the supplier the tax and is
+  // owed it back by the government.
   //
-  // **Accounts payable**, ordinarily: what is owed, tax INCLUDED (A-36 — "tax
-  // included, because A-29 takes tax out of cost of goods, not out of what is
-  // owed"). Tax is a debit above and sits inside this credit, which is the
-  // whole double entry an Input Tax Credit is: the shop owes the supplier the
-  // tax and is owed it back by the government.
-  //
-  // **Second-hand purchases** where a second-hand intake is `Prepaid` — E-02
-  // d54. Prepaid says the money already moved, and for a counter buy it moved
-  // through the till as a `Used Credit` tender, which debited that same
-  // account (d26, lexicon §14). So the intake credits it back at booked
-  // inventory cost and the residue is the period cost the lexicon describes:
-  // *"a lump paid for a crate and copies booked at a nominal figure differ on
-  // purpose."* Crediting Accounts Payable here instead would raise a debt to a
-  // walk-in who was paid at the counter and will never be paid again.
-  //
-  // The supplier does not decide this and must not: a shop may file a
-  // collection under its own supplier to analyse that stock's sales later,
-  // and where the money went is a different question from whose records these
-  // are. Terms answer it; the supplier is for reading.
+  // **Every intake raises a payable, second-hand and prepaid included** (E-02
+  // d54). A counter buy is not an exception: the Manager settles it in
+  // Accounts Payable drawing on *Second-hand purchases*, which is where the
+  // till already put the money (M-07 d26). One shape for every intake, a
+  // settlement artifact for every payment, and the same period cost left
+  // behind either way — the alternative special-cased the credit side by
+  // payment terms and left a counter buy with no record that it had been paid.
   const total = invoiceTotal(iv);
-  const prepaidSecondHand = iv.intakeMode === "Second-hand" && input.paymentTerms === "Prepaid";
   if (total !== 0) {
     postings.push(
-      prepaidSecondHand
-        ? credit(
-            need(roleAccount(accounts, "second-hand-purchases"), "Second-hand purchases (role)"),
-            bd,
-            total,
-            cur,
-            `Second-hand purchases — booked cost, ${iv.invoiceNumber}`,
-          )
-        : credit(
-            need(roleAccount(accounts, "accounts-payable"), "Accounts payable (role)"),
-            bd,
-            total,
-            cur,
-            `Accounts payable — ${iv.invoiceNumber}`,
-          ),
+      credit(need(roleAccount(accounts, "accounts-payable"), "Accounts payable (role)"), bd, total, cur, `Accounts payable — ${iv.invoiceNumber}`),
     );
   }
 
@@ -318,7 +288,19 @@ export function buildPaymentJournal(input: PaymentJournalInput): ArtifactJournal
     // A-65 says Method alone cannot answer — and exactly the case this cannot
     // tell apart until the batch carries the field.
     const ap = need(roleAccount(accounts, "accounts-payable"), "Accounts payable (role)");
-    const bank = need(roleAccount(accounts, "bank"), "Bank (role)");
+    // A-65 — the account the payment DREW ON, named on the settlement rather
+    // than inferred from the Method: "a shop paying some suppliers from one
+    // chequing account and others from a second, both by cheque, is not
+    // distinguishable by `Cheque`".
+    //
+    // It is also what lets a counter buy be settled at all. E-02 d54 raises a
+    // payable for one like any other intake, and the Manager clears it drawing
+    // on **Second-hand purchases**, where the till already put the money
+    // (M-07 d26) — which a hardcoded bank account could not express.
+    const drawnOn = b.drawnOnAccountId
+      ? accounts.find((a) => a.id === b.drawnOnAccountId)
+      : roleAccount(accounts, "bank");
+    const bank = need(drawnOn, b.drawnOnAccountId ? `the account this payment drew on` : "Bank (role)");
     const memo = reversing ? `Void of ${b.reference}` : b.reference || "Payment";
     if (reversing) {
       postings.push(credit(ap, bd, paid, cur, memo), debit(bank, bd, paid, cur, memo));

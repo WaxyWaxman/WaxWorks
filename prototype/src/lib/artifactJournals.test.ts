@@ -38,14 +38,13 @@ const invoice = (over: Partial<Invoice> = {}): Invoice =>
     ...over,
   }) as Invoice;
 
-const buildInv = (iv: Invoice, currency = "CAD", paymentTerms?: Invoice["paymentTerms"]) =>
+const buildInv = (iv: Invoice, currency = "CAD") =>
   buildInvoiceJournal({
     invoice: iv,
     writtenAt: "2026-09-12 09:30:00",
     accounts: CHART.accounts,
     mappings: CHART.mappings,
     currency,
-    paymentTerms,
   });
 
 const taxCharge = (taxCode: string, amount: number): InvoiceCharge => ({ id: `c-${taxCode}`, kind: "tax", taxCode, amount });
@@ -215,45 +214,29 @@ const batch = (over: Partial<PaymentBatch> = {}): PaymentBatch =>
 const buildPay = (b: PaymentBatch, reversalOf?: { voidId: string; voidedAt: string }) =>
   buildPaymentJournal({ batch: b, writtenAt: "2026-09-13 11:00:00", accounts: CHART.accounts, currency: "CAD", reversalOf });
 
-describe("E-02 d54 — a prepaid second-hand intake owes nobody", () => {
-  it("credits Second-hand purchases instead of raising a payable", () => {
-    // Prepaid says the money already moved, and for a counter buy it moved
-    // through the till as a Used Credit tender that debited this same account
-    // (M-07 d26). The intake credits it back at booked inventory cost, and the
-    // residue is the period cost lexicon §14 describes — "a lump paid for a
-    // crate and copies booked at a nominal figure differ on purpose".
-    //
-    // Crediting Accounts Payable here would raise a debt to a walk-in who was
-    // paid at the counter and will never be paid again.
-    const { batch, unresolved } = buildInv(invoice({ intakeMode: "Second-hand" }), "CAD", "Prepaid");
+describe("E-02 d54 — every intake raises a payable, second-hand included", () => {
+  it("credits Accounts Payable for a second-hand intake like any other", () => {
+    // A counter buy is not an exception. The money side went through the till
+    // and debited Second-hand purchases (M-07 d26); the payable is settled in
+    // A/P drawing on that same account, so the settlement is a real artifact
+    // rather than a rule hidden in the journal.
+    const { batch, unresolved } = buildInv(invoice({ intakeMode: "Second-hand" }));
 
     expect(lineFor(batch, acct("1200"))?.debit).toBe(30); // the copies, booked
-    expect(lineFor(batch, acct("5300"))?.credit).toBe(30); // Second-hand purchases
-    expect(lineFor(batch, acct("2100"))).toBeUndefined(); // nothing owed
+    expect(lineFor(batch, acct("2100"))?.credit).toBe(30); // owed until settled
+    expect(lineFor(batch, acct("5300"))).toBeUndefined(); // the till's side, not the intake's
     expect(unresolved).toEqual([]);
     expect(isImbalanced(batch)).toBe(false);
   });
 
-  it("still raises a payable for second-hand bought on terms", () => {
-    // A collection filed under its own supplier and paid later is an ordinary
-    // invoice. The SUPPLIER does not decide this and must not — a shop may file
-    // a collection under its own supplier purely to analyse that stock's sales
-    // later, and whose records these are is a different question from where the
-    // money went. Terms answer it.
-    const { batch } = buildInv(invoice({ intakeMode: "Second-hand" }), "CAD", "Net 30");
+  it("treats New and Second-hand the same way, whatever the terms", () => {
+    // The shape that was rejected read the credit side off payment terms. One
+    // shape for every intake is what replaced it.
+    const secondHand = buildInv(invoice({ intakeMode: "Second-hand" })).batch;
+    const newStock = buildInv(invoice({ intakeMode: "New" })).batch;
 
-    expect(lineFor(batch, acct("2100"))?.credit).toBe(30);
-    expect(lineFor(batch, acct("5300"))).toBeUndefined();
-  });
-
-  it("leaves NEW stock alone whatever its terms", () => {
-    // d54 is about the second-hand path. A prepaid new-stock invoice raising a
-    // payable that is never settled is a real question and a separate one,
-    // recorded in E-02 rather than answered here.
-    const { batch } = buildInv(invoice({ intakeMode: "New" }), "CAD", "Prepaid");
-
-    expect(lineFor(batch, acct("2100"))?.credit).toBe(30);
-    expect(lineFor(batch, acct("5300"))).toBeUndefined();
+    expect(lineFor(secondHand, acct("2100"))?.credit).toBe(30);
+    expect(lineFor(newStock, acct("2100"))?.credit).toBe(30);
   });
 });
 
@@ -293,6 +276,40 @@ describe("M-07 d12 — a PaymentBatch writes its own journal at record", () => {
     expect(unresolved.join(" ")).toContain("settled by supplier credit");
     expect(lineFor(j, acct("2100"))?.debit).toBe(20);
     expect(isImbalanced(j)).toBe(false);
+  });
+});
+
+describe("A-65 — a settlement names the account it drew on", () => {
+  it("credits that account rather than assuming the bank", () => {
+    // A-65's own case: "a shop paying some suppliers from one chequing account
+    // and others from a second, both by cheque, is not distinguishable by
+    // `Cheque`". Decided long ago and unbuilt until E-02 d54 needed it.
+    const second = CHART.accounts.find((a) => a.role === "second-hand-purchases")!;
+    const { batch: j } = buildPay(batch({ drawnOnAccountId: second.id }));
+
+    expect(lineFor(j, acct("2100"))?.debit).toBe(30);
+    expect(lineFor(j, second.id)?.credit).toBe(30);
+    expect(lineFor(j, acct("1010"))).toBeUndefined(); // not the bank
+  });
+
+  it("clears a counter buy's payable from where the till put the money", () => {
+    // The whole point of building it. E-02 d54 raises a payable for a
+    // second-hand intake like any other; the money went out at the till into
+    // Second-hand purchases (M-07 d26), so that is what the settlement draws
+    // on — and the account nets to the period cost rather than to nothing.
+    const second = CHART.accounts.find((a) => a.role === "second-hand-purchases")!;
+    const { batch: j, unresolved } = buildPay(
+      batch({ drawnOnAccountId: second.id, targets: [{ kind: "invoice", id: "inv-1", amount: 20, settleKind: "money" }] }),
+    );
+
+    expect(lineFor(j, second.id)?.credit).toBe(20);
+    expect(unresolved).toEqual([]);
+    expect(isImbalanced(j)).toBe(false);
+  });
+
+  it("still falls back to the bank where a settlement names no account", () => {
+    const { batch: j } = buildPay(batch());
+    expect(lineFor(j, acct("1010"))?.credit).toBe(30);
   });
 });
 
