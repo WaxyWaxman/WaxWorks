@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { assembleJournal, batchTotals, credit, datesIn, debit, isImbalanced, type Posting } from "./journal";
 
 const assemble = (postings: Posting[]) =>
-  assembleJournal({ id: "j-1", source: "close:b-1", writtenAt: "2026-09-16 18:00:00", postings, suspenseAccountId: "acc-suspense" });
+  assembleJournal({ id: "j-1", source: "close:b-1", writtenAt: "2026-09-16 18:00:00", postings, location: "0041982", suspenseAccountId: "acc-suspense" });
 
 describe("M-07 d14 — lines group by (business date, account), and a batch is not one date", () => {
   it("nets two postings to the same account on the same day into one line", () => {

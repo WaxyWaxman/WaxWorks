@@ -44,6 +44,10 @@ interface SettleForm {
   date: string;
   /** A-65 — the account the payment drew on. Defaults to the reserved bank. */
   drawnOnAccountId?: string;
+  /** M-06 d60 — what actually left the bank, typed only for a foreign
+   *  Supplier. Held as a string like every other money input here; absent
+   *  reads as "no rate movement", which is a fact for a domestic payment. */
+  paidAmount?: string;
   credit: Record<string, string>;
   money: Record<string, string>;
 }
@@ -187,6 +191,9 @@ export function AccountsPayable() {
         reference: form.reference.trim(),
         date: form.date,
         drawnOnAccountId: form.drawnOnAccountId,
+        // M-06 d60 — absent for a domestic settlement, and absent when the
+        // Manager left it alone, which reads as "no rate movement".
+        paidAmount: form.paidAmount?.trim() ? Number(form.paidAmount) : undefined,
         debits: plan.debits.map((d) => ({
           kind: d.kind === "invoice" ? ("invoice" as const) : ("entry" as const),
           id: d.id,
@@ -291,6 +298,9 @@ export function AccountsPayable() {
     // default, and the Manager overrides it where the money came from
     // somewhere else — a counter buy clears from Second-hand purchases.
     drawnOnAccountId: undefined,
+    // M-06 d60 — what actually left the bank. Only asked, and only sent, for a
+    // Supplier whose currency is not the home currency.
+    paidAmount: undefined as string | undefined,
     credit: {} as Record<string, string>,
     money: {} as Record<string, string>,
   });
@@ -459,6 +469,11 @@ export function AccountsPayable() {
         drawableAccounts={app.glAccounts.filter(
           (a) => accountType(a) === "asset" || a.role === "second-hand-purchases",
         )}
+        homeCurrency={app.homeCurrency}
+        // M-06 d59 — the rate the INVOICE recorded at finalize, not today's.
+        // The screen's arithmetic has to be the journal's or the figure the
+        // Manager confirms against is not the figure that will post.
+        rateFor={(targetId) => app.invoices.find((iv) => iv.id === targetId)?.exchangeRate ?? 1}
         onUnclear={(id) => {
           const r = app.unclearPayableEntries(id, authorisedBy ?? "");
           setMsg(

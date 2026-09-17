@@ -2,8 +2,8 @@ import { describe, expect, it } from "vitest";
 import { accountType, buildChart, seamsFor, unmappedSeams, type Seams } from "./chart";
 import { ADJUSTMENT_REASONS, type SectionRow, type TaxType, type TenderRow } from "../data/types";
 
-const section = (code: string, name: string): SectionRow =>
-  ({ code, name, countsAsRevenue: true, tracksStockDefault: true, discountable: true, returnable: true, active: true, sortOrder: 0 }) as SectionRow;
+const section = (code: string, name: string, countsAsRevenue = true): SectionRow =>
+  ({ code, name, countsAsRevenue, tracksStockDefault: true, discountable: true, returnable: true, active: true, sortOrder: 0 }) as SectionRow;
 
 const tender = (id: string, name: string, behavior = "Credit Card"): TenderRow =>
   ({ id, name, behavior, active: true }) as TenderRow;
@@ -51,23 +51,46 @@ describe("M-07 d11 — setup creates and maps every seam before anyone sees it",
   });
 
   it("reports what is missing when a seam has no account", () => {
-    // The check has to be real, or d11's invariant is a comment. A Section
-    // added after setup with no mapping is exactly d10's "discovered at the
-    // close, the worst possible moment".
+    // The check has to be real, or d11's invariant is a comment. A seam added
+    // after setup with no mapping is exactly d10's "discovered at the close,
+    // the worst possible moment".
     const { mappings } = buildChart(seams);
-    const later = { ...seams, sections: [...seams.sections, section("GC", "GIFT CARDS")] };
+    const later = { ...seams, tenders: [...seams.tenders, tender("t-later", "Interac")] };
+
+    expect(unmappedSeams(later, mappings)).toEqual(["Tender Interac"]);
+  });
+
+  // M-07 d29 — the Section seam is SPARSE. A Section that counts as revenue
+  // resolves by RULE to the reserved Sales role and has no mapping row to
+  // leave null, so its absence is not a hole. Only a Section that is not
+  // revenue keeps a mapping, because a dimension cannot decide
+  // revenue-versus-liability (M-06 d20's gift card load).
+  it("does not report a revenue Section as unmapped, because it resolves by rule (d29)", () => {
+    const { mappings } = buildChart(seams);
+    const later = { ...seams, sections: [...seams.sections, section("SO", "SOUL")] };
+
+    expect(unmappedSeams(later, mappings)).toEqual([]);
+  });
+
+  it("still reports a NON-revenue Section with no mapping (d29)", () => {
+    const { mappings } = buildChart(seams);
+    const later = { ...seams, sections: [...seams.sections, section("GC", "GIFT CARDS", false)] };
 
     expect(unmappedSeams(later, mappings)).toEqual(["Section GIFT CARDS"]);
   });
 });
 
 describe("M-07 d5/d6 — the chart follows the seams that already exist", () => {
-  it("gives every Section its own revenue account (d6)", () => {
+  // M-07 d28 — SUPERSEDES d6's revenue grain. Revenue resolves to ONE reserved
+  // Sales role and the Section rides on the line as a dimension (M-08 d2), so
+  // totalling sales across every Section and within one are the same query with
+  // a different filter. The breakdown M-03 reports comes from the dimension.
+  it("gives revenue a single reserved Sales account, not one per Section (d28)", () => {
     const { accounts } = buildChart(seams);
     const revenue = accounts.filter((a) => a.role === "revenue");
 
-    // A single Sales account would discard a breakdown M-03 already reports.
-    expect(revenue.map((a) => a.name)).toEqual(["Sales — VINYL", "Sales — MERCH"]);
+    expect(revenue).toHaveLength(1);
+    expect(revenue[0].name).toBe("Sales");
   });
 
   it("gives every tender its own account, not every behavior (M-06 d22)", () => {
@@ -154,14 +177,28 @@ describe("M-07 d5/d6 — the chart follows the seams that already exist", () => 
 });
 
 describe("M-07 d1/d3 — what the reserved accounts are, and whose numbers they carry", () => {
-  it("carries no Net Profit, Current Profits or Retained Earnings", () => {
-    // The wish list this flow was proposed with. d1 holds no balances and runs
-    // no period close, so all three are equity or derived figures that only
-    // mean something inside a close this flow does not run.
+  it("carries no Net Profit and no Current Profits, which are derived and never posted", () => {
+    // Two-thirds of the wish list this flow was proposed with still does not
+    // survive — M-08 d24 derives both when a statement is drawn, so neither is
+    // an account. M-08 d13 is corrected by d31 for the same reason: there is
+    // nothing to type into.
     const { accounts } = buildChart(seams);
     const names = accounts.map((a) => a.name.toLowerCase()).join(" | ");
 
-    expect(names).not.toMatch(/net profit|current profits|retained earnings/);
+    expect(names).not.toMatch(/net profit|current profits/);
+  });
+
+  // M-07 d31 — the third of the wish list DOES survive, because d27 reversed
+  // the grounds. M-08 d17's year-end seal posts to retained earnings, so the
+  // software must resolve it, which is d3's test for a reserved role.
+  it("carries Retained Earnings, because the year-end seal posts to it (d31)", () => {
+    const { accounts } = buildChart(seams);
+
+    // Widened deliberately: `GLRole` does not carry the role yet, and this
+    // assertion is about the CHART lacking the account, not about the type
+    // lacking the member. A `tsc` error here would break the build rather than
+    // report a non-conformance.
+    expect(accounts.find((a) => (a.role as string) === "retained-earnings")).toBeDefined();
   });
 
   it("carries a Suspense account, because d10 needs somewhere for a defect to go", () => {
@@ -187,24 +224,99 @@ describe("M-07 d1/d3 — what the reserved accounts are, and whose numbers they 
   });
 });
 
+describe("M-07 d32 — the starter chart, so day one does not begin with an invention", () => {
+  it("seeds ordinary expense accounts carrying NO role", () => {
+    // d11 promised "nothing has to be invented on day one", which was true while
+    // every account existed to receive an automatic posting. M-08 Phase 2 makes
+    // day one include typing rent.
+    const { accounts } = buildChart(seams);
+    const rent = accounts.find((a) => a.name === "Rent")!;
+
+    expect(rent).toBeDefined();
+    expect(rent.role).toBeUndefined();
+  });
+
+  it("gives them a STORED type, because d22 has no role to derive one from", () => {
+    const { accounts } = buildChart(seams);
+    const starter = accounts.filter((a) => !a.role);
+
+    expect(starter.length).toBeGreaterThan(0);
+    // Every role-less account must still classify, or it falls off a statement.
+    expect(starter.every((a) => accountType(a) !== undefined)).toBe(true);
+  });
+
+  it("seeds Bank charges, which M-06 d62 sends a bank fee to", () => {
+    // d62 keeps a bank fee off the supplier's Invoice — it is incurred weeks
+    // later, by the bank, and would otherwise raise invoice_cogs. It goes to a
+    // typed posting, and this is the account that posting names.
+    const { accounts } = buildChart(seams);
+
+    expect(accounts.find((a) => a.name === "Bank charges")).toBeDefined();
+  });
+
+  it("leaves them deactivatable like any account the Manager added (step 3)", () => {
+    const { accounts, mappings } = buildChart(seams);
+    const rent = accounts.find((a) => a.name === "Rent")!;
+
+    // Nothing resolves to them, so nothing breaks when a shop switches one off.
+    expect(mappings.find((m) => m.accountId === rent.id)).toBeUndefined();
+    expect(rent.active).toBe(true);
+  });
+});
+
 describe("M-07 step 5 — an account can be read back to what posts to it", () => {
   it("names the seam behind an account", () => {
     const { accounts, mappings } = buildChart(seams);
-    const vinyl = accounts.find((a) => a.name === "Sales — VINYL")!;
+    const visa = accounts.find((a) => a.name.includes("Visa"))!;
 
-    expect(seamsFor(vinyl.id, mappings, seams)).toEqual(["VINYL"]);
+    expect(seamsFor(visa.id, mappings, seams)).toEqual(["Visa"]);
+  });
+
+  // M-07 d29 — a revenue Section resolves by RULE, so it has no mapping row and
+  // the Sales account cannot be read back to a list of Sections. The breakdown
+  // lives on the line's section dimension (M-08 d2), not in the chart.
+  it("does not name a revenue Section behind the Sales account (d29)", () => {
+    const { accounts, mappings } = buildChart(seams);
+    const sales = accounts.find((a) => a.role === "revenue")!;
+
+    expect(seamsFor(sales.id, mappings, seams)).toEqual([]);
+  });
+
+  it("names a Manager-created non-revenue Section once it is mapped by hand (d33)", () => {
+    // d33 — buildChart seeds no Section mapping at all: revenue resolves to the
+    // Sales role and the system-owned gift-card Section to the liability its
+    // kind names. A Section a Manager creates and marks not-revenue is the one
+    // case left with nothing to resolve by, so the Manager maps it — and d33
+    // constrains the target to a LIABILITY, because money received against a
+    // future obligation is not revenue (M-06 d20).
+    const withDeposits = { ...seams, sections: [...seams.sections, section("DE", "DEPOSITS", false)] };
+    const { accounts, mappings } = buildChart(withDeposits);
+
+    expect(mappings.find((m) => m.seamKind === "section")).toBeUndefined();
+    expect(unmappedSeams(withDeposits, mappings)).toEqual(["Section DEPOSITS"]);
+
+    const liability = accounts.find((a) => a.role === "gift-card-liability")!;
+    const mapped = [...mappings, { seamKind: "section" as const, seamId: "DE", accountId: liability.id }];
+
+    expect(seamsFor(liability.id, mapped, withDeposits)).toContain("DEPOSITS");
+    expect(accountType(liability)).toBe("liability");
   });
 
   it("names both seams when two are pointed at one account", () => {
-    // d5 lets a Manager collapse two seams onto one account; the screen has to
-    // be able to say so, or the collapse is invisible.
+    // Step 5 lets a Manager collapse two seams onto one account; the screen has
+    // to be able to say so, or the collapse is invisible. Shown on TENDERS,
+    // which still map totally (M-06 d22) — d29 makes collapsing two Sections a
+    // reporting choice rather than a mapping one, so Sections can no longer
+    // demonstrate this.
     const { accounts, mappings } = buildChart(seams);
-    const vinyl = accounts.find((a) => a.name === "Sales — VINYL")!;
+    const visa = accounts.find((a) => a.name.includes("Visa"))!;
     const merged = mappings.map((m) =>
-      m.seamKind === "section" ? { ...m, accountId: vinyl.id } : m,
+      m.seamKind === "tender" && (m.seamId === "t-visa" || m.seamId === "t-amex")
+        ? { ...m, accountId: visa.id }
+        : m,
     );
 
-    expect(seamsFor(vinyl.id, merged, seams)).toEqual(["VINYL", "MERCH"]);
+    expect(seamsFor(visa.id, merged, seams)).toEqual(["Visa", "Amex"]);
   });
 
   it("names a tax mapping by which half it is", () => {
@@ -230,12 +342,15 @@ describe("M-07 — the suggested numbering groups by account type, not by subjec
     expect(band(collected.number)).toBe(2); // liability
   });
 
-  it("leaves the 3000s empty, because d1 holds no equity", () => {
-    // An accountant seeing no 3000s knows at once this file does not carry
-    // equity. Renumbering to close the gap would hide the fact.
+  // M-07 d31 — d27 reversed d1's no-equity claim and the 3000s fill. Retained
+  // earnings and owner's equity are both reserved roles; an accountant seeing
+  // an empty 3000s band would now be reading a chart that is missing something.
+  it("files equity in the 3000s, because d27 reversed d1's no-equity claim (d31)", () => {
     const { accounts } = buildChart(seams);
+    const equity = accounts.filter((a) => band(a.number) === 3);
 
-    expect(accounts.filter((a) => band(a.number) === 3)).toEqual([]);
+    expect(equity.length).toBeGreaterThan(0);
+    expect(equity.every((a) => accountType(a) === "equity")).toBe(true);
   });
 
   it("files revenue in the 4000s and cost of goods in the 5000s", () => {

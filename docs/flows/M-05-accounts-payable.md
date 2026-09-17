@@ -2,7 +2,7 @@
 
 **Actor:** Manager
 **Status:** Specified
-**Related:** [E-02 Receive inventory](E-02-receive-inventory.md) · [E-04 Manage the inventory](E-04-manage-inventory.md) · [E-05 Point of Sale](E-05-sell-a-record.md) · [M-01 Suppliers](M-01-supplier-margin.md) · [M-07 Chart of accounts](M-07-chart-of-accounts.md)
+**Related:** [E-02 Receive inventory](E-02-receive-inventory.md) · [E-04 Manage the inventory](E-04-manage-inventory.md) · [E-05 Point of Sale](E-05-sell-a-record.md) · [M-01 Suppliers](M-01-supplier-margin.md) · [M-07 Chart of accounts](M-07-chart-of-accounts.md) · [M-08 Keep the general ledger](M-08-general-ledger.md)
 
 **Job:** As a manager, I need to see what the store owes, settle supplier invoices, and get credit for stock that arrived short or damaged.
 
@@ -105,6 +105,14 @@ Loading and redeeming happen at the till ([E-05](E-05-sell-a-record.md)); this i
 ---
 
 ## Inherited from other flows
+
+**From [M-06](M-06-settings.md):**
+
+- **A PaymentBatch records two figures where it recorded one: what it cleared, and what it cost** ([M-06](M-06-settings.md) d59, d60). Settling a **USD 1,000** Invoice booked at CAD 1,350 may take **CAD 1,403.50** out of the bank, and the difference is a real exchange loss that has to land somewhere. So where the Supplier's currency is not the Store's home currency, the Manager **confirms what actually left the bank** and the difference posts to the reserved exchange gain-or-loss account. **A domestic payment is untouched** — the two figures are the same number and always will be, so it defaults and saves with no extra step. This is *recording rather than deriving*, which is d5's own rule: the bank statement is the fact, and a stored rate is only an estimate of it. **This flow's *Currency movement* open question, closed on [M-07](M-07-chart-of-accounts.md) d17, is answered here rather than reopened** — the movement is the confirmed difference, not a computation over two rates.
+
+**From [M-08](M-08-general-ledger.md):**
+
+- **The ledger's *Accounts payable* account is this flow's balance, exactly and permanently** ([M-08](M-08-general-ledger.md) d7). Nothing is ever typed into it, so *the A/P account balance **is** the sum of what M-05 holds* is a checkable invariant rather than an approximation — and a divergence is a defect, never a leftover. **The debts the shop carried in from paper are deliberately outside this flow:** they sit in a separate *Accounts payable — opening* account with no supplier, no terms and no aging, and are drawn down by hand, because nobody retro-enters forty invoices and a half-migrated payables ledger is worse than none. **Nothing in M-05 changes** — this is a commitment about what M-05 must stay true of, not a new mechanism.
 
 **From [E-02](E-02-receive-inventory.md):**
 

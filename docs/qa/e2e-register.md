@@ -341,6 +341,7 @@ milestones have both tracks landed.
 | M5 Close, receipts, review | M-03-T1–T5, M-04-T7 *(acknowledge)* |
 | M6 Hardening | Every row above, run as one seeded trading day |
 | M7 Payables (A-39) | M-05-T1–T7, E-02-T9, M-01-T4 |
+| **M-08 — unplaced** | M-08-T1–T16. **M-08 is in no milestone**: it reached `Specified` after [architecture](../architecture.md) §8's build order was written, and §8 has no **D** or **U** row for it. Placing it is an `/architecture` decision, and it is the one thing standing between these sixteen rows and a work order. Note M-08-T16 spans M3 (receiving) and M7 (payables), so the ledger cannot be wholly earlier than either |
 | Post-v1, in §8's order | M-02-T1–T10 → M-04-T1–T6 *(Add and Deactivate first, M-04 decision 21)* → M-06-T3, T5–T7, T9, T10, T12 *(the settings screens)* → M-07-T1–T7 and M-03-T6 *(the chart and the journal — unplaced, see Open questions)* |
 
 ---
