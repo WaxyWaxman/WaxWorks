@@ -133,6 +133,10 @@ Loading and redeeming happen at the till ([E-05](E-05-sell-a-record.md)); this i
 - **A settlement names the bank account it drew on, defaulted from the Method and overridable** ([architecture](../architecture.md) A-65). A bank account is not an entity — it is an account in [M-07](M-07-chart-of-accounts.md)'s chart carrying a bank role, and **this system holds no balance for it**; decision 5 is unchanged and the bank statement stays the reconciliation surface. The field is needed because **Method alone is too coarse**: a shop paying some suppliers from one chequing account and others from a second, both by cheque, is not distinguishable by `Cheque`. Shape follows decision 34's Method exactly — pre-filled, and the Manager may change it.
 - **A PaymentBatch writes its own journal entry when it is recorded** ([M-07](M-07-chart-of-accounts.md) d12), and a **void posts forward** as a reversing entry dated when the void happened rather than rewriting the original ([M-07](M-07-chart-of-accounts.md) d8) — which is decision 22's own shape, and [architecture](../architecture.md) A-33a's *reverse as recorded*, applied to the ledger.
 
+**From [architecture](../architecture.md):**
+
+- **Deleting a clearing is permitted, and the un-clear log must name the siblings** ([architecture](../architecture.md) A-70). A-70 records decision 48 and states the four conditions that make it safe — nothing cites the row, no money moved, no journal line was posted, and **its log preserves what the row recorded**. The fourth is a requirement on decision 39's logging rather than a restatement of it: removing the clearing destroys the **grouping**, and *"Cleared against 2 other entries"* does not say which two. Each member's un-clear entry therefore names its siblings. Failing any of the four puts the artifact back under decision 22's append-a-void shape.
+
 ---
 
 ## Resolved decisions
