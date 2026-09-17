@@ -148,7 +148,7 @@ non-tracked items like freight. They are an **editable table** (decision 28):
 | Tracks stock | The **default** for entries created here, not a rule over them (decision 29) |
 | Discountable | Off refuses a till discount on the line (decision 30) |
 | Returnable | Off refuses a Return of the line (decision 30) |
-| ~~GL code~~ | **Retired by decision 58** — the Section-to-account mapping lives in [M-07](M-07-chart-of-accounts.md) d4, one revenue account per Section (M-07 d6) |
+| ~~GL code~~ | **Retired by decision 58** — the Section-to-account mapping lives in [M-07](M-07-chart-of-accounts.md) d4 — and a revenue Section no longer maps at all ([M-07](M-07-chart-of-accounts.md) d28, d29, superseding d6's grain): it resolves to the reserved **Sales** role and rides on the line as a dimension |
 
 **Genre** is finer-grained and determines where a Record lives in the shop. **Every
 Genre has a parent Section and it is required** (decision 32), which is what lets a
@@ -243,7 +243,7 @@ QST are separate registrations (decision 48).
 **From [M-07](M-07-chart-of-accounts.md):**
 
 - **Decision 39's deferral is discharged, and no rate history was ever needed** ([M-07](M-07-chart-of-accounts.md) d17). d39 sent exchange gain or loss to the chart of accounts and warned the price of computing one would be [architecture](../architecture.md) A-36, A-47 and decision 37 reopened together. **M-07 places the gain instead of computing it** — a journal line carries its own currency code, nothing is converted, and the accountant's conversion difference *is* the gain. So d39's closing line, *"it now waits on the chart of accounts rather than on a setting"*, has been answered: the wait is over and **decisions 33, 37 and 38 are all unaffected**.
-- **No settings row carries a GL account.** [M-07](M-07-chart-of-accounts.md) d4 holds every account mapping in that flow, which retires the reserved fields on tax types (d11), tenders (d23) and Sections (d28) — recorded here as decision 58. A tax type maps to **two** accounts rather than one (M-07 d5), and revenue is one account per Section (M-07 d6), so adding a Section now also prompts for an account.
+- **No settings row carries a GL account.** [M-07](M-07-chart-of-accounts.md) d4 holds every account mapping in that flow, which retires the reserved fields on tax types (d11), tenders (d23) and Sections (d28) — recorded here as decision 58. A tax type maps to **two** accounts rather than one (M-07 d5), and revenue resolves to **one reserved Sales account** with the Section as a dimension ([M-07](M-07-chart-of-accounts.md) d28, superseding d6), so adding a **revenue** Section prompts for no account at all — only a Section marked *not* revenue still needs one ([M-07](M-07-chart-of-accounts.md) d29, d33).
 
 ---
 

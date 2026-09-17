@@ -330,10 +330,13 @@ owned elsewhere and are the real dependencies; the rest are this flow's own.
   is an exception to A-5, or consolidation works some other way — the reference model runs
   a system per store and **transfers** entries to a main site. **A candidate A-n for
   `/architecture`**, and the last structural thing between this flow and a build.
-- ~~**Can a period be reopened, and how far back?**~~ — **Resolved** by decisions 16, 18
-  and 22: any sealed period, with authorization and a recorded reason, except a year
-  **marked filed**, which never reopens. Decision 21's absolute bar on sealed years was
-  superseded once the reference model turned out to permit exactly what it forbade.
+- ~~**Can a period be reopened, and how far back?**~~ — **Resolved** by decisions 29, 18
+  and 22: **the most recently sealed period only**, with authorization and a recorded
+  reason, repeated to walk backwards — except a year **marked filed**, which never
+  reopens. *Both of the answers this question first had were superseded, which is why it
+  reads oddly:* decision 21's absolute bar on sealed years fell once the reference model
+  turned out to permit exactly what it forbade, and decision 16's *any sealed period*
+  fell to decision 29, whose friction is the guard d16 had removed.
 - ~~**What refuses a seal?**~~ — **Resolved** by decision 15 and step 17: an unbalanced
   posting and an invalid account, section or location. **A Suspense line does not** — it is
   reported and carried gross onto the closing transaction, because no Manager can clear one

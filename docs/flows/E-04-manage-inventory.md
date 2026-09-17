@@ -139,7 +139,7 @@ An optional cross-reference links the two, so a payout can be traced to the copi
 
 **From [M-07](M-07-chart-of-accounts.md):**
 
-- **An on-hand adjustment writes its own journal entry when it is made** ([M-07](M-07-chart-of-accounts.md) d12), and **each reason code maps to its own account** ([M-07](M-07-chart-of-accounts.md) d6) — `Shrinkage`, `Damaged`, `Found`, `Miscount / correction`, `Written off` and `Other` are six accounts, not one, because the six exist precisely so a Manager has to choose between them. It does not wait for a close and there is no month-end routine.
+- **An on-hand adjustment writes its own journal entry when it is made** ([M-07](M-07-chart-of-accounts.md) d12), and **each reason code maps to its own account** ([M-07](M-07-chart-of-accounts.md) d6, and **still does** — d30 keeps this half of d6 untouched while d28 supersedes its revenue half, because a reason code is a different *kind* of expense rather than a different part of the shop) — `Shrinkage`, `Damaged`, `Found`, `Miscount / correction`, `Written off` and `Other` are six accounts, not one, because the six exist precisely so a Manager has to choose between them. It does not wait for a close and there is no month-end routine.
 
 ---
 
@@ -182,6 +182,16 @@ An optional cross-reference links the two, so a payout can be traced to the copi
 ---
 
 ## Open questions
+
+- **Can a correction here ever land inside a sealed period?** [M-08](M-08-general-ledger.md)'s
+  Requirements say *"nothing may write into a sealed period, by any route"*, and name only
+  [M-03](M-03-daily-summary.md)'s Undo End of Day as the worked example — because that is
+  the one reversal in this system that does **not** post forward. This flow's on-hand adjustments write their own journals ([M-07](M-07-chart-of-accounts.md) d12), dated when the adjustment happened — so an adjustment correcting an old count is the case to check.
+  **The likely answer is that it cannot**, because [M-07](M-07-chart-of-accounts.md) d8
+  posts every correction forward to the day it was made, and today is by construction not
+  inside a period already sealed. *That reasoning is not written down anywhere*, so it is
+  recorded here as a question rather than assumed: if it holds, this flow needs a sentence
+  saying so; if it does not, this flow needs a refusal. **Raised by the [M-08](M-08-general-ledger.md) audit**, which found that neither flow mentions M-08 or a sealed period at all.
 
 - **Batch stock-take.** Reason-coded single adjustments are specified; counting a whole Section against the shelf and reconciling in one pass is not. It needs a session concept — count in progress, variances, then commit.
 - **Claim resolution beyond Credited.** ~~A supplier may **partially credit**~~ — **resolved by decision 20**: the memo's amount is captured and governs, so a part credit is an ordinary Credited claim at the memo's figure. ~~Still open: a supplier who **denies** a claim outright~~ — **resolved by decision 24**: a denial is one of three reasons a claim is **Abandoned**, which is the terminal disposition v1 previously lacked. ~~Still open: a supplier who issues a credit note **against a different Invoice** than the one claimed~~ — **resolved by decision 28**: they may, so long as it is an Invoice the store actually received stock on from them. The reference is evidence of what is being argued, never where the credit lands — that stays [M-05](M-05-accounts-payable.md) d27's selection. **This open question is now closed in full.**
