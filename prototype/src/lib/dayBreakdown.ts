@@ -19,6 +19,19 @@ export interface DayBreakdown {
   // ways and netting a day's top-ups against its draw-downs under one row
   // reports $0 for two real movements (M-03 d14).
   byTender: { label: string; amount: number }[];
+  /**
+   * The day's cash movement, net of what left the drawer — M-03 d16.
+   *
+   * `null` where nothing cash-shaped happened at all, so the tape carries no
+   * line rather than a misleading `$0.00`.
+   *
+   * **A subtotal, not a movement**, which is why it is its own field and not a
+   * row in `byTender`: anything summing that list would double-count it. d14's
+   * rule that the tender column reports every movement rather than a net figure
+   * is unaffected — both movements are still there, and this is read beside
+   * them.
+   */
+  cashNet: number | null;
   byTaxLine: { name: string; amount: number }[];
   // Money that came through a tender without being a sale, so the tender
   // column can be reconciled against net sales instead of silently
@@ -30,6 +43,12 @@ export interface DayBreakdown {
   payouts: { saleLabel: string; note: string; amount: number }[];
   belowMin: { recordId: string; label: string; onHand: number; minOnHand: number }[];
 }
+
+// The two labels the cash subtotal is built from. Named rather than typed
+// inline because the subtotal and the rows have to agree, and a typo in one of
+// them would silently drop a movement out of the total.
+const CASH = "Cash";
+const CASH_PAYOUTS = "Cash — pay-outs";
 
 export function computeDayBreakdown(
   sales: Sale[],
@@ -105,10 +124,21 @@ export function computeDayBreakdown(
       // customer paying onto their account and a customer spending the
       // credit are opposite movements that happen to share a type. Reported
       // separately so a day that did $100 of each doesn't read as $0.
+      //
+      // A PAY-OUT is reported against CASH (M-03 d16), because that is the
+      // tender it moved through: the section above says returns and pay-outs
+      // appear as negative amounts *against the tender they moved through*,
+      // and E-05 d16 says it plainly — "a negative cash line in the M-03
+      // close". Under its own `Pay-out` label, a day with no cash sales
+      // carried no cash line at all, and the $20 that left the drawer read as
+      // a category of its own rather than as cash going out. A cash refund was
+      // already right: it is a negative `Cash` tender and always netted here.
       const label =
-        t.type === "Account Balance"
-          ? `Account Balance (${t.accountDirection === "add" ? "added" : "drawn"})`
-          : t.type;
+        t.type === "Pay-out"
+          ? CASH_PAYOUTS
+          : t.type === "Account Balance"
+            ? `Account Balance (${t.accountDirection === "add" ? "added" : "drawn"})`
+            : t.type;
       tenderAmounts.set(label, round2((tenderAmounts.get(label) ?? 0) + t.amount));
       if (t.type === "Pay-out") {
         payouts.push({ saleLabel: sale.saleNumber ? `#${sale.saleNumber}` : "—", note: t.note ?? "", amount: t.amount });
@@ -135,6 +165,10 @@ export function computeDayBreakdown(
     netSales: round2(grossSales + returnsAmount),
     bySection: [...sectionAmounts.entries()].map(([label, amount]) => ({ label, amount })),
     byTender: [...tenderAmounts.entries()].map(([label, amount]) => ({ label, amount })),
+    cashNet:
+      tenderAmounts.has(CASH) || tenderAmounts.has(CASH_PAYOUTS)
+        ? round2((tenderAmounts.get(CASH) ?? 0) + (tenderAmounts.get(CASH_PAYOUTS) ?? 0))
+        : null,
     byTaxLine: [...taxAmounts.entries()].map(([name, amount]) => ({ name, amount })),
     giftCardsLoaded,
     voidCount,

@@ -547,6 +547,29 @@ function BreakdownView({ data }: { data: DayBreakdown }) {
                   <td className="num muted">{money(data.giftCardsLoaded)}</td>
                 </tr>
               )}
+              {/* M-03 d16 — the day's cash movement, net of what left the
+                  drawer. A subtotal beneath the movements rather than one of
+                  them, because d14 keeps every movement in the column above
+                  and this is the figure you count against.
+
+                  NOT a drawer figure, and the wording has to keep saying so:
+                  this flow holds no opening float and runs no
+                  counted-versus-expected comparison, so what it can report is
+                  how much cash MOVED, never how much is in the till. */}
+              {data.cashNet !== null && (
+                <tr>
+                  <td>
+                    <strong>Cash, net</strong>
+                    <div className="xsmall muted">
+                      what the drawer took less what left it — no float, so this is the day's movement rather than
+                      what is in the till
+                    </div>
+                  </td>
+                  <td className="num">
+                    <strong>{money(data.cashNet)}</strong>
+                  </td>
+                </tr>
+              )}
               {data.byTender.length === 0 && (
                 <tr>
                   <td className="small muted">Nothing tendered.</td>
