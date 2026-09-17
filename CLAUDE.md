@@ -17,6 +17,7 @@ colliding or quietly contradicting each other.
 | `docs/architecture.md` | The architecture, and the numbered **A-n** decisions (§2). §9 lists every amendment an A-n made elsewhere |
 | `docs/lexicon.md` | Controlled vocabulary — the canonical term for each concept |
 | `docs/prototype.md` | The clickable prototype and its flow ↔ screen map |
+| `docs/qa/e2e-register.md` | The end-to-end test register — one row per whole-flow scenario, its status against the prototype and the product |
 | `docs/reference/` | Worked examples and external-system notes |
 | `docs/templates/` | Starting point for a new flow document |
 | `.claude/skills/` | The planning skills (see below) |
@@ -92,8 +93,8 @@ would flood the conversation.
 
 | Entry point | Use it to |
 |---|---|
-| `/qa` | Write, maintain, and run tests; decision-to-test traceability |
-| `qa-reviewer` | Read-only conformance review, error states, abuse paths |
+| `/qa` | Write, maintain, and run tests; decision-to-test traceability; keep the end-to-end register. Modes: `register`, `walk`, `automate`, `run`, `stale`, `ready` |
+| `qa-reviewer` | Read-only conformance review, error states, abuse paths, register drift |
 
 ### Routing
 
@@ -103,11 +104,31 @@ would flood the conversation.
 | Behaviour inside one flow | `/flow-clarify <ID>` |
 | A job not yet written down | `/flow-new` |
 | Structure, security, reliability, tech choice | `/architecture` |
-| Whether code matches the spec; tests; edge cases | `/qa` |
+| Whether code or the prototype matches the spec; tests; edge cases | `/qa` |
+| "Is this flow ready to test end to end?" / "what do we test at this milestone?" | `/qa ready` |
 | Consistency of the whole set | `/spec-audit` |
 
 `/plan-check` comes first when a proposal might contradict something recorded.
 Finding the conflict before the writing is the cheap moment to find it.
+
+### When QA is called
+
+End-to-end testing is triggered by events, not by asking. The coordinator watches
+for these and routes; the skill that raises the event names the hand-off in its
+own close-out, so nothing depends on remembering this table.
+
+| Event | Raised by | Hand-off | Register effect |
+|---|---|---|---|
+| A flow reaches `Specified` | `/flow-clarify` close-out | `/qa register <ID>` | Rows added, `Planned` |
+| A decision is superseded, or an A-n amends a flow | `/plan-check` supersession, `/architecture` | `/qa stale <decision>` | Rows asserting it → `Stale` |
+| A prototype screen for a `Specified` flow lands or changes its `docs/prototype.md` map row | The pull request | `/qa walk <ID>` | Prototype column → `Walked`; divergences reported |
+| A `packages/contracts` entry changes | The contract pull request — both review it | `/qa stale` for rows calling it | Product column → `Stale` |
+| Both the **D** and **U** rows of an `architecture.md` §8 milestone are merged | The second of the two pull requests | `/qa ready <milestone>`, then `/qa automate` per row | Product column → `Automated` |
+| M6 hardening opens | The coordinator | `/qa ready M6` | Every v1 row `Automated`; a seeded trading day runs them all |
+
+"Development complete" for end-to-end purposes means **both tracks**: the screen
+against the real database function. One track alone is an integration test against
+the in-memory fake, and `/qa ready` says so rather than passing it.
 
 ## Gates against confident wrong answers
 

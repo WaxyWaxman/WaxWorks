@@ -22,6 +22,14 @@ section in THIS pull request. List them, or say "none".
 
 <!-- e.g. "E-05: Stub -> In clarification". All three places updated? -->
 
+## End-to-end register
+
+<!--
+docs/qa/e2e-register.md rows added or moved, by row ID and transition —
+"E-05-T7: Planned -> Walked (prototype)". A superseded decision must list the
+rows it makes Stale. A flow promoted to Specified gets rows. Say "none" if none.
+-->
+
 ---
 
 - [ ] `git merge origin/main` done, and the checks below run on the merged result
@@ -30,3 +38,4 @@ section in THIS pull request. List them, or say "none".
 - [ ] No existing decision row was renumbered or deleted
 - [ ] Status matches in the flow file, `docs/README.md`, and `docs/PRD.md` §3
 - [ ] If a decision was superseded, it is called out above — a textual merge cannot see it
+- [ ] Register rows asserting any superseded or amended decision are marked `Stale`; a flow promoted to `Specified` has rows
