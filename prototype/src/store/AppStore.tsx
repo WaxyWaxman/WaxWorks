@@ -969,7 +969,7 @@ interface AppContextValue extends AppState {
   // them are things read off the supplier's invoice and corrected until paid.
   updateInvoiceTotals: (
     invoiceId: string,
-    patch: Partial<Pick<Invoice, "statedSubtotal" | "freight" | "charges" | "paymentTerms" | "paymentMethod">>,
+    patch: Partial<Pick<Invoice, "statedSubtotal" | "freight" | "charges" | "invoiceDate" | "paymentTerms" | "paymentMethod">>,
   ) => void;
   setInvoiceTotalOverride: (invoiceId: string, value?: number) => void;
   /**

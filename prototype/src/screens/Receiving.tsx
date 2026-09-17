@@ -21,7 +21,7 @@ import {
 import { readStored, writeStored } from "../lib/tillMemory";
 import { money } from "../lib/money";
 import { priceLine } from "../lib/pricing";
-import { countField, figureField, integerOnly, numericOnly } from "../lib/fields";
+import { countField, figureField, integerOnly, moneyOnly, numericOnly } from "../lib/fields";
 import { outstandingQty } from "../lib/orderLines";
 import { invoiceChargesTotal, invoiceIsPaid, round2 } from "../lib/totals";
 import { storeTaxTypes } from "../lib/tax";
@@ -1029,7 +1029,7 @@ function StageCard({
                   <input
                     {...figureField}
                     value={listRaw}
-                    onChange={(e) => setListRaw(numericOnly(e.target.value))}
+                    onChange={(e) => setListRaw(moneyOnly(e.target.value))}
                   />
                   <span className="recv-stage-hint">pre-discount</span>
                 </label>
@@ -1050,7 +1050,7 @@ function StageCard({
                     <input
                       {...figureField}
                       value={sellRaw ?? suggested.toFixed(2)}
-                      onChange={(e) => setSellRaw(numericOnly(e.target.value))}
+                      onChange={(e) => setSellRaw(moneyOnly(e.target.value))}
                     />
                   )}
                   <span className="recv-stage-hint">
@@ -1483,7 +1483,7 @@ function EditLineRow({
           className="inline-num"
           {...figureField}
           value={listRaw}
-          onChange={(e) => setListRaw(numericOnly(e.target.value))}
+          onChange={(e) => setListRaw(moneyOnly(e.target.value))}
           aria-label="List price — pre-discount"
         />
       </td>
@@ -1501,7 +1501,7 @@ function EditLineRow({
           className="inline-num"
           {...figureField}
           value={sellRaw ?? ""}
-          onChange={(e) => setSellRaw(numericOnly(e.target.value))}
+          onChange={(e) => setSellRaw(moneyOnly(e.target.value))}
           aria-label="Sell price"
         />
       </td>

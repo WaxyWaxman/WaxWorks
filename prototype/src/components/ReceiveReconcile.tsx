@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { PAYMENT_METHODS, PAYMENT_TERMS } from "../data/types";
 import type { Invoice, InvoiceCharge, PaymentMethod, PaymentTerms, Supplier, TaxType } from "../data/types";
-import { figureField, numericOnly } from "../lib/fields";
+import { figureField, moneyOnly } from "../lib/fields";
 import { money } from "../lib/money";
 import { dueFor } from "../lib/payables";
 import { invoiceIsPaid, round2 } from "../lib/totals";
@@ -44,7 +44,7 @@ export function ReceiveReconcile({
   invoice: Invoice;
   supplier: Supplier;
   onPatchTotals: (
-    patch: Partial<Pick<Invoice, "statedSubtotal" | "freight" | "charges" | "paymentTerms" | "paymentMethod">>,
+    patch: Partial<Pick<Invoice, "statedSubtotal" | "freight" | "charges" | "invoiceDate" | "paymentTerms" | "paymentMethod">>,
   ) => void;
   /** d53 — what a charge may be labelled is a property of the store. */
   taxTypes: TaxType[];
@@ -149,7 +149,7 @@ export function ReceiveReconcile({
               {...figureField}
               disabled={locked}
               value={totalRaw}
-              onChange={(e) => onTotalRawChange(numericOnly(e.target.value, true))}
+              onChange={(e) => onTotalRawChange(moneyOnly(e.target.value, true))}
               aria-label="Invoice total — ±2% free, beyond raises a review flag"
             />
           </div>
@@ -330,7 +330,7 @@ function InvoiceTerms({
   invoice: Invoice;
   supplier: Supplier;
   locked: boolean;
-  onPatch: (patch: Partial<Pick<Invoice, "paymentTerms" | "paymentMethod">>) => void;
+  onPatch: (patch: Partial<Pick<Invoice, "invoiceDate" | "paymentTerms" | "paymentMethod">>) => void;
 }) {
   const terms = invoice.paymentTerms ?? supplier.paymentTerms;
   const method = invoice.paymentMethod ?? supplier.defaultPaymentMethod;
@@ -339,6 +339,28 @@ function InvoiceTerms({
 
   return (
     <>
+      {/* Editable here, and it belongs here rather than beside the figures:
+          this is the date the due date below is derived from (d45), so the
+          correction and its consequence sit together.
+
+          Correctable until the Invoice is paid, which is d40's window and what
+          `locked` already tracks. It no longer moves the ledger either way —
+          architecture A-71 dates the journal by the finalize, which the system
+          stamps — so fixing a mistyped date is now purely a payables
+          correction, which is the only thing it was ever meant to be.
+
+          `type="date"`, like every other date in this app: a value that is not
+          one calendar day compares against nothing else in the system. */}
+      <label className="field">
+        <span>Invoice date</span>
+        <input
+          type="date"
+          disabled={locked}
+          value={invoice.invoiceDate}
+          onChange={(e) => onPatch({ invoiceDate: e.target.value })}
+        />
+        <span className="hint">Off their paperwork. The due date below follows it.</span>
+      </label>
       <label className={"field" + inherited(invoice.paymentTerms)}>
         <span>
           Payment terms
@@ -444,7 +466,7 @@ function FigureInput({
       aria-label={label}
       value={raw ?? String(value)}
       onChange={(e) => {
-        const next = numericOnly(e.target.value);
+        const next = moneyOnly(e.target.value);
         setRaw(next);
         onCommit(Number(next) || 0);
       }}
