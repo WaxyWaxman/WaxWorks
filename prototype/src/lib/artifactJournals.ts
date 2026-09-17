@@ -100,9 +100,24 @@ export function buildInvoiceJournal(input: InvoiceJournalInput): ArtifactJournal
   const { invoice: iv, accounts, currency: cur } = input;
   const postings: Posting[] = [];
   const unresolved: string[] = [];
-  // d14 — the line's own business date. An Invoice's is the date on the
-  // paperwork, not the day someone got round to finalizing it.
-  const bd = businessDateOr(iv.invoiceDate, input.writtenAt, `Invoice date "${iv.invoiceDate}"`, unresolved);
+  // d14, and **A-71** — the line's own business date is the **finalize**, not
+  // the date on the supplier's paperwork.
+  //
+  // d13 already located the economic event here: *"finalize is when the money
+  // becomes real — lines become sellable inventory and the debt to the supplier
+  // exists."* The first build of this function dated the lines by
+  // `invoiceDate` anyway, which is a fact about the supplier's paperwork rather
+  // than about when the shop's position changed. d19 set the precedent for
+  // Sales by dating them at the tender, the moment the money moved.
+  //
+  // **What settles it is d8.** An Invoice dated 28 August and finalized 16
+  // September would post lines into a month the shop may already have exported,
+  // filed and had imported — the harm d8 exists to prevent, arriving as a new
+  // line rather than as a restatement and doing the same damage quietly.
+  //
+  // The supplier's invoice date keeps its own job untouched: E-02 d45 runs
+  // payment terms from it, never from the received date.
+  const bd = businessDateOr(input.writtenAt, input.writtenAt, `Finalize timestamp "${input.writtenAt}"`, unresolved);
 
   const need = (a: GLAccount | undefined, what: string): string => {
     if (a) return a.id;
