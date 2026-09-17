@@ -2,7 +2,7 @@
 
 **Actor:** Employee (Undo End of Day is **manager-only** — [M-03](M-03-daily-summary.md) d4, [architecture](../architecture.md) A-28a)
 **Status:** Specified
-**Related:** [E-03 Search the inventory](E-03-search-inventory.md) · [E-06 Process a return](E-06-process-a-return.md) · [E-07 Manage customers](E-07-manage-customers.md) · [M-03 Daily summary](M-03-daily-summary.md) · [M-06 Settings](M-06-settings.md) · [M-07 Chart of accounts](M-07-chart-of-accounts.md)
+**Related:** [E-03 Search the inventory](E-03-search-inventory.md) · [E-04 Manage the inventory](E-04-manage-inventory.md) · [E-06 Process a return](E-06-process-a-return.md) · [E-07 Manage customers](E-07-manage-customers.md) · [M-02 Re-order inventory](M-02-reorder-inventory.md) · [M-03 Daily summary](M-03-daily-summary.md) · [M-05 Accounts payable](M-05-accounts-payable.md) · [M-06 Settings](M-06-settings.md) · [M-07 Chart of accounts](M-07-chart-of-accounts.md)
 
 **Job:** As an employee, I need to ring up a sale and take payment.
 

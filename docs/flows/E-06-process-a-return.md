@@ -2,7 +2,7 @@
 
 **Actor:** Employee
 **Status:** Specified
-**Related:** [E-05 Point of Sale](E-05-sell-a-record.md) · [E-07 Manage customers](E-07-manage-customers.md) · [M-07 Chart of accounts](M-07-chart-of-accounts.md)
+**Related:** [E-05 Point of Sale](E-05-sell-a-record.md) · [E-07 Manage customers](E-07-manage-customers.md) · [M-03 Daily summary](M-03-daily-summary.md) · [M-07 Chart of accounts](M-07-chart-of-accounts.md)
 
 **Job:** As an employee, I need to take back a sold record and refund or exchange it.
 
