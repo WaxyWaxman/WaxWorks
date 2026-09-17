@@ -42,7 +42,8 @@ import {
   type OpeningPositionDraft,
 } from "../lib/ledgerOpeningPosition";
 import { closingTransactionFor, divergenceFlag } from "../lib/ledgerBalances";
-import type { LedgerIssuance } from "../lib/ledgerStatements";
+import { closeUndoRefusal } from "../lib/ledgerPeriods";
+import { yearEndClosingBatch, type LedgerIssuance } from "../lib/ledgerStatements";
 import type { LedgerReconciliation } from "../lib/ledgerReconciliation";
 import { toCalendarDate } from "../lib/calendarDate";
 import {
@@ -281,6 +282,10 @@ interface AppState {
   /** E-03 decision 8 — toggle to demo graceful degradation when the catalog provider (MusicBrainz) is down */
   providerUp: boolean;
 }
+
+// M-06 d64 - the fiscal year end defaults to 31 December, and M-08 d5 has this
+// flow READ it and never ask. One constant until M-06's settings screens land.
+const FISCAL_YEAR_END_MONTH = 12;
 
 const SEEDED_CHART = buildChart({ sections: SECTIONS, tenders: TENDERS, taxTypes: TAX_TYPES });
 
@@ -933,6 +938,8 @@ interface AppContextValue extends AppState {
   ledgerMarkYearFiled: (fiscalYearEnd: string, by: string) => void;
   ledgerReconcile: (reconciliation: LedgerReconciliation) => void;
   ledgerIssue: (issuance: LedgerIssuance) => void;
+  /** M-08 d11 - why an Undo End of Day is refused, or undefined. */
+  closeUndoRefusalFor: (batchId: string) => string | undefined;
   reconcileOversold: (recordId: string, by: string) => number;
   addLog: (saleId: string, text: string) => void;
 
@@ -1413,12 +1420,37 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
         actorInitials: by,
         authorizedByInitials: by,
       };
+
+      // d17 - where this seal ends a fiscal year it writes VISIBLE closing
+      // postings first. The ORDER is the substance: the zeroing is dated the
+      // last day of the year, which is inside the period being sealed, so the
+      // closing transaction must be computed from journals that already carry
+      // it. Recompute first and the seal stores balance-forwards the zeroing
+      // never reached, which is A-76's divergence arriving by our own hand.
+      const retained = prev.glAccounts.find((a) => a.role === "retained-earnings");
+      const suspense = prev.glAccounts.find((a) => a.role === "suspense");
+      const yearEnd =
+        retained && suspense
+          ? yearEndClosingBatch(
+              period,
+              FISCAL_YEAR_END_MONTH,
+              prev.glAccounts,
+              prev.journals,
+              retained.id,
+              suspense.id,
+              now(),
+            )
+          : undefined;
+
+      const journals = yearEnd ? [yearEnd, ...prev.journals] : prev.journals;
+
       return {
         ...prev,
+        journals,
         ledgerSeals: [...prev.ledgerSeals, seal],
         ledgerClosings: [
           ...prev.ledgerClosings,
-          closingTransactionFor(period, seal.id, prev.journals, suspenseGross, now()),
+          closingTransactionFor(period, seal.id, journals, suspenseGross, now()),
         ],
       };
     });
@@ -2638,9 +2670,28 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
   // Undo End of Day — Admin (M-03 decision 4). Restores every Sale in the
   // batch to Current, Sale numbers included; the batch itself stays in
   // history, marked undone, rather than disappearing.
+  /**
+   * M-08 d11 - why this batch may not be undone, or undefined if it may.
+   *
+   * Exposed so the till can DISABLE and EXPLAIN rather than letting a Manager
+   * press a button that quietly does nothing. The same predicate also guards
+   * the write below, because A-48 is explicit that a bound enforced in the
+   * client is not a bound - the screen reads it to be helpful, the act reads it
+   * to be correct.
+   */
+  const closeUndoRefusalFor: AppContextValue["closeUndoRefusalFor"] = (batchId) => {
+    const batch = s.closeBatches.find((b) => b.id === batchId);
+    if (!batch) return "That batch no longer exists.";
+    return closeUndoRefusal(batch.at.slice(0, 10), s.ledgerSeals, s.ledgerUnseals);
+  };
+
   const undoEndOfDay: AppContextValue["undoEndOfDay"] = (batchId, by) => {
     const batch = s.closeBatches.find((b) => b.id === batchId);
     if (!batch || batch.undoneAt) return;
+    // d11 - "nothing may write into a sealed period, BY ANY ROUTE, including
+    // M-03's Undo End of Day, which is the one reversal in this system that
+    // does not post forward."
+    if (closeUndoRefusal(batch.at.slice(0, 10), s.ledgerSeals, s.ledgerUnseals)) return;
     setS((prev) => ({
       ...prev,
       closeBatches: prev.closeBatches.map((b) => (b.id === batchId ? { ...b, undoneAt: now(), undoneBy: by } : b)),
@@ -4446,6 +4497,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
       ledgerMarkYearFiled,
       ledgerReconcile,
       ledgerIssue,
+      closeUndoRefusalFor,
       reconcileOversold,
       addLog,
       raiseClaim,

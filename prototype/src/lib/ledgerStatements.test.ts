@@ -18,6 +18,7 @@ import {
   issueProfitAndLoss,
   profitAndLoss,
   reopenIssuance,
+  yearEndClosingBatch,
   type LedgerIssuance,
 } from "./ledgerStatements";
 
@@ -453,5 +454,87 @@ describe("M-08 d36 — provisional, stored on the issuance and never recomputed"
     const spanning = profitAndLoss("2026-09-01", "2026-10-31", ACCOUNTS, BATCHES, seals, []);
     expect(spanning.periodSealed).toBe(false);
     expect(isProvisional(spanning)).toBe(true);
+  });
+});
+
+describe("M-08 d17 — a year-end seal writes VISIBLE closing postings", () => {
+  const RE = "3200"; // retained earnings
+  const ACCTS = [...ACCOUNTS, acct("3200", "Retained earnings", "retained-earnings")];
+
+  it("zeroes revenue and expense into retained earnings with real journal lines", () => {
+    // "Revenue and expense are not merely TREATED AS starting from zero;
+    // journal lines move them into retained earnings and an accountant can
+    // read them." The alternative — zeroing as a property of how
+    // balance-forwards are computed — makes "why is retained earnings this
+    // number" unanswerable from the ledger, which is the question the whole
+    // flow exists to make answerable.
+    const b = yearEndClosingBatch("2026-12", DEC, ACCTS, BATCHES, RE, "1900", "2027-01-02 09:00:00")!;
+    expect(b).toBeDefined();
+
+    // Sales credited 5,000 in the year; closing it debits 5,000.
+    expect(b.lines.find((l) => l.accountId === "4000")?.debit).toBe(5_000);
+    // COGS 3,000 and rent 1,200 were debits; closing them credits.
+    expect(b.lines.find((l) => l.accountId === "5000")?.credit).toBe(3_000);
+    expect(b.lines.find((l) => l.accountId === "6400")?.credit).toBe(1_200);
+    // The year made 800, so retained earnings is credited 800.
+    expect(b.lines.find((l) => l.accountId === RE)?.credit).toBe(800);
+  });
+
+  it("leaves every P&L account reading zero afterwards", () => {
+    const b = yearEndClosingBatch("2026-12", DEC, ACCTS, BATCHES, RE, "1900", "2027-01-02 09:00:00")!;
+    const after = [...BATCHES, b];
+    for (const id of ["4000", "5000", "6400"]) {
+      const bal = profitAndLoss("2026-01-01", "2026-12-31", ACCTS, after, [], []);
+      const line = [...bal.revenue, ...bal.costOfGoods, ...bal.expenses].find((l) => l.accountId === id);
+      expect(line).toBeUndefined();
+    }
+  });
+
+  it("dates every line the LAST DAY of the year, inside the period being sealed", () => {
+    // So the closing transaction computed afterwards sees them. A caller that
+    // recomputed balance-forwards first would store figures the zeroing never
+    // reached.
+    const b = yearEndClosingBatch("2026-12", DEC, ACCTS, BATCHES, RE, "1900", "2027-01-02 09:00:00")!;
+    for (const l of b.lines) expect(l.businessDate).toBe("2026-12-31");
+  });
+
+  it("is plainly identifiable as the seal's, in the source AND on every line", () => {
+    // d17's accepted consequence: the last day of a fiscal year carries a block
+    // of postings nobody typed and nothing in the shop did, so "a reader looking
+    // at 31 December" must not see a day of inexplicable activity.
+    const b = yearEndClosingBatch("2026-12", DEC, ACCTS, BATCHES, RE, "1900", "2027-01-02 09:00:00")!;
+    expect(b.source).toBe("year-end-seal:2026-12");
+    for (const l of b.lines) expect(l.memo).toContain("Year-end seal 2026-12");
+  });
+
+  it("writes NOTHING for a period that is not the year end", () => {
+    // The test that was missing. Every case above passes a December, so none of
+    // them could see a missing guard — and without one, sealing November wrote
+    // a year-end zeroing dated 30 November and sourced to a seal that was not a
+    // year end. Found by walking the app, not by reading the code.
+    expect(yearEndClosingBatch("2026-11", DEC, ACCTS, BATCHES, RE, "1900", "x")).toBeUndefined();
+    expect(yearEndClosingBatch("2026-09", DEC, ACCTS, BATCHES, RE, "1900", "x")).toBeUndefined();
+    // And the year end for a June shop is June, not December.
+    expect(yearEndClosingBatch("2026-12", 6, ACCTS, BATCHES, RE, "1900", "x")).toBeUndefined();
+  });
+
+  it("writes no batch at all where there is nothing to zero", () => {
+    const empty = [BATCHES[0]]; // the opening position only — no P&L activity
+    expect(yearEndClosingBatch("2026-12", DEC, ACCTS, empty, RE, "1900", "x")).toBeUndefined();
+  });
+
+  it("never reaches Suspense, because the two sides are one arithmetic", () => {
+    const b = yearEndClosingBatch("2026-12", DEC, ACCTS, BATCHES, RE, "1900", "2027-01-02 09:00:00")!;
+    expect(b.suspense).toBeUndefined();
+    const debits = b.lines.reduce((s, l) => s + Math.round(l.debit * 100), 0);
+    const credits = b.lines.reduce((s, l) => s + Math.round(l.credit * 100), 0);
+    expect(debits).toBe(credits);
+  });
+
+  it("follows a non-December year end to its own last day", () => {
+    const b = yearEndClosingBatch("2026-06", 6, ACCTS, BATCHES, RE, "1900", "x");
+    // The 2026-06 year runs July 2025 to June 2026; BATCHES' activity is all
+    // September 2026, which is the NEXT fiscal year.
+    expect(b).toBeUndefined();
   });
 });

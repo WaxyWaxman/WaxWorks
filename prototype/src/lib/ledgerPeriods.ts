@@ -330,3 +330,38 @@ export const nextPeriod = (period: LedgerPeriod): LedgerPeriod => {
   const [y, m] = period.split("-").map(Number);
   return m === 12 ? `${y + 1}-01` : `${y}-${String(m + 1).padStart(2, "0")}`;
 };
+
+// ---------------------------------------------------------------------------
+// d11 — nothing writes into a sealed period, BY ANY ROUTE
+// ---------------------------------------------------------------------------
+
+/**
+ * Why a day may not be restated, or undefined if it may.
+ *
+ * **This is the one route d11 singles out.** M-08's Requirements say *"nothing
+ * may write into a sealed period, by any route… including [M-03](M-03)'s Undo
+ * End of Day, which is the one reversal in this system that does not post
+ * forward."* Every other correction in Wax Works appends a dated entry (M-07
+ * d8), so a sealed period is safe from them by construction; an Undo reaches
+ * back and restates the day itself, which is exactly what a seal forbids.
+ *
+ * It lives here rather than in the close because the predicate is the ledger's.
+ * That is A-41's line — *the seam immutability is put on* — and in the product
+ * it is the same shape as `invoice_is_paid()`: the ledger owns the predicate,
+ * M-03's function calls it, and M5 can ship it returning false until M-08
+ * exists.
+ *
+ * **A filed year needs no separate check.** d22 makes a filed year unsealable,
+ * so its periods stay sealed and this refuses on that alone — which is why
+ * M-08-T10's *"never released for a day inside a filed year"* falls out rather
+ * than being enforced twice.
+ */
+export function closeUndoRefusal(
+  businessDate: string,
+  seals: LedgerPeriodSeal[],
+  unseals: LedgerPeriodUnseal[],
+): string | undefined {
+  const period = periodOf(businessDate);
+  if (!isSealed(period, seals, unseals)) return undefined;
+  return `${period} is sealed, so ${businessDate} cannot be restated. An Undo End of Day reaches back and rewrites the day rather than posting forward, which is the one thing a seal refuses (M-08 d11). Unseal ${period} first.`;
+}

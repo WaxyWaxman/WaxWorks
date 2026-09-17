@@ -344,7 +344,7 @@ not installed — so there is **no recording artifact**, which the `/qa walk` pr
 | M-08-T5 | **A typed posting carries its dimensions and its date is bounded at both ends.** Post rent: the line carries a **location** (required, the Store) and no **section** (blank means *not applicable*). Date it inside a sealed period: refused. Date it before the opening position: refused. Date it in the future: **permitted**. | 10–11 | M-08 decision 2, M-08 decision 11, M-08 decision 12, M-08 decision 27, A-72, A-73 | M-08-T1, one sealed period | Walked | Planned |  |
 | M-08-T6 | **Sealing reports every failure without sealing, and a Suspense line does not block it.** Leave an unbalanced posting and an invalid code in the period: the seal reports both and seals nothing. Fix, re-run, seal: the closing transaction carries balance-forwards. **A period carrying Suspense seals anyway**, and the total it carries is **gross** — short three dollars on one date and over three on another reports six, not zero. | 16–20 | M-08 decision 15, M-08 decision 20, M-07 decision 10, M-07 decision 25, A-75, A-76 | A period with postings, and a journal forced to Suspense | Blocked | Planned |  |
 | M-08-T7 | **A second seal of the same period is unrepresentable.** Seal a month. Seal it again: refused — not by a check someone remembered but because a live seal is unique per period. The balance-forwards are not doubled. | 16–20 | M-08 decision 20, A-75 | M-08-T6 | Blocked | Planned |  |
-| M-08-T8 | **A year-end seal writes visible closing postings.** Seal the period that ends the fiscal year M-06 configured. Revenue and expense are zeroed into retained earnings by **real journal lines** dated the last day of the year and identifiable as the seal's — not by a rule about how balance-forwards are computed. | 21 | M-08 decision 5, M-08 decision 17, M-06 decision 64 | M-08-T6, a fiscal year end set | Blocked | Planned |  |
+| M-08-T8 | **A year-end seal writes visible closing postings.** Seal the period that ends the fiscal year M-06 configured. Revenue and expense are zeroed into retained earnings by **real journal lines** dated the last day of the year and identifiable as the seal's — not by a rule about how balance-forwards are computed. | 21 | M-08 decision 5, M-08 decision 17, M-06 decision 64 | M-08-T6, a fiscal year end set | Walked | Planned |  |
 | M-08-T9 | **Unsealing reaches the most recent period only, repeats to walk back, and stops at a filed year.** Unseal the latest sealed month: authorized, with a reason required and recorded. Reach an older month: unseal each in turn. Mark a year **filed**, then try to unseal into it: refused, and the refusal names what is holding it. | 22–23 | M-08 decision 18, M-08 decision 22, M-08 decision 29 | Three sealed months and one sealed year | Blocked | Planned |  |
 | M-08-T10 | **Nothing writes into a sealed period, by any route.** With a day inside a sealed period, run M-03's **Undo End of Day** — the one reversal in this system that does not post forward: refused while the period is sealed, released when it is unsealed, and never released for a day inside a **filed** year. | 22–23 | M-08 decision 11, M-08 decision 22, M-08 decision 29, M-03 decision 4, A-66 | M-08-T9, a closed CloseBatch inside a sealed month | Blocked | Planned |  |
 | M-08-T11 | **An account reads back as balance forward · activity · new balance forward, filtered by dimension.** Pick an account and a range: three figures and every line behind them. Narrow by **section**: the same query, fewer lines. The middle term is true with no opening position and no seal — the other two are not. | 24 | M-08 decision 2, M-08 decision 20, M-08 decision 24 | A sealed month and an open one | Walked | Planned |  |
@@ -368,17 +368,23 @@ not installed — so there is **no recording artifact**, which the `/qa walk` pr
   sealed period is never offered and the second seal has no button to press. The refusal exists in
   `sealRefusal` and is unit-tested; the prototype cannot show it, and cannot show A-75's *unrepresentable* at
   all, which needs the partial unique index. *Route:* nothing — the prototype is not the target for A-75.
-- **M-08-T8 — not built.** [M-08](../flows/M-08-general-ledger.md) d17's **visible closing postings**, real
-  journal lines zeroing revenue and expense into retained earnings, are not written by the prototype's seal:
-  it warns that a seal is a year end and then writes only the closing transaction. Unreachable regardless —
-  the seed's clock is September and a December seal is never offered. *Route:* a prototype change, citing d17.
+- ~~**M-08-T8 — not built.**~~ — **Built and walked on 2026-09-17.** d17's visible closing postings are
+  written by `yearEndClosingBatch`, and the seal writes them **before** it recomputes balance-forwards, because
+  the zeroing is dated the last day of the year and therefore falls inside the period being sealed. Walked with
+  books opening 1 November 2025: rent of 1,500 posted in November reads *activity 1,500, new balance forward
+  1,500*; December reads *balance forward 1,500, activity −1,500, new balance forward 0.00*, carrying one line
+  dated 2025-12-31 reading *"Year-end seal 2025-12 — closing Rent into retained earnings"*, with retained
+  earnings taking the other side as *"the year's result"*. **The earlier finding that this was unreachable from
+  the seed's clock was wrong** — a year end is reachable whenever the books open before the last December.
 - **M-08-T9 — two thirds walked.** The unseal with a required reason, and walking back, both hold and are
   recorded. The **filed year** third needs a sealed December, which the seed's clock cannot reach. *Route:*
   the same clock problem as T8.
-- **M-08-T10 — not built.** [M-03](../flows/M-03-daily-summary.md)'s Undo End of Day does not consult the
-  ledger's seals — `undoEndOfDay` names no period and no seal — so *"nothing writes into a sealed period, by
-  any route"* is unenforced on the one route [M-08](../flows/M-08-general-ledger.md) d11 singles out.
-  *Route:* a prototype change citing d11; in the product this is A-41's shipped-predicate shape.
+- **M-08-T10 — built, not walked.** The refusal is `closeUndoRefusal` in `lib/ledgerPeriods.ts`, guarding both
+  `undoEndOfDay` and the till's button, which now disables and explains rather than doing nothing. Four unit
+  tests cover open, sealed, unsealed and filed. **It was not walked**: the row needs *a closed CloseBatch inside
+  a sealed month*, and building one in the prototype means ringing a sale, tendering it, opening a session and
+  running Total Today's Sales before sealing the period — which did not complete in this pass. The `Needs`
+  column already names that fixture; it is the fixture, not the rule, that is missing.
 - **M-08-T11 and the profit both hold; M-08-T12 has one clause unexercised.**
   [E-07](../flows/E-07-manage-customers.md) d21's *classified by sign, never netted* is not shown, because
   the screen draws the balance sheet without per-Customer balances — and **the ledger alone cannot satisfy

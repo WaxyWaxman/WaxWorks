@@ -375,22 +375,38 @@ export function OtherFunctionsModal({ onClose }: { onClose: () => void }) {
           <div className="card-head">Undo End of Day (Admin)</div>
           <div className="card-body stack">
             {openBatches.length === 0 && <p className="small muted">No batches to undo.</p>}
-            {openBatches.map((b) => (
-              <div key={b.id} className="row" style={{ justifyContent: "space-between" }}>
-                <span className="small">
-                  Batch <span className="mono">{b.id}</span> — {b.saleIds.length} Sale
-                  {b.saleIds.length === 1 ? "" : "s"} — {b.at} by {b.by}
-                </span>
-                <button
-                  className="btn sm danger"
-                  // Manager-only (A-28a, M-03 d4) and the last one in the
-                  // prototype with no gate — it reopens settled takings.
-                  onClick={() => setUndoing(b.id)}
-                >
-                  Undo
-                </button>
-              </div>
-            ))}
+            {openBatches.map((b) => {
+              // M-08 d11 — "nothing may write into a sealed period, BY ANY
+              // ROUTE, including M-03's Undo End of Day, which is the one
+              // reversal in this system that does not post forward." Every
+              // other correction appends a dated entry (M-07 d8); this one
+              // reaches back and restates the day.
+              //
+              // The predicate is the LEDGER's and lives in lib/ledgerPeriods.ts.
+              // Read here to disable and explain, and read again inside
+              // undoEndOfDay to refuse — A-48: a bound enforced in the client
+              // is not a bound, so the screen being helpful is not the guard.
+              const sealedWhy = app.closeUndoRefusalFor(b.id);
+              return (
+                <div key={b.id} className="stack">
+                  <div className="row" style={{ justifyContent: "space-between" }}>
+                    <span className="small">
+                      Batch <span className="mono">{b.id}</span> — {b.saleIds.length} Sale
+                      {b.saleIds.length === 1 ? "" : "s"} — {b.at} by {b.by}
+                    </span>
+                    <button
+                      className="btn sm danger"
+                      // Manager-only (A-28a, M-03 d4) — it reopens settled takings.
+                      disabled={sealedWhy !== undefined}
+                      onClick={() => setUndoing(b.id)}
+                    >
+                      Undo
+                    </button>
+                  </div>
+                  {sealedWhy && <p className="wo-caveat warn small">{sealedWhy}</p>}
+                </div>
+              );
+            })}
           </div>
         </div>
       </div>

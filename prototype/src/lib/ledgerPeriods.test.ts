@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { LedgerPeriodSeal, LedgerPeriodUnseal, LedgerYearFiling } from "../data/types";
 import {
+  closeUndoRefusal,
   fiscalYearEndFor,
   isFiled,
   isSealed,
@@ -322,5 +323,41 @@ describe("M-08 step 16 — the oldest unsealed month is what Seal a period offer
     // A-73 bounds a typed date below by the opening position's date. Without
     // one there is no oldest unsealed month, only an unbounded past.
     expect(oldestUnsealed(undefined, "2026-09", [], [])).toBeUndefined();
+  });
+});
+
+describe("M-08 d11 — nothing writes into a sealed period, by any route", () => {
+  const seals = [seal("s1", "2026-08")];
+
+  it("permits an Undo End of Day on an open period", () => {
+    expect(closeUndoRefusal("2026-09-14", seals, [])).toBeUndefined();
+  });
+
+  it("REFUSES one on a day inside a sealed period, and says why an Undo is different", () => {
+    // Every other correction in Wax Works appends a dated entry (M-07 d8), so a
+    // sealed period is safe from them by construction. An Undo reaches back and
+    // restates the day itself, which is the one thing a seal forbids — and
+    // M-08's Requirements name it as the one reversal that does not post
+    // forward.
+    const why = closeUndoRefusal("2026-08-14", seals, []);
+    expect(why).toContain("2026-08 is sealed");
+    expect(why).toContain("rather than posting forward");
+    expect(why).toContain("Unseal 2026-08 first");
+  });
+
+  it("RELEASES it when the period is unsealed", () => {
+    expect(closeUndoRefusal("2026-08-14", seals, [unseal("u1", "s1")])).toBeUndefined();
+  });
+
+  it("never releases it inside a FILED year, and needs no second check to do that", () => {
+    // d22 makes a filed year unsealable, so its periods stay sealed and this
+    // refuses on that alone. M-08-T10's "never released for a day inside a
+    // filed year" falls out rather than being enforced twice — a second check
+    // would be a second rule that could disagree with the first.
+    const decSeals = [seal("s-dec", "2026-12")];
+    const filings = [filing("2026-12")];
+    expect(unsealRefusal("2026-12", decSeals, [], filings, DEC, "try")).toContain("marked filed");
+    // The unseal is refused, so the period stays sealed, so the Undo stays refused.
+    expect(closeUndoRefusal("2026-12-31", decSeals, [])).toContain("is sealed");
   });
 });

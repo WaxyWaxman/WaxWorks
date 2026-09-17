@@ -6,8 +6,9 @@ import type {
   LedgerPeriodUnseal,
 } from "../data/types";
 import { accountType } from "./chart";
+import { assembleJournal, type Posting } from "./journal";
 import { activityBetween, linesIn, recomputeAsAt, totalOf, type BalanceFilter } from "./ledgerBalances";
-import { fiscalYearEndFor, isSealed, periodEnd, periodOf, periodStart } from "./ledgerPeriods";
+import { fiscalYearEndFor, isSealed, isYearEnd, periodEnd, periodOf, periodStart } from "./ledgerPeriods";
 import type { ReconciliationReport } from "./ledgerReconciliation";
 
 /**
@@ -572,3 +573,109 @@ export const exportLines = (
     .sort((a, b) => a.businessDate.localeCompare(b.businessDate));
 
 export { totalOf };
+
+// ---------------------------------------------------------------------------
+// d17 — the year-end seal writes its zeroing as real, visible postings
+// ---------------------------------------------------------------------------
+
+/**
+ * The journal a year-end seal writes.
+ *
+ * **Revenue and expense are not merely *treated as* starting from zero** (d17):
+ * journal lines move them into retained earnings and an accountant can read
+ * them. This is M-07 d12's existing rule rather than a new one — a journal is
+ * written by the artifact that causes it, and a year-end seal is an artifact
+ * that causes one.
+ *
+ * *The alternative d17 rejected* was zeroing as a property of how
+ * balance-forwards are computed: fewer rows, and it makes *why is retained
+ * earnings this number* unanswerable from the ledger itself — **which is the
+ * question the whole flow exists to make answerable.**
+ *
+ * Three things the decision fixes, each load-bearing:
+ *
+ *   - **Dated the last day of the year**, so the lines fall inside the period
+ *     being sealed and the closing transaction computed afterwards sees them.
+ *     The caller must write this batch BEFORE it recomputes balance-forwards,
+ *     or the seal stores figures the zeroing has not reached.
+ *   - **Sourced to the seal.** d17's accepted consequence is that the last day
+ *     of a fiscal year *"carries a block of postings nobody typed and nothing
+ *     in the shop did, so they must be plainly identifiable as the seal's —
+ *     otherwise a reader looking at 31 December sees a day of enormous and
+ *     inexplicable activity."* The source is `year-end-seal:<period>` and every
+ *     line's memo says so.
+ *   - **Into retained earnings**, which d13 makes untypeable precisely because
+ *     this is the only thing that ever writes it.
+ *
+ * Returns undefined where there is nothing to zero — a year with no revenue and
+ * no expense writes no batch rather than an empty one.
+ */
+export function yearEndClosingBatch(
+  period: string,
+  yearEndMonth: number,
+  accounts: GLAccount[],
+  batches: JournalBatch[],
+  retainedEarningsAccountId: string,
+  suspenseAccountId: string,
+  writtenAt: string,
+): JournalBatch | undefined {
+  // **The guard is here and not at the call site**, which is the whole of A-74's
+  // argument applied to one more rule: a caller that forgot it wrote a year-end
+  // zeroing at the end of every MONTH, dated the wrong day and sourced to a
+  // seal that was not a year end. That is exactly what happened — the unit
+  // tests only ever passed a December, so none of them could see it, and the
+  // walk found it in the app.
+  if (!isYearEnd(period, yearEndMonth)) return undefined;
+
+  const lastDay = periodEnd(period);
+  const yearStartPeriod = (() => {
+    const [y, m] = fiscalYearEndFor(period, yearEndMonth).split("-").map(Number);
+    return m === 12 ? `${y}-01` : `${y - 1}-${String(m + 1).padStart(2, "0")}`;
+  })();
+
+  const rows = activityBetween(batches, periodStart(yearStartPeriod), lastDay);
+
+  const postings: Posting[] = [];
+  let totalCents = 0;
+
+  for (const r of rows) {
+    const account = accounts.find((a) => a.id === r.accountId);
+    if (!account) continue;
+    const type = accountType(account);
+    if (type !== "income" && type !== "cogs" && type !== "expense") continue;
+
+    const c = cents(r.balance);
+    if (c === 0) continue;
+    totalCents += c;
+    // Reverse the account's own balance, so it reads zero from the new year.
+    postings.push({
+      accountId: r.accountId,
+      businessDate: lastDay,
+      amount: dollars(-c),
+      currency: "CAD",
+      memo: `Year-end seal ${period} — closing ${account.name} into retained earnings`,
+      ...(r.section ? { section: r.section } : {}),
+    });
+  }
+
+  if (postings.length === 0) return undefined;
+
+  // The other side, in one line: the year's profit or loss.
+  postings.push({
+    accountId: retainedEarningsAccountId,
+    businessDate: lastDay,
+    amount: dollars(totalCents),
+    currency: "CAD",
+    memo: `Year-end seal ${period} — the year's result`,
+  });
+
+  return assembleJournal({
+    id: `jb-year-end-${period}`,
+    // d17 — plainly identifiable as the seal's, per M-07 d15's source rule.
+    source: `year-end-seal:${period}`,
+    writtenAt,
+    postings,
+    suspenseAccountId,
+    location: "0",
+  });
+}
