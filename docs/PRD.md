@@ -218,7 +218,7 @@ _Status: **ratified**._
 - The system is **multi-store**. The schema scopes every entity to a Store from the outset; v1 deploys one store with no cross-store UI.
 - **MusicBrainz** is the external catalog metadata source, behind a provider adapter. Discogs remains implemented as a second adapter, off by default ([architecture](architecture.md) A-12).
 - **There is a Customer record** ([E-07](flows/E-07-manage-customers.md)) — holds, special orders, store credit, discounts, and receipt-less returns all need somewhere to hang.
-- **Multi-jurisdiction sales tax is in scope** on the outbound side, as a table of named tax lines referenced per item ([M-06](flows/M-06-settings.md)). Inbound tax treatment stays as E-02 decision 17 has it.
+- **Multi-jurisdiction sales tax is in scope** on the outbound side, resolved from two axes that never compete — the Customer's tax group, else the store's default; the Genre's product tax code; then the `(group, code)` cell naming the tax types to apply ([M-06](flows/M-06-settings.md) d11, d12, d14; §4 above). ~~As a table of named tax lines referenced per item~~ — that was M-06 d1's shape, superseded by d11. Inbound tax is **excluded from cost of goods** ([E-02](flows/E-02-receive-inventory.md) d34, amending its decision 17) — see item 4 below.
 - **Payment recording and accounts payable are in scope** — tenders captured at the till ([E-05](flows/E-05-sell-a-record.md)), supplier balances settled in [M-05](flows/M-05-accounts-payable.md). Formalized as E-02 decision 26, superseding decision 25. The only exclusion is integration with a third-party payment processing system such as Square or Stripe (NG-4).
 - **The internal barcode scheme is ratified** — UPC-A under GS1 number system `2` (§4.3).
 

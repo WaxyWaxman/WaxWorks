@@ -134,13 +134,19 @@ that is a separate question nobody has answered yet._
 - **The in-flight band's three-row cap is not reached by seed data** — no seeded Supplier carries
   more than three. The design mock (`design/suppliers-ui-mock.html`) exercises it at six.
 - Suppliers (M-01) are built with the full field set. **Discount is gated** behind in-place
-  Manager authorisation (decisions 11, 13) — initials only, like every other gate here, with no
-  real auth behind it. Merge and Delete are labeled, not enforced. There is no separate Margin
+  Manager authorisation (decisions 11, 13) through `ManagerAuthorize`, which resolves a real,
+  active Manager and asks for their password where they have one — see the bullet above.
+  **Merge is real** (every pointer is reassigned to the surviving record). **Delete is not
+  gated by state:** `deleteSupplier` removes the row unconditionally, where [A-54](architecture.md)
+  refuses while the Supplier carries outstanding accounts payable, a draft Invoice, an in-flight
+  claim, or a pending order stream. `deleteCustomer` has the same gap; only Genres enforce A-54
+  here. There is no separate Margin
   field — Discount does double duty, describing what the Supplier charges **and** driving
   suggested retail at receiving (E-02 decision 49 — the decision 31 this
   line used to cite is the invoice-number lookup). A Discount change reprices future receiving
-  only (never existing stock); minimum order qty/amount and cancel-by are captured but not yet
-  consumed by anything (M-02 isn't built);
+  only (never existing stock). Minimum order qty/amount **are** consumed — Order Processing reads
+  them for a stream's readiness (M-02 decisions 4, 35) — while cancel-by is captured and read by nothing,
+  which is M-02's own open question rather than a gap here;
   multi-store scope and floor/ceiling constraints are still open questions.
 - Customers (E-07) are built with the full field set and are not gated. There is no separate Edit
   function — every field, account number included, is a live input on the open card; New and
@@ -153,9 +159,10 @@ that is a separate question nobody has answered yet._
   memory, not "since the last close" — this prototype has no persistence across sessions to track
   that boundary. Copy never carries over the specific InventoryItem (the source's copy may still be
   sold); Edit on a Current Sale does, since voiding the original returns it to sellable first.
-- Receiving's photograph/OCR step (decision 15) isn't modelled at all — stated subtotal, tax, and
-  freight are plain manually-entered fields, full stop, with no camera or extraction simulation
-  standing in for it. Barcode-to-record matching is local-only (no live catalog-provider call, no
+- Receiving's stated charges are plain manually-entered fields, and that is the spec rather than a
+  simplification: [E-02](flows/E-02-receive-inventory.md) decision 27 removed invoice photography
+  and document extraction outright, superseding decision 15, so there is no camera step to stand
+  in for. Barcode-to-record matching is local-only (no live catalog-provider call, no
   multi-match picker); a code with no local match goes straight to the search-or-create fallback.
 - Receiving's Orders panel and Order Processing (M-02) share one `PendingOrderLine` array, and a
   **placed line is never deleted** (M-02 decision 21): receiving it writes to its log rather than
@@ -195,11 +202,16 @@ that is a separate question nobody has answered yet._
   decision 7's "cost" (the post-discount Ext. Price) — renamed to "List price" so "cost" means
   one thing everywhere: the net, post-discount figure that drives the below-cost guardrail and
   everything downstream (InventoryItem.cost, Supplier Claims).
-- **Accounts Payable (M-05)** has no currency conversion — an Invoice in a Supplier's own
-  currency shows that currency's code, not a store-currency equivalent, since the exchange rate
-  it would need is a setting from M-06, which isn't built (open question, "Currency movement").
+- **Accounts Payable (M-05)** settles a foreign-currency Invoice at the rate the Invoice recorded
+  at finalize, and the Manager confirms what actually left the bank ([M-06](flows/M-06-settings.md)
+  d59, d60) — the "no currency conversion" simplification this bullet used to record is closed,
+  and the store-wide figure is still one line per currency, never a sum ([M-06](flows/M-06-settings.md) d37).
   The GiftCard record doesn't carry an issue date or a last-used date, so the liability registry
-  omits those two columns from the spec's field list rather than fabricating them.
+  omits those two columns from the spec's field list rather than fabricating them. **A gift card
+  balance is stored, not derived** — the same in-memory shortcut as the Invoice status below — but
+  its behaviour now matches [A-51](architecture.md): a redemption past the balance is **refused,
+  never clamped**, at the pad and in the store's `addTender` alike, and the check counts the Gift
+  Card tenders already sitting on an Open or Held Sale against the same code (`lib/giftCards.ts`).
 
 - **Accounts Payable is built to d17–d30.** One selection settles anything — Invoices,
   manual entries, Credits, Credited claims and Claim placeholders in any mix (d27); credits

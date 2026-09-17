@@ -10,6 +10,7 @@ import { money } from "../lib/money";
 import { genreNameFor, sectionSearchTerms } from "../lib/taxonomy";
 import { resolveScan } from "../lib/resolve";
 import { availableOnHand, balanceDue, lineTaxComponents, saleTotals } from "../lib/totals";
+import { giftCardAvailable, giftCardRedeemRefusal } from "../lib/giftCards";
 import { useApp } from "../store/AppStore";
 import { useIdentify, useActor } from "../components/Identify";
 
@@ -563,41 +564,55 @@ function SaleEditor() {
         />
       )}
 
-      {gcRedeem && (
-        <Modal
-          title={`Redeem gift card ${gcRedeem.code}`}
-          onClose={() => setGcRedeem(null)}
-          foot={
-            <>
-              <button className="btn ghost" onClick={() => setGcRedeem(null)}>
-                Cancel
-              </button>
-              <button
-                className="btn primary"
-                onClick={() => {
-                  const amt = Math.min(gcRedeem.balance, Math.max(0, due));
-                  app.addTender(sale.id, {
-                    type: "Gift Card",
-                    amount: amt,
-                    reference: gcRedeem.code,
-                    // Raised on the customer's behalf rather than from the pad,
-                    // so it resolves the row the same way the journal would.
-                    tenderRowId: defaultTenderRow("Gift Card", app.tenders)?.id,
-                  });
-                  setGcRedeem(null);
-                }}
-              >
-                Redeem {money(Math.min(gcRedeem.balance, Math.max(0, due)))}
-              </button>
-            </>
-          }
-        >
-          <p className="small">
-            Balance {money(gcRedeem.balance)}. Redemption is a <strong>tender</strong>, not a
-            line-item discount, so it composes with split tender (E-05 decision 10).
-          </p>
-        </Modal>
-      )}
+      {gcRedeem && (() => {
+        // A-51 — bounded by what the card can still cover for THIS Sale, which
+        // is its balance less any Gift Card tender already sitting on the Open
+        // Sale against the same code (those have not moved money yet).
+        const available = giftCardAvailable(
+          app.giftCards.find((g) => g.code === gcRedeem.code),
+          sale,
+        );
+        const amt = Math.min(available, Math.max(0, due));
+        const refusal = amt <= 0 ? giftCardRedeemRefusal(app.giftCards, sale, gcRedeem.code, 0.01) : null;
+        return (
+          <Modal
+            title={`Redeem gift card ${gcRedeem.code}`}
+            onClose={() => setGcRedeem(null)}
+            foot={
+              <>
+                <button className="btn ghost" onClick={() => setGcRedeem(null)}>
+                  Cancel
+                </button>
+                <button
+                  className="btn primary"
+                  disabled={amt <= 0}
+                  onClick={() => {
+                    app.addTender(sale.id, {
+                      type: "Gift Card",
+                      amount: amt,
+                      reference: gcRedeem.code,
+                      // Raised on the customer's behalf rather than from the pad,
+                      // so it resolves the row the same way the journal would.
+                      tenderRowId: defaultTenderRow("Gift Card", app.tenders)?.id,
+                    });
+                    setGcRedeem(null);
+                  }}
+                >
+                  Redeem {money(Math.max(0, amt))}
+                </button>
+              </>
+            }
+          >
+            <p className="small">
+              Balance {money(gcRedeem.balance)}
+              {available < gcRedeem.balance && <> — {money(available)} after what this Sale already holds against it</>}.
+              Redemption is a <strong>tender</strong>, not a line-item discount, so it composes with split
+              tender (E-05 decision 10).
+            </p>
+            {refusal && <div className="callout danger">{refusal}</div>}
+          </Modal>
+        );
+      })()}
 
       {custPick && <CustomerPickModal saleId={sale.id} onClose={() => setCustPick(false)} />}
 
@@ -615,10 +630,14 @@ function SaleEditor() {
           rows={offerableTenders(app.tenders)}
           due={due}
           hasCustomer={!!customer}
+          giftCardRefusal={(code, amount) => giftCardRedeemRefusal(app.giftCards, sale, code, amount)}
           onClose={() => setShowTender(null)}
           onAdd={(t) => {
-            app.addTender(sale.id, t);
+            // A-51 — the store refuses too; the pad stays open showing why.
+            const refusal = app.addTender(sale.id, t);
+            if (refusal) return refusal;
             setShowTender(null);
+            return null;
           }}
         />
       )}
@@ -1011,6 +1030,7 @@ function TenderModal({
   rows,
   due,
   hasCustomer,
+  giftCardRefusal,
   onAdd,
   onClose,
 }: {
@@ -1019,6 +1039,9 @@ function TenderModal({
   rows: TenderRow[];
   due: number;
   hasCustomer: boolean;
+  /** A-51 — why a Gift Card tender of this amount against this code is refused, or null. */
+  giftCardRefusal: (code: string, amount: number) => string | null;
+  /** Returns the store's refusal, if any, so the pad can show it and stay open. */
   onAdd: (t: {
     type: TenderType;
     tenderRowId?: string;
@@ -1026,7 +1049,7 @@ function TenderModal({
     note?: string;
     reference?: string;
     accountDirection?: "add" | "draw";
-  }) => void;
+  }) => string | null;
   onClose: () => void;
 }) {
   const [rowId, setRowId] = useState<string>(initialRowId ?? rows[0]?.id ?? "");
@@ -1044,6 +1067,10 @@ function TenderModal({
 
   const needsCustomer = type === "Account Balance" && !hasCustomer;
   const needsNote = type === "Pay-out" && note.trim().length === 0;
+  // A-51 — refused, never clamped. The pad used to take any amount against
+  // any code and let the store clamp the balance at zero (issue #16).
+  const gcRefusal = type === "Gift Card" && amount > 0 ? giftCardRefusal(reference, amount) : null;
+  const [storeRefusal, setStoreRefusal] = useState<string | null>(null);
   // Negative amounts are for tenders that don't count toward paying off
   // this Sale's total — Pay-out sends cash out of the till for an expense,
   // and "add to balance" redirects an incoming tender (e.g. cash) into the
@@ -1064,20 +1091,22 @@ function TenderModal({
           </button>
           <button
             className="btn primary"
-            disabled={amount <= 0 || needsCustomer || needsNote}
+            disabled={amount <= 0 || needsCustomer || needsNote || !!gcRefusal}
             onClick={() =>
-              onAdd({
-                type,
-                // E-05 d36 — WHICH tender, not just which kind. M-06 d22 gives
-                // Visa and Mastercard separate accounts because they settle as
-                // separate deposits; this is the field that makes that
-                // reconcilable from a Sale.
-                tenderRowId: rowId,
-                amount: isNegativeType ? -Math.abs(amount) : amount,
-                note: note.trim() || undefined,
-                reference: reference.trim() || undefined,
-                accountDirection: type === "Account Balance" ? acctDirection : undefined,
-              })
+              setStoreRefusal(
+                onAdd({
+                  type,
+                  // E-05 d36 — WHICH tender, not just which kind. M-06 d22 gives
+                  // Visa and Mastercard separate accounts because they settle as
+                  // separate deposits; this is the field that makes that
+                  // reconcilable from a Sale.
+                  tenderRowId: rowId,
+                  amount: isNegativeType ? -Math.abs(amount) : amount,
+                  note: note.trim() || undefined,
+                  reference: reference.trim() || undefined,
+                  accountDirection: type === "Account Balance" ? acctDirection : undefined,
+                }),
+              )
             }
           >
             Add {isNegativeType ? "-" : ""}
@@ -1112,10 +1141,13 @@ function TenderModal({
           <div className="callout ok">Change owed: {money(amount - due)}</div>
         )}
         {(type === "Gift Card") && (
-          <label className="field">
-            <span>Gift card code</span>
-            <input type="text" value={reference} onChange={(e) => setReference(e.target.value)} placeholder="GC-4417" />
-          </label>
+          <>
+            <label className="field">
+              <span>Gift card code</span>
+              <input type="text" value={reference} onChange={(e) => setReference(e.target.value)} placeholder="GC-4417" />
+            </label>
+            {(gcRefusal || storeRefusal) && <div className="callout danger">{gcRefusal ?? storeRefusal}</div>}
+          </>
         )}
         {type === "Account Balance" && (
           <>

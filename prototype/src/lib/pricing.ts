@@ -1,4 +1,4 @@
-import { roundUpShelf } from "./money";
+import { roundToEnding } from "./money";
 
 // E-02's pricing rules, as pure functions.
 //
@@ -46,9 +46,12 @@ export function priceLine(input: {
   decidedPrice?: number;
   /** The price being accepted, if the operator has typed one. */
   acceptedPrice?: number;
+  /** M-06 d44 — the store's configured price ending, in minor units (99, 95, 0). */
+  priceEndingMinor: number;
 }): LinePricing {
   const cost = round2(input.listPrice * (1 - input.lineDiscountPct / 100));
-  const computed = roundUpShelf(input.listPrice * (1 + input.supplierMarkupPct / 100));
+  // A-49 — nearest configured ending, and only ever a suggestion (d32).
+  const computed = roundToEnding(input.listPrice * (1 + input.supplierMarkupPct / 100), input.priceEndingMinor);
   const prefill = input.decidedPrice ?? computed;
   const sell = input.acceptedPrice ?? prefill;
 
