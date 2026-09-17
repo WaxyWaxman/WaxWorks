@@ -10,6 +10,9 @@ const KIND_LABEL: Record<ReviewFlagKind, string> = {
   "discrepancy-accepted": "Discrepancy accepted",
   "negative-stock": "Negative stock",
   "sale-lock-broken": "Sale lock broken",
+  // architecture A-68 — the first kind with no actor. The queue stops meaning
+  // "what the staff did" and starts meaning "what wants a look".
+  "journal-imbalance": "Journal imbalance",
 };
 
 // M-04 decision 8 — actions that used to block on a manager override now
@@ -49,7 +52,23 @@ export function ReviewQueueBadge() {
                     )}
                   </div>
                   <p style={{ marginTop: "var(--sp-2)" }}>{f.summary}</p>
-                  <p className="small muted">Recorded by {f.recordedBy}</p>
+                  {/* A-68 — a NULL actor means the system raised it, and M-07
+                      d10 requires whatever surfaces one to say so in those
+                      terms: a non-zero Suspense balance is always a defect in
+                      this system, never a data-entry error. No Manager can
+                      create one and none can clear one, so this must not read
+                      as something to go and fix. Acknowledging it means "I have
+                      seen this bug" (A-68), which is still manager-only. */}
+                  <p className="small muted">
+                    {f.recordedBy ? (
+                      <>Recorded by {f.recordedBy}</>
+                    ) : (
+                      <>
+                        <strong>Raised by the system</strong> — nobody did this. It is a defect in this software, and
+                        there is nothing here for you to correct. Acknowledging it means you have seen it.
+                      </>
+                    )}
+                  </p>
                 </div>
               </div>
             ))}

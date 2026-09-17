@@ -2,11 +2,12 @@ import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { BarcodeInput } from "./BarcodeInput";
 import { Modal } from "./Modal";
-import type { Sale } from "../data/types";
+import type { JournalBatch, Sale } from "../data/types";
 import type { DayBreakdown } from "../lib/dayBreakdown";
 import { money } from "../lib/money";
 import { resolveScan } from "../lib/resolve";
 import { saleTotals } from "../lib/totals";
+import { datesIn, isImbalanced } from "../lib/journal";
 import { useApp } from "../store/AppStore";
 import { ManagerAuthorize } from "./ManagerAuthorize";
 import { useActor } from "./Identify";
@@ -302,7 +303,18 @@ export function OtherFunctionsModal({ onClose }: { onClose: () => void }) {
   const app = useApp();
   const [undoing, setUndoing] = useState<string | null>(null);
   const withActor = useActor();
-  const [breakdown, setBreakdown] = useState<{ closing: boolean; data: DayBreakdown } | null>(null);
+  const [breakdown, setBreakdown] = useState<{
+    closing: boolean;
+    data: DayBreakdown;
+    // M-07 d7 — what the close wrote beside the summary. Present only on a
+    // real close: View Subtotal touches nothing and therefore writes nothing.
+    journal?: {
+      batch: JournalBatch;
+      unresolved: string[];
+      ambiguousTenders: string[];
+      payouts: { sale: string; amount: number }[];
+    };
+  } | null>(null);
   const openBatches = app.closeBatches.filter((b) => !b.undoneAt);
 
   if (breakdown) {
@@ -327,6 +339,7 @@ export function OtherFunctionsModal({ onClose }: { onClose: () => void }) {
             Current Sales moved to Closed. Undo from Other Functions if needed.
           </div>
         )}
+        {breakdown.journal && <JournalNotice {...breakdown.journal} />}
       </Modal>
     );
   }
@@ -345,8 +358,9 @@ export function OtherFunctionsModal({ onClose }: { onClose: () => void }) {
               // CloseBatch, so this cannot ride a constant.
               onClick={() =>
                 withActor("Total Today's Sales", (actor) => {
-                  const { breakdown: data } = app.totalTodaysSales(actor);
-                  setBreakdown({ closing: true, data });
+                  const { breakdown: data, journal, unresolved, ambiguousTenders, payouts } =
+                    app.totalTodaysSales(actor);
+                  setBreakdown({ closing: true, data, journal: { batch: journal, unresolved, ambiguousTenders, payouts } });
                 })
               }
             >
@@ -383,6 +397,90 @@ export function OtherFunctionsModal({ onClose }: { onClose: () => void }) {
         </div>
       </div>
     </Modal>
+  );
+}
+
+/**
+ * M-07 d10's SECOND mechanism, at the surface it names: *"the Manager is
+ * told."*
+ *
+ * Suspense keeps the journal balanced by construction, so the export is always
+ * a valid document — and telling the Manager is what stops a balanced-but-wrong
+ * journal going quiet, which is the failure Suspense would otherwise introduce.
+ * Two mechanisms, not two options.
+ *
+ * Deliberately NOT a journal view. d9 gives this flow no dashboard, no balances
+ * and no journal display — *"a read-only journal view would be the first step
+ * back toward the ledger decision 1 declined."* This is a receipt for a thing
+ * that happened, in the close's own screen rather than in M-07's, and it counts
+ * lines rather than showing them.
+ */
+function JournalNotice({
+  batch,
+  unresolved,
+  ambiguousTenders,
+  payouts,
+}: {
+  batch: JournalBatch;
+  unresolved: string[];
+  ambiguousTenders: string[];
+  payouts: { sale: string; amount: number }[];
+}) {
+  const dates = datesIn(batch);
+  const bad = isImbalanced(batch);
+  return (
+    <div className={`callout ${bad ? "warn" : "ok"}`} style={{ marginTop: "var(--sp-2)" }}>
+      {bad ? (
+        <>
+          <strong>The journal did not balance, and the close went through anyway.</strong> {money(batch.suspense ?? 0)}{" "}
+          went to <strong>Suspense</strong> so the books stay a valid document (d10).{" "}
+          <strong>Nobody at the till caused this and nobody can correct it</strong> — a figure in Suspense is always a
+          defect in this software. It has been raised in the review queue; report it.
+          {unresolved.length > 0 && (
+            <>
+              {" "}
+              What could not be resolved: {unresolved.join("; ")}.
+            </>
+          )}
+        </>
+      ) : (
+        <>
+          <strong>Journal written</strong> onto this batch — {batch.lines.length} line
+          {batch.lines.length === 1 ? "" : "s"}
+          {dates.length > 1 ? (
+            <>
+              {" "}
+              across <strong>{dates.length} business dates</strong> ({dates.join(", ")}), because this close swept more
+              than one day (d14). Each day is dated its own, not today.
+            </>
+          ) : (
+            <> dated {dates[0] ?? "—"}.</>
+          )}{" "}
+          Balanced. It posts nowhere else and nothing runs at month end (d12) — it waits for the export.
+        </>
+      )}
+      {payouts.length > 0 && (
+        <p className="small" style={{ marginTop: "var(--sp-2)" }}>
+          <strong>
+            {payouts.length} pay-out{payouts.length === 1 ? "" : "s"} posted on the wrong side of the books
+          </strong>{" "}
+          ({payouts.map((p) => `${p.sale} ${money(p.amount)}`).join(", ")}). E-05 d16 makes a pay-out{" "}
+          <em>cash removed from the till</em>, so it should debit the expense and credit the cash it came out of. The
+          till funds one with an offsetting tender instead, so the Sale records cash that never entered the drawer and
+          does not say which tender was the offset — which makes the right entry underivable here. The journal balances
+          and two accounts are wrong by twice the pay-out. Raised against E-05.
+        </p>
+      )}
+      {ambiguousTenders.length > 0 && (
+        <p className="small" style={{ marginTop: "var(--sp-2)" }}>
+          <strong>Told apart only by behaviour:</strong> {ambiguousTenders.join(", ")}. More than one configured tender
+          shares each of these, and a Sale records the behaviour rather than the tender — so every one of them posted to
+          a single account. M-06 d22 gives Visa and Mastercard separate accounts <em>because they settle as separate
+          deposits</em>, and that reconciliation is not reachable until the till offers the configured tenders. Raised
+          against E-05.
+        </p>
+      )}
+    </div>
   );
 }
 
