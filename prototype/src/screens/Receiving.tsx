@@ -502,6 +502,11 @@ function InvoiceEditor({
     if (delta !== 0) app.setInvoiceTotalOverride(invoiceId, enteredTotal);
     const res = app.finalizeInvoice(invoiceId);
     if (res) setFinalizedCount(res.itemCount);
+    // M-07 d24 — where this system had to GUESS a line's business date, the
+    // substitution has to read as a guess. It balances, so d10's Suspense never
+    // fires and the review queue is never reached; saying it here, at the act,
+    // is what stops a date nobody chose looking like a date someone did.
+    if (res?.unresolved.length) setToast(res.unresolved.join(" · "));
   });;
 
   const doSaveUpdates = () => {

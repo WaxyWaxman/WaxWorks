@@ -1119,6 +1119,10 @@ export type GLRole =
   | "cogs"
   | "accounts-payable"
   | "freight-inbound"
+  // d23 — invoice-level MISC, beside freight rather than inside it. E-02 step 6
+  // has the Employee type the two as separate figures off the paperwork, and a
+  // misc charge can be anything a supplier bills that is not freight.
+  | "misc-inbound"
   | "second-hand-purchases"
   | "gift-card-liability"
   | "customer-credit"

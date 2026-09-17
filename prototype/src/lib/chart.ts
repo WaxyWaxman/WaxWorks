@@ -54,6 +54,11 @@ const RESERVED: { role: GLRole; number: string; name: string }[] = [
   { role: "customer-credit", number: "2300", name: "Customer account credit" },
   { role: "cogs", number: "5100", name: "Cost of goods" },
   { role: "freight-inbound", number: "5200", name: "Freight inbound" },
+  // d23 — its own account rather than folded into freight. A-29 puts both in
+  // cost of goods and the formula treats them alike, but the paperwork does
+  // not: E-02 step 6 has them entered as two figures, and a misc charge is a
+  // restocking fee or a pallet deposit as often as it is carriage.
+  { role: "misc-inbound", number: "5250", name: "Miscellaneous — inbound" },
   { role: "second-hand-purchases", number: "5300", name: "Second-hand purchases" },
   { role: "card-processing-fees", number: "6100", name: "Card processing fees" },
   { role: "cash-over-short", number: "6200", name: "Cash over / short" },
@@ -73,6 +78,7 @@ export const ROLE_PURPOSE: Record<GLRole, string> = {
   cogs: "That same cost, out at the moment it sells (d2)",
   "accounts-payable": "What is owed a supplier, from finalize (d13)",
   "freight-inbound": "Invoice-level freight, never allocated per copy (E-02 d16)",
+  "misc-inbound": "Invoice-level misc, never allocated per copy (E-02 d16, d23)",
   "second-hand-purchases": "The counter buy's money side; the intake credits it back",
   "gift-card-liability": "Money received against a future obligation (M-06 d20)",
   "customer-credit": "What the store owes a customer on their account",
@@ -158,6 +164,7 @@ const TYPE_FOR_ROLE: Record<GLRole, GLAccountType> = {
   revenue: "income",
   cogs: "cogs",
   "freight-inbound": "cogs",
+  "misc-inbound": "cogs",
   "second-hand-purchases": "cogs",
   adjustment: "cogs",
   "card-processing-fees": "expense",
