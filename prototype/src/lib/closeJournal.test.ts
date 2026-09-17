@@ -210,13 +210,13 @@ describe("M-07 d2 — a Return only reverses the cost where the copy came back",
     expect(lineFor(batch, acct("5100"))?.credit).toBe(8);
   });
 
-  it("posts nothing on the cost side for a written-off copy, and still balances", () => {
-    // The copy is gone, so its cost stays in cost of goods. Whether it should
-    // instead reach d6's `Written off` adjustment account is NOT decided —
-    // recorded as an open question rather than invented. What matters here is
-    // that the undecided case cannot unbalance the journal: Inventory and cost
-    // of goods are a self-contained pair, so omitting both is silent, not a
-    // false Suspense figure.
+  it("reverses it for a written-off copy too, because the write-off is its own act", () => {
+    // The copy came back over the counter either way. Routing it to `writeoff`
+    // is an on-hand adjustment, and d12 has an adjustment write its OWN journal
+    // to the account its reason code maps to (d6) — so the cost comes back into
+    // Inventory here and leaves again there. Two decided movements rather than
+    // one invented one, and the write-off lands in the account d6 created for
+    // it instead of sitting silently in cost of goods.
     const back = sale({
       lines: [line({ qty: -1, tax: [{ code: "a", name: "GST", ratePpm: 50_000, amount: -1 }], routedTo: "writeoff" })],
       tenders: [tender({ amount: -21 })],
@@ -224,8 +224,22 @@ describe("M-07 d2 — a Return only reverses the cost where the copy came back",
 
     const { batch } = build([back]);
 
-    expect(lineFor(batch, acct("1200"))).toBeUndefined();
-    expect(lineFor(batch, acct("5100"))).toBeUndefined();
+    expect(lineFor(batch, acct("1200"))?.debit).toBe(8);
+    expect(lineFor(batch, acct("5100"))?.credit).toBe(8);
+    expect(isImbalanced(batch)).toBe(false);
+  });
+
+  it("reverses it for a return nobody has routed yet", () => {
+    // The reversal is a fact about the copy coming back, not about what is
+    // done with it afterwards — so it does not wait on a disposition.
+    const back = sale({
+      lines: [line({ qty: -1, tax: [{ code: "a", name: "GST", ratePpm: 50_000, amount: -1 }], routedTo: undefined })],
+      tenders: [tender({ amount: -21 })],
+    });
+
+    const { batch } = build([back]);
+
+    expect(lineFor(batch, acct("1200"))?.debit).toBe(8);
     expect(isImbalanced(batch)).toBe(false);
   });
 });

@@ -305,21 +305,21 @@ export function buildCloseJournal(input: CloseJournalInput): CloseJournalResult 
  * own cost, which is unusual for a shop this size and is the reason gross
  * margin can be true every day rather than on count day.
  *
- * A RETURN reverses it, but only where the copy came back to stock. E-06 step 6
- * routes a returned copy three ways, and only two of them put it back:
+ * **A RETURN always reverses it, whatever E-06 step 6 then does with the copy.**
+ * The copy physically came back over the counter, so d2's movement runs
+ * backwards — out of cost of goods, into Inventory — and that is true before
+ * anyone decides where it goes next.
  *
- *   sellable / regrade — the copy is on the floor again, so the cost goes back
- *                        into Inventory and out of cost of goods.
- *   writeoff          — the copy is gone. **Nothing posts, and its cost stays
- *                        in cost of goods**, which is not a decision this flow
- *                        has taken. d6 gives E-04's `Written off` reason code
- *                        its own account, and whether a returned-and-destroyed
- *                        copy should reach it is unspecified — recorded as an
- *                        open question rather than invented here.
+ * Which is what keeps the write-off case honest rather than special. Routing a
+ * returned copy to `writeoff` is an **on-hand adjustment**, and d12 has an
+ * adjustment write its own journal when it is made, to the account its reason
+ * code maps to (d6). So the copy's cost comes back into Inventory here and
+ * leaves again through `buildAdjustmentJournal` — two decided movements rather
+ * than one invented one, and the write-off lands in the reason-coded account
+ * d6 created for it instead of sitting silently in cost of goods.
  *
- * A return line that has not been routed yet posts nothing either, for the
- * same reason: where the copy went is not known, and guessing writes a figure
- * nobody decided.
+ * An unrouted return line reverses too, for the same reason: the reversal is a
+ * fact about the copy coming back, not about what is done with it afterwards.
  */
 function costPostings(
   line: SaleLine,
@@ -341,13 +341,10 @@ function costPostings(
       credit(need(inventoryAcct, "Inventory (role)"), bd, cost, cur, "Inventory — sold"),
     ];
   }
-  if (line.routedTo === "sellable" || line.routedTo === "regrade") {
-    return [
-      debit(need(inventoryAcct, "Inventory (role)"), bd, cost, cur, "Inventory — returned to stock"),
-      credit(need(cogsAcct, "Cost of goods (role)"), bd, cost, cur, "Cost of goods — reversed on return"),
-    ];
-  }
-  return [];
+  return [
+    debit(need(inventoryAcct, "Inventory (role)"), bd, cost, cur, "Inventory — returned"),
+    credit(need(cogsAcct, "Cost of goods (role)"), bd, cost, cur, "Cost of goods — reversed on return"),
+  ];
 }
 
 const round = (n: number): number => Math.round(n * 100) / 100;

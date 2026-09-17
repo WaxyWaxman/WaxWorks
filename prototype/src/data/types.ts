@@ -1183,6 +1183,8 @@ export interface GLMapping {
  *
  * Defined here because the prototype had never modelled them as data.
  */
+export type AdjustmentReason = (typeof ADJUSTMENT_REASONS)[number];
+
 export const ADJUSTMENT_REASONS = [
   "Shrinkage",
   "Damaged",
