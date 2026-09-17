@@ -124,6 +124,7 @@ class Flow:
         self.text = text
         self.status = self._status()
         self.decisions = self._decisions()
+        self.struck = self._struck()
 
     def _status(self) -> str | None:
         m = STATUS_LINE_RE.search(self.text)
@@ -152,6 +153,32 @@ class Flow:
             if cell:
                 numbers.append(int(cell.group(1)))
         return numbers
+
+
+    def _struck(self) -> set[int]:
+        """Decision numbers whose row is struck through -- i.e. superseded.
+
+        The house rule is that a superseded decision stays in the table, struck
+        in place, pointing at what replaced it, because citations of it are
+        permanent addresses. That makes `~~` immediately after the number cell
+        the one reliable machine-readable signal that a row no longer holds.
+
+        An *amended* row is deliberately not struck: it still holds in part, and
+        its prefix says which part. Those are left alone.
+        """
+        m = re.search(
+            r"^##\s+Resolved decisions\s*$(.*?)(?=^##\s|\Z)",
+            self.text,
+            re.MULTILINE | re.DOTALL,
+        )
+        if not m:
+            return set()
+        out: set[int] = set()
+        for line in m.group(1).splitlines():
+            cell = re.match(r"^\|\s*(\d+)\s*\|\s*~~", line.strip())
+            if cell:
+                out.add(int(cell.group(1)))
+        return out
 
 
 flows: dict[str, Flow] = {}
@@ -264,6 +291,119 @@ for path in MD_FILES:
                 err(
                     f"{rel(path)}:{lineno}: cites '{cited_id} decision {cited_num}', "
                     f"but {cited_id} has no decision {cited_num}"
+                )
+
+
+# --------------------------------------------------------------------------
+# 4a. Short-form citations -- "M-07 d28", "[M-07](...) d28", and a bare "d28"
+#     inside a flow, which means that flow's own decision.
+#
+# Check 4 above only matches the long form ("E-02 decision 8"). The documents
+# overwhelmingly use the short form, so until now the form the repo actually
+# writes was not validated at all -- not for staleness, not even for existence.
+# --------------------------------------------------------------------------
+
+# "[M-07](M-07-chart-of-accounts.md) d28" or "M-07 d28"
+QUALIFIED_RE = re.compile(r"\[?([EM]-\d{2})\]?(?:\([^)]*\))?\s+d(\d+)")
+# a bare "d28", once the qualified ones have been blanked out of the line
+BARE_RE = re.compile(r"(?<![\w-])d(\d+)")
+
+
+def short_citations(path: str, line: str) -> list[tuple[str, int]]:
+    """Every (flow_id, decision) this line cites in short form."""
+    found: list[tuple[str, int]] = []
+    rest = line
+    for m in QUALIFIED_RE.finditer(line):
+        found.append((m.group(1).upper(), int(m.group(2))))
+        rest = rest.replace(m.group(0), " " * len(m.group(0)), 1)
+    # A bare dN only means something inside a flow document, where it refers to
+    # that flow's own table. Elsewhere -- the PRD, the architecture, a skill --
+    # it is ambiguous and is left alone.
+    own = FLOW_FILE_RE.match(os.path.basename(path))
+    if own and os.path.dirname(path) == FLOW_DIR:
+        for m in BARE_RE.finditer(rest):
+            found.append((own.group(1), int(m.group(1))))
+    return found
+
+
+for path in MD_FILES:
+    if rel(path).startswith((".claude/", "docs/templates/")):
+        continue
+    for lineno, line in enumerate(read(path).splitlines(), 1):
+        for cited_id, cited_num in short_citations(path, line):
+            target = flows.get(cited_id)
+            if target is None:
+                continue  # 4b and 5 already police unknown IDs and dead links
+            if cited_num not in target.decisions:
+                err(
+                    f"{rel(path)}:{lineno}: cites '{cited_id} d{cited_num}', "
+                    f"but {cited_id} has no decision {cited_num}"
+                )
+
+
+# --------------------------------------------------------------------------
+# 4c. Citations of a SUPERSEDED decision (warning)
+#
+# The failure this exists for: a decision is struck mid-session and the text
+# already citing it is never revisited. The number still resolves, so check 4
+# passes, and the citation reads as current. Four of these appeared in one
+# session on the M-08 branch, all from supersessions landing after the citing
+# text was written.
+#
+# A warning rather than an error, because discussing a struck row on purpose is
+# legitimate and common -- the superseding row says what it replaced, an
+# amendment prefix names what fell. A line that shows it knows is left alone.
+# --------------------------------------------------------------------------
+
+# Process docs cite illustratively -- CLAUDE.md and CONTRIBUTING.md both use
+# "E-02 decision 8" to show what a citation looks like, and that example going
+# stale is not a defect. Their citations are still checked for EXISTENCE by 4a;
+# only the staleness warning is suppressed, on the same grounds check 4 already
+# skips .claude/ and docs/templates/.
+ILLUSTRATIVE = ("CLAUDE.md", "CONTRIBUTING.md", "docs/README.md")
+
+AWARE_RE = re.compile(
+    r"~~|supersed|amend|retire|struck|reverse|replaced by|no longer|fell to|overtaken",
+    re.IGNORECASE,
+)
+
+# Suppression is judged in a WINDOW around the citation, not across the whole
+# line. A decision row here is one line and routinely runs past two thousand
+# characters, so whole-line suppression lets a stale citation hide anywhere
+# inside a row that mentions an amendment for its own separate reasons. That is
+# not hypothetical: A-77 cited a struck M-08 d16 while saying "amended" about
+# something else in the same row, and whole-line matching missed it.
+AWARE_WINDOW = 140
+
+
+def cites_knowingly(line: str, at: int) -> bool:
+    return bool(AWARE_RE.search(line[max(0, at - AWARE_WINDOW) : at + AWARE_WINDOW]))
+
+
+for path in MD_FILES:
+    if rel(path).startswith((".claude/", "docs/templates/")) or rel(path) in ILLUSTRATIVE:
+        continue
+    for lineno, line in enumerate(read(path).splitlines(), 1):
+        # A row that is ITSELF struck through is a historical record citing a
+        # historical record -- a retired e2e-register row naming the decision it
+        # used to hold, say. Nothing there needs to be current.
+        if re.match(r"^\|\s*~~", line.strip()):
+            continue
+        seen: set[tuple[str, int]] = set()
+        for pattern in (QUALIFIED_RE, CITATION_RE):
+            for m in pattern.finditer(line):
+                cited_id, cited_num = m.group(1).upper(), int(m.group(2))
+                if (cited_id, cited_num) in seen:
+                    continue
+                seen.add((cited_id, cited_num))
+                target = flows.get(cited_id)
+                if not target or cited_num not in target.struck:
+                    continue
+                if cites_knowingly(line, m.start()):
+                    continue  # this citation says it knows
+                warn(
+                    f"{rel(path)}:{lineno}: cites {cited_id} d{cited_num}, which is "
+                    "struck through in its own table -- say what superseded it"
                 )
 
 
