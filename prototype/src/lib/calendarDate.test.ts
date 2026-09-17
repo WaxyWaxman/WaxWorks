@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { isCalendarDate, toCalendarDate } from "./calendarDate";
 import { dueFor } from "./payables";
+import { isBusinessDate } from "./journal";
 
 /**
  * The date a receiving clerk types is the one that has to compare against every
@@ -81,5 +82,26 @@ describe("dueFor with no usable date to run from (E-02 d45)", () => {
     expect(dueFor("End of Month", "10/09/2026", today).dueDate).toBeUndefined();
     // COD carries no due date either way, and used to age by NaN days.
     expect(dueFor("COD", "10/09/2026", today).overdueBy).toBeUndefined();
+  });
+});
+
+describe("what the entry point hands the journal (M-07 d14, d19)", () => {
+  // A line carries its own business date (d14) and that date is a calendar day
+  // (d19). `buildInvoiceJournal` reports an Invoice date that is not one as
+  // unresolved, and keeps doing so — this asserts the other end: what the
+  // intake stores can never be the thing that guard is there to catch.
+  it("normalizes to something the journal will accept as a business date", () => {
+    for (const raw of ["2026-09-10", "10/09/2026", "1/9/2026", "29/02/2028"]) {
+      expect(isBusinessDate(toCalendarDate(raw))).toBe(true);
+    }
+  });
+
+  it("hands back nothing at all rather than something unusable", () => {
+    // The refusals are blank, and blank is visibly blank. What must never come
+    // out of here is a string that LOOKS like a date and files in no period.
+    for (const raw of ["", "10 Sept 2026", "09/10/26", "31/02/2026", "yesterday"]) {
+      expect(toCalendarDate(raw)).toBe("");
+      expect(isBusinessDate(toCalendarDate(raw))).toBe(false);
+    }
   });
 });
