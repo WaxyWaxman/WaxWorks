@@ -312,7 +312,6 @@ export function OtherFunctionsModal({ onClose }: { onClose: () => void }) {
       batch: JournalBatch;
       unresolved: string[];
       ambiguousTenders: string[];
-      payouts: { sale: string; amount: number }[];
     };
   } | null>(null);
   const openBatches = app.closeBatches.filter((b) => !b.undoneAt);
@@ -358,9 +357,8 @@ export function OtherFunctionsModal({ onClose }: { onClose: () => void }) {
               // CloseBatch, so this cannot ride a constant.
               onClick={() =>
                 withActor("Total Today's Sales", (actor) => {
-                  const { breakdown: data, journal, unresolved, ambiguousTenders, payouts } =
-                    app.totalTodaysSales(actor);
-                  setBreakdown({ closing: true, data, journal: { batch: journal, unresolved, ambiguousTenders, payouts } });
+                  const { breakdown: data, journal, unresolved, ambiguousTenders } = app.totalTodaysSales(actor);
+                  setBreakdown({ closing: true, data, journal: { batch: journal, unresolved, ambiguousTenders } });
                 })
               }
             >
@@ -419,12 +417,10 @@ function JournalNotice({
   batch,
   unresolved,
   ambiguousTenders,
-  payouts,
 }: {
   batch: JournalBatch;
   unresolved: string[];
   ambiguousTenders: string[];
-  payouts: { sale: string; amount: number }[];
 }) {
   const dates = datesIn(batch);
   const bad = isImbalanced(batch);
@@ -467,18 +463,6 @@ function JournalNotice({
             </>
           )}
         </>
-      )}
-      {payouts.length > 0 && (
-        <p className="small" style={{ marginTop: "var(--sp-2)" }}>
-          <strong>
-            {payouts.length} pay-out{payouts.length === 1 ? "" : "s"} posted on the wrong side of the books
-          </strong>{" "}
-          ({payouts.map((p) => `${p.sale} ${money(p.amount)}`).join(", ")}). E-05 d16 makes a pay-out{" "}
-          <em>cash removed from the till</em>, so it should debit the expense and credit the cash it came out of. The
-          till funds one with an offsetting tender instead, so the Sale records cash that never entered the drawer and
-          does not say which tender was the offset — which makes the right entry underivable here. The journal balances
-          and two accounts are wrong by twice the pay-out. Raised against E-05.
-        </p>
       )}
       {ambiguousTenders.length > 0 && (
         <p className="small" style={{ marginTop: "var(--sp-2)" }}>

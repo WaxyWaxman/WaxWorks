@@ -297,23 +297,55 @@ describe("what a Sale does not record", () => {
     expect(tenderRowFor(tender({ type: "Cash" }), rows)?.id).toBe("tn-cash");
   });
 
-  it("reports a pay-out as posted on the wrong side, because the right side is not derivable", () => {
-    // E-05 d16 — a pay-out is cash REMOVED from the till, so it should debit
-    // the expense and credit the cash. The till funds it with an offsetting
-    // tender and does not record which one, so the Sale carries $20 of cash
-    // that never entered the drawer. The journal balances and two accounts are
-    // wrong by twice the pay-out. Detected, named, and not guessed at.
+  it("posts a pay-out as the two-sided entry it is (E-05 d35)", () => {
+    // Was the worst thing in this file. d16 makes a pay-out cash REMOVED from
+    // the till; the till used to store it as a negative tender that left the
+    // Sale owing, so the operator cleared it with an offsetting cash tender —
+    // and the Sale then recorded $20 of cash that never entered the drawer.
+    // The journal balanced exactly and put both accounts on the wrong side by
+    // twice the pay-out.
+    //
+    // d35 makes the pay-out fund itself, so it needs no offsetting tender and
+    // the entry is plain: debit the expense, credit the cash it came out of.
     const payoutSale = sale({
       lines: [],
-      tenders: [tender({ id: "t-po", type: "Pay-out", amount: -20, note: "courier COD" }), tender({ id: "t-c", type: "Cash", amount: 20 })],
+      tenders: [tender({ id: "t-po", type: "Pay-out", amount: -20, note: "courier COD" })],
     });
 
-    const { batch, payouts } = build([payoutSale]);
+    const { batch } = build([payoutSale]);
 
-    expect(payouts).toEqual([{ sale: "Sale #1", amount: 20 }]);
+    expect(lineFor(batch, acct("6300"))?.debit).toBe(20); // the expense
+    expect(lineFor(batch, acct("1100"))?.credit).toBe(20); // out of the drawer
     expect(isImbalanced(batch)).toBe(false);
-    // The wrongness, asserted rather than described: cash debited, expense credited.
-    expect(lineFor(batch, acct("1100"))?.debit).toBe(20);
-    expect(lineFor(batch, acct("6300"))?.credit).toBe(20);
+    expect(lineFor(batch, acct("6300"))?.memo).toContain("courier COD");
+  });
+
+  it("nets the drawer correctly when a pay-out rides on a real Sale", () => {
+    // The case the old shape got wrong by $40. The customer hands over $36.20
+    // and the courier takes $20 out of the same drawer, so Cash nets $16.20 —
+    // and it is ONE line per (date, account), because d14 groups them.
+    const mixed = sale({
+      tenders: [
+        tender({ id: "t-c", type: "Cash", amount: 21 }),
+        tender({ id: "t-po", type: "Pay-out", amount: -8, note: "window cleaner" }),
+      ],
+    });
+
+    const { batch } = build([mixed]);
+
+    expect(lineFor(batch, acct("1100"))?.debit).toBe(13); // 21 in, 8 out
+    expect(lineFor(batch, acct("6300"))?.debit).toBe(8);
+    expect(isImbalanced(batch)).toBe(false);
+  });
+
+  it("says so when there is no Cash tender for a pay-out to come out of", () => {
+    // d11 maps every seam, so this is a defect rather than a configuration
+    // hole — and it is the one thing about a pay-out this still cannot resolve.
+    const noCash = TENDERS.filter((r) => r.behavior !== "Cash");
+    const payoutSale = sale({ lines: [], tenders: [tender({ id: "t-po", type: "Pay-out", amount: -20 })] });
+
+    const { unresolved } = build([payoutSale], { tenders: noCash });
+
+    expect(unresolved.join(" ")).toContain("Cash tender");
   });
 });

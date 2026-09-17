@@ -107,6 +107,15 @@ funds — Mastercard* overstated and *Cash in drawer* understated by the same fi
 The journal is impeccable. Decision 10 never fires, Suspense stays at zero, and
 nothing in this flow can detect it.
 
+*Building Phase 3 found a second thing of this exact shape and it turned out to be
+ours rather than theirs.* A pay-out balanced perfectly and put two accounts on the
+wrong side by twice its amount — not because anyone mis-rang it, but because the
+till recorded a cash tender no customer had handed over. **The difference is that
+this one was detectable**, since a Pay-out tender is visible on the Sale, so the
+close reported it rather than guessing; and [E-05](E-05-sell-a-record.md) d35 has
+since removed the cause. The row above is about the failure this flow genuinely
+cannot see. It is worth knowing that it is a narrower set than it first looked.
+
 **The correction already exists and it expires at the close.** [E-05](E-05-sell-a-record.md)
 d31 and d32 let a reversing tender be added to a **Current** Sale — d32 states plainly
 that *changing the tenders on a Current Sale moves real money* — and d27 defaults the
@@ -174,7 +183,7 @@ _Numbered so they can be cited precisely. Append only — never renumber or dele
 
 ## Open questions
 
-~~**Nothing is open that blocks a build, and nothing is open at all in this flow.**~~ **Building Phase 3 reopened it.** Nothing below blocks a build — every one of them is implemented, balanced and reported — and of the six it raised, **three are now closed by decisions 23, 24 and 25**, and the seventh they raised between them is closed by [architecture](../architecture.md) A-71. Four remain, and they are all the same shape: **a decision here needs a fact that the artifact it reads does not record.** They were invisible from the specification because each document is individually consistent; they appear only where the journal has to read one document's artifact through another's decision.
+~~**Nothing is open that blocks a build, and nothing is open at all in this flow.**~~ **Building Phase 3 reopened it.** Nothing below blocks a build — every one of them is implemented, balanced and reported — and of the six it raised, **three are closed by decisions 23, 24 and 25**, the seventh they raised between them by [architecture](../architecture.md) A-71, and a fourth by [E-05](E-05-sell-a-record.md) d35. Three remain, and they are all the same shape: **a decision here needs a fact that the artifact it reads does not record.** They were invisible from the specification because each document is individually consistent; they appear only where the journal has to read one document's artifact through another's decision.
 
 The record of what was asked before the build follows below the new ones.
 
@@ -192,7 +201,7 @@ The record of what was asked before the build follows below the new ones.
 ### Raised against other flows
 
 - **A Sale does not record which tender it was, only which behaviour.** [M-06](M-06-settings.md) d22 gives `Visa` and `Mastercard` separate accounts *because they settle as separate deposits, and a breakdown that merges them cannot be tied back to a bank statement*, and d21 keeps one account per tender on exactly that reasoning. A Sale's tender carries the **behaviour**, so at the close every card in the day lands in one account and the reconciliation d22 exists to protect is unreachable. This flow cannot fix it — which tenders the till offers is [E-05](E-05-sell-a-record.md)'s screen and [M-06](M-06-settings.md)'s configuration. Recorded there.
-- **A pay-out cannot be journalled correctly from what a Sale records.** [E-05](E-05-sell-a-record.md) d16 makes a pay-out *cash removed from the till for an expense*, so the entry is debit the expense, credit the cash — and d21 provisions the expense account for it. The till stores it as a **negative tender funded by an offsetting one**, so a Sale carries cash that never entered the drawer and does not say which tender was the offset. **The journal balances exactly** and two accounts are wrong by twice the pay-out. It is the failure this flow's own *"An imbalance and a wrong tender are different failures"* describes, with one difference: this one **is** detectable, because a Pay-out tender is visible on the Sale. Detected and reported at the close; the fix belongs to [E-05](E-05-sell-a-record.md). Recorded there.
+- ~~**A pay-out cannot be journalled correctly from what a Sale records.**~~ — **Resolved by [E-05](E-05-sell-a-record.md) d35, which owns it**, and by removing the cause rather than detecting the symptom. A pay-out now **settles a Sale on its own**: it is the cash movement d16 always called it, so there is no offsetting tender, no phantom cash on the Sale, and nothing to identify as the funder. The journal is a plain two-sided entry — debit the pay-out expense (d21), credit the cash — and this flow's close, which used to report every pay-out as posted on the wrong side, has nothing left to report.
 
 ### Asked before the build
 

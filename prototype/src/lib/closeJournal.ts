@@ -127,57 +127,36 @@ export interface CloseJournalResult {
   unresolved: string[];
   /** Tenders whose configured row could not be told apart — see `tenderRowFor`. */
   ambiguousTenders: string[];
-  /**
-   * Pay-outs, which this journal posts on the wrong side and cannot fix — see
-   * `payoutDefect` below. Reported rather than corrected, because correcting
-   * one means knowing something a Sale does not record.
-   */
-  payouts: { sale: string; amount: number }[];
 }
 
 /**
- * **A pay-out cannot be journalled correctly from what a Sale records.**
+ * E-05 d35 — **a pay-out funds itself, so its journal is a plain two-sided
+ * entry.** Debit the pay-out expense (d21 provisions it, calling it *"the one
+ * kind no reserved account covered"*), credit the cash it came out of.
  *
- * E-05 d16 and the [lexicon] agree on what one is: *cash removed from the till
- * for an expense*. The correct entry is therefore **debit the pay-out expense,
- * credit the cash it came out of** — and d21 provisions exactly that, giving
- * `payout` an expense account and calling it *"the one kind no reserved account
- * covered"*.
+ * This used to be the worst thing in this file. d16 makes a pay-out *cash
+ * removed from the till*, but the prototype stored it as a negative tender that
+ * left the Sale owing, so the operator cleared it with an offsetting cash
+ * tender — and the Sale then recorded cash that never entered the drawer, with
+ * nothing saying which tender was the phantom. The journal **balanced exactly**
+ * and put Cash and the expense on the wrong sides by twice the pay-out, which
+ * is the failure M-07 describes under *"an imbalance and a wrong tender are
+ * different failures"*. It was detected and reported rather than guessed at.
  *
- * The till stores it as a NEGATIVE tender and makes the operator fund it with
- * an offsetting one: a $20 pay-out on an otherwise empty Sale is recorded as
- * `Pay-out -20` **and `Cash +20`**, because `balanceDue` reads $20 still owing
- * until something covers it. So the Sale records $20 of cash that never entered
- * the drawer, and nothing on it says which tender was the offset.
+ * d35 removed the cause rather than the symptom, so there is nothing left to
+ * detect.
  *
- * What that does to the journal, on a Sale that also sold $36.20 of records:
- *
- * |  | Cash | Pay-out expense |
- * |---|---|---|
- * | What happened | debit $16.20 | debit $20 |
- * | What posts | debit $56.20 | **credit** $20 |
- *
- * **It balances exactly** — the signed tenders sum to the Sale's total by
- * construction, which is the whole reason this journal closes — and two
- * accounts are wrong by twice the pay-out. This is precisely the failure M-07
- * describes under *"An imbalance and a wrong tender are different failures"*:
- * impeccable arithmetic, money in the wrong place, Suspense at zero. The one
- * difference is that this one IS detectable, because a Pay-out tender is
- * visible on the Sale — so it is detected and reported here.
- *
- * **Not corrected here**, because correcting it means deciding which tender
- * funded the pay-out, and a Sale with two tenders does not say. That is E-05's
- * to answer — either by recording the funding tender or by storing a pay-out
- * as the negative cash line d16 already calls it. Raised as an open question.
+ * The cash side resolves to the **Cash tender's** account, which is where the
+ * drawer's money lives (d21 — `cash` takes undeposited funds). A shop that has
+ * configured no cash tender at all has nowhere for it to come from, and that
+ * is reported rather than assumed.
  */
-export const payoutDefect = (t: Tender): boolean => t.type === "Pay-out";
 
 export function buildCloseJournal(input: CloseJournalInput): CloseJournalResult {
   const { accounts, mappings } = input;
   const postings: Posting[] = [];
   const unresolved: string[] = [];
   const ambiguousTenders = new Set<string>();
-  const payouts: CloseJournalResult["payouts"] = [];
   const cur = input.currency;
 
   const need = (a: GLAccount | undefined, what: string): string => {
@@ -259,10 +238,14 @@ export function buildCloseJournal(input: CloseJournalInput): CloseJournalResult 
     // --- What the customer actually handed over ---------------------------
     //
     // Every tender DEBITS the account its behavior implies (d21). That is not
-    // a choice: `balanceDue` is zero at tender, so the signed tenders sum to
-    // the Sale's grand total, which is exactly what the credits above sum to.
-    // The journal balances because the till's own arithmetic balanced — and
-    // where it does not, d10's Suspense is what says so.
+    // a choice: `balanceDue` is zero at tender, so the tenders that count
+    // toward the Sale sum to its grand total, which is exactly what the credits
+    // above sum to. The journal balances because the till's own arithmetic
+    // balanced — and where it does not, d10's Suspense is what says so.
+    //
+    // The pay-out is the exception at both ends (d35): it settles nothing, so
+    // it is outside that sum, and it posts both of its own sides, so it adds
+    // nothing to either total.
     for (const t of sale.tenders) {
       const row = tenderRowFor(t, input.tenders);
       if (!row) {
@@ -270,16 +253,26 @@ export function buildCloseJournal(input: CloseJournalInput): CloseJournalResult 
         continue;
       }
       if (tenderIsAmbiguous(t, input.tenders)) ambiguousTenders.add(t.type);
-      if (payoutDefect(t)) payouts.push({ sale: label, amount: Math.abs(t.amount) });
-      postings.push(
-        debit(
-          need(seamAccount(accounts, mappings, "tender", row.id), `Tender ${row.name}`),
-          bd,
-          round(t.amount),
-          cur,
-          `${row.name}`,
-        ),
-      );
+      const acct = need(seamAccount(accounts, mappings, "tender", row.id), `Tender ${row.name}`);
+
+      // d35 — the pay-out is its own two-sided entry, and is the one tender
+      // that does not simply debit its own account by what was recorded. The
+      // expense is incurred and the drawer pays for it; nothing else on the
+      // Sale funds it, which is exactly why it no longer needs an offsetting
+      // tender at the till.
+      if (t.type === "Pay-out") {
+        const amount = round(Math.abs(t.amount));
+        const cashRow = input.tenders.find((r) => r.behavior === "Cash" && !r.systemOwned);
+        const cashAcct = need(
+          cashRow ? seamAccount(accounts, mappings, "tender", cashRow.id) : undefined,
+          "a Cash tender for the pay-out to come out of",
+        );
+        const memo = t.note ? `Pay-out — ${t.note}` : "Pay-out";
+        postings.push(debit(acct, bd, amount, cur, memo), credit(cashAcct, bd, amount, cur, memo));
+        continue;
+      }
+
+      postings.push(debit(acct, bd, round(t.amount), cur, `${row.name}`));
     }
   }
 
@@ -295,7 +288,6 @@ export function buildCloseJournal(input: CloseJournalInput): CloseJournalResult 
     }),
     unresolved,
     ambiguousTenders: [...ambiguousTenders],
-    payouts,
   };
 }
 

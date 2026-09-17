@@ -89,11 +89,37 @@ export function saleTotals(sale: Sale, ctx: TaxContext): SaleTotals {
   };
 }
 
+/**
+ * Everything that moved through the till on this Sale, pay-outs included.
+ *
+ * This is the figure a **void** needs — "how much is still unaccounted for" —
+ * because a pay-out is cash that genuinely left the drawer and putting the
+ * Sale away does not put the money back.
+ */
 export const tenderedTotal = (sale: Sale): number =>
   round2(sale.tenders.reduce((s, t) => s + t.amount, 0));
 
+/**
+ * What has been put toward **settling this Sale**, which is not the same thing
+ * — E-05 d35.
+ *
+ * **A pay-out funds itself.** d16 calls it *cash removed from the till for an
+ * expense*, and step 15 settles a counter buy by *"tendering it back as
+ * negative cash"*: money leaving the drawer is the whole of the movement, not
+ * half of one. Counting it toward the Sale left a $20 pay-out reading as $20
+ * still owing, so the till demanded an offsetting tender to clear it — and the
+ * Sale then recorded $20 of cash that never came in.
+ *
+ * `Account Balance (add)` deliberately stays counted, because it genuinely IS
+ * funded by another tender: the customer hands over cash to put on their
+ * account, and the two halves are both real. A pay-out has no such second half.
+ * The drawer is the second half.
+ */
+export const tenderedTowardSale = (sale: Sale): number =>
+  round2(sale.tenders.reduce((s, t) => (t.type === "Pay-out" ? s : s + t.amount), 0));
+
 export const balanceDue = (sale: Sale, ctx: TaxContext): number =>
-  round2(saleTotals(sale, ctx).grand - tenderedTotal(sale));
+  round2(saleTotals(sale, ctx).grand - tenderedTowardSale(sale));
 
 // A-47 — half AWAY FROM ZERO, not Math.round's half-up, so a negative-quantity
 // Return line rounds symmetrically to the Sale that produced it (A-49 names
