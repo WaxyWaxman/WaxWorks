@@ -2,8 +2,8 @@ import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useApp } from "../store/AppStore";
 import { ManagerAuthorize } from "../components/ManagerAuthorize";
-import { ROLE_PURPOSE, seamsFor, unmappedSeams, type Seams } from "../lib/chart";
-import type { GLAccount } from "../data/types";
+import { ROLE_PURPOSE, TYPE_LABEL, accountType, seamsFor, unmappedSeams, type Seams } from "../lib/chart";
+import type { GLAccountType } from "../data/types";
 
 /**
  * M-07 — Chart of accounts.
@@ -17,22 +17,22 @@ import type { GLAccount } from "../data/types";
  * rename and renumber (d3), not build.
  */
 
-const BANDS: { band: number; label: string }[] = [
-  { band: 1, label: "Assets" },
-  { band: 2, label: "Liabilities" },
-  { band: 3, label: "Equity" },
-  { band: 4, label: "Revenue" },
-  { band: 5, label: "Cost of goods" },
-  { band: 6, label: "Expenses" },
-  { band: 9, label: "Suspense" },
-];
+// d22 — grouped by an account's TYPE, derived from its role, and NOT by its
+// number: d3 makes the number the store's, and renumbering to match an
+// accountant's chart is the first thing a Manager is invited to do. Grouping on
+// the number would scramble the moment they did.
+const TYPES: GLAccountType[] = ["asset", "liability", "equity", "income", "cogs", "expense"];
 
 export function ChartOfAccounts() {
   const app = useApp();
   const nav = useNavigate();
   const [authorisedBy, setAuthorisedBy] = useState<string | null>(null);
   const [adding, setAdding] = useState(false);
-  const [draft, setDraft] = useState({ number: "", name: "" });
+  const [draft, setDraft] = useState<{ number: string; name: string; type: GLAccountType }>({
+    number: "",
+    name: "",
+    type: "expense",
+  });
 
   const seams: Seams = useMemo(
     () => ({ sections: app.sections, tenders: app.tenders, taxTypes: app.taxTypes }),
@@ -50,7 +50,6 @@ export function ChartOfAccounts() {
       />
     );
 
-  const bandOf = (a: GLAccount) => Math.floor(Number(a.number) / 1000);
   const sorted = [...app.glAccounts].sort((a, b) => Number(a.number) - Number(b.number));
 
   return (
@@ -77,16 +76,14 @@ export function ChartOfAccounts() {
         </p>
       )}
 
-      {BANDS.map(({ band, label }) => {
-        const rows = sorted.filter((a) => bandOf(a) === band);
+      {TYPES.map((kind) => {
+        const rows = sorted.filter((a) => accountType(a) === kind);
         return (
-          <section key={band}>
-            <h2>
-              {band}000s · {label}
-            </h2>
+          <section key={kind}>
+            <h2>{TYPE_LABEL[kind]}</h2>
             {rows.length === 0 ? (
               <p className="small muted">
-                {band === 3 ? (
+                {kind === "equity" ? (
                   <>
                     <strong>Empty on purpose.</strong> d1 runs no period close and holds no equity, so there is no
                     Retained Earnings and no Net Profit here. An accountant seeing no 3000s knows at once that this
@@ -161,12 +158,26 @@ export function ChartOfAccounts() {
               value={draft.name}
               onChange={(e) => setDraft({ ...draft, name: e.target.value })}
             />
+            {/* d22 — asked HERE and nowhere else. Every other account derives
+                its type from its role; this one has none, so nothing but the
+                Manager knows what kind it is. */}
+            <select
+              aria-label="Account type"
+              value={draft.type}
+              onChange={(e) => setDraft({ ...draft, type: e.target.value as GLAccountType })}
+            >
+              {TYPES.map((k) => (
+                <option key={k} value={k}>
+                  {TYPE_LABEL[k]}
+                </option>
+              ))}
+            </select>
             <button
               className="btn ink primary"
               disabled={!draft.number.trim() || !draft.name.trim()}
               onClick={() => {
-                app.addGLAccount(draft.number.trim(), draft.name.trim());
-                setDraft({ number: "", name: "" });
+                app.addGLAccount(draft.number.trim(), draft.name.trim(), draft.type);
+                setDraft({ number: "", name: "", type: "expense" });
                 setAdding(false);
               }}
             >
@@ -177,7 +188,8 @@ export function ChartOfAccounts() {
             </button>
             <p className="small muted">
               An added account carries <strong>no role</strong> (step 3) — nothing posts to it by itself. It exists to
-              be pointed at.
+              be pointed at. Which is also why it is the <em>only</em> account asked for a type: every other one
+              derives its type from its role (d22), and this one has no role to derive from.
             </p>
           </div>
         ) : (
@@ -195,8 +207,9 @@ export function ChartOfAccounts() {
       <p className="small muted">
         The starting chart mirrors this system rather than an accountant's habits (d11): a Section each, a{" "}
         <em>tender</em> each rather than a card type (M-06 d22), and <strong>two</strong> accounts per tax — collected
-        is a liability, paid is an Input Tax Credit (d5, E-02 d34). <strong>Not yet decided:</strong> whether an
-        account carries an explicit <em>type</em>, which the export will need.
+        is a liability, paid is an Input Tax Credit (d5, E-02 d34). An account's <em>type</em> is
+        <strong>derived from its role</strong> (d22), never from its number — so renumbering the chart cannot scramble
+        the grouping above.
       </p>
     </div>
   );

@@ -103,6 +103,7 @@ import type {
   ClaimVoid,
   Clearing,
   GLAccount,
+  GLAccountType,
   GLMapping,
   GLSeamKind,
   SupplierClaim,
@@ -995,7 +996,9 @@ interface AppContextValue extends AppState {
   // M-07 — the chart. d3: the number and name are the store's; the ROLE is not
   // editable, because the software resolves by it.
   updateGLAccount: (id: string, patch: { number?: string; name?: string; active?: boolean }) => void;
-  addGLAccount: (number: string, name: string) => void;
+  // d22 — a type is asked for HERE and nowhere else: this is the only account
+  // with no role to derive one from.
+  addGLAccount: (number: string, name: string, type: GLAccountType) => void;
   setGLMapping: (seamKind: GLSeamKind, seamId: string, accountId: string) => void;
 
   pendingOrderFor: (id?: string) => PendingOrderLine | undefined;
@@ -3571,10 +3574,10 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
     }));
 
   /** Step 3 — an added account carries NO role, so nothing posts to it by itself. */
-  const addGLAccount: AppContextValue["addGLAccount"] = (number, name) =>
+  const addGLAccount: AppContextValue["addGLAccount"] = (number, name, type) =>
     setS((prev) => ({
       ...prev,
-      glAccounts: [...prev.glAccounts, { id: uid("gl"), number, name, active: true }],
+      glAccounts: [...prev.glAccounts, { id: uid("gl"), number, name, type, active: true }],
     }));
 
   /**

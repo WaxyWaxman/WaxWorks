@@ -1104,6 +1104,13 @@ export type GLRole =
   | "tax-paid"
   | "adjustment";
 
+/**
+ * M-07 d22 — the six kinds a destination asks for. DERIVED from an account's
+ * role, and stored only on an account the Manager added, which is the only one
+ * with no role to derive it from.
+ */
+export type GLAccountType = "asset" | "liability" | "equity" | "income" | "cogs" | "expense";
+
 export interface GLAccount {
   id: string;
   /** Fixed (d3). Absent = added by the Manager, with nothing posting to it. */
@@ -1111,6 +1118,13 @@ export interface GLAccount {
   /** The STORE's, not ours — d3: nothing resolves an account by its number. */
   number: string;
   name: string;
+  /**
+   * d22 — set ONLY where `role` is absent. Deriving it from the role everywhere
+   * else keeps it from being the second copy of a fact that A-36, A-37 and
+   * A-33b each refused, and from depending on the NUMBER, which d3 makes the
+   * store's and which they are invited to change.
+   */
+  type?: GLAccountType;
   /** M-06 d9 — an account that has been posted to is deactivated, never deleted. */
   active: boolean;
 }

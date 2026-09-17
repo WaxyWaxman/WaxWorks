@@ -1,5 +1,6 @@
 import type {
   GLAccount,
+  GLAccountType,
   GLMapping,
   GLRole,
   SectionRow,
@@ -134,6 +135,56 @@ function tenderAccount(tn: TenderRow): { role: GLRole; base: number; prefix: str
       return { role: "undeposited", base: 1100, prefix: "Undeposited funds" };
   }
 }
+
+/**
+ * M-07 d22 — every role implies exactly one type, so the type is derived and
+ * never stored beside the role.
+ *
+ * `suspense` is the one judgement call: a suspense account is conventionally an
+ * asset, and its whole point is that it should never hold anything.
+ */
+const TYPE_FOR_ROLE: Record<GLRole, GLAccountType> = {
+  bank: "asset",
+  inventory: "asset",
+  undeposited: "asset",
+  "tax-paid": "asset",
+  suspense: "asset",
+  "accounts-payable": "liability",
+  "gift-card-liability": "liability",
+  "customer-credit": "liability",
+  "tax-collected": "liability",
+  "tender-gift-card": "liability",
+  "tender-customer-credit": "liability",
+  revenue: "income",
+  cogs: "cogs",
+  "freight-inbound": "cogs",
+  "second-hand-purchases": "cogs",
+  adjustment: "cogs",
+  "card-processing-fees": "expense",
+  "cash-over-short": "expense",
+  "tender-payout": "expense",
+  "tender-rounding": "expense",
+};
+
+/**
+ * d22 — an account's type. From its role where it has one; from the stored
+ * field where the Manager added it, which is the only case nothing else knows.
+ *
+ * Deliberately NOT from the number: d3 makes the number the store's, and
+ * renumbering to match an accountant's chart is the first thing a Manager is
+ * invited to do.
+ */
+export const accountType = (a: GLAccount): GLAccountType | undefined =>
+  a.role ? TYPE_FOR_ROLE[a.role] : a.type;
+
+export const TYPE_LABEL: Record<GLAccountType, string> = {
+  asset: "Assets",
+  liability: "Liabilities",
+  equity: "Equity",
+  income: "Revenue",
+  cogs: "Cost of goods",
+  expense: "Expenses",
+};
 
 export function buildChart(seams: Seams): BuiltChart {
   const accounts: GLAccount[] = [];

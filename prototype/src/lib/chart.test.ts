@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildChart, seamsFor, unmappedSeams, type Seams } from "./chart";
+import { accountType, buildChart, seamsFor, unmappedSeams, type Seams } from "./chart";
 import { ADJUSTMENT_REASONS, type SectionRow, type TaxType, type TenderRow } from "../data/types";
 
 const section = (code: string, name: string): SectionRow =>
@@ -219,5 +219,45 @@ describe("M-07 — the suggested numbering groups by account type, not by subjec
     const { accounts } = buildChart(seams);
 
     expect(new Set(accounts.map((a) => a.number)).size).toBe(accounts.length);
+  });
+});
+
+describe("M-07 d22 — an account's type is derived from its role", () => {
+  it("derives a type for every role, so nothing needs one stored beside it", () => {
+    // A stored type beside a role is the second copy of a fact, which A-36,
+    // A-37 and A-33b each refused. This is the check that it is never needed.
+    const { accounts } = buildChart(seams);
+
+    expect(accounts.every((a) => accountType(a) !== undefined)).toBe(true);
+  });
+
+  it("does not read the number, so renumbering cannot scramble the grouping", () => {
+    // d3 makes the number the store's, and renumbering to match an accountant's
+    // chart is the first thing a Manager is invited to do.
+    const { accounts } = buildChart(seams);
+    const inventory = accounts.find((a) => a.role === "inventory")!;
+    const renumbered = { ...inventory, number: "7742" };
+
+    expect(accountType(renumbered)).toBe("asset");
+  });
+
+  it("puts a tax type's halves on opposite sides by TYPE, not by band", () => {
+    const { accounts } = buildChart(seams);
+
+    expect(accountType(accounts.find((a) => a.name === "GST paid (ITC)")!)).toBe("asset");
+    expect(accountType(accounts.find((a) => a.name === "GST collected")!)).toBe("liability");
+  });
+
+  it("reads the stored type for an account the Manager added, which has no role", () => {
+    const added = { id: "gl-x", number: "6300", name: "Rent", type: "expense" as const, active: true };
+
+    expect(accountType(added)).toBe("expense");
+  });
+
+  it("has nothing to say about an added account with no type", () => {
+    // Undefined rather than a guess: nothing but the Manager knows.
+    const added = { id: "gl-y", number: "6400", name: "Mystery", active: true };
+
+    expect(accountType(added)).toBeUndefined();
   });
 });
