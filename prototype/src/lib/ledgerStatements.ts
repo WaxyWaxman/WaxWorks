@@ -8,6 +8,7 @@ import type {
 import { accountType } from "./chart";
 import { activityBetween, linesIn, recomputeAsAt, totalOf, type BalanceFilter } from "./ledgerBalances";
 import { fiscalYearEndFor, isSealed, periodEnd, periodOf, periodStart } from "./ledgerPeriods";
+import type { ReconciliationReport } from "./ledgerReconciliation";
 
 /**
  * M-08 Phase 4 — the statements, and what issuing one leaves behind.
@@ -393,10 +394,18 @@ export interface BalanceSheetIssuance extends IssuanceBase {
  * the only one that **refuses** an operation rather than warning about one —
  * and a gate does not belong in a log whose kinds can grow.
  */
+export interface ReconciliationReportIssuance extends IssuanceBase {
+  kind: "reconciliation-report";
+  /** A-77 — an as-at instant, like a balance sheet: it asserts a moment. */
+  scope: { kind: "as-at"; at: string };
+  figures: ReconciliationReport;
+}
+
 export type LedgerIssuance =
   | JournalExportIssuance
   | ProfitAndLossIssuance
-  | BalanceSheetIssuance;
+  | BalanceSheetIssuance
+  | ReconciliationReportIssuance;
 
 interface IssuedBy {
   issuedAt: string;
@@ -438,6 +447,29 @@ export const issueBalanceSheet = (
   ...by,
   figures,
   provisional: isProvisional(figures),
+});
+
+/**
+ * A reconciliation report is issued like a balance sheet — an as-at instant,
+ * because it asserts a moment rather than moving anything. d25's *"nothing
+ * downstream requires it"* holds here too: issuing one gates nothing.
+ *
+ * Provisional is passed in rather than derived, because a reconciliation report
+ * is about an ACCOUNT rather than a period and this module cannot tell which
+ * periods it spans without being handed them.
+ */
+export const issueReconciliationReport = (
+  id: string,
+  figures: ReconciliationReport,
+  provisional: boolean,
+  by: IssuedBy,
+): ReconciliationReportIssuance => ({
+  id,
+  kind: "reconciliation-report",
+  scope: { kind: "as-at", at: figures.asAt },
+  ...by,
+  figures,
+  provisional,
 });
 
 /**

@@ -287,6 +287,27 @@ owned elsewhere and are the real dependencies; the rest are this flow's own.
 
 ### This flow's own
 
+- **Decision 25's *nets to zero* rule serves one of the two cases decision 25
+  names.** d25 and [lexicon](../lexicon.md) §11 both give one rule — *"entries
+  within one account, marked together, that net to zero"* — and both name two
+  cases: *"a bank statement, or the two halves of an undeposited-funds
+  movement."* **The second works exactly; the first does not.** A bank
+  reconciliation ticks the entries that **appear on the statement**, and what is
+  left over is outstanding cheques and deposits in transit — the ticked set has
+  no reason to net to zero, because a month that took in more than it paid out
+  nets to whatever the balance moved by, which is the point of doing it. The
+  only sets a bank account can produce under the rule are offsetting pairs,
+  which there means a payment that happens to equal a deposit: a coincidence,
+  not a reconciliation. *This is not a drafting slip — the sum-to-zero shape is
+  deliberate and is what makes a set balance-neutral by construction* — so the
+  question is whether **a bank statement is a second kind of reconciliation**
+  (mark what cleared; the remainder is the outstanding list) or whether the bank
+  case was mis-described and belongs only to *undeposited funds*. Either answer
+  touches [lexicon](../lexicon.md) §11, which carries the canonical definition.
+  **Demonstrated rather than argued** in `prototype/src/lib/ledgerReconciliation.test.ts`,
+  where a complete and correct September bank reconciliation is refused by the
+  rule.
+
 - **Does remitting tax earn an act of its own?** Decision 34 leaves it as two typed postings on
   decision 19's precedent, and names the exposure it accepts: **the one figure a government will
   audit is the one this system leaves entirely to hand.** Nothing checks that what was posted
