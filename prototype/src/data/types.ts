@@ -1056,3 +1056,77 @@ export interface Genre {
   // starts taxing money the shop has merely received.
   systemOwned?: boolean;
 }
+
+// ---------------------------------------------------------------------------
+// M-07 — the chart of accounts.
+//
+// d1: this is a chart and a journal export, NOT an internal ledger. No account
+// carries a balance here; the books live with the shop's accountant.
+
+/**
+ * What the software resolves an account BY (M-07 d3). The role is fixed and not
+ * editable; the number and name belong to the store.
+ *
+ * Absent means the Manager added it (step 3): it carries no role, nothing posts
+ * to it automatically, and it exists to be a mapping target.
+ *
+ * The per-seam roles — revenue, undeposited, tax-collected, tax-paid,
+ * adjustment — are NOT unique: there is one account per Section, per tender,
+ * per tax type twice (d5) and per reason code (d6). Those resolve through a
+ * GLMapping, not through the role. The rest are one each.
+ */
+export type GLRole =
+  // one each — the reserved roles the software must be able to resolve
+  | "inventory"
+  | "cogs"
+  | "accounts-payable"
+  | "freight-inbound"
+  | "second-hand-purchases"
+  | "gift-card-liability"
+  | "customer-credit"
+  | "cash-over-short"
+  | "card-processing-fees"
+  | "bank"
+  | "suspense"
+  // one per seam — resolved through a mapping
+  | "revenue"
+  | "undeposited"
+  | "tax-collected"
+  | "tax-paid"
+  | "adjustment";
+
+export interface GLAccount {
+  id: string;
+  /** Fixed (d3). Absent = added by the Manager, with nothing posting to it. */
+  role?: GLRole;
+  /** The STORE's, not ours — d3: nothing resolves an account by its number. */
+  number: string;
+  name: string;
+  /** M-06 d9 — an account that has been posted to is deactivated, never deleted. */
+  active: boolean;
+}
+
+/** Which seam posts where (M-07 d4 — the mapping lives here, not on the seam). */
+export type GLSeamKind = "section" | "tender" | "tax-collected" | "tax-paid" | "adjustment";
+
+export interface GLMapping {
+  seamKind: GLSeamKind;
+  seamId: string;
+  accountId: string;
+}
+
+/**
+ * E-04's six adjustment reason codes, which d6 gives an account each: "the six
+ * exist because a Manager is made to choose between them, and collapsing them
+ * in the ledger throws away the only thing that choice was for."
+ *
+ * Defined here because the prototype had never modelled them as data.
+ */
+export const ADJUSTMENT_REASONS = [
+  "Shrinkage",
+  "Damaged",
+  "Found",
+  "Miscount / correction",
+  "Written off",
+  "Other",
+] as const;

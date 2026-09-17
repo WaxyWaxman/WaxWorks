@@ -1,0 +1,136 @@
+import { describe, expect, it } from "vitest";
+import { buildChart, seamsFor, unmappedSeams, type Seams } from "./chart";
+import { ADJUSTMENT_REASONS, type SectionRow, type TaxType, type TenderRow } from "../data/types";
+
+const section = (code: string, name: string): SectionRow =>
+  ({ code, name, countsAsRevenue: true, tracksStockDefault: true, discountable: true, returnable: true, active: true, sortOrder: 0 }) as SectionRow;
+
+const tender = (id: string, name: string): TenderRow =>
+  ({ id, name, behavior: "Credit Card", active: true }) as TenderRow;
+
+const tax = (code: string, name: string): TaxType => ({ code, name, ratePpm: 50_000 }) as TaxType;
+
+const seams: Seams = {
+  sections: [section("VI", "VINYL"), section("ME", "MERCH")],
+  tenders: [tender("t-cash", "Cash"), tender("t-visa", "Visa"), tender("t-amex", "Amex")],
+  taxTypes: [tax("a", "GST"), tax("b", "QST")],
+};
+
+describe("M-07 d11 — setup creates and maps every seam before anyone sees it", () => {
+  it("leaves nothing unmapped, which is what makes Suspense a defect and not a hole", () => {
+    const { mappings } = buildChart(seams);
+
+    expect(unmappedSeams(seams, mappings)).toEqual([]);
+  });
+
+  it("reports what is missing when a seam has no account", () => {
+    // The check has to be real, or d11's invariant is a comment. A Section
+    // added after setup with no mapping is exactly d10's "discovered at the
+    // close, the worst possible moment".
+    const { mappings } = buildChart(seams);
+    const later = { ...seams, sections: [...seams.sections, section("GC", "GIFT CARDS")] };
+
+    expect(unmappedSeams(later, mappings)).toEqual(["Section GIFT CARDS"]);
+  });
+});
+
+describe("M-07 d5/d6 — the chart follows the seams that already exist", () => {
+  it("gives every Section its own revenue account (d6)", () => {
+    const { accounts } = buildChart(seams);
+    const revenue = accounts.filter((a) => a.role === "revenue");
+
+    // A single Sales account would discard a breakdown M-03 already reports.
+    expect(revenue.map((a) => a.name)).toEqual(["Sales — VINYL", "Sales — MERCH"]);
+  });
+
+  it("gives every tender its own account, not every behavior (M-06 d22)", () => {
+    // Visa and Amex settle as separate deposits; a merged figure cannot be tied
+    // back to a bank statement.
+    const { accounts } = buildChart(seams);
+
+    expect(accounts.filter((a) => a.role === "undeposited")).toHaveLength(3);
+  });
+
+  it("gives every tax type TWO accounts, collected and paid (d5)", () => {
+    const { accounts } = buildChart(seams);
+
+    expect(accounts.filter((a) => a.role === "tax-collected").map((a) => a.name)).toEqual([
+      "GST collected",
+      "QST collected",
+    ]);
+    expect(accounts.filter((a) => a.role === "tax-paid").map((a) => a.name)).toEqual([
+      "GST paid (ITC)",
+      "QST paid (ITC)",
+    ]);
+  });
+
+  it("gives every E-04 reason code its own account (d6)", () => {
+    const { accounts } = buildChart(seams);
+    const adj = accounts.filter((a) => a.role === "adjustment");
+
+    expect(adj).toHaveLength(ADJUSTMENT_REASONS.length);
+    expect(adj[0].name).toBe("Inventory adjustment — Shrinkage");
+  });
+});
+
+describe("M-07 d1/d3 — what the reserved accounts are, and whose numbers they carry", () => {
+  it("carries no Net Profit, Current Profits or Retained Earnings", () => {
+    // The wish list this flow was proposed with. d1 holds no balances and runs
+    // no period close, so all three are equity or derived figures that only
+    // mean something inside a close this flow does not run.
+    const { accounts } = buildChart(seams);
+    const names = accounts.map((a) => a.name.toLowerCase()).join(" | ");
+
+    expect(names).not.toMatch(/net profit|current profits|retained earnings/);
+  });
+
+  it("carries a Suspense account, because d10 needs somewhere for a defect to go", () => {
+    const { accounts } = buildChart(seams);
+
+    expect(accounts.find((a) => a.role === "suspense")).toBeDefined();
+  });
+
+  it("carries a bank account as an ordinary account with a role (A-65)", () => {
+    // Not an entity, and no balance is held for it.
+    const { accounts } = buildChart(seams);
+
+    expect(accounts.find((a) => a.role === "bank")?.name).toBe("Chequing");
+  });
+
+  it("gives every reserved role exactly one account", () => {
+    const { accounts } = buildChart(seams);
+    const reserved = accounts.filter(
+      (a) => a.role && !["revenue", "undeposited", "tax-collected", "tax-paid", "adjustment"].includes(a.role),
+    );
+
+    expect(new Set(reserved.map((a) => a.role)).size).toBe(reserved.length);
+  });
+});
+
+describe("M-07 step 5 — an account can be read back to what posts to it", () => {
+  it("names the seam behind an account", () => {
+    const { accounts, mappings } = buildChart(seams);
+    const vinyl = accounts.find((a) => a.name === "Sales — VINYL")!;
+
+    expect(seamsFor(vinyl.id, mappings, seams)).toEqual(["VINYL"]);
+  });
+
+  it("names both seams when two are pointed at one account", () => {
+    // d5 lets a Manager collapse two seams onto one account; the screen has to
+    // be able to say so, or the collapse is invisible.
+    const { accounts, mappings } = buildChart(seams);
+    const vinyl = accounts.find((a) => a.name === "Sales — VINYL")!;
+    const merged = mappings.map((m) =>
+      m.seamKind === "section" ? { ...m, accountId: vinyl.id } : m,
+    );
+
+    expect(seamsFor(vinyl.id, merged, seams)).toEqual(["VINYL", "MERCH"]);
+  });
+
+  it("names a tax mapping by which half it is", () => {
+    const { accounts, mappings } = buildChart(seams);
+    const paid = accounts.find((a) => a.name === "GST paid (ITC)")!;
+
+    expect(seamsFor(paid.id, mappings, seams)).toEqual(["GST paid"]);
+  });
+});
