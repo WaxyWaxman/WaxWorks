@@ -131,12 +131,11 @@ export function untypeableInOpeningReason(account: GLAccount): string | undefine
     return `${account.name} is supplied by the system — on hand × cost (step 3).`;
   }
   if (account.role === "gift-card-liability") {
-    // _Status: recommended, not yet ratified._ Proposed by the user on
-    // 2026-09-17: the account is system-owned and stays locked. The argument is
-    // d13's, applied to a role d13 does not name — the balance IS the sum of
-    // outstanding gift cards, which E-06 owns, so one typed line breaks that
-    // the first time it happens. It wants a decision row of its own in M-08
-    // rather than living only here. See `untypeableReason` in ledgerPostings.
+    // d33 — the balance IS the sum of what is outstanding on live cards, and
+    // E-05 writes every movement (loaded as a line, redeemed as a tender). d8
+    // already keeps the customer side empty here for a related reason; this is
+    // the other half of the same paper problem, and the user confirmed on
+    // 2026-09-17 that pre-migration cards are out of scope entirely.
     return `${account.name} is kept by the system — gift cards are issued and redeemed, never typed.`;
   }
   if (account.role === "suspense") {
@@ -286,10 +285,9 @@ export interface OpeningContext {
 /**
  * Step 1 — why the first day may not be this one, or undefined if it may.
  *
- * **The books start on any day.** Step 1 carried a guess — *"it must be a past
- * date and the first day of a month; unconfirmed"* — and the user retired both
- * halves on 2026-09-17. Neither was ever a decision, so nothing is superseded;
- * an unconfirmed guess simply stops being implemented.
+ * **The books start on any day (d35).** Step 1 carried a guess — *"it must be a
+ * past date and the first day of a month; unconfirmed"* — and d35 retires both
+ * halves. Nothing is superseded, because a guess was never a decision.
  *
  * Nothing is lost by dropping the future half either, because A-73 already
  * refuses a posting dated on or before the opening position: books that start

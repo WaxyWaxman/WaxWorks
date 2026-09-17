@@ -158,8 +158,16 @@ export function balanceRefusal(lines: TypedPostingLine[]): string | undefined {
 /**
  * Why this account may not be typed into, or undefined if it may.
  *
- * **Three roles, for three different reasons, and the reasons matter because
- * two of them are invariants and one is a proposal.**
+ * **d32 is the test behind every call below**, and it has two halves that both
+ * have to hold: an account is untypeable where the system owns *every* movement
+ * into and out of it, **unless a deliberate divergence from what the system
+ * computes is a real and recurring act.** The second half is not decorative —
+ * an account the system fills but never empties is one a Manager must be able
+ * to empty, or the balance grows forever. It is what keeps Inventory typeable
+ * (d13) and what keeps the tax accounts typeable (d34).
+ *
+ * **Four roles are refused, for four different reasons, and the reasons matter
+ * because one of them is still a proposal.**
  *
  *   `retained-earnings` (d13) — kept by the system for itself. It is derived
  *     from the P&L by the year-end seal (d17), and a typed figure makes the
@@ -205,28 +213,52 @@ export function untypeableReason(account: GLAccount): string | undefined {
       // d14 — NOT RATIFIED.
       return `${account.name} is cleared by its own act, not by a posting (d14, not ratified).`;
     case "gift-card-liability":
-      // _Status: recommended, not yet ratified._ Proposed by the user on
-      // 2026-09-17 — a system-owned account that stays locked everywhere.
+      // d33 — d13's argument with E-05 in M-05's place. E-05 loads a card as a
+      // line and draws it down as a tender, E-06 can return onto one, and M-05
+      // d10 keeps the registry whose total IS the liability. So the balance is
+      // computed from artifacts, and one typed line makes the books disagree
+      // with the cards a customer physically presents.
       //
-      // **The argument is d13's, applied to a role d13 does not name.** d13
-      // refuses *Accounts payable* because it "is M-05's balance exactly and
-      // permanently" under d7, "and one typed line breaks that invariant on its
-      // first use." A gift card liability is the same shape with E-06 in M-05's
-      // place: the balance IS the sum of what is outstanding on live cards, and
-      // a typed figure makes the books disagree with the cards.
-      //
-      // **What this opens is bigger than one account, and is not decided here.**
-      // d13 named two roles and deliberately PERMITTED a third (Inventory, for
-      // a dead-stock write-down), which reads as a considered list rather than
-      // an exhaustive one. On this argument `customer-credit` (E-07),
-      // `undeposited`, `tax-collected` and `tax-paid` are all the same shape and
-      // none is refused today. Whether d13 is a list or a principle is a
-      // question for the flow, not for this file.
+      // Safe to lock ONLY because this shop's cards do not expire, so
+      // redemption is the sole way the balance drains and d32's second half is
+      // satisfied. E-05 does not say that anywhere — d33 records the reliance
+      // and E-05's *Inherited from other flows* carries the constraint back.
       return `${account.name} is kept by the system — gift cards are issued and redeemed, never typed.`;
+
+    // d34 — `tax-collected` and `tax-paid` are deliberately ABSENT from this
+    // switch, and their absence is a decision rather than an omission.
+    //
+    // They pass d32's first half: the till fills one and the receiving desk
+    // fills the other. They fail its second, and that is what decides it —
+    // **nothing in this system remits tax.** M-07 d5 has GST charged on a Sale
+    // sit as a liability owed to the government, and no flow models paying it.
+    // Locking them would leave a shop unable to record its own remittance while
+    // the liability grew every quarter forever, so the way out stays open on
+    // d19's terms: an act nobody has modelled is not thereby forbidden, it is
+    // two ordinary postings. See `permittedBecauseNothingEmptiesIt` below.
     default:
       return undefined;
   }
 }
+
+/**
+ * d34, and d13's Inventory — the roles that pass d32's first half and are
+ * typeable anyway, each for a stated reason.
+ *
+ * Named rather than left as an absence from `untypeableReason`, because an
+ * absence cannot be read and cannot be tested: *why is Inventory offered* has
+ * an answer, and a later reader tightening the switch would otherwise have to
+ * rediscover it. Whatever is here is a **deliberate** permission.
+ */
+export const TYPEABLE_BY_EXCEPTION: Readonly<Record<string, string>> = Object.freeze({
+  // d13 — a dead-stock write-down is exactly where book value should diverge
+  // from the shelf. d32's second half, and the case it was written from.
+  inventory: "A dead-stock write-down is a real and recurring act (d13).",
+  // d34 — the till fills it and nothing empties it, because no flow models
+  // remitting tax. Two ordinary postings, on d19's terms.
+  "tax-collected": "Nothing in this system remits tax (d34).",
+  "tax-paid": "Nothing in this system remits tax (d34).",
+});
 
 /**
  * What the account picker offers.

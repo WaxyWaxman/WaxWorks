@@ -10,6 +10,7 @@ import {
   postingJournal,
   postingRefusal,
   postingRefusals,
+  TYPEABLE_BY_EXCEPTION,
   untypeableReason,
   type LedgerPosting,
   type PostingContext,
@@ -26,10 +27,15 @@ const acct = (id: string, name: string, role?: GLRole, active = true): GLAccount
 
 const ACCOUNTS: GLAccount[] = [
   acct("1010", "Chequing", "bank"),
+  acct("1100", "Undeposited funds", "undeposited"),
   acct("1200", "Inventory", "inventory"),
+  acct("1300", "GST paid", "tax-paid"),
   acct("1900", "Suspense", "suspense"),
   acct("2100", "Accounts payable", "accounts-payable"),
   acct("2150", "Accounts payable — opening", "accounts-payable-opening"),
+  acct("2200", "GST collected", "tax-collected"),
+  acct("2300", "Gift cards", "gift-card-liability"),
+  acct("2400", "Customer credit", "customer-credit"),
   acct("3200", "Retained earnings", "retained-earnings"),
   acct("6400", "Rent"),
   acct("6410", "Utilities"),
@@ -153,21 +159,62 @@ describe("M-08 d13, d14 — the accounts a Manager may not type into", () => {
     expect(why).toContain("not ratified");
   });
 
-  it("refuses the gift card liability — PROPOSED by the user, not yet a decision", () => {
-    // 2026-09-17. d13's own argument with E-06 in M-05's place: the balance IS
-    // the sum of what is outstanding on live cards, so one typed line makes the
-    // books disagree with the cards. d13 does not name this role, so it wants a
-    // decision of its own rather than living only in this file.
+  it("refuses the gift card liability — M-08 d33", () => {
+    // d13's own argument with E-05 in M-05's place: the balance IS the sum of
+    // what is outstanding on live cards, so one typed line makes the books
+    // disagree with the cards a customer physically presents.
     const why = untypeableReason(acct("2300", "Gift cards", "gift-card-liability"));
     expect(why).toContain("kept by the system");
     expect(why).toContain("never typed");
   });
 
   it("still PERMITS the accounts d13 considered and allowed", () => {
-    // The gift card refusal is an addition, not a widening of d13 into every
-    // system-written account. Inventory is the one d13 permitted on purpose.
     expect(untypeableReason(acct("1200", "Inventory", "inventory"))).toBeUndefined();
     expect(untypeableReason(acct("2150", "A/P — opening", "accounts-payable-opening"))).toBeUndefined();
+  });
+});
+
+describe("M-08 d32, d34 — the test behind d13, and the case it turned around", () => {
+  it("PERMITS tax collected and tax paid, because nothing in this system remits tax", () => {
+    // d34. They pass d32's first half — the till fills one, the receiving desk
+    // fills the other — and fail its second: no flow models remittance, so
+    // locking them leaves a shop unable to record paying its own sales tax
+    // while the liability grows every quarter forever.
+    expect(untypeableReason(acct("2200", "GST collected", "tax-collected"))).toBeUndefined();
+    expect(untypeableReason(acct("1300", "GST paid", "tax-paid"))).toBeUndefined();
+  });
+
+  it("names every deliberate permission rather than leaving it an absence", () => {
+    // An absence cannot be read and cannot be tested. A later reader tightening
+    // the switch would otherwise have to rediscover why Inventory is offered.
+    expect(Object.keys(TYPEABLE_BY_EXCEPTION).sort()).toEqual([
+      "inventory",
+      "tax-collected",
+      "tax-paid",
+    ]);
+    expect(TYPEABLE_BY_EXCEPTION["inventory"]).toContain("d13");
+    expect(TYPEABLE_BY_EXCEPTION["tax-collected"]).toContain("d34");
+  });
+
+  it("lets a Manager post the remittance d34 leaves to hand, as two ordinary lines", () => {
+    // d19's shape: an act nobody has modelled is not thereby forbidden.
+    // Debit the liability, credit the bank, and the quarter discharges.
+    const remittance = {
+      businessDate: "2026-09-15",
+      lines: [
+        line("2200", 4_812.5, { memo: "GST remitted, Q2" }),
+        line("1010", -4_812.5, { memo: "GST remitted, Q2" }),
+      ],
+    };
+    expect(postingRefusal(remittance, ctx())).toBeUndefined();
+  });
+
+  it("does NOT lock the accounts d32 names but declines to decide", () => {
+    // d32 states the test and deliberately does not apply it to accounts nobody
+    // has examined. customer-credit and undeposited pass its first half and are
+    // open questions, not refusals — one account at a time, on its own merits.
+    expect(untypeableReason(acct("2400", "Customer credit", "customer-credit"))).toBeUndefined();
+    expect(untypeableReason(acct("1100", "Undeposited funds", "undeposited"))).toBeUndefined();
   });
 
   it("offers neither an untypeable account nor a deactivated one, for different reasons", () => {

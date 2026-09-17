@@ -79,11 +79,10 @@ describe("M-08 step 2 — the opening position is dated the day before the books
   });
 });
 
-describe("M-08 step 1 — the books start on any day", () => {
+describe("M-08 d35 — the books start on any day", () => {
   it("accepts any day of any month", () => {
-    // Step 1 carried a guess — "it must be a past date and the first day of a
-    // month; unconfirmed" — and the user retired both halves on 2026-09-17.
-    // Nothing is superseded: an unconfirmed guess stops being implemented.
+    // d35 retires step 1's guess in both halves. Nothing is superseded,
+    // because a guess was never a decision.
     expect(firstDayRefusal("2026-06-01", TODAY)).toBeUndefined();
     expect(firstDayRefusal("2026-06-15", TODAY)).toBeUndefined();
     expect(firstDayRefusal("2026-02-29", TODAY)).toBeUndefined();
@@ -164,10 +163,10 @@ describe("M-08 d7, d8, d9, d26 — what may not be typed, and why each is differ
     expect(why).toContain("M-07 d10");
   });
 
-  it("refuses the gift card liability — PROPOSED by the user, not yet a decision", () => {
-    // 2026-09-17: a system-owned account that stays locked everywhere. d13's
-    // argument applied to a role d13 does not name — the balance IS what is
-    // outstanding on live cards, which E-06 owns.
+  it("refuses the gift card liability — M-08 d33", () => {
+    // The balance IS what is outstanding on live cards, and E-05 writes every
+    // movement. Pre-migration cards are out of scope per the user, so there is
+    // no paper figure here either.
     const why = untypeableInOpeningReason(acct("2300", "Gift cards", "gift-card-liability"));
     expect(why).toContain("kept by the system");
     expect(why).toContain("never typed");
