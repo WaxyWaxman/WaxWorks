@@ -251,7 +251,12 @@ Held copies count against **available** stock but remain on hand.
 
 ## Open questions
 
-- **What happens when a customer presents a paper credit note?** [M-08](M-08-general-ledger.md) d8 opens [E-07](E-07-manage-customers.md) empty at migration, so the **Store Credit** tender has no balance to draw on for a credit the shop issued before Wax Works existed. **Owned jointly with [E-07](E-07-manage-customers.md)**, which owns the balance; this flow owns the pad. The options and their costs are recorded there. Raised by [M-08](M-08-general-ledger.md) d8.
+- ~~**What happens when a customer presents a paper credit note?**~~ — **Resolved by
+  [E-07](E-07-manage-customers.md) d22**: it is rung as a **discount**. No Customer is
+  created and no balance is issued, so the **Store Credit** tender is not involved at all
+  and this pad needs nothing new. *The cost lands on this flow's figures:* revenue reads
+  low and discounts read high for as long as the paper lasts, and the copy's cost still
+  posts, so the sale's gross margin reads as a loss.
 
 - ~~**Rounding at the till**~~ — **Resolved** by decision 26: rounding is a suggestion everywhere, receiving included.
 - ~~**Layaway / deposits**~~ — **Resolved** by decision 25: a line-less Sale tendered to the Customer's account.

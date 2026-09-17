@@ -168,6 +168,8 @@ second follow from its own decisions._
 _Commitments pushed here by another flow. These are decided, not open — each cites
 the decision it comes from._
 
+- **A balance sheet classifies each Customer's balance by sign and never nets across Customers** ([E-07](E-07-manage-customers.md) d21). Store credit — a positive balance — totals into **liabilities**; an unpaid customer invoice — a negative one — totals into **assets**; the two groups are never added together. [E-07](E-07-manage-customers.md) d4's single signed figure and d5's derived-from-movements both survive, because the defect was in the summing rather than in the storage.
+
 - **A journal is written inside the transaction that writes its artifact**
   ([architecture](../architecture.md) A-67). An artifact and its journal can never
   disagree. **This is the constraint that shapes decision 3 below**: whatever
@@ -266,12 +268,14 @@ owned elsewhere and are the real dependencies; the rest are this flow's own.
   ever converted* falls for the journal line, [M-06](M-06-settings.md) d37's *never a stored
   amount* holds for display only, and [architecture](../architecture.md) A-47's exclusion of
   currency conversion from the rate rule is reopened. **A-36 and A-33a survive untouched.**
-- **Accounts receivable is one signed figure that nets an asset against a liability.**
-  [E-07](E-07-manage-customers.md) d4 makes a Customer's balance a single signed number —
-  positive is store credit the shop owes, negative is an unpaid customer invoice the shop
-  is owed. E-07 records the problem in its own naming note. **A balance sheet needs both
-  halves in different sections and cannot derive them from one column.**
-  [PRD](../PRD.md) §6 already carries this open. **Owned by [E-07](E-07-manage-customers.md).**
+- ~~**Accounts receivable is one signed figure that nets an asset against a liability.**~~
+  — **Resolved by [E-07](E-07-manage-customers.md) d21, which owns it**, and cheaply: its
+  d4 and d5 both stand. **The problem was summing, not the signed figure.** A statement
+  **classifies each Customer's balance by its sign and never nets across Customers** —
+  positives total into liabilities, negatives into assets. What it forecloses is a Customer
+  holding credit and an unpaid invoice at once, which the single figure already nets, and
+  which stops being wanted only when this flow grows terms and aging — deferred at
+  [PRD](../PRD.md) §6 and [architecture](../architecture.md) §11.
 
 ### This flow's own
 
@@ -307,19 +311,11 @@ owned elsewhere and are the real dependencies; the rest are this flow's own.
   *a statement that has left the building* is the other thing that should give a Manager
   pause before unsealing. **Almost certainly an A-n rather than a flow decision.**
 
-- **What does the till do when a paper credit note is presented?** Decision 8 runs the
-  paper out rather than migrating it, which is settled — but a customer will walk in with
-  one, and [E-05](E-05-sell-a-record.md)'s **Store Credit** tender draws on an
-  [E-07](E-07-manage-customers.md) balance that, by decision 8, does not exist. Three
-  shapes, none chosen: the Manager **creates the Customer and issues the credit then**,
-  which is decision 8's migration happening one customer at a time and on demand — and
-  the offsetting entry lands as a cost in the month it was honoured, which is honest;
-  ringing it as a **discount**, which understates revenue and loses the fact that a
-  liability was settled; or a **tender of its own** for exactly this, which is a mechanism
-  built for a case that empties. **Owned jointly by [E-05](E-05-sell-a-record.md) and
-  [E-07](E-07-manage-customers.md)** — this flow only cares that whatever happens produces
-  a balanced posting. Raised by decision 8, and it is the practical half of that
-  decision's accepted consequence.
+- ~~**What does the till do when a paper credit note is presented?**~~ — **Resolved by
+  [E-07](E-07-manage-customers.md) d22**: rung as a **discount**, with no Customer created
+  and no balance issued, so decision 8's *run the paper out* needs no mechanism at all.
+  *The cost is visible in this flow's statements:* while the paper lasts, revenue reads low
+  and discounts read high, and the copy's cost still posts.
 
 - ~~**What is a closed period called?**~~ — **Resolved** by decision 4: a period is
   **sealed**. Reserved in [lexicon](../lexicon.md) §15, along with *unseal* and
