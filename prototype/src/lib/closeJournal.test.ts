@@ -102,12 +102,16 @@ const lineFor = (b: JournalBatch, accountId: string, date?: string) =>
 // ---------------------------------------------------------------------------
 
 describe("M-07 d9 — the close's lines come from figures the close already has", () => {
-  it("credits the Section's revenue account, net of tax (d6)", () => {
+  // M-07 d28 — SUPERSEDES d6's grain. There is ONE reserved Sales account and
+  // the Section rides on the line as a dimension (M-08 d2), so this resolves by
+  // ROLE. Finding it by number was always the test apologising for itself: d3
+  // forbids the software from resolving that way.
+  it("credits the single reserved Sales account, net of tax (d28)", () => {
     const { batch } = build([sale({})]);
-    // 4100 is VINYL's suggested number. The account is found by NUMBER only
-    // here, in the test — d3 forbids the software from resolving that way, and
-    // buildChart is what puts the number on it.
-    expect(lineFor(batch, acct("4100"))?.credit).toBe(20);
+    const sales = CHART.accounts.find((a) => a.role === "revenue")!;
+
+    expect(CHART.accounts.filter((a) => a.role === "revenue")).toHaveLength(1);
+    expect(lineFor(batch, sales.id)?.credit).toBe(20);
   });
 
   it("credits tax collected per type, and never the paid half (d5)", () => {
@@ -192,7 +196,14 @@ describe("M-06 d20 — a gift card load is a liability, never a revenue bucket",
     const { batch } = build([load]);
 
     expect(lineFor(batch, acct("2200"))?.credit).toBe(25);
-    expect(lineFor(batch, acct("4110"))).toBeUndefined(); // the GIFT CARDS Section's own account
+    // M-07 d29 — a load touches no revenue account at all. Under d6 this
+    // asserted the absence of the GIFT CARDS Section's OWN revenue account;
+    // d28 leaves one Sales account for the whole shop, so what matters now is
+    // that a liability never reaches it. A dimension cannot decide
+    // revenue-versus-liability, which is the whole reason d29 keeps the
+    // non-revenue mapping.
+    const sales = CHART.accounts.find((a) => a.role === "revenue")!;
+    expect(lineFor(batch, sales.id)).toBeUndefined();
     expect(isImbalanced(batch)).toBe(false);
   });
 });
