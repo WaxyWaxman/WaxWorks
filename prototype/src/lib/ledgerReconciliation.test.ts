@@ -97,10 +97,14 @@ describe("M-08 d25 — a reconciled set is entries in ONE account that net to ze
     ]);
   });
 
-  it("refuses a set that does not net to zero, and names the gap", () => {
+  it("refuses a MATCHED set that does not net to zero, and names the other kind", () => {
+    // d37 — the refusal now points at the way forward rather than only saying
+    // no, because since d37 there IS a way forward.
     const entries = undeposited();
     const why = reconciliationRefusal([entries[0], entries[3]], "Bank statement", []);
-    expect(why).toBe("This set is out by 200.00. A reconciled set nets to zero.");
+    expect(why).toContain("out by 200.00");
+    expect(why).toContain("A matched set nets to zero");
+    expect(why).toContain("cleared");
   });
 
   it("refuses a set spanning two accounts, before it looks at the arithmetic", () => {
@@ -187,32 +191,59 @@ describe("M-08 — what is left to check", () => {
   });
 });
 
-describe("M-08 d25 — the rule serves one of the two cases d25 names", () => {
-  it("does NOT reconcile a bank account against a bank statement", () => {
-    // OPEN QUESTION, demonstrated rather than asserted in prose.
-    //
-    // d25 and lexicon §11 both give one rule — "entries within one account,
-    // marked together, that net to zero" — and both name TWO cases: "a bank
-    // statement, or the two halves of an undeposited-funds movement."
-    //
-    // The second works exactly (every test above). The first does not. A bank
-    // reconciliation ticks the entries that APPEAR ON THE STATEMENT; what is
-    // left over is outstanding cheques and deposits in transit. The ticked set
-    // has no reason to net to zero — a month that took in more than it paid
-    // out nets to whatever the balance moved by, which is the whole point.
+describe("M-08 d37 — a bank statement is a second KIND, not a case of the first", () => {
+  // This describe block used to assert the opposite: that a complete and
+  // correct bank reconciliation was REFUSED, out by 18,800. It was right, and
+  // it is what turned the open question from arguable into visible. d37 answers
+  // it, so the demonstration becomes the regression test for the answer.
+
+  it("still refuses a bank account as a MATCHED set — nothing about d25 changed", () => {
     const bank = entriesInAccount(BATCHES, "1010");
-    expect(bank.map((e) => e.line.businessDate)).toEqual(["2026-09-02", "2026-09-04"]);
-
-    // Both deposits cleared the bank. That is a complete, correct September
-    // reconciliation of this account — and the rule refuses it.
     expect(markedTotal(bank).difference).toBe(800);
-    expect(reconciliationRefusal(bank, "Bank statement, September", [])).toBe(
-      "This set is out by 800.00. A reconciled set nets to zero.",
+    expect(reconciliationRefusal(bank, "Bank statement, September", [], "matched")).toContain(
+      "A matched set nets to zero",
     );
+  });
 
-    // The only sets this account CAN produce are offsetting pairs, which for a
-    // bank account means a payment that happens to equal a deposit — a
-    // coincidence, not a reconciliation.
+  it("PERMITS the same entries as a CLEARED set, whose remainder is the point", () => {
+    // "A bank reconciliation ticks what appears on the statement, and what is
+    // left over is outstanding cheques and deposits in transit."
+    const bank = entriesInAccount(BATCHES, "1010");
+    expect(reconciliationRefusal(bank, "Bank statement, September", [], "cleared")).toBeUndefined();
+  });
+
+  it("keeps every other rule for a cleared set — one account, a document, no double-marking", () => {
+    // d37 changed one rule and no others. Balance-neutral is what it relaxed;
+    // the rest of d25 stands for both kinds.
+    const mixed = [entriesInAccount(BATCHES, "1100")[0], entriesInAccount(BATCHES, "4000")[0]];
+    expect(reconciliationRefusal(mixed, "Statement", [], "cleared")).toContain("within one account");
+    const bank = entriesInAccount(BATCHES, "1010");
+    expect(reconciliationRefusal(bank, "  ", [], "cleared")).toContain("Name the document");
+    expect(reconciliationRefusal([bank[0]], "Statement", [], "cleared")).toContain("at least two");
+  });
+
+  it("records WHICH kind it was, because the members do not say", () => {
+    // d37's accepted consequence: a Manager has to know which they are doing
+    // before they start, and ticking the same entries under the other kind
+    // means something different.
+    const bank = entriesInAccount(BATCHES, "1010");
+    const cleared = reconcile("rec-b1", bank, "Bank statement, September", BY, "cleared");
+    expect(cleared.kind).toBe("cleared");
+
+    const pair = [undeposited()[0], undeposited()[1]];
+    expect(reconcile("rec-u1", pair, "Deposit slip", BY).kind).toBe("matched");
+  });
+
+  it("leaves a cleared set balance-neutral by CONVENTION, not by construction", () => {
+    // The cost d37 accepted, asserted so it is not forgotten: nothing but the
+    // Manager's attention stands behind a cleared mark, where a matched set is
+    // provably neutral.
+    const bank = entriesInAccount(BATCHES, "1010");
+    const cleared = reconcile("rec-b2", bank, "Bank statement", BY, "cleared");
+    expect(markedTotal(bank).balanced).toBe(false);
+    expect(cleared.kind).toBe("cleared");
+    // And it still moves no money — that half is unchanged for both kinds.
+    expect(reconciliationJournalLines()).toEqual([]);
   });
 });
 

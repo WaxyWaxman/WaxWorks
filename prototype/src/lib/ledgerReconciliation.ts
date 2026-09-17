@@ -3,19 +3,17 @@ import type { JournalBatch, JournalLine } from "../data/types";
 /**
  * M-08 d25's other half — reconciling an account against an outside document.
  *
- * *"A reconciled set is entries within one account, marked together, that net
- * to zero"* ([lexicon](../../../docs/lexicon.md) §11, d25). **Balance-neutral
- * by construction**, the same shape M-05 d15's clearing has and deliberately
- * not the same word — the lexicon widened *reconcile* rather than splitting it,
- * unlike *close*, which d4 had to replace because a day and a month are
- * genuinely different acts.
+ * A reconciled set is entries **within one account**, marked together against
+ * an outside document ([lexicon](../../../docs/lexicon.md) §11, d25) — and d37
+ * gives it **two kinds**, because d25's single *nets to zero* rule served one of
+ * the two cases d25 itself named. See `ReconciliationKind` below.
  *
- * **Two rules do all the work, and the second is the one that matters:**
+ * **Two rules do all the work, and the second now depends on the kind:**
  *
- *   - **One account.** A set cannot span accounts. Reconciling is checking one
- *     column of this system's record against one outside document.
- *   - **Nets to zero.** So the mark moves nothing, by construction rather than
- *     by a rule anyone has to enforce afterwards.
+ *   - **One account**, always. A set cannot span accounts. Reconciling is
+ *     checking one column of this system's record against one outside document.
+ *   - **Nets to zero** for a `matched` set, so the mark moves nothing by
+ *     construction. A `cleared` set does not net, and must not be asked to.
  *
  * *"Nothing downstream requires it"* (d25, step 27) — **an unreconciled account
  * seals exactly as a reconciled one does**, so the mark is evidence and never a
@@ -78,11 +76,38 @@ export const entryAmount = (e: ReconcilableEntry): number =>
 // ---------------------------------------------------------------------------
 
 /**
+ * d37 — **two kinds under one word**, and only one of them nets to zero.
+ *
+ *   `matched` — offsetting entries within one account, **balance-neutral by
+ *     construction**. The two halves of an undeposited-funds movement. This is
+ *     d25 unchanged, and the only kind that can claim the guarantee.
+ *   `cleared` — the entries that **appear on an outside document**. A bank
+ *     statement. The remainder is outstanding cheques and deposits in transit,
+ *     and it is **the point of the exercise rather than a failure** — so
+ *     nothing nets, and nothing is required to.
+ *
+ * d25 gave one rule and named two cases under it; building it showed the rule
+ * serves one. A complete and correct September reconciliation of a bank account
+ * was refused, *out by 18,800*, which is what turned the question from arguable
+ * into visible.
+ *
+ * **Both move no money and gate nothing** — everything d25 established survives.
+ * What changed is that *nets to zero* stops being the definition of reconciling
+ * and becomes the definition of one kind of it. *And the cost is real:* a
+ * cleared set is balance-neutral **by convention**, so the guarantee sum-to-zero
+ * bought does not extend to it, and nothing but the Manager's attention stands
+ * behind a cleared mark.
+ */
+export type ReconciliationKind = "matched" | "cleared";
+
+/**
  * A-74 — `reconciliation_create` is **manager-only**, so both names are on it.
  * A-77 models it as `ledger_reconciliations` with
  * `ledger_reconciliation_members` beside it.
  */
 export interface LedgerReconciliation {
+  /** d37 — which shape this is. A reader cannot tell from the members. */
+  kind: ReconciliationKind;
   id: string;
   /** d25 — one account. A set cannot span two. */
   accountId: string;
@@ -104,7 +129,11 @@ export interface LedgerReconciliation {
 // ---------------------------------------------------------------------------
 
 export interface MarkedTotal {
-  /** Step 27 — *"marking entries until the difference is zero"*. */
+  /**
+   * Step 27 — *"marking entries until the difference is zero"* — for a
+   * **matched** set. For a **cleared** one this is the amount the marked
+   * entries came to, and it is **not** meant to reach zero (d37).
+   */
   difference: number;
   count: number;
   balanced: boolean;
@@ -144,6 +173,7 @@ export function reconciliationRefusal(
   selected: ReconcilableEntry[],
   document: string,
   existing: LedgerReconciliation[],
+  kind: ReconciliationKind = "matched",
 ): string | undefined {
   // INFERRED, by parallel with M-05 d15, which needs at least two members.
   // A single entry netting to zero would be a $0.00 line, and no journal in
@@ -173,11 +203,15 @@ export function reconciliationRefusal(
     return `${already.length} of these entries are already reconciled.`;
   }
 
-  // d25 — nets to zero, which is what makes it balance-neutral BY
-  // CONSTRUCTION rather than by a rule enforced afterwards.
-  const { difference } = markedTotal(selected);
-  if (cents(difference) !== 0) {
-    return `This set is out by ${Math.abs(difference).toFixed(2)}. A reconciled set nets to zero.`;
+  // d25, d37 — a MATCHED set nets to zero, which is what makes it
+  // balance-neutral by CONSTRUCTION rather than by a rule enforced afterwards.
+  // A CLEARED set does not, and must not be asked to: its remainder is the
+  // outstanding list, which is the answer the exercise exists to produce.
+  if (kind === "matched") {
+    const { difference } = markedTotal(selected);
+    if (cents(difference) !== 0) {
+      return `This set is out by ${Math.abs(difference).toFixed(2)}. A matched set nets to zero — mark it as cleared against a statement instead (d37).`;
+    }
   }
 
   return undefined;
@@ -200,9 +234,11 @@ export function reconcile(
   selected: ReconcilableEntry[],
   document: string,
   by: { reconciledAt: string; actorInitials: string; authorizedByInitials: string },
+  kind: ReconciliationKind = "matched",
 ): LedgerReconciliation {
   return {
     id,
+    kind,
     accountId: selected[0].line.accountId,
     members: selected.map(({ batchId, lineIndex }) => ({ batchId, lineIndex })),
     document,

@@ -351,7 +351,7 @@ not installed — so there is **no recording artifact**, which the `/qa walk` pr
 | M-08-T12 | **The books state a profit, and the balance sheet balances.** Draw a P&L for a sealed period: it has a bottom line and it is called a profit. Draw a balance sheet as at its end: equity carries **current earnings derived at the moment it is drawn**, named as its own line. Customer balances are **classified by sign and never netted across Customers** — store credit into liabilities, unpaid customer invoices into assets. | 25 | M-08 decision 23, M-08 decision 24, M-08 decision 25, E-07 decision 21, M-07 decision 27 | M-08-T6, one customer in credit and one owing | Walked | Planned |  |
 | M-08-T13 | **A statement excludes lines dated after its as-at date, and every statement answers the same way.** Post a future-dated entry. Draw a balance sheet as at today: absent. Draw the P&L for the period: absent. Draw both again once its date has arrived: present. | 24–25 | M-08 decision 30, A-73 | M-08-T5's future-dated posting | Walked | Planned |  |
 | M-08-T14 | **Issuing stores the figures, and re-opening shows what was issued.** Issue a balance sheet. Re-open the stored issuance: **the figures as issued**, never a recomputation. Export a journal range, then an overlapping one: warned, proceeds. The record of what left the building is what makes that warning possible. | 26 | M-08 decision 25, M-08 decision 31, M-07 decision 16, A-77 | M-08-T12 | Walked | Planned |  |
-| M-08-T15 | **Reconciling marks a set that nets to zero, moves no money, and gates nothing.** Mark entries in the bank account against a statement until the difference is zero; stamp the set. No balance moves. Seal the period with another account left unreconciled: it seals — the mark is evidence, never a gate. | 27 | M-08 decision 25 | A bank account with entries, and a statement to reconcile against | Blocked | Planned |  |
+| M-08-T15 | **Reconciling marks a set that nets to zero, moves no money, and gates nothing.** Mark entries in the bank account against a statement until the difference is zero; stamp the set. No balance moves. Seal the period with another account left unreconciled: it seals — the mark is evidence, never a gate. | 27 | M-08 decision 25 | A bank account with entries, and a statement to reconcile against | Walked | Planned |  |
 | M-08-T16 | **A foreign payable nets Accounts payable to zero across finalize and payment.** Finalize a USD Invoice: it books in the **home** currency at the rate recorded on the Invoice. Settle it, confirming what actually left the bank. **A/P nets to zero across the two journals** and the movement lands in *Exchange gain or loss*. The defect this exists to catch balanced inside each journal separately, so only a scenario spanning both artifacts can see it. | 9–15 | M-06 decision 59, M-06 decision 60, M-07 decision 8 | A USD Supplier, a rate, and a finalized Invoice in that currency | — | Planned |  |
 
 #### What the walk of 2026-09-17 found
@@ -397,10 +397,12 @@ not installed — so there is **no recording artifact**, which the `/qa walk` pr
   range overlapping it — *"1 earlier export already covered part of this range"*, and **the Export button
   stayed enabled**, because A-28a warns rather than refusing. Then an adjacent range, 1 October to 1 November:
   **no warning**, because the bounds are half-open and two neighbours cannot both claim the boundary day.
-- **M-08-T15 — the row asks for what the rule refuses.** Every entry in the bank account was ticked, a
-  complete September reconciliation, and the stamp was refused: *"out by 18,800.00. A reconciled set nets to
-  zero."* This is the open question [M-08](../flows/M-08-general-ledger.md) already records against decision
-  25, reproduced at the register. *Route:* `/flow-clarify M-08` — the question is written; the answer is not.
+- ~~**M-08-T15 — the row asks for what the rule refuses.**~~ — **Resolved by decision 37 and walked on
+  2026-09-17.** A bank statement is a **second kind** of reconciliation. Walked both: three entries in the
+  bank account that do not net were **refused as a matched set** — *"out by 6,950.00. A matched set nets to
+  zero — mark it as cleared against a statement instead (d37)"* — and **permitted as a cleared set**, stamping
+  as `CLEARED · 3 entries`. *The row itself now needs rewriting:* it says *"until the difference is zero"*,
+  which is the matched rule, and a bank statement is the case that does not.
 
 **Two divergences on rows that did walk.**
 
@@ -436,6 +438,10 @@ follows is coverage the rows do not yet claim.
   accounts the system keeps"* is now a principle rather than an enumeration, so the row should assert the
   principle's other half too: **the tax accounts are offered** (d34).
 - **M-08-T12** — add **d36**: a statement over an unsealed period is marked **provisional**.
+- **M-08-T15** — rewritten for **d37**: it asks for entries *"until the difference is zero"*, which is the
+  **matched** rule, against a **bank account**, which is the case that does not net. The row should assert
+  both kinds and which one a bank statement is.
+- **M-08-T4** — also **d38**: `customer-credit` and `undeposited` are no longer offered.
 - **M-08-T14** — add **d36**'s sharper half, that a **stored issuance keeps its provisional mark after its
   period seals** where the live statement drops it. That is the assertion distinguishing storing the mark from
   rendering it, and it has no row anywhere.

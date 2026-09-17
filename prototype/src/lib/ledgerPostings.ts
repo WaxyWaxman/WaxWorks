@@ -23,11 +23,10 @@ import { isSealed, periodOf } from "./ledgerPeriods";
  * They live here rather than in the screen because that is the whole of A-74's
  * argument, and the prototype has no other place that is not a screen.
  *
- * **Two of the four rest on decisions that are NOT RATIFIED.** d3 and d14 both
- * carry *"Status: recommended, not yet ratified"* and d3 says in terms *"do not
- * cite as settled"*. They are implemented here because a prototype is how a
- * proposal gets looked at, and every one of them is marked at its own function.
- * Nothing below should be read as a recorded decision.
+ * **d3 and d14 were both proposals when this was written and were RATIFIED on
+ * 2026-09-17**, after being built and walked — which is what a prototype is for.
+ * A-74 had been citing both as invariants since before either was settled; it may
+ * now do so honestly.
  */
 
 // ---------------------------------------------------------------------------
@@ -85,7 +84,7 @@ export interface LedgerPosting extends PostingDraft {
   writtenAt: string;
   actorInitials: string;
   authorizedByInitials: string;
-  /** d3, A-74, A-52 — appended by an edit, never overwritten. NOT RATIFIED. */
+  /** d3, A-74, A-52 — appended by an edit, never overwritten. */
   log?: PostingEdit[];
 }
 
@@ -166,8 +165,9 @@ export function balanceRefusal(lines: TypedPostingLine[]): string | undefined {
  * to empty, or the balance grows forever. It is what keeps Inventory typeable
  * (d13) and what keeps the tax accounts typeable (d34).
  *
- * **Four roles are refused, for four different reasons, and the reasons matter
- * because one of them is still a proposal.**
+ * **Six roles are refused**, and the reasons are not interchangeable — three are
+ * invariants another flow owns, one is the year-end seal's, and two are accounts
+ * whose only correction is an exception rather than a posting (d14, d38).
  *
  *   `retained-earnings` (d13) — kept by the system for itself. It is derived
  *     from the P&L by the year-end seal (d17), and a typed figure makes the
@@ -210,8 +210,10 @@ export function untypeableReason(account: GLAccount): string | undefined {
     case "accounts-payable":
       return `${account.name} is the payables balance exactly, so nothing is typed into it. Use the opening account (d7).`;
     case "suspense":
-      // d14 — NOT RATIFIED.
-      return `${account.name} is cleared by its own act, not by a posting (d14, not ratified).`;
+      // d14, ratified 2026-09-17. Clearing a Suspense balance is its own
+      // manager-only act recording a reason — M-07 d10's "none can clear one"
+      // now has an exception, and M-07 carries it.
+      return `${account.name} is cleared by its own act, not by a posting (d14).`;
     case "gift-card-liability":
     // M-07 d21 gives every TENDER its own account, and a gift card redemption's
     // lands at 2210 "Gift card liability - Gift card" under the reserved 2200.
@@ -233,6 +235,20 @@ export function untypeableReason(account: GLAccount): string | undefined {
       // satisfied. E-05 does not say that anywhere — d33 records the reliance
       // and E-05's *Inherited from other flows* carries the constraint back.
       return `${account.name} is kept by the system — gift cards are issued and redeemed, never typed.`;
+
+    case "customer-credit":
+    case "tender-customer-credit":
+      // d38 — E-07 writes every movement of a Customer's balance, and a typed
+      // line makes the books disagree with a NAMED PERSON. The drift between
+      // the customer ledger and this account is real (it is an open question),
+      // and correcting it is defect-repair rather than a recurring act, so it
+      // takes d14's shape: its own manager-only act recording a reason.
+      return `${account.name} is E-07's balance — a correction is its own act, not a posting (d38).`;
+    case "undeposited":
+      // d38 — the close fills it and a deposit empties it (A-65). Cash that
+      // never reaches the bank has no route AT ALL, because M-03 d8 declined
+      // over/short entirely — and that is defect-repair too, not trading.
+      return `${account.name} is filled by the close and emptied by a deposit — a correction is its own act, not a posting (d38).`;
 
     // d34 — `tax-collected` and `tax-paid` are deliberately ABSENT from this
     // switch, and their absence is a decision rather than an omission.
@@ -412,7 +428,7 @@ export const postingRefusal = (draft: PostingDraft, ctx: PostingContext): string
 // ---------------------------------------------------------------------------
 
 /**
- * _Status: recommended, not yet ratified (d3). Do not cite as settled._
+ * d3, **ratified 2026-09-17** after being built and walked.
  *
  * Why this posting may not be edited, or undefined if it may.
  *
@@ -450,7 +466,7 @@ export function editRefusal(
  * overwriting. A-52's reasoning: *"a money rule nobody is recorded as having
  * changed is worse than a money rule in code."*
  *
- * NOT RATIFIED, with `editRefusal`.
+ * d3, ratified 2026-09-17, with `editRefusal`.
  */
 export function applyEdit(
   posting: LedgerPosting,

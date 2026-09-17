@@ -154,10 +154,14 @@ describe("M-08 d13, d14 — the accounts a Manager may not type into", () => {
     expect(untypeableReason(acct("1200", "Inventory", "inventory"))).toBeUndefined();
   });
 
-  it("refuses Suspense — d14, and NOT RATIFIED", () => {
+  it("refuses Suspense — d14, ratified 2026-09-17", () => {
+    // Was marked NOT RATIFIED when it was written, and this test asserted the
+    // marking as well as the rule. Ratified after being built and walked, so
+    // the marking goes and the rule stays. M-07 d10's "none can clear one" now
+    // has an exception, and M-07's Inherited section carries it.
     const why = untypeableReason(acct("1900", "Suspense", "suspense"));
     expect(why).toContain("its own act");
-    expect(why).toContain("not ratified");
+    expect(why).not.toContain("not ratified");
   });
 
   it("refuses the gift card liability — M-08 d33", () => {
@@ -210,12 +214,32 @@ describe("M-08 d32, d34 — the test behind d13, and the case it turned around",
     expect(postingRefusal(remittance, ctx())).toBeUndefined();
   });
 
-  it("does NOT lock the accounts d32 names but declines to decide", () => {
-    // d32 states the test and deliberately does not apply it to accounts nobody
-    // has examined. customer-credit and undeposited pass its first half and are
-    // open questions, not refusals — one account at a time, on its own merits.
-    expect(untypeableReason(acct("2400", "Customer credit", "customer-credit"))).toBeUndefined();
-    expect(untypeableReason(acct("1100", "Undeposited funds", "undeposited"))).toBeUndefined();
+  it("M-08 d38 — LOCKS the two accounts d32 named, now that they have been examined", () => {
+    // d32 stated the test and declined to apply it; d38 applied it. Both pass
+    // d32's first half, and both have an act with no route — cash that never
+    // reaches the bank (M-03 d8 declined over/short entirely), and a
+    // customer-credit balance drifted from the customer ledger. What decided it
+    // is d32's other word: a discrepancy is DEFECT-REPAIR, not a recurring act,
+    // and d14 already gives defect-repair its own manager-only act.
+    //
+    // This test asserted the opposite until 2026-09-17, which is correct: it
+    // was asserting d32's deliberate non-decision, and the decision has now
+    // been taken.
+    for (const role of ["customer-credit", "tender-customer-credit"] as const) {
+      expect(untypeableReason(acct("2400", "Customer credit", role))).toContain("E-07's balance");
+    }
+    expect(untypeableReason(acct("1100", "Undeposited funds", "undeposited"))).toContain(
+      "filled by the close and emptied by a deposit",
+    );
+  });
+
+  it("M-08 d38, d14 — every locked account routes its correction to the same shape", () => {
+    // d14 and d38 — three accounts now want an act that is designed NOWHERE.
+    // Recorded as an open question; asserted here so the day it is built, this
+    // is the list it has to serve.
+    for (const role of ["suspense", "customer-credit", "undeposited"] as const) {
+      expect(untypeableReason(acct("x", "Account", role))).toContain("own act");
+    }
   });
 
   it("offers neither an untypeable account nor a deactivated one, for different reasons", () => {

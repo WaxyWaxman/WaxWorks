@@ -50,6 +50,7 @@ import {
   reconciliationRefusal,
   unreconciled,
   type ReconcilableEntry,
+  type ReconciliationKind,
 } from "../lib/ledgerReconciliation";
 
 /**
@@ -1110,18 +1111,60 @@ function ReconcilePhase({ by }: { by: string }) {
   const [accountId, setAccountId] = useState(banky[0]?.id ?? "");
   const [document, setDocument] = useState("");
   const [ticked, setTicked] = useState<Set<string>>(new Set());
+  // d37's accepted consequence, made structural: "a Manager has to know which
+  // they are doing before they start, because ticking the same entries under
+  // the other kind means something different — and the screen therefore cannot
+  // offer one list of entries and one button."
+  const [kind, setKind] = useState<ReconciliationKind>("matched");
 
   const open = unreconciled(app.journals, accountId, app.ledgerReconciliations);
   const key = (e: ReconcilableEntry) => `${e.batchId}#${e.lineIndex}`;
   const selected = open.filter((e) => ticked.has(key(e)));
   const marked = markedTotal(selected);
-  const why = reconciliationRefusal(selected, document, app.ledgerReconciliations);
+  const why = reconciliationRefusal(selected, document, app.ledgerReconciliations, kind);
 
   return (
     <div className="grid cols-2">
       <div className="card">
         <div className="card-head">Mark entries until the difference is zero</div>
         <div className="card-body stack">
+          <div className="btn-row">
+            <button
+              className={`btn ${kind === "matched" ? "primary" : "ghost"}`}
+              onClick={() => {
+                setKind("matched");
+                setTicked(new Set());
+              }}
+            >
+              Matched — nets to zero
+            </button>
+            <button
+              className={`btn ${kind === "cleared" ? "primary" : "ghost"}`}
+              onClick={() => {
+                setKind("cleared");
+                setTicked(new Set());
+              }}
+            >
+              Cleared — against a statement
+            </button>
+          </div>
+          <p className="small muted">
+            {kind === "matched" ? (
+              <>
+                <strong>Matched</strong> — offsetting entries that net to zero, so the mark is
+                balance-neutral <strong>by construction</strong>. The two halves of an
+                undeposited-funds movement (d25).
+              </>
+            ) : (
+              <>
+                <strong>Cleared</strong> — the entries that appear on the statement. What is left over
+                is outstanding cheques and deposits in transit, and{" "}
+                <strong>that remainder is the point</strong>, not a failure (d37). Balance-neutral by{" "}
+                <em>convention</em>: nothing but your attention stands behind a cleared mark.
+              </>
+            )}
+          </p>
+
           <div className="row wrap">
             <select
               value={accountId}
@@ -1178,7 +1221,13 @@ function ReconcilePhase({ by }: { by: string }) {
 
       <div className="stack">
         <div className="card">
-          <div className="card-head">{marked.balanced && marked.count > 0 ? "Nets to zero" : "Difference"}</div>
+          <div className="card-head">
+            {kind === "cleared"
+              ? "Marked as cleared"
+              : marked.balanced && marked.count > 0
+                ? "Nets to zero"
+                : "Difference"}
+          </div>
           <div className="card-body stack">
             <p className="num" style={{ fontSize: "1.4rem" }}>
               {money(marked.difference)}
@@ -1192,11 +1241,19 @@ function ReconcilePhase({ by }: { by: string }) {
               className="btn primary"
               disabled={why !== undefined}
               onClick={() => {
-                app.ledgerReconcile(reconcile(`rec-${Date.now()}`, selected, document, {
-                  reconciledAt: new Date().toISOString(),
-                  actorInitials: by,
-                  authorizedByInitials: by,
-                }));
+                app.ledgerReconcile(
+                  reconcile(
+                    `rec-${Date.now()}`,
+                    selected,
+                    document,
+                    {
+                      reconciledAt: new Date().toISOString(),
+                      actorInitials: by,
+                      authorizedByInitials: by,
+                    },
+                    kind,
+                  ),
+                );
                 setTicked(new Set());
                 setDocument("");
               }}
@@ -1204,10 +1261,21 @@ function ReconcilePhase({ by }: { by: string }) {
               Stamp the set as reconciled together
             </button>
             <p className="small muted">
-              d25 — a reconciled set is entries <strong>within one account</strong> that <strong>net to zero</strong>, so
-              it is balance-neutral by construction. <strong>It moves no money</strong>, and{" "}
-              <strong>nothing downstream requires it</strong>: an unreconciled account seals exactly as a reconciled one
-              does. The mark is evidence, never a gate.
+              A reconciled set is entries <strong>within one account</strong>, marked together against an
+              outside document (d25).{" "}
+              {kind === "matched" ? (
+                <>
+                  A <strong>matched</strong> set nets to zero, so it is balance-neutral{" "}
+                  <strong>by construction</strong>.
+                </>
+              ) : (
+                <>
+                  A <strong>cleared</strong> set does not net, and is not asked to (d37).
+                </>
+              )}{" "}
+              Either way <strong>it moves no money</strong>, and{" "}
+              <strong>nothing downstream requires it</strong>: an unreconciled account seals exactly as a
+              reconciled one does. The mark is evidence, never a gate.
             </p>
           </div>
         </div>
@@ -1222,7 +1290,9 @@ function ReconcilePhase({ by }: { by: string }) {
                 <tbody>
                   {app.ledgerReconciliations.map((r) => (
                     <tr key={r.id}>
-                      <td>{r.members.length} entries</td>
+                      <td>
+                        <span className="badge">{r.kind}</span> {r.members.length} entries
+                      </td>
                       <td className="small">{r.document}</td>
                       <td>{r.authorizedByInitials}</td>
                     </tr>
@@ -1234,13 +1304,17 @@ function ReconcilePhase({ by }: { by: string }) {
         </div>
 
         <div className="card">
-          <div className="card-head">Open question, visible here</div>
+          <div className="card-head">Why there are two kinds</div>
           <div className="card-body">
             <p className="small muted">
-              The <em>nets to zero</em> rule serves the <strong>two halves of an undeposited-funds movement</strong>{" "}
-              exactly. It does <strong>not</strong> serve a bank statement, which d25 also names: a bank reconciliation
-              ticks what <em>appears on the statement</em>, and the remainder is outstanding cheques and deposits in
-              transit — that set has no reason to net to zero. Recorded as an open question in the flow, not fixed here.
+              d25 gave one rule — <em>entries within one account that net to zero</em> — and named two
+              cases under it. <strong>It served one.</strong> Building this refused a complete and
+              correct September bank reconciliation, <strong>out by 18,800</strong>, which is what
+              turned the question from arguable into visible. <strong>d37</strong> answers it: a{" "}
+              <strong>matched</strong> set nets to zero and is neutral by construction; a{" "}
+              <strong>cleared</strong> set marks what the document shows and carries the remainder as
+              its point. Both move no money and gate nothing — an unreconciled account seals exactly
+              as a reconciled one does.
             </p>
           </div>
         </div>
