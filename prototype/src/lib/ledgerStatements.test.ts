@@ -538,3 +538,40 @@ describe("M-08 d17 — a year-end seal writes VISIBLE closing postings", () => {
     expect(b).toBeUndefined();
   });
 });
+
+describe("M-08, E-07 d21 — when the two sources of a Customer balance disagree", () => {
+  const CUSTOMERS: JournalBatch[] = [
+    ...BATCHES,
+    // The GL nets to -100 (a debit of 100 on a liability account).
+    batch("cust", [line("2400", "2026-09-20", 100, 0), line("1010", "2026-09-20", 0, 100)]),
+  ];
+
+  it("reports no divergence when the customer ledger ties to the account", () => {
+    // +200 and -300 net to -100, which is exactly what the GL account carries.
+    const bs = balanceSheet("2026-09-30", ACCOUNTS, CUSTOMERS, [], [], DEC, [200, -300]);
+    expect(bs.customerLedgerDivergence).toBe(0);
+    expect(bs.outOfBalance).toBe(0);
+  });
+
+  it("names the difference when they have drifted, rather than showing a sheet that is just wrong", () => {
+    // E-07 d5 derives a Customer's balance from movements; the journal is
+    // written by the artifacts those movements cause. Two paths to one figure —
+    // A-76's shape, and nothing has settled it here. INFERRED, not a decision.
+    //
+    // The figure is **the customer ledger less the GL account**, so a negative
+    // one means the ledger carries less than the journal says it should. Here
+    // +200 and -250 net to a ledger position of +50 against the account's +100,
+    // so the divergence is -50. Stating the direction rather than asserting a
+    // magnitude, because a sign nobody wrote down is a sign the next reader
+    // guesses at — as I did.
+    const bs = balanceSheet("2026-09-30", ACCOUNTS, CUSTOMERS, [], [], DEC, [200, -250]);
+    expect(bs.customerLedgerDivergence).toBe(-50);
+    expect(bs.outOfBalance).not.toBe(0);
+  });
+
+  it("reports nothing at all when no customer balances are supplied", () => {
+    const bs = balanceSheet("2026-09-30", ACCOUNTS, CUSTOMERS, [], [], DEC);
+    expect(bs.customerLedgerDivergence).toBeUndefined();
+    expect(bs.outOfBalance).toBe(0);
+  });
+});

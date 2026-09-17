@@ -34,10 +34,15 @@ import {
 import { accountEnquiry } from "../lib/ledgerBalances";
 import {
   balanceSheet,
+  exportLines,
+  exportOverlaps,
   isProvisional,
   issueBalanceSheet,
+  issueExport,
   issueProfitAndLoss,
   profitAndLoss,
+  reopenIssuance,
+  type LedgerIssuance,
 } from "../lib/ledgerStatements";
 import {
   markedTotal,
@@ -731,6 +736,11 @@ function ReadPhase({ by }: { by: string }) {
   const [accountId, setAccountId] = useState(app.glAccounts[0]?.id ?? "");
   const [period, setPeriod] = useState(periodOf(today()));
   const [section, setSection] = useState("");
+  const [exportFrom, setExportFrom] = useState(`${periodOf(today())}-01`);
+  const [exportTo, setExportTo] = useState(`${periodOf(today())}-01`);
+  // d31 — re-opening shows WHAT WAS ISSUED, never a recomputation, so this
+  // holds the issuance itself and the panel renders `reopenIssuance` of it.
+  const [reopened, setReopened] = useState<LedgerIssuance | null>(null);
 
   const yearEndMonth = 12;
   const enquiry = accountEnquiry(
@@ -745,7 +755,20 @@ function ReadPhase({ by }: { by: string }) {
   const from = `${period}-01`;
   const to = new Date(Number(period.slice(0, 4)), Number(period.slice(5, 7)), 0).toISOString().slice(0, 10);
   const pl = profitAndLoss(from, to, app.glAccounts, app.journals, app.ledgerSeals, app.ledgerUnseals);
-  const bs = balanceSheet(to, app.glAccounts, app.journals, app.ledgerSeals, app.ledgerUnseals, yearEndMonth);
+  // E-07 d21 — each Customer's SIGNED balance, so the sheet can classify by
+  // sign and never net across Customers. The ledger alone cannot do this: the
+  // chart holds one `customer-credit` account carrying exactly the net d21
+  // forbids, so the customer ledger is a second input to a balance sheet.
+  const customerBalances = app.customers.map((c) => c.balance);
+  const bs = balanceSheet(
+    to,
+    app.glAccounts,
+    app.journals,
+    app.ledgerSeals,
+    app.ledgerUnseals,
+    yearEndMonth,
+    customerBalances,
+  );
 
   const issuedBy = { issuedAt: new Date().toISOString(), actorInitials: by, authorizedByInitials: by };
 
@@ -921,7 +944,20 @@ function ReadPhase({ by }: { by: string }) {
               </tbody>
             </table>
             {bs.outOfBalance !== 0 && (
-              <p className="wo-caveat warn">Out of balance by {money(bs.outOfBalance)} — this is a defect.</p>
+              <p className="wo-caveat warn">
+                <strong>Out of balance by {money(bs.outOfBalance)}.</strong>
+                {bs.customerLedgerDivergence !== undefined && bs.customerLedgerDivergence !== 0 && (
+                  <>
+                    {" "}
+                    The customer ledger and the <em>Customer account credit</em> account disagree by{" "}
+                    {money(bs.customerLedgerDivergence)}. E-07 d5 derives a Customer&rsquo;s balance from
+                    movements and the journal is written by the artifacts those movements cause —{" "}
+                    <strong>two paths to one figure</strong>, which nothing has yet settled the way
+                    A-76 settled it for balance-forwards. Recorded as an open question rather than
+                    reconciled here.
+                  </>
+                )}
+              </p>
             )}
             <button className="btn" onClick={() => app.ledgerIssue(issueBalanceSheet(`iss-${Date.now()}`, bs, issuedBy))}>
               Issue
@@ -936,28 +972,126 @@ function ReadPhase({ by }: { by: string }) {
         </div>
       </div>
 
-      <div className="card">
-        <div className="card-head">What has left the building ({app.ledgerIssuances.length})</div>
-        <div className="card-body">
-          <p className="small muted">
-            d31 — issuing stores the <strong>figures</strong>, not a rendered file, and re-opening one shows{" "}
-            <strong>what was issued</strong> rather than a recomputation. A-77 makes this the record M-07 d16&rsquo;s
-            overlap warning and d29&rsquo;s unseal both wanted and neither had.
-          </p>
-          {app.ledgerIssuances.length > 0 && (
-            <table className="data">
-              <tbody>
-                {app.ledgerIssuances.map((i) => (
-                  <tr key={i.id}>
-                    <td>{i.kind}</td>
-                    <td>{i.scope.kind === "as-at" ? `as at ${i.scope.at}` : `${i.scope.from} →`}</td>
-                    <td>{i.provisional ? <span className="badge">provisional</span> : ""}</td>
-                    <td>{i.authorizedByInitials}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          )}
+      <div className="grid cols-2">
+        <div className="card">
+          <div className="card-head">Export the journal (M-07 d15, d16)</div>
+          <div className="card-body stack">
+            <p className="small muted">
+              M-07 keeps what the file <strong>is</strong>; this flow owns the surface it is obtained from
+              (d31). The range is <strong>half-open</strong> — the second date is excluded — so two adjacent
+              exports cannot both claim the boundary day.
+            </p>
+            <div className="row wrap">
+              <label className="field">
+                <span>From</span>
+                <input type="date" value={exportFrom} onChange={(e) => setExportFrom(e.target.value)} />
+              </label>
+              <label className="field">
+                <span>Up to, excluded</span>
+                <input type="date" value={exportTo} onChange={(e) => setExportTo(e.target.value)} />
+              </label>
+            </div>
+
+            {(() => {
+              const lines = exportLines(app.journals, exportFrom, exportTo);
+              const clash = exportOverlaps({ from: exportFrom, toExclusive: exportTo }, app.ledgerIssuances);
+              return (
+                <>
+                  <p className="small">
+                    <strong>{lines.length}</strong> line{lines.length === 1 ? "" : "s"} in this range.
+                  </p>
+                  {clash.length > 0 && (
+                    <p className="wo-caveat warn">
+                      <strong>
+                        {clash.length} earlier export{clash.length === 1 ? "" : "s"} already covered part of
+                        this range.
+                      </strong>{" "}
+                      M-07 d16: <em>importing the same journal twice silently doubles the books.</em> This
+                      <strong> warns and never refuses</strong> (A-28a) — a second export of a range is
+                      sometimes exactly what an accountant asked for. Only earlier <strong>exports</strong>
+                      count: duplicating a statement corrupts nothing (A-77).
+                    </p>
+                  )}
+                  <button
+                    className="btn"
+                    disabled={lines.length === 0}
+                    onClick={() =>
+                      app.ledgerIssue(
+                        issueExport(
+                          `iss-${Date.now()}`,
+                          exportFrom,
+                          exportTo,
+                          lines,
+                          app.ledgerSeals,
+                          app.ledgerUnseals,
+                          issuedBy,
+                        ),
+                      )
+                    }
+                  >
+                    Export
+                  </button>
+                </>
+              );
+            })()}
+          </div>
+        </div>
+
+        <div className="card">
+          <div className="card-head">What has left the building ({app.ledgerIssuances.length})</div>
+          <div className="card-body stack">
+            <p className="small muted">
+              d31 — issuing stores the <strong>figures</strong>, not a rendered file, and re-opening one shows{" "}
+              <strong>what was issued</strong> rather than a recomputation. A-77 makes this the record M-07
+              d16&rsquo;s overlap warning and d29&rsquo;s unseal both wanted and neither had.
+            </p>
+            {app.ledgerIssuances.length === 0 ? (
+              <p className="small muted">Nothing issued yet.</p>
+            ) : (
+              <table className="data">
+                <tbody>
+                  {app.ledgerIssuances.map((i) => (
+                    <tr key={i.id} className="row-click" onClick={() => setReopened(i)}>
+                      <td>{i.kind}</td>
+                      <td>
+                        {i.scope.kind === "as-at"
+                          ? `as at ${i.scope.at}`
+                          : `${i.scope.from} → ${i.scope.toExclusive}`}
+                      </td>
+                      <td>{i.provisional ? <span className="badge">provisional</span> : ""}</td>
+                      <td>{i.authorizedByInitials}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+
+            {reopened && (
+              <div className="card">
+                <div className="card-head">
+                  Re-opened — {reopened.kind}
+                  <button className="btn ghost sm" onClick={() => setReopened(null)}>
+                    close
+                  </button>
+                </div>
+                <div className="card-body stack">
+                  <p className="small muted">
+                    <strong>The figures as issued, never a recomputation</strong> (d31). Issued{" "}
+                    {reopened.issuedAt.slice(0, 10)} by {reopened.authorizedByInitials}
+                    {reopened.provisional && (
+                      <>
+                        {" "}
+                        and marked <strong>provisional</strong> — a mark it keeps even once its period
+                        seals, because it says what was true when it left (d36)
+                      </>
+                    )}
+                    .
+                  </p>
+                  <IssuedFigures issuance={reopened} />
+                </div>
+              </div>
+            )}
+          </div>
         </div>
       </div>
     </div>
@@ -1112,5 +1246,89 @@ function ReconcilePhase({ by }: { by: string }) {
         </div>
       </div>
     </div>
+  );
+}
+
+/**
+ * d31 — renders a stored issuance's figures and **recomputes nothing**.
+ *
+ * Every number here comes from `reopenIssuance`, which returns what was stored
+ * and never re-derives it. That is the whole reason an issuance keeps figures
+ * rather than a rendered file: *"otherwise the record of what the accountant
+ * holds could quietly change."*
+ */
+function IssuedFigures({ issuance }: { issuance: LedgerIssuance }) {
+  const figures = reopenIssuance(issuance);
+
+  if (issuance.kind === "journal-export") {
+    const lines = figures as ReturnType<typeof exportLines>;
+    return (
+      <table className="data">
+        <tbody>
+          {lines.slice(0, 12).map((l, i) => (
+            <tr key={i}>
+              <td>{l.businessDate}</td>
+              <td className="small">{l.memo}</td>
+              <td className="num">{l.debit ? money(l.debit) : ""}</td>
+              <td className="num">{l.credit ? money(l.credit) : ""}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    );
+  }
+
+  if (issuance.kind === "profit-and-loss") {
+    const pl = figures as { totalRevenue: number; totalCostOfGoods: number; totalExpenses: number; profit: number };
+    return (
+      <table className="data">
+        <tbody>
+          <tr>
+            <td>Revenue</td>
+            <td className="num">{money(pl.totalRevenue)}</td>
+          </tr>
+          <tr>
+            <td>Cost of goods</td>
+            <td className="num">{money(pl.totalCostOfGoods)}</td>
+          </tr>
+          <tr>
+            <td>Expenses</td>
+            <td className="num">{money(pl.totalExpenses)}</td>
+          </tr>
+          <tr className="group-row">
+            <td>
+              <strong>Profit</strong>
+            </td>
+            <td className="num">
+              <strong>{money(pl.profit)}</strong>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    );
+  }
+
+  const bs = figures as { totalAssets: number; totalLiabilities: number; currentEarnings: number; totalEquity: number };
+  return (
+    <table className="data">
+      <tbody>
+        <tr>
+          <td>Assets</td>
+          <td className="num">{money(bs.totalAssets)}</td>
+        </tr>
+        <tr>
+          <td>Liabilities</td>
+          <td className="num">{money(bs.totalLiabilities)}</td>
+        </tr>
+        <tr>
+          <td>Current earnings</td>
+          <td className="num">{money(bs.currentEarnings)}</td>
+        </tr>
+        <tr className="group-row">
+          <td>Equity</td>
+          <td className="num">{money(bs.totalEquity)}</td>
+        </tr>
+      </tbody>
+    </table>
   );
 }

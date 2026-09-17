@@ -214,6 +214,19 @@ export interface BalanceSheet {
   currentEarnings: number;
   /** Assets − (liabilities + equity). Zero, or the statement is wrong. */
   outOfBalance: number;
+  /**
+   * **INFERRED, and not a recorded decision.** By how much the per-Customer
+   * balances disagree with the `customer-credit` account they replace.
+   *
+   * E-07 d21 has the statement classify each Customer's balance by sign, and
+   * E-07 d5 has that balance *derived from movements* — while the GL account is
+   * written by the artifacts those movements cause. **Two paths to one figure,
+   * which is the shape A-76 already had to settle for balance-forwards**, and
+   * nothing has settled it here. When they disagree the balance sheet cannot
+   * balance, and a reader deserves to know why rather than being shown a sheet
+   * that is simply wrong. Undefined where no per-Customer balances were given.
+   */
+  customerLedgerDivergence?: number;
   periodSealed: boolean;
   later: LaterLines;
 }
@@ -255,6 +268,15 @@ export function balanceSheet(
   }
 
   // E-07 d21 — group by sign, total each group, never add the groups together.
+  let divergence: number | undefined;
+  if (customerBalances && customerAccount) {
+    // The GL account nets what d21 forbids netting, so its balance is exactly
+    // what the two classified lines should come to between them. A difference
+    // means the customer ledger and the journal have drifted.
+    const glNet = grouped.get(customerAccount.id) ?? 0;
+    const ledgerNet = customerBalances.reduce((t, b) => t - cents(b), 0);
+    divergence = dollars(ledgerNet - glNet);
+  }
   if (customerBalances && customerAccount) {
     const owedToCustomers = customerBalances.filter((b) => b > 0).reduce((s, b) => s + cents(b), 0);
     const owedByCustomers = customerBalances.filter((b) => b < 0).reduce((s, b) => s - cents(b), 0);
@@ -309,6 +331,7 @@ export function balanceSheet(
     totalEquity: dollars(totalEquity),
     currentEarnings,
     outOfBalance: dollars(totalAssets - totalLiabilities - totalEquity),
+    ...(divergence !== undefined ? { customerLedgerDivergence: divergence } : {}),
     periodSealed: isSealed(periodOf(asAt), seals, unseals),
     later: laterThan(batches, asAt),
   };

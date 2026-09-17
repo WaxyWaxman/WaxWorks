@@ -348,9 +348,9 @@ not installed — so there is **no recording artifact**, which the `/qa walk` pr
 | M-08-T9 | **Unsealing reaches the most recent period only, repeats to walk back, and stops at a filed year.** Unseal the latest sealed month: authorized, with a reason required and recorded. Reach an older month: unseal each in turn. Mark a year **filed**, then try to unseal into it: refused, and the refusal names what is holding it. | 22–23 | M-08 decision 18, M-08 decision 22, M-08 decision 29 | Three sealed months and one sealed year | Blocked | Planned |  |
 | M-08-T10 | **Nothing writes into a sealed period, by any route.** With a day inside a sealed period, run M-03's **Undo End of Day** — the one reversal in this system that does not post forward: refused while the period is sealed, released when it is unsealed, and never released for a day inside a **filed** year. | 22–23 | M-08 decision 11, M-08 decision 22, M-08 decision 29, M-03 decision 4, A-66 | M-08-T9, a closed CloseBatch inside a sealed month | Blocked | Planned |  |
 | M-08-T11 | **An account reads back as balance forward · activity · new balance forward, filtered by dimension.** Pick an account and a range: three figures and every line behind them. Narrow by **section**: the same query, fewer lines. The middle term is true with no opening position and no seal — the other two are not. | 24 | M-08 decision 2, M-08 decision 20, M-08 decision 24 | A sealed month and an open one | Walked | Planned |  |
-| M-08-T12 | **The books state a profit, and the balance sheet balances.** Draw a P&L for a sealed period: it has a bottom line and it is called a profit. Draw a balance sheet as at its end: equity carries **current earnings derived at the moment it is drawn**, named as its own line. Customer balances are **classified by sign and never netted across Customers** — store credit into liabilities, unpaid customer invoices into assets. | 25 | M-08 decision 23, M-08 decision 24, M-08 decision 25, E-07 decision 21, M-07 decision 27 | M-08-T6, one customer in credit and one owing | Blocked | Planned |  |
+| M-08-T12 | **The books state a profit, and the balance sheet balances.** Draw a P&L for a sealed period: it has a bottom line and it is called a profit. Draw a balance sheet as at its end: equity carries **current earnings derived at the moment it is drawn**, named as its own line. Customer balances are **classified by sign and never netted across Customers** — store credit into liabilities, unpaid customer invoices into assets. | 25 | M-08 decision 23, M-08 decision 24, M-08 decision 25, E-07 decision 21, M-07 decision 27 | M-08-T6, one customer in credit and one owing | Walked | Planned |  |
 | M-08-T13 | **A statement excludes lines dated after its as-at date, and every statement answers the same way.** Post a future-dated entry. Draw a balance sheet as at today: absent. Draw the P&L for the period: absent. Draw both again once its date has arrived: present. | 24–25 | M-08 decision 30, A-73 | M-08-T5's future-dated posting | Walked | Planned |  |
-| M-08-T14 | **Issuing stores the figures, and re-opening shows what was issued.** Issue a balance sheet. Re-open the stored issuance: **the figures as issued**, never a recomputation. Export a journal range, then an overlapping one: warned, proceeds. The record of what left the building is what makes that warning possible. | 26 | M-08 decision 25, M-08 decision 31, M-07 decision 16, A-77 | M-08-T12 | Blocked | Planned |  |
+| M-08-T14 | **Issuing stores the figures, and re-opening shows what was issued.** Issue a balance sheet. Re-open the stored issuance: **the figures as issued**, never a recomputation. Export a journal range, then an overlapping one: warned, proceeds. The record of what left the building is what makes that warning possible. | 26 | M-08 decision 25, M-08 decision 31, M-07 decision 16, A-77 | M-08-T12 | Walked | Planned |  |
 | M-08-T15 | **Reconciling marks a set that nets to zero, moves no money, and gates nothing.** Mark entries in the bank account against a statement until the difference is zero; stamp the set. No balance moves. Seal the period with another account left unreconciled: it seals — the mark is evidence, never a gate. | 27 | M-08 decision 25 | A bank account with entries, and a statement to reconcile against | Blocked | Planned |  |
 | M-08-T16 | **A foreign payable nets Accounts payable to zero across finalize and payment.** Finalize a USD Invoice: it books in the **home** currency at the rate recorded on the Invoice. Settle it, confirming what actually left the bank. **A/P nets to zero across the two journals** and the movement lands in *Exchange gain or loss*. The defect this exists to catch balanced inside each journal separately, so only a scenario spanning both artifacts can see it. | 9–15 | M-06 decision 59, M-06 decision 60, M-07 decision 8 | A USD Supplier, a rate, and a finalized Invoice in that currency | — | Planned |  |
 
@@ -385,16 +385,16 @@ not installed — so there is **no recording artifact**, which the `/qa walk` pr
   a sealed month*, and building one in the prototype means ringing a sale, tendering it, opening a session and
   running Total Today's Sales before sealing the period — which did not complete in this pass. The `Needs`
   column already names that fixture; it is the fixture, not the rule, that is missing.
-- **M-08-T11 and the profit both hold; M-08-T12 has one clause unexercised.**
-  [E-07](../flows/E-07-manage-customers.md) d21's *classified by sign, never netted* is not shown, because
-  the screen draws the balance sheet without per-Customer balances — and **the ledger alone cannot satisfy
-  d21**, since the chart holds one `customer-credit` account carrying exactly the net d21 forbids. *Route:* a
-  prototype change, and [M-08](../flows/M-08-general-ledger.md) wants an *Inherited* line saying the customer
-  ledger is a second input to a balance sheet.
-- **M-08-T14 — two thirds not built.** Issuing works and the stored figures hold. **Re-opening** an issuance
-  has no control, and the **journal export** is not on the screen at all, so d16's overlap warning — which
-  [architecture](../architecture.md) A-77 exists to serve — has nothing to warn from. *Route:* a prototype
-  change, citing d31 and A-77.
+- ~~**M-08-T12 — one clause unexercised.**~~ — **Walked on 2026-09-17.** The screen now passes each
+  Customer's signed balance, so [E-07](../flows/E-07-manage-customers.md) d21's *classified by sign, never
+  netted* is exercised: the seed's customers read **120.50 into assets and 25.00 into liabilities**, never a
+  net. *What it surfaced is below.*
+- ~~**M-08-T14 — two thirds not built.**~~ — **Walked on 2026-09-17.** Re-opening a stored issuance shows the
+  figures as issued and recomputes nothing (d31), and the journal export is on the screen with
+  [M-07](../flows/M-07-chart-of-accounts.md) d16's overlap warning. Walked: exported 1–30 September, then a
+  range overlapping it — *"1 earlier export already covered part of this range"*, and **the Export button
+  stayed enabled**, because A-28a warns rather than refusing. Then an adjacent range, 1 October to 1 November:
+  **no warning**, because the bounds are half-open and two neighbours cannot both claim the boundary day.
 - **M-08-T15 — the row asks for what the rule refuses.** Every entry in the bank account was ticked, a
   complete September reconciliation, and the stamp was refused: *"out by 18,800.00. A reconciled set nets to
   zero."* This is the open question [M-08](../flows/M-08-general-ledger.md) already records against decision
@@ -412,6 +412,15 @@ not installed — so there is **no recording artifact**, which the `/qa walk` pr
   books that start 2026-09-17 reports *"the books start after 2026-09-16"* rather than *"2026-09 is sealed"*.
   Both are [architecture](../architecture.md) A-73 bounds and both are correct; the row reads as though the
   sealed case is the one a Manager meets first. Cosmetic, and worth knowing when the row is automated.
+
+**A new open question, surfaced by fixing M-08-T12.** A Customer's balance has **two sources**:
+[E-07](../flows/E-07-manage-customers.md) d5 derives it from movements, and the `customer-credit` account is
+written by the artifacts those movements cause. **Nothing ties them**, and in the prototype they disagree by
+95.50 on the seed alone. That is A-76's *two paths to one figure* in a second place, and A-76's answer —
+*stored is by definition the last recomputed* — does not transfer, because neither of these is a
+materialisation of the other. The balance sheet now **names the difference** rather than showing a sheet that
+is merely out of balance, which is an inference and not a recorded decision. Owner: `/flow-clarify`, or
+`/architecture` if the answer is structural.
 
 #### Rows that need rewriting against decisions 32 to 36
 
