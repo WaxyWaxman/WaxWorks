@@ -237,8 +237,23 @@ function NewInvoiceModal({ onClose, onCreated }: { onClose: () => void; onCreate
   const [supplierId, setSupplierId] = useState(app.suppliers[0]?.id ?? "");
   const [mode, setMode] = useState<IntakeMode>("New");
   const [invoiceNumber, setInvoiceNumber] = useState("");
-  const [invoiceDate, setInvoiceDate] = useState("");
-  const [receivedDate, setReceivedDate] = useState(new Date().toLocaleDateString("en-CA"));
+  // Both default to TODAY, and `en-CA` is what gives `YYYY-MM-DD` — the one
+  // shape `toCalendarDate` keeps and everything else in the system compares
+  // against.
+  //
+  // The invoice date defaulting is the newer half and is worth saying why:
+  // most stock is received the day the paperwork arrives, so today is right
+  // more often than blank is, and E-02 d45 runs payment terms from this field —
+  // leaving it empty means an Invoice that ages nowhere in Accounts Payable.
+  // It is a DEFAULT and not a constraint: blank stays legal, because a
+  // second-hand intake has no supplier paperwork to copy a date off (d39), and
+  // the Employee clears or changes it off the invoice in hand.
+  //
+  // It no longer touches the ledger either way — architecture A-71 dates an
+  // Invoice's journal by its finalize, which the system stamps.
+  const today = new Date().toLocaleDateString("en-CA");
+  const [invoiceDate, setInvoiceDate] = useState(today);
+  const [receivedDate, setReceivedDate] = useState(today);
   const [statedSubtotal, setStatedSubtotal] = useState("0.00");
   const [tax, setTax] = useState("0.00");
   const [freight, setFreight] = useState("0.00");
