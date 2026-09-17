@@ -27,11 +27,9 @@ import { fiscalYearEndFor, isSealed, periodEnd, periodOf, periodStart } from "./
  *   A-77 — an issuance is a **discriminated union**, and the `filed` mark is
  *          deliberately not one of its kinds.
  *
- * *Not decided here, and deliberately absent:* whether a statement drawn on an
- * open period is labelled **provisional**. The flow records that as an open
- * question — whether it is a label, a property of the stored artifact, or the
- * period dates doing the work — so this module exposes `periodSealed` as a
- * fact and puts no word on it.
+ *   d36  — a statement over any unsealed period is **provisional**, and the
+ *          mark is **stored on the issuance**, never rendered from the period's
+ *          state. Nothing is printed on the sealed side.
  */
 
 const cents = (n: number): number => Math.round(n * 100);
@@ -332,6 +330,59 @@ export type IssuanceScope =
   | { kind: "as-at"; at: string };
 
 /**
+ * d36 — whether a statement on screen is provisional.
+ *
+ * Derived here and **only for the live screen**, which is recomputing anyway.
+ * An issuance stores its own copy, because a mark a re-opened issuance
+ * recomputed would vanish the moment its period sealed — the exact harm d31
+ * stores figures to prevent.
+ *
+ * One-way: a sealed period prints **nothing**. d29 permits an unseal, so
+ * *final* is a promise this system cannot keep, and the absence of the word is
+ * the absence of a warning rather than a claim (d15's shape).
+ */
+export const isProvisional = (statement: { periodSealed: boolean }): boolean =>
+  !statement.periodSealed;
+
+/**
+ * d36 — every variant carries `provisional`, **stored and never recomputed**.
+ *
+ * It sits on the issuance rather than inside `figures` because it is a property
+ * of what LEFT THE BUILDING rather than of the arithmetic, and because A-77's
+ * unseal warning reads issuances: *"they hold a copy that said provisional"*
+ * and *"they hold a copy that said nothing"* are different situations, and the
+ * second is worse.
+ */
+interface IssuanceBase {
+  id: string;
+  provisional: boolean;
+  issuedAt: string;
+  actorInitials: string;
+  /** A-74 — `statement_issue` is manager-only. */
+  authorizedByInitials: string;
+}
+
+export interface JournalExportIssuance extends IssuanceBase {
+  kind: "journal-export";
+  scope: { kind: "range"; from: string; toExclusive: string };
+  /** d31 — the figures, not a rendered file. */
+  figures: JournalLine[];
+}
+
+export interface ProfitAndLossIssuance extends IssuanceBase {
+  kind: "profit-and-loss";
+  scope: { kind: "range"; from: string; toExclusive: string };
+  figures: ProfitAndLoss;
+}
+
+export interface BalanceSheetIssuance extends IssuanceBase {
+  kind: "balance-sheet";
+  /** A-77 — an as-at INSTANT, never a degenerate range. */
+  scope: { kind: "as-at"; at: string };
+  figures: BalanceSheet;
+}
+
+/**
  * A-77's kinds. **Not interchangeable**, which is the reason for the union:
  * *"an export moves the journal itself and duplicating it corrupts the
  * destination, while a statement asserts a moment and duplicating it corrupts
@@ -343,34 +394,84 @@ export type IssuanceScope =
  * and a gate does not belong in a log whose kinds can grow.
  */
 export type LedgerIssuance =
-  | {
-      id: string;
-      kind: "journal-export";
-      scope: { kind: "range"; from: string; toExclusive: string };
-      issuedAt: string;
-      actorInitials: string;
-      authorizedByInitials: string;
-      /** d31 — the figures, not a rendered file. */
-      figures: JournalLine[];
-    }
-  | {
-      id: string;
-      kind: "profit-and-loss";
-      scope: { kind: "range"; from: string; toExclusive: string };
-      issuedAt: string;
-      actorInitials: string;
-      authorizedByInitials: string;
-      figures: ProfitAndLoss;
-    }
-  | {
-      id: string;
-      kind: "balance-sheet";
-      scope: { kind: "as-at"; at: string };
-      issuedAt: string;
-      actorInitials: string;
-      authorizedByInitials: string;
-      figures: BalanceSheet;
-    };
+  | JournalExportIssuance
+  | ProfitAndLossIssuance
+  | BalanceSheetIssuance;
+
+interface IssuedBy {
+  issuedAt: string;
+  actorInitials: string;
+  authorizedByInitials: string;
+}
+
+/**
+ * d31, d36 — the only places an issuance is made, so the provisional mark
+ * cannot be forgotten at a call site.
+ *
+ * Each freezes the figures and the mark together, and nothing constructs an
+ * issuance by hand — which is what makes d36's *"stored rather than rendered"*
+ * an invariant rather than a habit.
+ */
+export const issueProfitAndLoss = (
+  id: string,
+  scope: { kind: "range"; from: string; toExclusive: string },
+  figures: ProfitAndLoss,
+  by: IssuedBy,
+): ProfitAndLossIssuance => ({
+  id,
+  kind: "profit-and-loss",
+  scope,
+  ...by,
+  figures,
+  provisional: isProvisional(figures),
+});
+
+/** The scope comes from the figures, so the two can never name different days. */
+export const issueBalanceSheet = (
+  id: string,
+  figures: BalanceSheet,
+  by: IssuedBy,
+): BalanceSheetIssuance => ({
+  id,
+  kind: "balance-sheet",
+  scope: { kind: "as-at", at: figures.asAt },
+  ...by,
+  figures,
+  provisional: isProvisional(figures),
+});
+
+/**
+ * d36 for an export. A range is provisional while **any** period it touches is
+ * unsealed — an export of an open month can be missing lines that land later,
+ * and M-07 d16's *"importing the same journal twice silently doubles the
+ * books"* is the same hazard from the other end.
+ */
+export function issueExport(
+  id: string,
+  from: string,
+  toExclusive: string,
+  figures: JournalLine[],
+  seals: LedgerPeriodSeal[],
+  unseals: LedgerPeriodUnseal[],
+  by: IssuedBy,
+): JournalExportIssuance {
+  // The last day actually covered, since `toExclusive` is exclusive.
+  const lastDay = dayBeforeOf(toExclusive);
+  return {
+    id,
+    kind: "journal-export",
+    scope: { kind: "range", from, toExclusive },
+    ...by,
+    figures,
+    provisional: !everyPeriodSealed(from, lastDay, seals, unseals),
+  };
+}
+
+const dayBeforeOf = (date: string): string => {
+  const d = new Date(`${date}T00:00:00`);
+  d.setDate(d.getDate() - 1);
+  return d.toISOString().slice(0, 10);
+};
 
 /**
  * d31 — re-opening a stored issuance shows **what was issued**, never a

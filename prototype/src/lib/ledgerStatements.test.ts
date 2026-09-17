@@ -11,7 +11,11 @@ import {
   balanceSheet,
   exportLines,
   exportOverlaps,
+  isProvisional,
   issuancesTouching,
+  issueBalanceSheet,
+  issueExport,
+  issueProfitAndLoss,
   profitAndLoss,
   reopenIssuance,
   type LedgerIssuance,
@@ -256,15 +260,12 @@ describe("M-08, E-07 d21 — customer balances classify by sign and never net", 
 
 describe("M-08 d25, M-08 d31, A-77 — an issuance stores the figures and never recomputes", () => {
   const pl = profitAndLoss("2026-09-01", "2026-09-30", ACCOUNTS, BATCHES, [], []);
-  const issued: LedgerIssuance = {
-    id: "iss-1",
-    kind: "profit-and-loss",
-    scope: { kind: "range", from: "2026-09-01", toExclusive: "2026-10-01" },
-    issuedAt: "2026-10-02 09:00:00",
-    actorInitials: "WW",
-    authorizedByInitials: "WW",
-    figures: pl,
-  };
+  const issued = issueProfitAndLoss(
+    "iss-1",
+    { kind: "range", from: "2026-09-01", toExclusive: "2026-10-01" },
+    pl,
+    { issuedAt: "2026-10-02 09:00:00", actorInitials: "WW", authorizedByInitials: "WW" },
+  );
 
   it("re-opens to what was issued, not to a fresh figure", () => {
     // d31: "otherwise the record of what the accountant holds could quietly
@@ -286,30 +287,28 @@ describe("M-08 d25, M-08 d31, A-77 — an issuance stores the figures and never 
     // A-77: "Encode an instant as a degenerate range and every balance sheet
     // overlaps every earlier export, so d16's overlap warning — its entire
     // purpose — becomes noise."
-    const bs: LedgerIssuance = {
-      id: "iss-2",
-      kind: "balance-sheet",
-      scope: { kind: "as-at", at: "2026-09-30" },
-      issuedAt: "2026-10-02 09:00:00",
-      actorInitials: "WW",
-      authorizedByInitials: "WW",
-      figures: balanceSheet("2026-09-30", ACCOUNTS, BATCHES, [], [], DEC),
-    };
+    const bs = issueBalanceSheet(
+      "iss-2",
+      balanceSheet("2026-09-30", ACCOUNTS, BATCHES, [], [], DEC),
+      { issuedAt: "2026-10-02 09:00:00", actorInitials: "WW", authorizedByInitials: "WW" },
+    );
     expect(bs.scope.kind).toBe("as-at");
+    expect(bs.scope.at).toBe("2026-09-30");
   });
 });
 
 describe("M-07 d16, A-77 — the overlap warning, and whose rule it is", () => {
+  const BY = { issuedAt: "2026-10-02 09:00:00", actorInitials: "WW", authorizedByInitials: "WW" };
   const exports_: LedgerIssuance[] = [
-    {
-      id: "e1",
-      kind: "journal-export",
-      scope: { kind: "range", from: "2026-09-01", toExclusive: "2026-10-01" },
-      issuedAt: "2026-10-02 09:00:00",
-      actorInitials: "WW",
-      authorizedByInitials: "WW",
-      figures: exportLines(BATCHES, "2026-09-01", "2026-10-01"),
-    },
+    issueExport(
+      "e1",
+      "2026-09-01",
+      "2026-10-01",
+      exportLines(BATCHES, "2026-09-01", "2026-10-01"),
+      [],
+      [],
+      BY,
+    ),
   ];
 
   it("warns when a second export covers the same days", () => {
@@ -330,15 +329,12 @@ describe("M-07 d16, A-77 — the overlap warning, and whose rule it is", () => {
     // corrupts nothing."
     const withStatement: LedgerIssuance[] = [
       ...exports_,
-      {
-        id: "p1",
-        kind: "profit-and-loss",
-        scope: { kind: "range", from: "2026-08-01", toExclusive: "2026-09-01" },
-        issuedAt: "2026-09-02 09:00:00",
-        actorInitials: "WW",
-        authorizedByInitials: "WW",
-        figures: profitAndLoss("2026-08-01", "2026-08-31", ACCOUNTS, BATCHES, [], []),
-      },
+      issueProfitAndLoss(
+        "p1",
+        { kind: "range", from: "2026-08-01", toExclusive: "2026-09-01" },
+        profitAndLoss("2026-08-01", "2026-08-31", ACCOUNTS, BATCHES, [], []),
+        { issuedAt: "2026-09-02 09:00:00", actorInitials: "WW", authorizedByInitials: "WW" },
+      ),
     ];
     const clash = exportOverlaps({ from: "2026-08-01", toExclusive: "2026-09-01" }, withStatement);
     expect(clash).toEqual([]);
@@ -354,25 +350,14 @@ describe("M-07 d16, A-77 — the overlap warning, and whose rule it is", () => {
 });
 
 describe("M-08 d29, A-77 — the unseal applies a different rule to the same log", () => {
+  const BY = { issuedAt: "2026-10-02 09:00:00", actorInitials: "WW", authorizedByInitials: "WW" };
   const issuances: LedgerIssuance[] = [
-    {
-      id: "e1",
-      kind: "journal-export",
-      scope: { kind: "range", from: "2026-09-01", toExclusive: "2026-10-01" },
-      issuedAt: "2026-10-02 09:00:00",
-      actorInitials: "WW",
-      authorizedByInitials: "WW",
-      figures: [],
-    },
-    {
-      id: "b1",
-      kind: "balance-sheet",
-      scope: { kind: "as-at", at: "2026-09-30" },
-      issuedAt: "2026-10-02 09:00:00",
-      actorInitials: "WW",
-      authorizedByInitials: "WW",
-      figures: balanceSheet("2026-09-30", ACCOUNTS, BATCHES, [seal("s1", "2026-09")], [], DEC),
-    },
+    issueExport("e1", "2026-09-01", "2026-10-01", [], [], [], BY),
+    issueBalanceSheet(
+      "b1",
+      balanceSheet("2026-09-30", ACCOUNTS, BATCHES, [seal("s1", "2026-09")], [], DEC),
+      BY,
+    ),
   ];
 
   it("warns on ANY issuance touching the period, whatever its kind", () => {
@@ -391,22 +376,82 @@ describe("M-08 d29, A-77 — the unseal applies a different rule to the same log
   });
 });
 
-describe("M-08 — the seal state is a fact the statement carries, and not a word", () => {
-  it("reports whether the period is sealed, and puts no label on it", () => {
-    // The flow records as OPEN whether a statement is *provisional* until its
-    // period is sealed, and whether that word appears on it. This module
-    // exposes the fact and decides nothing.
+describe("M-08 d36 — provisional, stored on the issuance and never recomputed", () => {
+  const BY = { issuedAt: "2026-10-02 09:00:00", actorInitials: "WW", authorizedByInitials: "WW" };
+  const SEPT = { kind: "range", from: "2026-09-01", toExclusive: "2026-10-01" } as const;
+
+  it("marks a statement over an unsealed period", () => {
     const open = profitAndLoss("2026-09-01", "2026-09-30", ACCOUNTS, BATCHES, [], []);
     expect(open.periodSealed).toBe(false);
+    expect(isProvisional(open)).toBe(true);
+    expect(issueProfitAndLoss("i1", SEPT, open, BY).provisional).toBe(true);
+  });
 
-    const sealed = profitAndLoss("2026-09-01", "2026-09-30", ACCOUNTS, BATCHES, [seal("s1", "2026-09")], []);
-    expect(sealed.periodSealed).toBe(true);
-    expect(JSON.stringify(sealed).toLowerCase()).not.toContain("provisional");
+  it("says NOTHING on the sealed side — *final* is a promise d29 can break", () => {
+    // An unseal is always available on the most recently sealed period, and
+    // the whole unseal apparatus exists because that happens. The absence of
+    // the word is the absence of a warning, not a claim (d15's shape).
+    const seals = [seal("s1", "2026-09")];
+    const sealed = profitAndLoss("2026-09-01", "2026-09-30", ACCOUNTS, BATCHES, seals, []);
+    const issued = issueProfitAndLoss("i2", SEPT, sealed, BY);
+    expect(issued.provisional).toBe(false);
+    expect(JSON.stringify(issued).toLowerCase()).not.toContain("final");
+  });
+
+  it("KEEPS the mark when the period seals afterwards — the point of storing it", () => {
+    // d31: "re-opening a stored issuance shows what was issued, never a
+    // recomputation." A rendered label would silently vanish here, and the
+    // record of what the accountant holds would have quietly changed.
+    const open = profitAndLoss("2026-09-01", "2026-09-30", ACCOUNTS, BATCHES, [], []);
+    const issued = issueProfitAndLoss("i3", SEPT, open, BY);
+
+    // September is sealed later. The stored issuance does not move.
+    const seals = [seal("s1", "2026-09")];
+    expect(profitAndLoss("2026-09-01", "2026-09-30", ACCOUNTS, BATCHES, seals, []).periodSealed).toBe(
+      true,
+    );
+    expect(issued.provisional).toBe(true);
+    expect(reopenIssuance(issued).periodSealed).toBe(false);
+  });
+
+  it("distinguishes the two copies an unseal has to warn about", () => {
+    // A-77's gain: "they hold a copy that said provisional" and "they hold a
+    // copy that said nothing" are different situations, and the second is worse.
+    const seals = [seal("s1", "2026-09")];
+    const provisional = issueProfitAndLoss(
+      "i4",
+      SEPT,
+      profitAndLoss("2026-09-01", "2026-09-30", ACCOUNTS, BATCHES, [], []),
+      BY,
+    );
+    const firm = issueProfitAndLoss(
+      "i5",
+      SEPT,
+      profitAndLoss("2026-09-01", "2026-09-30", ACCOUNTS, BATCHES, seals, []),
+      BY,
+    );
+    const touching = issuancesTouching("2026-09", [provisional, firm]);
+    expect(touching.filter((i) => !i.provisional).map((i) => i.id)).toEqual(["i5"]);
+  });
+
+  it("marks a balance sheet the same way, from its own as-at date", () => {
+    const open = balanceSheet("2026-09-30", ACCOUNTS, BATCHES, [], [], DEC);
+    const issued = issueBalanceSheet("i6", open, BY);
+    expect(issued.provisional).toBe(true);
+    expect(issued.scope.at).toBe(open.asAt);
+  });
+
+  it("marks an export whose range touches an unsealed period", () => {
+    const seals = [seal("s1", "2026-09")];
+    const lines = exportLines(BATCHES, "2026-09-01", "2026-10-01");
+    expect(issueExport("e2", "2026-09-01", "2026-10-01", lines, seals, [], BY).provisional).toBe(false);
+    expect(issueExport("e3", "2026-09-01", "2026-11-01", lines, seals, [], BY).provisional).toBe(true);
   });
 
   it("needs EVERY period in the range sealed, not just the first", () => {
     const seals = [seal("s1", "2026-09")];
     const spanning = profitAndLoss("2026-09-01", "2026-10-31", ACCOUNTS, BATCHES, seals, []);
     expect(spanning.periodSealed).toBe(false);
+    expect(isProvisional(spanning)).toBe(true);
   });
 });
