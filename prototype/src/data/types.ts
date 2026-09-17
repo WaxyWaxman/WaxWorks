@@ -1088,9 +1088,18 @@ export type GLRole =
   | "card-processing-fees"
   | "bank"
   | "suspense"
-  // one per seam — resolved through a mapping
+  // one per seam — resolved through a mapping.
+  //
+  // The five tender roles are d21: every tender keeps its own account, and each
+  // takes the KIND its behavior implies. M-06 d22's reason for per-tender
+  // granularity is about deposits, and that reason does not reach a gift card
+  // redemption, where no money moves at all.
   | "revenue"
-  | "undeposited"
+  | "undeposited" // cash and card — money that will reach a bank
+  | "tender-gift-card" // a redemption draws down a liability
+  | "tender-customer-credit" // store_credit and used_credit
+  | "tender-payout" // cash out for an expense (M-06)
+  | "tender-rounding" // the system-written nickel difference (M-06 d26)
   | "tax-collected"
   | "tax-paid"
   | "adjustment";

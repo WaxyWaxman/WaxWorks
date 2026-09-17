@@ -79,7 +79,11 @@ export const ROLE_PURPOSE: Record<GLRole, string> = {
   "card-processing-fees": "The difference a deposit reveals — derived, never configured",
   suspense: "Where an unbalanced journal's difference goes (d10). Never zero by accident",
   revenue: "One per Section (d6) — M-06 d20 says which Sections are revenue at all",
-  undeposited: "One per tender (M-06 d22) — taken in, not yet paid out by the bank",
+  undeposited: "Cash or card taken in, not yet paid out by the bank (d21)",
+  "tender-gift-card": "A redemption drawing down the gift card liability (d21)",
+  "tender-customer-credit": "Store credit spent, or a counter buy creating it (d21)",
+  "tender-payout": "Cash out of the till for an expense (M-06, d21)",
+  "tender-rounding": "The nickel difference the system writes (M-06 d26, d21)",
   "tax-collected": "Charged on a Sale. A liability (d5)",
   "tax-paid": "Paid on a supplier Invoice. An Input Tax Credit, a receivable (E-02 d34)",
   adjustment: "One per E-04 reason code (d6) — the six exist so a Manager must choose",
@@ -105,6 +109,32 @@ export interface BuiltChart {
  * accounts — correct per M-06 d22, and startling on first sight. d3's editable
  * numbers and names are what make that survivable.
  */
+/**
+ * d21 — which kind of account a tender's behavior implies.
+ *
+ * `rounding` is the awkward one: architecture section 5 gives it its own
+ * behavior in the enum, and this prototype models it as a `Cash` tender carrying
+ * `systemOwned` instead (M-06 d26 — written by the system, never a button). The
+ * divergence is the prototype's, not the specification's, so it is detected
+ * here rather than worked around silently.
+ */
+function tenderAccount(tn: TenderRow): { role: GLRole; base: number; prefix: string } {
+  if (tn.systemOwned && tn.behavior === "Cash")
+    return { role: "tender-rounding", base: 6210, prefix: "Cash over / short" };
+  switch (tn.behavior) {
+    case "Gift Card":
+      return { role: "tender-gift-card", base: 2210, prefix: "Gift card liability" };
+    case "Account Balance":
+    case "Used Credit":
+      return { role: "tender-customer-credit", base: 2310, prefix: "Customer account credit" };
+    case "Pay-out":
+      return { role: "tender-payout", base: 6300, prefix: "Pay-out" };
+    default:
+      // Cash and Credit Card — the two that actually produce a deposit.
+      return { role: "undeposited", base: 1100, prefix: "Undeposited funds" };
+  }
+}
+
 export function buildChart(seams: Seams): BuiltChart {
   const accounts: GLAccount[] = [];
   const mappings: GLMapping[] = [];
@@ -127,9 +157,17 @@ export function buildChart(seams: Seams): BuiltChart {
 
   // M-06 d22 — per TENDER, not per behavior: Visa and Amex settle as separate
   // deposits, and a merged figure cannot be tied back to a bank statement.
-  seams.tenders.forEach((t, i) => {
-    const a = add("undeposited", String(1100 + i * 10), `Undeposited funds — ${t.name}`);
-    mappings.push({ seamKind: "tender", seamId: t.id, accountId: a.id });
+  //
+  // d21 — but the KIND follows the behavior. d22's reason is about deposits and
+  // does not reach a gift card redemption, where no money moves at all; five of
+  // the seven behaviors are not assets, and putting them all in "undeposited
+  // funds" is what building this screen made visible.
+  const seen: Record<string, number> = {};
+  seams.tenders.forEach((tn) => {
+    const spec = tenderAccount(tn);
+    const n = (seen[spec.role] = (seen[spec.role] ?? 0) + 1);
+    const a = add(spec.role, String(spec.base + (n - 1) * 10), `${spec.prefix} — ${tn.name}`);
+    mappings.push({ seamKind: "tender", seamId: tn.id, accountId: a.id });
   });
 
   // d5 — TWO per tax type. Netting them would merge an asset and a liability in

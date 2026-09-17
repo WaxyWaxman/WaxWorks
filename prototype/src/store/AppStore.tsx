@@ -28,6 +28,7 @@ import {
   tenderedTotal,
 } from "../lib/totals";
 import { clearedAgainst, entryIsCleared, unclearRefusal } from "../lib/payables";
+import { buildChart } from "../lib/chart";
 import {
   CURRENT_USER,
   CUSTOMERS,
@@ -101,6 +102,9 @@ import type {
   ReleaseCacheEntry,
   ClaimVoid,
   Clearing,
+  GLAccount,
+  GLMapping,
+  GLSeamKind,
   SupplierClaim,
   TaxLine,
   Tender,
@@ -213,6 +217,10 @@ interface AppState {
   paymentBatches: PaymentBatch[]; // M-05 d16 — one row per settlement, across Invoices, entries and credits
   batchVoids: PaymentBatchVoid[]; // M-05 d22 / A-33a — a void is an appended artifact, never a column on the batch
   clearings: Clearing[]; // M-05 d46 — a clearing is an act with members, addressable like a batch
+  // M-07 — the chart and its mappings. d1: no account carries a balance;
+  // this is a chart and a journal export, not an internal ledger.
+  glAccounts: GLAccount[];
+  glMappings: GLMapping[];
   pendingOrders: PendingOrderLine[];
   reviewFlags: ReviewFlag[];
   activeSaleId: string | null;
@@ -228,6 +236,8 @@ interface AppState {
   /** E-03 decision 8 — toggle to demo graceful degradation when the catalog provider (MusicBrainz) is down */
   providerUp: boolean;
 }
+
+const SEEDED_CHART = buildChart({ sections: SECTIONS, tenders: TENDERS, taxTypes: TAX_TYPES });
 
 const seed: AppState = {
   records: RECORDS,
@@ -712,6 +722,10 @@ const seed: AppState = {
   ],
   batchVoids: [],
   clearings: [],
+  // M-07 d11 — created and mapped before anyone sees the screen, so nothing
+  // can be left unmapped and d10's Suspense stays a defect rather than a hole.
+  glAccounts: SEEDED_CHART.accounts,
+  glMappings: SEEDED_CHART.mappings,
   pendingOrders: PENDING_ORDERS,
   reviewFlags: [],
   activeSaleId: null,
@@ -978,6 +992,11 @@ interface AppContextValue extends AppState {
   // M-05 d39 — a clearing is a REVERSIBLE MARK, not a terminal state.
   // d46 — addressed by the CLEARING, the way a void addresses a batch.
   unclearPayableEntries: (clearingId: string, by: string) => { uncleared: boolean; reason?: string };
+  // M-07 — the chart. d3: the number and name are the store's; the ROLE is not
+  // editable, because the software resolves by it.
+  updateGLAccount: (id: string, patch: { number?: string; name?: string; active?: boolean }) => void;
+  addGLAccount: (number: string, name: string) => void;
+  setGLMapping: (seamKind: GLSeamKind, seamId: string, accountId: string) => void;
 
   pendingOrderFor: (id?: string) => PendingOrderLine | undefined;
   /** Logs the receipt on the line; the line SURVIVES (M-02 d21). `qty` is
@@ -3538,6 +3557,40 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
     return { uncleared: true };
   };
 
+  /**
+   * M-07 d3 — the Manager edits an account's NUMBER and NAME to match the chart
+   * their accountant already keeps. The role is absent from the patch on
+   * purpose: it is what the software resolves by, and is not theirs to change.
+   *
+   * M-06 d9 (inherited) — an account is deactivated, never deleted.
+   */
+  const updateGLAccount: AppContextValue["updateGLAccount"] = (id, patch) =>
+    setS((prev) => ({
+      ...prev,
+      glAccounts: prev.glAccounts.map((a) => (a.id === id ? { ...a, ...patch } : a)),
+    }));
+
+  /** Step 3 — an added account carries NO role, so nothing posts to it by itself. */
+  const addGLAccount: AppContextValue["addGLAccount"] = (number, name) =>
+    setS((prev) => ({
+      ...prev,
+      glAccounts: [...prev.glAccounts, { id: uid("gl"), number, name, active: true }],
+    }));
+
+  /**
+   * Step 5 — repoint a seam. Two seams may share one account, which is how a
+   * shop collapses a breakdown it does not want; the mapping is replaced rather
+   * than added, so a seam always resolves to exactly one account (d11).
+   */
+  const setGLMapping: AppContextValue["setGLMapping"] = (seamKind, seamId, accountId) =>
+    setS((prev) => ({
+      ...prev,
+      glMappings: [
+        ...prev.glMappings.filter((m) => !(m.seamKind === seamKind && m.seamId === seamId)),
+        { seamKind, seamId, accountId },
+      ],
+    }));
+
   const pendingOrderFor = (id?: string) => s.pendingOrders.find((o) => o.id === id);
 
   // Clicking an order in Receiving's Orders panel "moves" it into the current
@@ -3925,6 +3978,9 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
       addPayableEntry,
       clearPayableEntries,
       unclearPayableEntries,
+      updateGLAccount,
+      addGLAccount,
+      setGLMapping,
       pendingOrderFor,
       receivePendingOrderLine,
       setPendingOrderLineStatus,

@@ -5,8 +5,8 @@ import { ADJUSTMENT_REASONS, type SectionRow, type TaxType, type TenderRow } fro
 const section = (code: string, name: string): SectionRow =>
   ({ code, name, countsAsRevenue: true, tracksStockDefault: true, discountable: true, returnable: true, active: true, sortOrder: 0 }) as SectionRow;
 
-const tender = (id: string, name: string): TenderRow =>
-  ({ id, name, behavior: "Credit Card", active: true }) as TenderRow;
+const tender = (id: string, name: string, behavior = "Credit Card"): TenderRow =>
+  ({ id, name, behavior, active: true }) as TenderRow;
 
 const tax = (code: string, name: string): TaxType => ({ code, name, ratePpm: 50_000 }) as TaxType;
 
@@ -46,9 +46,57 @@ describe("M-07 d5/d6 — the chart follows the seams that already exist", () => 
   it("gives every tender its own account, not every behavior (M-06 d22)", () => {
     // Visa and Amex settle as separate deposits; a merged figure cannot be tied
     // back to a bank statement.
-    const { accounts } = buildChart(seams);
+    const { mappings } = buildChart(seams);
 
-    expect(accounts.filter((a) => a.role === "undeposited")).toHaveLength(3);
+    expect(mappings.filter((m) => m.seamKind === "tender")).toHaveLength(3);
+  });
+
+  it("gives each tender the account KIND its behavior implies (d21)", () => {
+    // d22's reason is about DEPOSITS, and it does not reach a gift card
+    // redemption, where no money moves at all. Building the chart put five of
+    // nine seeded tenders in the assets band, which is what this prevents.
+    const mixed: Seams = {
+      ...seams,
+      tenders: [
+        tender("t-cash", "Cash", "Cash"),
+        tender("t-visa", "Visa", "Credit Card"),
+        tender("t-gift", "Gift card", "Gift Card"),
+        tender("t-acct", "On account", "Account Balance"),
+        tender("t-used", "Used credit", "Used Credit"),
+        tender("t-pay", "Pay-out", "Pay-out"),
+      ],
+    };
+    const roleOf = (name: string) =>
+      buildChart(mixed).accounts.find((a) => a.name.endsWith(`— ${name}`))?.role;
+
+    expect(roleOf("Cash")).toBe("undeposited");
+    expect(roleOf("Visa")).toBe("undeposited");
+    expect(roleOf("Gift card")).toBe("tender-gift-card");
+    expect(roleOf("On account")).toBe("tender-customer-credit");
+    expect(roleOf("Used credit")).toBe("tender-customer-credit");
+    expect(roleOf("Pay-out")).toBe("tender-payout");
+  });
+
+  it("puts a payout in the expenses band and a redemption in liabilities (d21)", () => {
+    const mixed: Seams = {
+      ...seams,
+      tenders: [tender("t-pay", "Pay-out", "Pay-out"), tender("t-gift", "Gift card", "Gift Card")],
+    };
+    const { accounts } = buildChart(mixed);
+    const band = (n: string) => Math.floor(Number(n) / 1000);
+
+    expect(band(accounts.find((a) => a.role === "tender-payout")!.number)).toBe(6);
+    expect(band(accounts.find((a) => a.role === "tender-gift-card")!.number)).toBe(2);
+  });
+
+  it("detects the system-written rounding tender, which this prototype models as Cash", () => {
+    // architecture section 5 gives `rounding` its own behavior; the prototype
+    // carries it as a Cash tender with systemOwned. The divergence is the
+    // prototype's, so it is detected rather than worked around silently.
+    const rounding = { id: "t-round", name: "Cash rounding", behavior: "Cash", active: true, systemOwned: true } as TenderRow;
+    const { accounts } = buildChart({ ...seams, tenders: [rounding] });
+
+    expect(accounts.find((a) => a.name.endsWith("— Cash rounding"))?.role).toBe("tender-rounding");
   });
 
   it("gives every tax type TWO accounts, collected and paid (d5)", () => {
