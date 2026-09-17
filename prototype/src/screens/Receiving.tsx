@@ -307,12 +307,20 @@ function NewInvoiceModal({ onClose, onCreated }: { onClose: () => void; onCreate
                   // The Employee copies the figures across on the invoice panel
                   // beside every other total. Nothing to add and nothing to
                   // choose, in the common case.
-                  charges: storeTaxTypes(app.taxTypes, app.taxGroupCells, app.defaultTaxGroup).map((t, i) => ({
-                    id: `chg-${t.code}-${i}`,
-                    kind: "tax" as const,
-                    taxCode: t.code,
-                    amount: 0,
-                  })),
+                  charges: [
+                    ...storeTaxTypes(app.taxTypes, app.taxGroupCells, app.defaultTaxGroup).map((t, i) => ({
+                      id: `chg-${t.code}-${i}`,
+                      kind: "tax" as const,
+                      taxCode: t.code,
+                      amount: 0,
+                    })),
+                    // And the Miscellaneous slot, seeded at zero like the tax
+                    // rows. Seeded rather than created on first edit because a
+                    // row that appears the moment you type into it is a row
+                    // that loses the keystroke: it swaps for the stored one
+                    // mid-entry, and the decimal point goes with it.
+                    { id: "chg-misc", kind: "misc" as const, amount: 0 },
+                  ],
                 });
                 onCreated(id);
                 onClose();

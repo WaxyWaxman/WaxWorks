@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { PAYMENT_METHODS, PAYMENT_TERMS } from "../data/types";
 import type { Invoice, InvoiceCharge, PaymentMethod, PaymentTerms, Supplier, TaxType } from "../data/types";
 import { figureField, numericOnly } from "../lib/fields";
@@ -410,6 +411,50 @@ function InvoiceTerms({
   );
 }
 
+/**
+ * A figure field that can actually be typed into.
+ *
+ * `numericOnly` deliberately lets partial input through — `""`, `"12."` and
+ * `"-"` are all things a value passes through on the way to being a number.
+ * That only survives if something holds the partial string: binding the input
+ * straight back to the model runs `Number("4.")` → `4` → renders `"4"`, and
+ * **the decimal point is erased on the keystroke that typed it**, so `4.24`
+ * cannot be entered at all.
+ *
+ * So the raw text lives here until blur, and the model gets the number on every
+ * keystroke — the same split the invoice Total already uses with `totalRaw`,
+ * which is why that one field was typable and these were not.
+ */
+function FigureInput({
+  value,
+  disabled,
+  onCommit,
+  label,
+}: {
+  value: number;
+  disabled: boolean;
+  onCommit: (n: number) => void;
+  label?: string;
+}) {
+  const [raw, setRaw] = useState<string | null>(null);
+  return (
+    <input
+      {...figureField}
+      disabled={disabled}
+      aria-label={label}
+      value={raw ?? String(value)}
+      onChange={(e) => {
+        const next = numericOnly(e.target.value);
+        setRaw(next);
+        onCommit(Number(next) || 0);
+      }}
+      // Hand the field back to the model, so it shows the stored figure rather
+      // than whatever was mid-typing.
+      onBlur={() => setRaw(null)}
+    />
+  );
+}
+
 function PaperworkFields({
   invoice,
   locked,
@@ -434,11 +479,10 @@ function PaperworkFields({
     <>
       <label className="recv-entry">
         <span>Stated subtotal</span>
-        <input
-          {...figureField}
-          disabled={locked}
+        <FigureInput
           value={invoice.statedSubtotal}
-          onChange={(e) => onPatch({ statedSubtotal: Number(numericOnly(e.target.value)) || 0 })}
+          disabled={locked}
+          onCommit={(n) => onPatch({ statedSubtotal: n })}
         />
       </label>
 
@@ -461,34 +505,19 @@ function PaperworkFields({
       {invoice.charges.filter((c) => c.kind === "tax").map((c) => (
         <label className="recv-entry" key={c.id}>
           <span>{labelFor(c)}</span>
-          <input
-            {...figureField}
-            disabled={locked}
-            value={c.amount}
-            onChange={(e) => setCharge(c.id, { amount: Number(numericOnly(e.target.value)) || 0 })}
-          />
+          <FigureInput value={c.amount} disabled={locked} onCommit={(n) => setCharge(c.id, { amount: n })} />
         </label>
       ))}
 
       <label className="recv-entry">
         <span>Freight</span>
-        <input
-          {...figureField}
-          disabled={locked}
-          value={invoice.freight}
-          onChange={(e) => onPatch({ freight: Number(numericOnly(e.target.value)) || 0 })}
-        />
+        <FigureInput value={invoice.freight} disabled={locked} onCommit={(n) => onPatch({ freight: n })} />
       </label>
 
       {invoice.charges.filter((c) => c.kind === "misc").map((c) => (
         <label className="recv-entry" key={c.id}>
           <span>{labelFor(c)}</span>
-          <input
-            {...figureField}
-            disabled={locked}
-            value={c.amount}
-            onChange={(e) => setCharge(c.id, { amount: Number(numericOnly(e.target.value)) || 0 })}
-          />
+          <FigureInput value={c.amount} disabled={locked} onCommit={(n) => setCharge(c.id, { amount: n })} />
         </label>
       ))}
 
@@ -500,16 +529,12 @@ function PaperworkFields({
       {!invoice.charges.some((c) => c.kind === "misc") && (
         <label className="recv-entry">
           <span>Miscellaneous</span>
-          <input
-            {...figureField}
-            disabled={locked}
+          <FigureInput
             value={0}
-            onChange={(e) =>
+            disabled={locked}
+            onCommit={(n) =>
               onPatch({
-                charges: [
-                  ...invoice.charges,
-                  { id: `chg-misc-${invoice.charges.length}`, kind: "misc", amount: Number(numericOnly(e.target.value)) || 0 },
-                ],
+                charges: [...invoice.charges, { id: `chg-misc-${invoice.charges.length}`, kind: "misc", amount: n }],
               })
             }
           />
