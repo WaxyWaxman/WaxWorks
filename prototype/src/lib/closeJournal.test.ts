@@ -269,7 +269,21 @@ describe("M-07 d10 — an unresolvable seam reaches Suspense and is named", () =
 });
 
 describe("what a Sale does not record", () => {
-  it("cannot tell Visa from Mastercard, and says so rather than picking quietly", () => {
+  it("posts to the tender the Sale names, not to whichever shares its behaviour (E-05 d36)", () => {
+    // The reconciliation M-06 d22 gives Visa and Mastercard separate accounts
+    // FOR. Before d36 the pad offered behaviours, so every card in the day
+    // landed in whichever row was listed first.
+    const mc = tender({ type: "Credit Card", tenderRowId: "tn-mc", amount: 21 });
+    expect(tenderRowFor(mc, TENDERS)?.id).toBe("tn-mc");
+    expect(tenderIsAmbiguous(mc, TENDERS)).toBe(false);
+
+    const { batch, ambiguousTenders } = build([sale({ tenders: [mc] })]);
+    expect(lineFor(batch, acct("1120"))?.debit).toBe(21); // Mastercard's own
+    expect(lineFor(batch, acct("1110"))).toBeUndefined(); // not Visa's
+    expect(ambiguousTenders).toEqual([]);
+  });
+
+  it("still falls back to the behaviour for a Sale recorded before the pad offered rows", () => {
     // M-06 d22 gives them separate accounts BECAUSE they settle as separate
     // deposits. `Tender.type` is `Credit Card` for both, so the reconciliation
     // that reason exists to protect is not reachable from a Sale.

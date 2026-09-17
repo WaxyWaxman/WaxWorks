@@ -13,6 +13,7 @@ import type {
 } from "../data/types";
 import { assembleJournal, credit, debit, roleAccount, seamAccount, type Posting } from "./journal";
 import { sectionRowFor } from "./taxonomy";
+import { defaultTenderRow } from "./tenders";
 import { lineNet, lineTaxComponents, type TaxContext } from "./totals";
 
 /**
@@ -83,12 +84,12 @@ export function tenderRowFor(t: Tender, rows: TenderRow[]): TenderRow | undefine
     const exact = rows.find((r) => r.id === t.tenderRowId);
     if (exact) return exact;
   }
-  // d26's rounding tender is system-owned and never offered at the till, so a
-  // behavior match must not fall onto it: a customer's cash would post to Cash
-  // over / short. Excluded from the ordinary match, and reached only by
-  // `tenderRowId`, which is the one thing that names it unambiguously.
-  const candidates = rows.filter((r) => r.behavior === t.type && !r.systemOwned);
-  return candidates.find((r) => r.active) ?? candidates[0];
+  // Falling back to the behaviour, for Sales recorded before the pad offered
+  // rows (E-05 d36). `defaultTenderRow` excludes the system-owned rounding
+  // tender for the reason d26 gives — a customer's cash must never be able to
+  // land in Cash over / short — and resolves through a deactivated row rather
+  // than refusing, per M-07 d18.
+  return defaultTenderRow(t.type, rows);
 }
 
 /** True where more than one configured row shares this tender's behavior. */
