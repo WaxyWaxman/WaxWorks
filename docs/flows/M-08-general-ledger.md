@@ -39,8 +39,11 @@ can compute is an activity total and not a position (decision 9).
    into *Accounts payable* (decision 7).
 6. The customer side stays **empty** — outstanding store credit and customer invoices are
    honoured on paper and never migrated (decision 8).
-7. Manager reviews as often as they like; the opening position persists as a draft. _TBD —
-   what happens when the typed figures do not balance, which is open below._
+7. **Equity is not typed** — it is the figure that balances assets against liabilities, and
+   is shown rather than entered (decision 26). The opening position therefore cannot fail
+   to balance. Manager reviews as often as they like; it persists as a draft.
+   **This review is the single highest-value check in the flow**, because decision 26's
+   cost is that a typo in an asset becomes equity silently.
 8. Manager **seals** the opening position. It may still be unsealed and retyped until the
    first real period is sealed, and never after (decision 6).
 
@@ -82,15 +85,18 @@ Balances per account over a date range, financial statements, reconciliation.
 
 _Drafted, not interrogated._
 
-24. Manager picks an account and a date range, optionally narrowed by section or location (decision 2), and reads **balance forward · activity in the period · new balance forward**, with every line behind it. *Note the middle term is true without an opening position and without a seal; the other two are not.*
-25. Manager runs a **Profit & Loss** for a period and a **Balance Sheet** as at its end. *Guess: both marked **provisional** while the period is unsealed.* Every statement states the period it covers, because decision 9 makes the first year a short one.
-26. Manager **reconciles** an account against an outside document — marking entries until the difference is zero, then stamping the marked set as reconciled together. _TBD — and see the vocabulary caution: *clearing* and *settlement* are both taken ([lexicon](../lexicon.md) §14)._
-27. Statements and reconciliation reports are printable. *Guess: letter-size, following [E-02](E-02-receive-inventory.md) step 22.*
+24. Manager picks an account and a date range, optionally narrowed by section or location (decision 2), and reads **balance forward · activity in the period · new balance forward**, with every line behind it. *The middle term is true without an opening position and without a seal; the other two are not.*
+25. Manager runs a **Profit & Loss** for a period and a **Balance Sheet** as at its end. The P&L has a bottom line and it is called a profit (decision 23). Equity on the balance sheet carries **current earnings, derived at the moment it is drawn** and named as its own line rather than folded into a total (decision 24). Every statement states the period it covers, because decision 9 makes the first year a short one. *Guess: both marked **provisional** while the period is unsealed.*
+26. **Issuing** a statement stores it (decision 25), so what the accountant is holding is a fact this system has — which is what d16's unseal, d22's *filed* mark and [M-07](M-07-chart-of-accounts.md) d16's unmodelled export log all separately want.
+27. Manager **reconciles** an account against an outside document — a bank statement, or the two halves of an undeposited-funds movement — marking entries until the difference is zero, then stamping the marked set as **reconciled together** (decision 25). It moves no money, and nothing downstream requires it.
+28. Statements and reconciliation reports are printable. *Guess: letter-size, following [E-02](E-02-receive-inventory.md) step 22.*
 
 ## Requirements
 
-_Mostly `_TBD_`. The ones below are not new — they are inherited commitments restated
-as requirements of this flow, and they constrain every screen it can grow._
+_The first group are inherited commitments restated as requirements of this flow. The
+second follow from its own decisions._
+
+**Inherited, restated:**
 
 - **Nothing here instructs a bank, a processor, or anyone else.** This flow records
   what a Manager tells it happened ([M-05](M-05-accounts-payable.md) d5,
@@ -115,7 +121,47 @@ as requirements of this flow, and they constrain every screen it can grow._
   September.** The choice is always between dating it September — which needs September
   open — and dating it October, which is a real and often correct answer for an ordinary bill (decisions 11, 16).
 - **All of it scopes to a Store** ([architecture](../architecture.md) A-5).
-- _TBD_ — the requirements that follow from this flow's own decisions, once it has any.
+**From this flow's own decisions:**
+
+- **A posting must balance before it is saved** (decision 10), and a typed posting never
+  reaches Suspense. Suspense is exclusively the system-defect account
+  ([M-07](M-07-chart-of-accounts.md) d10) and nothing a person types may put a figure
+  there (decisions 13, 14) — which is what keeps *"always a defect in this system, never
+  a data-entry error"* true now that there is data entry.
+- **Nothing may write into a sealed period** (decision 11), by any route. A posting dated
+  into one is refused; so is any act that would restate a day inside one, including
+  [M-03](M-03-daily-summary.md)'s Undo End of Day, which is the one reversal in this
+  system that does not post forward.
+- **A sealed period is reopened only by an unseal, and an unseal is an artifact** —
+  authorized, reasoned and recorded (decisions 16, 18). **A year marked *filed* cannot be
+  unsealed at all** (decision 22): the only permanently irreversible state here, and the
+  only one that depends on a Manager arming it.
+- **Every figure this flow states must be reproducible from the journal.** Balance-forwards
+  are stored *and* recomputable (decision 20), so a stored figure a rebuild would not
+  reproduce is a defect — and something must be able to say so, because nothing else in
+  this system has two paths to one number.
+- **Nothing is posted that no artifact caused.** Current earnings is derived when a
+  statement is drawn (decision 24); the only equity postings ever written are the
+  year-end seal's, and those are visible (decision 17). This is
+  [M-07](M-07-chart-of-accounts.md) d12's rule holding in the one flow that could most
+  easily break it.
+- **A statement states the period it covers**, because decision 9 makes the first year a
+  short one and a short year must not read as a bad one. An **issued** statement is stored
+  (decision 25), so what the accountant holds is a fact this system has rather than an
+  assumption.
+- **A reconciled set moves no money** (decision 25). It is balance-neutral by
+  construction, like [M-05](M-05-accounts-payable.md) d15's clearing and deliberately not
+  that word, and **nothing downstream requires it** — it is evidence, never a gate.
+- **The opening position is typed, and nothing validates it against the world.** Its
+  figures come from paper (decisions 6, 7, 8, 9), they may be corrected only until the
+  first seal, and **an error in them is carried forward by every period afterwards without
+  ever disagreeing with anything.** It is the least defended surface in this system and the
+  most consequential.
+- **A figure this flow states may be wrong, and that is new** (decision 23). The
+  prohibition [M-07](M-07-chart-of-accounts.md) d1 imposed was a guarantee bought by
+  silence; what replaces it is a set of conditions — the opening position right, every
+  seam mapped, the expenses actually entered, the period sealed — **none of which is
+  detectable from the figure itself.**
 
 ## Inherited from other flows
 
@@ -170,7 +216,7 @@ _Numbered so they can be cited precisely. Append only — never renumber or dele
 | 9 | **The books' first fiscal year is a stub. No year-to-date revenue or expense is typed into the opening position, so the first annual statement covers only the months since the switchover.** The opening position carries the balance sheet and nothing else. **The asymmetry this rests on is real and worth stating:** a P&L is honest from day one with no opening position at all, because revenue and expense genuinely do start at the switchover — it is only the **balance sheet** that is wrong without one. So the balance sheet figures are mandatory and the year-to-date figures are optional, and this decision declines the optional half. Ten fewer numbers typed from paper is ten fewer chances to type one wrong, and the year they would reconstruct is a year whose detail lives with the accountant anyway. *Accepted consequence:* **the first annual P&L is not comparable to the years either side of it**, so every statement has to state the period it covers plainly enough that a short first year does not read as a bad one |
 | 10 | **A typed posting that does not balance is refused. It is not sent to Suspense, and this does not contradict [M-07](M-07-chart-of-accounts.md) d10 — it is what keeps d10 true.** d10's Suspense exists for a specific reason given at [architecture](../architecture.md) A-67: a journal is written inside its artifact's transaction, so a journal that could fail to balance is a journal that could **fail the commit**, and *"a bookkeeping defect must never be able to stop the shop ending its day."* **None of that reaches a typed posting.** There is no artifact waiting to commit, no till blocked, no close halted — only a Manager at a screen with the correction in front of them. And d10's accepted consequence is explicit that a Suspense balance is *"always a defect in this system, never a data-entry mistake — no Manager action can create one"*; a typo routed to Suspense would make that sentence false the first time it happened, and every surface that tells a Manager not to try to fix a Suspense line would become a lie. **Refusing is therefore the reading that preserves d10 rather than the exception to it.** *Accepted consequence:* this is the one place in the system that **blocks** rather than proceeding-and-recording ([architecture](../architecture.md) A-28a), so the refusal has to earn it by being useful — it must name the amount still needed and which side, not merely say no |
 | 11 | **A posting dated inside a sealed period is refused. The Manager dates it in the open period instead.** The hydro bill for January arriving in February after January is sealed lands in February. This is [M-07](M-07-chart-of-accounts.md) d8's post-forward rule reaching the one case d8 did not have to imagine — *"nothing may restate a day that has already been exported"* — and a sealed period is the stronger form of that: a statement may already be printed and with the accountant, and a posting that slipped into it would leave the books and that statement disagreeing with nothing anywhere saying so. *Rejected:* unsealing January to take the posting, which is more accurate on paper and makes unsealing routine — and a seal that is routinely undone has stopped meaning anything. *Accepted consequence, and the reference model warns about it in these terms:* **an expense can land in the month the paper arrived rather than the month it was incurred**, so a Manager who seals early buys drift. The mitigation is operational, not mechanical — seal a month once the bills for it have come in, not on the first of the next |
-| 12 | **A location is required on every line; a section is optional.** A **location** is derivable everywhere without asking — [architecture](../architecture.md) A-5 already scopes every row to a Store, and a single-store shop has exactly one — so requiring it costs almost nothing now and means the axis is **populated from day one** rather than back-filled the day a second location exists, which is the migration decision 2 was chosen to avoid. A **section** is a reporting refinement and genuinely does not apply to every line: a bank transfer, a loan repayment and an owner's draw have no section, and inventing one for them would put noise in the axis rather than detail. Where a section *is* meaningful the posting already knows it — a revenue line resolves its Section through the Sale line ([E-05](E-05-sell-a-record.md)) — so a blank section marks *not applicable* rather than *not bothered*. *Accepted consequence:* the two dimensions behave differently, which a reader has to be told rather than infer, and **a blank section is indistinguishable from a forgotten one** on a line typed by hand. *Open below:* whether a location and a Store are the same thing, which decision 2 did not settle and which this decision assumes |
+| 12 | *Sharpened by decision 27 — a location identifies **which store**, and the books consolidate across stores. The "division of the business" reading drafted here was wrong.* **A location is required on every line; a section is optional.** A **location** is derivable everywhere without asking — [architecture](../architecture.md) A-5 already scopes every row to a Store, and a single-store shop has exactly one — so requiring it costs almost nothing now and means the axis is **populated from day one** rather than back-filled the day a second location exists, which is the migration decision 2 was chosen to avoid. A **section** is a reporting refinement and genuinely does not apply to every line: a bank transfer, a loan repayment and an owner's draw have no section, and inventing one for them would put noise in the axis rather than detail. Where a section *is* meaningful the posting already knows it — a revenue line resolves its Section through the Sale line ([E-05](E-05-sell-a-record.md)) — so a blank section marks *not applicable* rather than *not bothered*. *Accepted consequence:* the two dimensions behave differently, which a reader has to be told rather than infer, and **a blank section is indistinguishable from a forgotten one** on a line typed by hand. *Open below:* whether a location and a Store are the same thing, which decision 2 did not settle and which this decision assumes |
 | 13 | **Retained earnings, current profits and *Accounts payable* are not typeable. Inventory and Suspense are treated differently and separately.** The first three are kept by the system for itself: retained earnings and current profits are **derived from the P&L by the year-end seal**, and a typed figure makes the books disagree with themselves; *Accounts payable* is [M-05](M-05-accounts-payable.md)'s balance exactly and permanently under decision 7, and one typed line breaks that invariant on its first use. **Inventory is typeable, and this reverses the drafting instinct.** [M-07](M-07-chart-of-accounts.md) d2's perpetual inventory makes the account's balance the sum of on-hand costs — but **a dead-stock write-down is precisely the case where book value *should* diverge from the shelf**, and it is a real and recurring act in this trade rather than an edge case. Forbidding it would leave a shop unable to write down stock it cannot sell, which overstates assets year after year and is the failure the reference model spends a section warning about. *Accepted consequence:* **the Inventory account stops being reconcilable to on-hand × cost by construction**, so something has to be able to show the difference and say which part of it was deliberate. *Suspense: see decision 14* |
 | 14 | _Status: recommended, not yet ratified._ **Suspense is not available in an ordinary posting. Clearing a Suspense balance is a separate, manager-only act that records a reason.** [M-07](M-07-chart-of-accounts.md) d10 states that *"no Manager action can create one and none can clear one"* — written when nothing but an artifact could write a journal, which made it a description; manual postings turn it into a **choice**. Making Suspense ordinarily typeable would decide it the wrong way: the danger is not a Manager clearing a genuine Suspense balance once its cause is fixed, it is Suspense quietly becoming **what it means in every other accounting package** — the bucket a difference is dumped into so a posting will balance. That is the exact thing d10 exists to prevent, and decision 10 above refuses the same move by a different door. **But a balance that nothing can ever clear is also wrong:** a defect gets fixed and its three dollars sit on the balance sheet forever. So the route exists and is deliberately not ordinary — its own act, manager-only, carrying a reason, and visible as an exception rather than as a line in a posting nobody reads twice. *Not ratified — the mechanism is proposed here rather than chosen, and [M-07](M-07-chart-of-accounts.md) d10 may need a row of its own to say that its "none can clear one" now has an exception* |
 | 15 | **A period containing a Suspense line seals anyway. The closing transaction records the Suspense total, gross, so any statement drawn from that period can say so.** Refusing would **deadlock the books**, and not rarely — it is the guaranteed outcome the first time Suspense does the job it exists for. [M-07](M-07-chart-of-accounts.md) d10 records that *"no Manager action can create one and none can clear one"*, so a seal that refuses on Suspense is a seal no Manager can ever satisfy: the books stop in the month the defect landed and never move again. **Proceeding is also the house preference** ([architecture](../architecture.md) A-28a, [E-02](E-02-receive-inventory.md) d35) and, more to the point, it is [M-07](M-07-chart-of-accounts.md) d10's own logic followed to its end — Suspense exists *so that* a defect on our side can never stop the shop, and stopping the books is stopping the shop by a slower route. **Gross, not net** (d25): a period short three dollars on one date and over three on another must report six, or two defects report as none. *Accepted consequence:* **a sealed period can contain a known bug, permanently**, and the seal is what makes it permanent — so the record of it has to survive on the closing transaction where a statement can reach it, rather than living only on the journal line that caused it |
@@ -180,6 +226,11 @@ _Numbered so they can be cited precisely. Append only — never renumber or dele
 | 19 | **Accruals are out of scope. A Manager who wants one posts an estimate and reverses it by hand, as two ordinary postings.** An accrual is the conventional answer to a bill that arrives after its period — post an estimate on the last day, reverse it when the real invoice lands — and **nothing here prevents one**: it is two postings this flow already supports, and no new concept is needed to do it correctly. What is declined is the **machinery** — a posting marked to auto-reverse on a future date, which would be the first scheduled write in this system and a second kind of posting to explain. The judgement is that the case is **narrow and annual**: an ordinary month's drift is self-correcting, because every month carries the previous month's bill and consistent lateness is what an accountant expects. It bites once a year, at the fiscal boundary, where a Manager doing it deliberately is better served than a Manager relying on a feature they use once. *Accepted consequence:* **the reversal depends on someone remembering it**, and a forgotten reversal leaves an estimate standing as a real expense in the new year — which is worse than never having accrued, because it is invisible and doubled. If this is ever revisited, that asymmetry is the reason to revisit it |
 | 20 | **A seal writes a stored closing transaction carrying balance-forwards, and reporting reads it rather than re-summing history. The reference model's shape, adopted deliberately. What we add is that it can also be *recomputed*, and that is what makes decision 16 safe.** The stored figure is not an optimisation borrowed from a slower era — **it is this system's existing house rule**, twice over: [M-03](M-03-daily-summary.md) d13 and [architecture](../architecture.md) A-30 store the close's summary rather than recomputing it, and [M-07](M-07-chart-of-accounts.md) d7 stores every journal rather than deriving it, both for the same stated reason — *"storing rather than recomputing means a past day can never quietly restate itself."* A balance read from stored balance-forwards is the figure that was true when the period was sealed, and two readings of the same sealed period can never disagree. **The reference model is stored-*only*, and that is the one place we differ:** its reopen rule is most-recent-only partly because a stale closing transaction three months back has no cheap way to be rebuilt. We can rebuild, so decision 16 can let any period be unsealed and the balance-forwards after it re-derived — **stored *and* recomputable is strictly better than stored alone**, and it is the difference that buys d16 rather than a reason to reverse it. *Accepted consequence:* there are now **two paths to the same figure**, so they can disagree — a stored balance-forward that a rebuild would not reproduce is a defect, and something has to be able to say so. *Shape is [architecture](../architecture.md)'s:* whether the closing transaction is a balanced set of journal lines like the reference model's, or a stored summary beside the journal, is a data-model question this flow does not settle — but a year-end's zeroing reaches the journal either way (decision 17) |
 | 22 | **A year is marked *filed* when the return has gone in, and a filed year refuses the unseal. Supersedes 21; restores decision 16 for everything not yet filed.** [architecture](../architecture.md) A-66's shape exactly — *immutable while something outside the system depends on it*, where the outside thing is a tax return rather than a bank deposit. **The timing is the whole decision.** An accountant's cycle runs: the shop seals December and the year; the accountant reviews over the following months and issues adjustments — depreciation, reclassifications, a stock write-down; *then* the return is filed. Those adjustments arrive **after the seal and before the filing**, which is precisely the window 21 closed. Sealing at step one and filing at step three are different moments and only the second is a point of no return. **The mark is the Manager's**, set when the accountant confirms the return has gone in, and it is a claim about the outside world that this system cannot verify — which is why it is a recorded act with a date rather than a checkbox. *Accepted consequence, and it is the reason 21 was attractive:* **the guard now depends on someone arming it.** A Manager who never marks a year filed keeps every year reopenable forever, and the system cannot tell the difference between a year not yet filed and one nobody got round to marking. The mitigation is a prompt, not a mechanism — this is a fact only a human has |
+| 23 | **This system may state a profit. [M-07](M-07-chart-of-accounts.md) d27 retires the prohibition; this flow is what earned it.** M-07's Requirements forbade any screen, report, column or summary being labelled *profit*, *net profit*, *net income* or *earnings*, on the grounds that a figure computed from what the system held would be *"wrong by more than the day's gross margin"* on an ordinary day. **That was true and is no longer.** Decision 1's typed postings bring in rent, utilities, loans, depreciation, draws and tax — the groups whose absence made the figure wrong — so the P&L has a bottom line and it may be called what it is. *Accepted consequence, and it is the trade the whole flow makes:* **a system that may state a profit may state a wrong one**, and d1's prohibition was a guarantee of never being wrong bought by never speaking. What replaces it is not a better guarantee but a set of conditions — an opening position typed correctly (d6), every seam still mapped ([M-07](M-07-chart-of-accounts.md) d11), the expenses actually entered, and the period sealed (d15). **Each is a way for the figure to be wrong, and none of them is detectable from the figure itself** |
+| 24 | **Current earnings is derived when a statement is drawn, never posted. Only the year-end seal posts (d17).** Mid-year a balance sheet balances only if equity carries the result so far — assets less liabilities exceeds opening equity by exactly the profit to date — and that figure is obtained by summing the revenue and expense accounts at the moment the statement is drawn, as the reference model does. **No monthly posting, no running equity account, nothing accumulating.** This keeps [M-07](M-07-chart-of-accounts.md) d12's rule intact — a journal is written by the artifact that causes it, and no artifact causes a month's profit — and it means the only equity postings this system ever writes are the year-end seal's, which d17 already makes visible. *Accepted consequence:* **retained earnings on the chart is only correct immediately after a year-end seal.** Between seals, equity as *posted* and equity as *shown on a balance sheet* differ by the year to date, which is correct accounting and reads as a discrepancy to anyone comparing the chart against the statement — so the statement has to name the derived line rather than fold it silently into a total |
+| 25 | **A statement is stored when it is issued, and a reconciled set is a mark that moves no money.** Two parts of one decision about what reading the books leaves behind. **Storing an issued statement** is this system's rule for the fourth time — [M-03](M-03-daily-summary.md) d13 and [architecture](../architecture.md) A-30 store the close's summary, [M-07](M-07-chart-of-accounts.md) d7 stores every journal, d20 stores balance-forwards, each *"so that a past day can never quietly restate itself"* — and here it buys something further: **what has left the building becomes a fact this system holds.** That is wanted in three places at once — d22's *filed* mark is a cruder version of it, d16's unseal has no way to know whether the accountant is holding an older copy, and [M-07](M-07-chart-of-accounts.md) d16's export log *"records what it has exported and warns when a range overlaps"* and **has never been modelled**. One artifact answers all three. **A reconciled set** is entries within one account, marked together, that net to zero, against an outside document — a bank statement, or the two halves of an undeposited-funds movement. It is **balance-neutral by construction**, the same shape [M-05](M-05-accounts-payable.md) d15's clearing has and deliberately not the same word ([lexicon](../lexicon.md), widened rather than split). *Accepted consequence:* reconciling records that someone checked, and **nothing downstream requires it** — an unreconciled account seals exactly as a reconciled one does, so the mark is evidence and never a gate. *Open below:* whether a seal should say so |
+| 26 | **Equity is not typed into the opening position. The Manager types assets and liabilities, and equity is the figure that balances them.** An opening position that can fail to balance is one a Manager can be stuck against with no way forward and no way back — and **equity *is* the balancing figure**, definitionally, not a fourth number to be reconciled against the other three. Typing it and then checking the three agree is asking a Manager to reproduce an identity. It also removes the only place an opening position could have needed Suspense, which both [M-07](M-07-chart-of-accounts.md) d10 and decision 10 refuse it. *Accepted consequence, and it is a real loss:* **a typo in an asset silently becomes equity.** Type inventory as $612,000 instead of $61,200 and the books balance perfectly with half a million dollars of invented worth, and nothing anywhere disagrees. Decision 6's window is the only defence — retypeable until the first seal, and never after — which makes reviewing the opening position before that first seal the single highest-value check in this flow |
+| 27 | **A location identifies which *store* a line happened at, and the books consolidate across stores. Sharpens decision 12, which had it defaulting from the Store without saying why.** Location `0` is home base and further stores take `1`, `2`, `3`; a single-store shop carries `0` on every line and never thinks about it. **This is not the reference model's *division of the business*** — that reading was drafted here in error, and it was wrong about this shop: income from something other than records is income, recorded through the till and distinguished by its **section**, which is what sections are for (decision 12). *Nothing is being built for multi-store now* — the axis exists so the table is ready, on the same grounds decision 2 was taken. **What this implies is bigger than the field, and it is not this flow's to settle:** [architecture](../architecture.md) A-5 says *"Every entity is scoped to a Store. Nothing is shared"*, and a ledger that many stores report into is **shared by construction**. Either the Ledger domain is an exception to A-5, or consolidation happens some other way — the reference model, for what it is worth, runs separate systems per store and **transfers** entries to a main site rather than sharing one ledger. *Raised for `/architecture` as a candidate A-n; recorded here as what this flow needs, not as an architecture decision this flow may take* |
 | 21 | ~~**A sealed year can never be unsealed. Bounds decision 16, which governs months.**~~ — **superseded by 22.** The reasoning was sound and the **fact it rested on was wrong**: this decision was taken on the understanding that the reference model forbids reopening a closed year, and it does not. It permits reopening one month at a time, indefinitely backwards, and names *"the previous fiscal year end that has been adjusted by your accountant"* as a case where doing so is warranted. **What survives into 22** is everything except the absoluteness — a sealed year *is* different from a sealed month, it *is* the thing worth guarding, and the harm *is* books that no longer match a filed return. What 22 changes is **when the door shuts**: at the filing, not at the seal |
 
 ## Open questions
@@ -187,7 +238,17 @@ _Numbered so they can be cited precisely. Append only — never renumber or dele
 **None of these blocks scaffolding, and all of them block building.** The first two are
 owned elsewhere and are the real dependencies; the rest are this flow's own.
 
-### Blocking, owned by another flow
+### Blocking, owned elsewhere
+
+- **Does the Ledger domain consolidate across stores, and is that an exception to
+  [architecture](../architecture.md) A-5?** Decision 27 has a line name **which store** it
+  happened at, so that many stores can report into one set of books. A-5 says *"Every
+  entity is scoped to a Store. Nothing is shared"*, and a ledger many stores report into
+  is shared by construction. The reference model reaches the same outcome differently —
+  a system per store, **transferring** locked entries to a main site — which is a third
+  option neither this flow nor A-5 has considered. **Owned by `/architecture` as a
+  candidate A-n.** Nothing needs it to keep specifying behaviour; the schema cannot be
+  drawn without it.
 
 - **Exchange gain or loss.** [M-06](M-06-settings.md) d39 is explicit that this comes due
   on exactly this trigger: *"it is blocked on there being no general ledger — and it is
@@ -205,6 +266,19 @@ owned elsewhere and are the real dependencies; the rest are this flow's own.
   [PRD](../PRD.md) §6 already carries this open. **Owned by [E-07](E-07-manage-customers.md).**
 
 ### This flow's own
+
+- **Should a seal say anything about an unreconciled account?** Decision 25 makes a
+  reconciled set evidence and never a gate — an unreconciled account seals exactly as a
+  reconciled one does. The reference model disagrees in its guidance though not in its
+  software: *"A month should not be closed until the activity for the period is reviewed…
+  Bank balances are compared (reconciled) against bank statements."* Unsettled whether the
+  seal reports *"the bank account has 14 entries not reconciled against any statement"* —
+  which is true, cheap and possibly noise — or stays silent on the grounds that d15
+  already establishes a seal reports defects rather than housekeeping.
+- **Is a statement *provisional* until its period is sealed, and does that word appear on
+  it?** A P&L for an open month is a real figure that can still change, which is exactly
+  what an unsealed period means. Unsettled whether that is a label on the document, a
+  property of the stored artifact (d25), or simply the period dates doing the work.
 
 - ~~**Does anything refuse an unseal?**~~ — **Resolved** by decision 22: a year **marked
   filed** refuses it, on [architecture](../architecture.md) A-66's pattern. *What the
@@ -236,31 +310,27 @@ owned elsewhere and are the real dependencies; the rest are this flow's own.
 - ~~**Are a Section and a Location required on every line, or may they be blank?**~~ —
   **Resolved** by decision 12: a location is required and defaulted from the Store, a
   section is optional and its blank means *not applicable* rather than *not bothered*.
-- **Is a location the same thing as a Store?** Decision 12 requires one on every line and
-  defaults it from the Store, which [architecture](../architecture.md) A-5 already scopes
-  every row to — **but the reference model's Location is a *division of the business***, a
-  bookseller who also collects rent keeping the two reportable apart. Those are two
-  different partitions, and this flow currently assumes they are one field. If they are
-  not, a line needs both, and decision 2's triple is a quadruple. **Cheap to settle now and
-  a migration later**, on exactly the grounds decision 2 was chosen. Related and also open:
-  whether a balance sheet can be drawn per location at all, which is the only reason to
-  carry one.
-- **Can a period be reopened, and how far back?** Reopening the most recent period only is
-  the conventional answer. Unsettled here, and it interacts with decision 3: reopening a
-  period makes typed postings editable again, which is either the point or a hole.
-- **What refuses a seal?** An unbalanced transaction and an invalid code are the
-  obvious two. **A Suspense line is the interesting one** —
-  [M-07](M-07-chart-of-accounts.md) d10 makes it a defect in this system by construction,
-  so a period containing one is a period whose books record a known bug. Proposed above as
-  a refusal; not ratified, and the counter-argument is real: a refusal a Manager cannot
-  clear is a refusal that stops the books forever, since d10 also records that **no
-  Manager action can clear one**.
-- **Does the opening position need to balance before it is sealed?** Migrating off paper
-  means there is nothing to reconcile against except the paper. Unsettled what this flow
-  does when figures typed from an accountant's statements do not balance — which,
-  being typed, they sometimes will not. *Decision 6 settles when the opening position may
-  be **retyped**, not what happens when it does not **balance** — different questions, and
-  only the first is closed.*
+- ~~**Is a location the same thing as a Store?**~~ — **Resolved** by decision 27: it names
+  **which store**, `0` for home base, and the *division of the business* reading drafted
+  here was wrong. *What it opened stays open and is not this flow's to close:* a ledger
+  that many stores report into is **shared**, and [architecture](../architecture.md) A-5
+  says *"Every entity is scoped to a Store. Nothing is shared."* Either the Ledger domain
+  is an exception to A-5, or consolidation works some other way — the reference model runs
+  a system per store and **transfers** entries to a main site. **A candidate A-n for
+  `/architecture`**, and the last structural thing between this flow and a build.
+- ~~**Can a period be reopened, and how far back?**~~ — **Resolved** by decisions 16, 18
+  and 22: any sealed period, with authorization and a recorded reason, except a year
+  **marked filed**, which never reopens. Decision 21's absolute bar on sealed years was
+  superseded once the reference model turned out to permit exactly what it forbade.
+- ~~**What refuses a seal?**~~ — **Resolved** by decision 15 and step 17: an unbalanced
+  posting and an invalid account, section or location. **A Suspense line does not** — it is
+  reported and carried gross onto the closing transaction, because no Manager can clear one
+  and a seal that refused would stop the books permanently.
+- ~~**Does the opening position need to balance before it is sealed?**~~ — **Resolved** by
+  decision 26: it **cannot** fail to balance, because equity is not typed — it is the figure
+  that balances assets against liabilities. The cost moved rather than vanished: a typo in
+  an asset now becomes equity in silence, and decision 6's window before the first seal is
+  the only thing that will ever catch it.
 - **What is a financial statement here — a screen, a file, or both?** And does the
   existing CSV export ([M-07](M-07-chart-of-accounts.md) d15) stay M-07's, or does a
   reporting surface in this flow absorb it? **M-07 Phase 4 is not built and is on hold
