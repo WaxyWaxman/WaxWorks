@@ -3,12 +3,21 @@ import {
   PAYABLE_ENTRY_TYPES,
   PAYMENT_METHODS,
   type PayableEntryType,
+  type PayableEntry,
   type PaymentBatch,
   type PaymentBatchVoid,
   type PaymentMethod,
   type Supplier,
 } from "../data/types";
-import { autoPlacement, clearsToZero, creditOn, moneyOn, type LedgerRow, type SettlementPlan } from "../lib/payables";
+import {
+  autoPlacement,
+  batchMoneyPaid,
+  clearsToZero,
+  creditOn,
+  moneyOn,
+  type LedgerRow,
+  type SettlementPlan,
+} from "../lib/payables";
 import { money } from "../lib/money";
 import { round2 } from "../lib/totals";
 
@@ -40,6 +49,7 @@ export function SettleTrack({
   onCreateNew,
   batches,
   voids,
+  entries,
   openBatch,
   onOpenBatch,
   onVoid,
@@ -72,6 +82,8 @@ export function SettleTrack({
   onCreateNew: () => void;
   batches: PaymentBatch[];
   voids: PaymentBatchVoid[];
+  /** d38 — the overpayment remainders a batch emitted, for `batchMoneyPaid`. */
+  entries: PayableEntry[];
   openBatch: string | null;
   onOpenBatch: (id: string) => void;
   onVoid: (id: string) => void;
@@ -102,6 +114,7 @@ export function SettleTrack({
       rows={rows}
       batches={batches}
       voids={voids}
+      entries={entries}
       openBatch={openBatch}
       onOpenBatch={onOpenBatch}
       onVoid={onVoid}
@@ -118,6 +131,7 @@ function Standing({
   rows,
   batches,
   voids,
+  entries,
   openBatch,
   onOpenBatch,
   onVoid,
@@ -128,6 +142,7 @@ function Standing({
   rows: LedgerRow[];
   batches: PaymentBatch[];
   voids: PaymentBatchVoid[];
+  entries: PayableEntry[];
   openBatch: string | null;
   onOpenBatch: (id: string) => void;
   onVoid: (id: string) => void;
@@ -260,10 +275,15 @@ function Standing({
           {batches.length === 0 && <div className="wo-sec-empty">No settlement recorded yet.</div>}
           {batches.map((b) => {
             const voided = voids.find((v) => v.batchId === b.id);
-            const total = round2(b.targets.reduce((n, t) => n + t.amount, 0));
+            // d5/d38 — what LEFT THE BANK, not what the targets settled. An
+            // overpayment is capped on its target and returned as a Credit, so
+            // summing targets would show $68.65 against an $80.00 cheque on the
+            // one screen that reconciles against the statement.
+            const money_ = batchMoneyPaid(b, entries);
             const cr = round2(
               b.targets.filter((t) => t.settleKind === "credit").reduce((n, t) => n + t.amount, 0),
             );
+            const total = round2(money_ + cr);
             const open = openBatch === b.id;
             return (
               <div className={"ap-batch" + (voided ? " voided" : "")} key={b.id}>
@@ -348,17 +368,30 @@ function Selection({
   const creditPlaced = round2(plan.debits.reduce((n, d) => n + creditOn(form, d.key, auto), 0));
   const moneyPlaced = round2(plan.debits.reduce((n, d) => n + moneyOn(form, d.key, d.balance, auto), 0));
 
+  // d38 — per debit, what is being put against it over and above its balance.
+  // Not a problem: an artifact, and the Manager is told before they commit.
+  const overpaid = plan.debits
+    .map((d) => ({
+      d,
+      by: round2(creditOn(form, d.key, auto) + moneyOn(form, d.key, d.balance, auto) - d.balance),
+    }))
+    .filter((o) => o.by > 0.005);
+  const overpaidTotal = round2(overpaid.reduce((n, o) => n + o.by, 0));
+
   const problems: string[] = [];
   if (!plan.isClearing) {
     // d33 — there is no "place the credit exactly" check any more, because
     // there is nothing to place: the fill is computed and is exact by
     // construction. What remains is the money, which IS the Manager's.
-    for (const d of plan.debits) {
-      const sum = round2(creditOn(form, d.key, auto) + moneyOn(form, d.key, d.balance, auto));
-      if (sum > d.balance + 0.005) {
-        problems.push(`${d.type} ${d.reference}: ${money(sum)} against a balance of ${money(d.balance)}.`);
-      }
-    }
+    // d38 — an overpayment is NOT refused. Money that ends up in the store's
+    // favour always gets an artifact: a remainder Credit, on d25's terms, with
+    // the supplier balance allowed to go negative because of it. Refusing it
+    // here forced the Manager to mis-record what they actually paid, which is
+    // the one thing a payables ledger must never make them do (d34 — "the
+    // batch records the event, never the expectation").
+    //
+    // It is surfaced rather than blocked: `overpaid` below drives a notice, and
+    // the Settle button stays enabled.
     if (moneyPlaced > 0.005 && !form.reference.trim()) {
       problems.push("A reference is required for the money half — it is what reconciles against the statement (d5).");
     }
@@ -513,6 +546,14 @@ function Selection({
             <div className="wo-caveat">
               A Claim placeholder contributes <strong>nothing to the money</strong>, ever (d27). Ticking it retires it —
               a decision to stop chasing it.
+            </div>
+          )}
+          {overpaidTotal > 0.005 && (
+            <div className="wo-caveat warn">
+              {money(overpaidTotal)} more than is owed
+              {overpaid.length === 1 ? ` on ${overpaid[0].d.type} ${overpaid[0].d.reference}` : ""}. This is recorded as
+              paid, not refused — it comes back as a <strong>remainder Credit</strong> and the supplier balance goes
+              negative by that much until it is used (d38, d25). The batch records what you actually paid (d34).
             </div>
           )}
           {plan.remainder > 0.005 && (

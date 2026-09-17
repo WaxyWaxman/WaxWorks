@@ -258,6 +258,24 @@ export const invoiceIsPaid = (iv: Invoice, batches: PaymentBatch[], voids: Payme
   invoiceBalance(iv, batches, voids) <= 0.005 &&
   invoicePaidToDate(iv, batches, voids) > 0.005;
 
+/**
+ * M-05 d37 — an Invoice is frozen while ANY non-voided PaymentBatch targets
+ * it. Amends E-02 d40, which made it correctable "until paid".
+ *
+ * `invoiceIsPaid` already refused every edit to a FULLY paid Invoice (A-41).
+ * The gap was the PARTLY paid one: not paid, therefore correctable, therefore
+ * amendable while money stood against it — and d22's void would then return
+ * that money to a target that no longer said what it said. Forcing the order
+ * removes the case: void the payment, correct, re-record (d40 pre-fills the
+ * re-record so the retyping is not punitive).
+ *
+ * Same shape as A-33's "paid blocks the edit" and A-66's "banked blocks the
+ * undo": a change is refused while something downstream depends on it, and
+ * permitted the moment that dependency is lifted.
+ */
+export const invoiceIsFrozen = (iv: Invoice, batches: PaymentBatch[], voids: PaymentBatchVoid[]): boolean =>
+  !!iv.finalizedAt && invoicePaidToDate(iv, batches, voids) > 0.005;
+
 // ---- manual ledger entries (d12) and the artifacts that look like them ----
 
 /** The unsigned face value: what was typed, always positive. */

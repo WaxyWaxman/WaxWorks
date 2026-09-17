@@ -170,6 +170,10 @@ export function AccountsPayable() {
           id: d.id,
           credit: creditOn(form, d.key, auto),
           money: moneyOn(form, d.key, d.balance, auto),
+          // d38 — the write path needs the balance to know what is excess. The
+          // invariant belongs there, not in this screen (A-4).
+          balance: d.balance,
+          reference: `${d.type} ${d.reference}`,
         })),
         credits: plan.credits.map((c) => ({ id: c.creditId!, amount: -c.balance, label: c.reference })),
         placeholderIds: plan.holds.map((h) => h.id),
@@ -376,6 +380,7 @@ export function AccountsPayable() {
         net={net}
         rows={rows}
         plan={plan}
+        entries={app.payableEntries}
         creating={creating}
         form={form}
         expectedMethod={expectedMethod}

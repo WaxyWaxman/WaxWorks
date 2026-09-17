@@ -1,7 +1,13 @@
 import { describe, expect, it } from "vitest";
-import { creditDrawdown, settlementPlan, unclearRefusal, type LedgerRow } from "./payables";
-import { creditIsConsumed } from "./totals";
-import type { PayableEntry, PaymentBatch, PaymentBatchVoid } from "../data/types";
+import {
+  batchMoneyPaid,
+  creditDrawdown,
+  settlementPlan,
+  unclearRefusal,
+  type LedgerRow,
+} from "./payables";
+import { creditIsConsumed, invoiceIsFrozen } from "./totals";
+import type { Invoice, PayableEntry, PaymentBatch, PaymentBatchVoid } from "../data/types";
 
 /**
  * The first tests over payables. They exist because a scoping pass found a live
@@ -240,5 +246,106 @@ describe("M-05 d39 — a clearing is reversible; a settlement's disposal is not"
 
   it("refuses a row that is not cleared at all", () => {
     expect(unclearRefusal([entry("A")])).toMatch(/not cleared/);
+  });
+});
+
+describe("M-05 d37 — an Invoice is frozen while any live batch targets it", () => {
+  const invoice = (over: Partial<Invoice> = {}): Invoice => ({
+    id: "INV",
+    supplierId: "sup",
+    invoiceNumber: "55021",
+    intakeMode: "New",
+    invoiceDate: "2026-08-27",
+    receivedDate: "2026-08-27",
+    statedSubtotal: 100,
+    tax: 0,
+    freight: 0,
+    misc: 0,
+    status: "Finalized",
+    lines: [],
+    createdBy: "MT",
+    createdAt: "2026-08-27 10:00:00",
+    finalizedAt: "2026-08-27 11:00:00",
+    log: [],
+    ...over,
+  });
+
+  const paying = (amount: number): PaymentBatch => ({
+    ...batch("b1", []),
+    targets: [{ kind: "invoice", id: "INV", amount, settleKind: "money" }],
+  });
+
+  it("does not freeze an Invoice nothing has been paid against", () => {
+    expect(invoiceIsFrozen(invoice(), [], [])).toBe(false);
+  });
+
+  it("freezes a PARTLY paid Invoice — the gap d37 closes", () => {
+    // $100 invoice, $40 paid. Not paid, so A-41's invoiceIsPaid let every edit
+    // through, and d22's void would then have returned money to a target that
+    // no longer said what it said.
+    expect(invoiceIsFrozen(invoice(), [paying(40)], [])).toBe(true);
+  });
+
+  it("freezes a fully paid one too — d37 is a superset of A-41, not a swap", () => {
+    expect(invoiceIsFrozen(invoice(), [paying(100)], [])).toBe(true);
+  });
+
+  it("thaws when the batch is voided (d22, A-33a — immutable WHILE paid)", () => {
+    const voided: PaymentBatchVoid[] = [
+      { id: "v1", batchId: "b1", voidedAt: "2026-09-17 09:00:00", voidedBy: "MT" },
+    ];
+
+    expect(invoiceIsFrozen(invoice(), [paying(40)], voided)).toBe(false);
+  });
+
+  it("never freezes a draft, however odd its figures", () => {
+    expect(invoiceIsFrozen(invoice({ finalizedAt: undefined, status: "Draft" }), [paying(40)], [])).toBe(false);
+  });
+});
+
+describe("M-05 d5/d38 — a batch records what left the bank, not what it settled", () => {
+  const rem = (id: string, amount: number, over: Partial<PayableEntry> = {}): PayableEntry => ({
+    id,
+    supplierId: "sup",
+    type: "Credit",
+    source: "remainder",
+    reference: id,
+    date: "2026-09-16",
+    subtotal: amount,
+    tax: 0,
+    freight: 0,
+    misc: 0,
+    createdBy: "MT",
+    createdAt: "2026-09-16 10:00:00",
+    log: [],
+    ...over,
+  });
+
+  const paid = (amount: number): PaymentBatch => ({
+    ...batch("b1", []),
+    targets: [{ kind: "invoice", id: "INV", amount, settleKind: "money" }],
+  });
+
+  it("counts the overpayment artifact back in", () => {
+    // $80.00 cheque against a $68.65 Invoice. The target is capped at $68.65 so
+    // the Invoice balance stays at zero (d8); the $11.35 is a Credit. The
+    // statement says $80.00 and so must the payment history (d5).
+    const over = rem("rem-1", 11.35, { fromBatchId: "b1" });
+
+    expect(batchMoneyPaid(paid(68.65), [over])).toBe(80);
+  });
+
+  it("ignores a CREDIT's remainder — no money left the bank for that one", () => {
+    // A credit consumed whole with change left over emits the same artifact,
+    // but nothing was paid for it. `fromCreditId` is what tells them apart.
+    const fromCredit = rem("rem-2", 10, { fromBatchId: "b1", fromCreditId: "C1" });
+
+    expect(batchMoneyPaid(paid(68.65), [fromCredit])).toBe(68.65);
+  });
+
+  it("ignores another batch's remainders", () => {
+    const other = rem("rem-3", 50, { fromBatchId: "b2" });
+
+    expect(batchMoneyPaid(paid(68.65), [other])).toBe(68.65);
   });
 });

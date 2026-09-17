@@ -337,6 +337,27 @@ export function creditDrawdown(
  * discriminator; before it existed both acts wrote the same two fields and an
  * un-clear would have silently reversed the wrong one.
  */
+/**
+ * M-05 d5, d38 — what actually left the bank for this batch.
+ *
+ * NOT the sum of its targets. A target records what a debit was settled BY, and
+ * d38 caps it at what that debit owed so the Invoice's derived balance stays at
+ * zero rather than going negative (d8). The excess is a remainder Credit, so
+ * the money that left is the money targets PLUS this batch's overpayment
+ * remainders — derived from rows, never stored beside them.
+ *
+ * This is the figure d5's reference has to reconcile against: a $80.00 cheque
+ * on a $68.65 Invoice is $80.00 on the statement, and a payment history saying
+ * $68.65 is the one screen that must not disagree with the bank.
+ */
+export function batchMoneyPaid(batch: PaymentBatch, entries: PayableEntry[]): number {
+  const targets = batch.targets.filter((t) => t.settleKind === "money").reduce((n, t) => n + t.amount, 0);
+  const over = entries
+    .filter((e) => e.source === "remainder" && e.fromBatchId === batch.id && !e.fromCreditId)
+    .reduce((n, e) => n + payableEntryTotal(e), 0);
+  return round2(targets + over);
+}
+
 export function unclearRefusal(entries: PayableEntry[]): string | undefined {
   if (entries.length === 0) return "Nothing selected.";
   if (entries.some((e) => !e.clearedAt)) return "Nothing to un-clear — some of those are not cleared.";

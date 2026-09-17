@@ -703,6 +703,18 @@ export interface PayableEntry {
    * the absence of `clearedWith` would have been the same implicit trap.
    */
   clearedInBatchId?: string;
+  /**
+   * The PaymentBatch that emitted this remainder (M-05 d25, d38).
+   *
+   * Two things read it. `voidPaymentBatch` finds the remainders to reverse
+   * under d30 — it used to match on `createdAt` equality, which cross-claims
+   * between two settlements against one supplier in the same tick. And the
+   * money that actually left the bank is DERIVED from it: money targets plus
+   * this batch's overpayment remainders, which is what d5's reference has to
+   * reconcile against. Derived rather than stored, so it cannot drift from
+   * the rows it describes (A-36, A-37, A-33b all refuse the stored copy).
+   */
+  fromBatchId?: string;
   createdBy: string;
   createdAt: string;
   log: { at: string; text: string }[];

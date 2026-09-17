@@ -21,7 +21,7 @@ import { lineTaxComponents, type TaxContext } from "../lib/totals";
 import * as usersLib from "../lib/users";
 import {
   customerBalanceDelta,
-  invoiceIsPaid,
+  invoiceIsFrozen,
   payableEntrySignedAmount,
   payableEntryTotal,
   round2,
@@ -943,7 +943,7 @@ interface AppContextValue extends AppState {
       date: string;
       // A-69 — a debit carries what it is being settled with, not which credit
       // funded it. The credits are named on the batch.
-      debits: { kind: PayableTargetKind; id: string; credit?: number; money?: number }[];
+      debits: { kind: PayableTargetKind; id: string; credit?: number; money?: number; balance: number; reference: string }[];
       credits: { id: string; amount: number; label: string }[];
       placeholderIds: string[];
     },
@@ -2921,7 +2921,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
 
   const addInvoiceLine: AppContextValue["addInvoiceLine"] = (invoiceId, line) => {
     const invoice = s.invoices.find((iv) => iv.id === invoiceId);
-    if (!invoice || invoiceIsPaid(invoice, s.paymentBatches, s.batchVoids)) return;
+    if (!invoice || invoiceIsFrozen(invoice, s.paymentBatches, s.batchVoids)) return;
     const cost = round2(line.listPrice * (1 - line.discountPct / 100));
     let newLine: InvoiceLine = { id: uid("invline"), ...line, cost };
 
@@ -2990,7 +2990,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
   const updateInvoiceLine: AppContextValue["updateInvoiceLine"] = (invoiceId, lineId, patch) => {
     const invoice = s.invoices.find((iv) => iv.id === invoiceId);
     const existing = invoice?.lines.find((l) => l.id === lineId);
-    if (!invoice || invoiceIsPaid(invoice, s.paymentBatches, s.batchVoids) || !existing) return;
+    if (!invoice || invoiceIsFrozen(invoice, s.paymentBatches, s.batchVoids) || !existing) return;
     const merged = { ...existing, ...patch };
     const newCost = round2(merged.listPrice * (1 - merged.discountPct / 100));
     const updatedLine: InvoiceLine = { ...merged, cost: newCost };
@@ -3028,7 +3028,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
   const removeInvoiceLine: AppContextValue["removeInvoiceLine"] = (invoiceId, lineId) => {
     const invoice = s.invoices.find((iv) => iv.id === invoiceId);
     const line = invoice?.lines.find((l) => l.id === lineId);
-    if (!invoice || invoiceIsPaid(invoice, s.paymentBatches, s.batchVoids) || !line) return { blocked: true };
+    if (!invoice || invoiceIsFrozen(invoice, s.paymentBatches, s.batchVoids) || !line) return { blocked: true };
     const itemIds = line.itemIds ?? [];
     const anySold = itemIds.some((id) => s.inventory.find((i) => i.id === id)?.status === "sold");
     if (anySold) return { blocked: true };
@@ -3061,13 +3061,13 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
     setS((prev) => ({
       ...prev,
       invoices: prev.invoices.map((iv) =>
-        iv.id === invoiceId && !invoiceIsPaid(iv, prev.paymentBatches, prev.batchVoids) ? { ...iv, ...patch } : iv,
+        iv.id === invoiceId && !invoiceIsFrozen(iv, prev.paymentBatches, prev.batchVoids) ? { ...iv, ...patch } : iv,
       ),
     }));
 
   const setInvoiceTotalOverride: AppContextValue["setInvoiceTotalOverride"] = (invoiceId, value) => {
     const invoice = s.invoices.find((iv) => iv.id === invoiceId);
-    if (!invoice || invoiceIsPaid(invoice, s.paymentBatches, s.batchVoids)) return;
+    if (!invoice || invoiceIsFrozen(invoice, s.paymentBatches, s.batchVoids)) return;
     setS((prev) => ({
       ...prev,
       invoices: prev.invoices.map((iv) => (iv.id === invoiceId ? { ...iv, totalOverride: value } : iv)),
@@ -3204,20 +3204,33 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
       // order given; making that TICK order is d43's own work.
       const pool = input.credits.map((c) => ({ ...c, left: round2(c.amount) }));
 
+      const overpayments: { ref: string; amount: number }[] = [];
       for (const d of input.debits) {
         let credit = round2(d.credit ?? 0);
+        let creditApplied = 0;
         while (credit > 0.005) {
           const src = pool.find((p) => p.left > 0.005);
           if (!src) break;
           const take = round2(Math.min(credit, src.left));
           src.left = round2(src.left - take);
           credit = round2(credit - take);
+          creditApplied = round2(creditApplied + take);
           targets.push({ kind: d.kind, id: d.id, amount: take, settleKind: "credit" });
         }
+        // d38 — money over and above what this debit owes is NOT refused and is
+        // NOT written onto the target: the target takes what the debit owed,
+        // and the excess becomes a remainder Credit below. That keeps the
+        // Invoice's derived balance at zero rather than negative (d8 — balances
+        // are derived, never edited), while the money that actually left the
+        // bank is still the sum of the target and the artifact.
         const moneyPart = round2(d.money ?? 0);
-        if (moneyPart > 0.005) {
-          targets.push({ kind: d.kind, id: d.id, amount: moneyPart, settleKind: "money" });
+        const room = round2(Math.max(0, round2(d.balance) - creditApplied));
+        const applied = round2(Math.min(moneyPart, room));
+        if (applied > 0.005) {
+          targets.push({ kind: d.kind, id: d.id, amount: applied, settleKind: "money" });
         }
+        const excess = round2(moneyPart - applied);
+        if (excess > 0.005) overpayments.push({ ref: d.reference ?? d.id, amount: excess });
       }
       if (targets.length === 0 && input.placeholderIds.length === 0) return prev;
 
@@ -3259,6 +3272,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
             supplierId: input.supplierId,
             type: "Credit",
             source: "remainder",
+            fromBatchId: batch.id,
             fromCreditId: c.id,
             reference: `Remainder of ${c.label}`,
             date: input.date,
@@ -3271,6 +3285,35 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
             log: [{ at, text: `Remainder of ${money(left)} from ${c.label} — nothing left to attach it to (d25)` }],
           });
         }
+      }
+
+      // d38's first door — money paid over and above what a debit owed. Same
+      // artifact as a credit's remainder, because it is the same fact: money
+      // that ended up in the store's favour. It carries no `fromCreditId`, no
+      // credit having produced it, and the supplier balance goes negative by
+      // this much until it is spent (d25).
+      for (const o of overpayments) {
+        remainders.push({
+          id: uid("rem"),
+          supplierId: input.supplierId,
+          type: "Credit",
+          source: "remainder",
+          fromBatchId: batch.id,
+          reference: `Overpayment on ${o.ref}`,
+          date: input.date,
+          subtotal: o.amount,
+          tax: 0,
+          freight: 0,
+          misc: 0,
+          createdBy: by,
+          createdAt: at,
+          log: [
+            {
+              at,
+              text: `${money(o.amount)} paid over the balance of ${o.ref} — recorded as paid and returned as a Credit (d38, d25)`,
+            },
+          ],
+        });
       }
 
       const paymentBatches = [batch, ...prev.paymentBatches];
@@ -3330,7 +3373,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
 
       // d30 — one reversing Adjustment per remainder this batch emitted.
       const reversals: PayableEntry[] = prev.payableEntries
-        .filter((e) => e.source === "remainder" && e.createdAt === batch.createdAt && e.supplierId === batch.supplierId)
+        .filter((e) => e.source === "remainder" && e.fromBatchId === batch.id)
         .map((rem) => ({
           id: uid("rev"),
           supplierId: rem.supplierId,
