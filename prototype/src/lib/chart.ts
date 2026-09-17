@@ -84,6 +84,53 @@ const RESERVED: { role: GLRole; number: string; name: string }[] = [
 ];
 
 /**
+ * d32 — the starter chart: ordinary expense and non-operating accounts, seeded
+ * so that day one does not begin with a Manager inventing one.
+ *
+ * d11 promised the chart arrives pre-loaded and *"nothing is blank and nothing
+ * has to be invented on day one"*, which was true while every account existed
+ * to receive an automatic posting. **M-08 Phase 2 makes day one include typing
+ * rent**, and a Manager facing an empty expense band has to invent one before
+ * they can record it.
+ *
+ * These carry **no role** (step 3), so nothing resolves to them and nothing
+ * posts to them by itself — they exist to be pointed at by a typed posting.
+ * They are renameable, renumberable and deactivatable exactly like an account
+ * the Manager added, and deactivating the ones a shop does not use is expected
+ * to be a Manager's first act rather than their last (d32's accepted
+ * consequence: the chart starts grown).
+ *
+ * **Bank charges is load-bearing rather than decorative** — M-06 d62 sends a
+ * bank fee to a typed posting rather than onto a supplier's Invoice, and this
+ * is where it goes.
+ *
+ * *Where this diverges from the reference model, and it is recorded as an open
+ * question in M-07 rather than decided here:* Bookmanager reserves 800-999 for
+ * revenue and expense **not directly related to sales**, so its P&L separates
+ * operating from non-operating. `GLAccountType` has no such member, so interest
+ * income files as `income` beside Sales and income tax as `expense` beside
+ * rent. A P&L drawn from these cannot tell the two apart.
+ */
+const STARTER: { number: string; name: string; type: GLAccountType }[] = [
+  { number: "4900", name: "Interest income", type: "income" },
+  { number: "4910", name: "Gain on disposal of assets", type: "income" },
+  { number: "6400", name: "Rent", type: "expense" },
+  { number: "6410", name: "Utilities", type: "expense" },
+  { number: "6420", name: "Wages and salaries", type: "expense" },
+  { number: "6430", name: "Advertising and promotion", type: "expense" },
+  { number: "6440", name: "Insurance", type: "expense" },
+  { number: "6450", name: "Telephone and internet", type: "expense" },
+  { number: "6460", name: "Repairs and maintenance", type: "expense" },
+  { number: "6470", name: "Professional fees", type: "expense" },
+  // M-06 d62 — where a bank fee lands, kept clear of the exchange gain or loss
+  // so that account means rate movement and nothing else.
+  { number: "6480", name: "Bank charges", type: "expense" },
+  { number: "6500", name: "Interest expense", type: "expense" },
+  { number: "6510", name: "Depreciation", type: "expense" },
+  { number: "6900", name: "Income tax", type: "expense" },
+];
+
+/**
  * What each role is for, in one line, shown beside it so the Manager can see
  * what the software will put there before renaming it (step 2).
  */
@@ -216,13 +263,17 @@ export const TYPE_LABEL: Record<GLAccountType, string> = {
 export function buildChart(seams: Seams): BuiltChart {
   const accounts: GLAccount[] = [];
   const mappings: GLMapping[] = [];
-  const add = (role: GLRole | undefined, number: string, name: string): GLAccount => {
-    const a: GLAccount = { id: `gl-${number}-${accounts.length}`, role, number, name, active: true };
+  const add = (role: GLRole | undefined, number: string, name: string, type?: GLAccountType): GLAccount => {
+    const a: GLAccount = { id: `gl-${number}-${accounts.length}`, role, number, name, active: true, ...(type ? { type } : {}) };
     accounts.push(a);
     return a;
   };
 
   for (const r of RESERVED) add(r.role, r.number, r.name);
+  // d32 — role-less, so they carry a STORED type: d22 derives a type from a
+  // role and these have none, which is the same case as an account the Manager
+  // added at step 3. Nothing posts to them by itself.
+  for (const a of STARTER) add(undefined, a.number, a.name, a.type);
 
   // d6 — revenue is one account per Section, because M-06 d28 already gives
   // every Section a code and a sort order, and a single `Sales` account would

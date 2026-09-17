@@ -224,6 +224,46 @@ describe("M-07 d1/d3 — what the reserved accounts are, and whose numbers they 
   });
 });
 
+describe("M-07 d32 — the starter chart, so day one does not begin with an invention", () => {
+  it("seeds ordinary expense accounts carrying NO role", () => {
+    // d11 promised "nothing has to be invented on day one", which was true while
+    // every account existed to receive an automatic posting. M-08 Phase 2 makes
+    // day one include typing rent.
+    const { accounts } = buildChart(seams);
+    const rent = accounts.find((a) => a.name === "Rent")!;
+
+    expect(rent).toBeDefined();
+    expect(rent.role).toBeUndefined();
+  });
+
+  it("gives them a STORED type, because d22 has no role to derive one from", () => {
+    const { accounts } = buildChart(seams);
+    const starter = accounts.filter((a) => !a.role);
+
+    expect(starter.length).toBeGreaterThan(0);
+    // Every role-less account must still classify, or it falls off a statement.
+    expect(starter.every((a) => accountType(a) !== undefined)).toBe(true);
+  });
+
+  it("seeds Bank charges, which M-06 d62 sends a bank fee to", () => {
+    // d62 keeps a bank fee off the supplier's Invoice — it is incurred weeks
+    // later, by the bank, and would otherwise raise invoice_cogs. It goes to a
+    // typed posting, and this is the account that posting names.
+    const { accounts } = buildChart(seams);
+
+    expect(accounts.find((a) => a.name === "Bank charges")).toBeDefined();
+  });
+
+  it("leaves them deactivatable like any account the Manager added (step 3)", () => {
+    const { accounts, mappings } = buildChart(seams);
+    const rent = accounts.find((a) => a.name === "Rent")!;
+
+    // Nothing resolves to them, so nothing breaks when a shop switches one off.
+    expect(mappings.find((m) => m.accountId === rent.id)).toBeUndefined();
+    expect(rent.active).toBe(true);
+  });
+});
+
 describe("M-07 step 5 — an account can be read back to what posts to it", () => {
   it("names the seam behind an account", () => {
     const { accounts, mappings } = buildChart(seams);

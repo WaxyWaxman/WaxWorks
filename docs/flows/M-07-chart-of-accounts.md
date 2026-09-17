@@ -216,6 +216,23 @@ _Numbered so they can be cited precisely. Append only — never renumber or dele
 
 The record of what was asked before the build follows below the new ones.
 
+### Raised by building d31 and d32
+
+- **Can a P&L separate operating from non-operating?** Decision 32 seeds *interest
+  income*, *gain on disposal of assets* and *income tax*, which the reference model
+  files in a band of its own — 800–999, *"any special revenues or expenses that are
+  **not directly related to sales** or the costs of generating those sales"* — precisely
+  so a P&L can show the two apart. **This system has no such type.** `GLAccountType`
+  carries asset, liability, equity, income, cogs and expense, so interest income files
+  as `income` beside Sales and income tax as `expense` beside rent, and a statement
+  drawn from them **cannot tell operating from non-operating**. Visible in the built
+  chart today: 4900 *Interest income* sits in the Revenue band with 4100 *Sales*. *Three
+  shapes, none chosen:* a seventh account type; a numbering convention that
+  [M-08](M-08-general-ledger.md)'s statements read, which decision 3 forbids because the
+  number is the store's; or accept it and let the accountant re-group. **Owned here**,
+  and it constrains [M-08](M-08-general-ledger.md) d25's P&L rather than this flow's
+  chart — nothing is blocked until that statement is built.
+
 ### Raised by the ledger split
 
 - ~~**Which account does a revenue line resolve to, now that a Section is a dimension?**~~
