@@ -82,6 +82,11 @@ const RESERVED: { role: GLRole; number: string; name: string }[] = [
   { role: "second-hand-purchases", number: "5300", name: "Second-hand purchases" },
   { role: "card-processing-fees", number: "6100", name: "Card processing fees" },
   { role: "cash-over-short", number: "6200", name: "Cash over / short" },
+  // M-06 d60 — the difference between what a foreign payable was booked at and
+  // what the bank actually took. Kept clear of *Bank charges* (d32, 6480) so
+  // this account means RATE MOVEMENT and nothing else: M-06 d62 sends a wire
+  // fee to its own document precisely so this one stays readable.
+  { role: "exchange-gain-or-loss", number: "6350", name: "Exchange gain or loss" },
   // d10 — a non-zero balance here is ALWAYS a defect in this system, never a
   // data-entry mistake. 9999 is where a suspense account conventionally sits,
   // and last is the right place for something that should never have a figure.
@@ -153,6 +158,7 @@ export const ROLE_PURPOSE: Record<GLRole, string> = {
   "gift-card-liability": "Money received against a future obligation (M-06 d20)",
   "customer-credit": "What the store owes a customer on their account",
   "cash-over-short": "The nickel-rounding tender the system writes (M-06 d26)",
+  "exchange-gain-or-loss": "What the bank took, less what a foreign payable was booked at (M-06 d59, d60)",
   "card-processing-fees": "The difference a deposit reveals — derived, never configured",
   suspense: "Where an unbalanced journal's difference goes (d10). Never zero by accident",
   revenue: "Every Section that counts as revenue (d28). The Section rides on the line as a dimension, not as its own account",
@@ -241,6 +247,7 @@ const TYPE_FOR_ROLE: Record<GLRole, GLAccountType> = {
   adjustment: "cogs",
   "card-processing-fees": "expense",
   "cash-over-short": "expense",
+  "exchange-gain-or-loss": "expense",
   "tender-payout": "expense",
   "tender-rounding": "expense",
 };

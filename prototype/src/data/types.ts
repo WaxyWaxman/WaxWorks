@@ -615,6 +615,22 @@ export interface PaymentBatchVoid {
 export interface PaymentBatch {
   id: string;
   supplierId: string;
+  /**
+   * M-06 d60 — **what actually left the bank**, in the store's home currency.
+   *
+   * Recorded rather than derived, which is M-05 d5's own rule: the bank
+   * statement is the fact and a stored rate is only an estimate of it. The
+   * difference against what the payable was BOOKED at (the rate on the
+   * Invoice, M-06 d59) is the exchange gain or loss, and it posts to the
+   * reserved role.
+   *
+   * Undefined for a domestic settlement and for every batch recorded before
+   * this existed — both read as *the booked amount*, which is to say no rate
+   * movement, which for a domestic payment is not an assumption but a fact.
+   * The Manager is only asked when the Supplier's currency is not the home
+   * currency (d60).
+   */
+  paidAmount?: number;
   method: PaymentMethod;
   reference: string; // free text — "Cheque 101", "Credit card 1278" — what reconciles against the bank statement
   /**
@@ -693,6 +709,21 @@ export interface InvoiceCharge {
 
 export interface Invoice {
   id: string;
+  /**
+   * M-06 d59, d61 — the rate from the supplier's currency to the store's home
+   * currency, **as it stood at finalize**, recorded here and never looked up
+   * again. d39's own mechanism: *"a rate belongs beside the money it converted,
+   * not in a table of every rate that ever was"* — so M-06 d33's one-current-
+   * rate, which makes a past rate unrecoverable, stops mattering.
+   *
+   * Undefined on a domestic Invoice and on every Invoice finalized before this
+   * existed; both read as 1.
+   *
+   * It is what makes A-33a's *reverse as recorded* true across a rate move: a
+   * void reverses the figures this Invoice used, and a later rate change
+   * cannot leak into it.
+   */
+  exchangeRate?: number;
   supplierId: string;
   invoiceNumber: string;
   intakeMode: IntakeMode;
@@ -1191,6 +1222,11 @@ export type GLRole =
   | "retained-earnings"
   | "accounts-payable-opening"
   | "owners-equity"
+  // M-06 d60 — where the difference lands between what a foreign payable was
+  // BOOKED at (the rate on the Invoice, d59) and what actually LEFT THE BANK.
+  // One role, signed either way, like `cash-over-short` already is: a period
+  // with both a gain and a loss shows the net, and the sign says which it was.
+  | "exchange-gain-or-loss"
   // one per seam — resolved through a mapping.
   //
   // The five tender roles are d21: every tender keeps its own account, and each

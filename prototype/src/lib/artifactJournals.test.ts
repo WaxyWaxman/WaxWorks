@@ -38,7 +38,7 @@ const invoice = (over: Partial<Invoice> = {}): Invoice =>
     ...over,
   }) as Invoice;
 
-const buildInv = (iv: Invoice, currency = "CAD") =>
+const buildInv = (iv: Invoice, currency = "CAD", rate = 1) =>
   buildInvoiceJournal({
     invoice: iv,
     writtenAt: "2026-09-12 09:30:00",
@@ -46,6 +46,8 @@ const buildInv = (iv: Invoice, currency = "CAD") =>
     accounts: CHART.accounts,
     mappings: CHART.mappings,
     currency,
+    homeCurrency: "CAD",
+    rate,
   });
 
 const taxCharge = (taxCode: string, amount: number): InvoiceCharge => ({ id: `c-${taxCode}`, kind: "tax", taxCode, amount });
@@ -144,9 +146,27 @@ describe("M-07 d13 — an Invoice writes its journal at finalize", () => {
     expect(lineFor(batch, acct("2100"))?.credit).toBe(35.99); // owed: 30 + 5.99
   });
 
-  it("carries the supplier's currency and converts nothing (d17)", () => {
-    const { batch } = buildInv(invoice(), "USD");
-    expect(batch.lines.every((l) => l.currency === "USD")).toBe(true);
+  // M-06 d59 — SUPERSEDES d17 for the journal line. d17's "nothing is ever
+  // converted" was right for a system that only exported; a set of journal
+  // lines has to balance in ONE currency to be double entry, and a USD payable
+  // settled from a CAD bank balances in neither. What survives of d17 is the
+  // export, and the rule that a rate rides on the artifact rather than in a
+  // table of every rate that ever was.
+  it("books a foreign Invoice in the HOME currency at the recorded rate (d59)", () => {
+    const { batch } = buildInv(invoice({ freight: 5.99 }), "USD", 1.35);
+
+    expect(batch.lines.every((l) => l.currency === "CAD")).toBe(true);
+    // USD 30 stock + USD 5.99 freight = USD 35.99 owed. At 1.35:
+    expect(lineFor(batch, acct("1200"))?.debit).toBe(40.5); // stock   30    → 40.50
+    expect(lineFor(batch, acct("5200"))?.debit).toBe(8.09); // freight  5.99 →  8.09
+    expect(lineFor(batch, acct("2100"))?.credit).toBe(48.59); // owed  35.99 → 48.59
+    expect(isImbalanced(batch)).toBe(false); // 40.50 + 8.09 = 48.59, exactly
+  });
+
+  it("leaves a domestic Invoice untouched, because its rate is 1 (d59)", () => {
+    const { batch } = buildInv(invoice({ freight: 5.99 }), "CAD");
+
+    expect(lineFor(batch, acct("2100"))?.credit).toBe(35.99);
   });
 
   it("names the artifact behind every line (d15)", () => {
@@ -212,8 +232,71 @@ const batch = (over: Partial<PaymentBatch> = {}): PaymentBatch =>
     ...over,
   }) as PaymentBatch;
 
-const buildPay = (b: PaymentBatch, reversalOf?: { voidId: string; voidedAt: string }) =>
-  buildPaymentJournal({ batch: b, writtenAt: "2026-09-13 11:00:00", location: "0041982", accounts: CHART.accounts, currency: "CAD", reversalOf });
+const buildPay = (b: PaymentBatch, reversalOf?: { voidId: string; voidedAt: string }, bookedRate?: number) =>
+  buildPaymentJournal({ batch: b, writtenAt: "2026-09-13 11:00:00", location: "0041982", accounts: CHART.accounts, currency: "CAD",
+    ...(bookedRate ? { bookedRateFor: () => bookedRate } : {}), reversalOf });
+
+describe("M-06 d59, d60 — a foreign payable clears at what it was booked at", () => {
+  // The defect this closes: A/P credited CAD 1,350 at finalize and debited CAD
+  // 1,000 at payment leaves 350 of residue that nothing ever clears, and
+  // nothing flags it — each journal balances on its own, so M-07 d10's
+  // Suspense structurally cannot see it.
+  it("debits Accounts payable at the INVOICE's rate, not the paperwork figure (d59)", () => {
+    const b = batch({ targets: [{ kind: "invoice", id: "inv-1", amount: 1000, settleKind: "money" }] });
+    const { batch: j } = buildPay(b, undefined, 1.35);
+
+    expect(lineFor(j, acct("2100"))?.debit).toBe(1350);
+  });
+
+  it("posts the difference against what actually left the bank as a loss (d60)", () => {
+    // Booked at 1.35 = CAD 1,350. The bank took CAD 1,403.50. The 53.50 is a
+    // real exchange loss, RECORDED rather than computed from a rate.
+    const b = batch({ targets: [{ kind: "invoice", id: "inv-1", amount: 1000, settleKind: "money" }], paidAmount: 1403.5 });
+    const { batch: j } = buildPay(b, undefined, 1.35);
+
+    expect(lineFor(j, acct("2100"))?.debit).toBe(1350);
+    expect(lineFor(j, acct("1010"))?.credit).toBe(1403.5);
+    expect(lineFor(j, acct("6350"))?.debit).toBe(53.5);
+    expect(isImbalanced(j)).toBe(false);
+  });
+
+  it("posts a gain when the bank took less than the payable was booked at (d60)", () => {
+    const b = batch({ targets: [{ kind: "invoice", id: "inv-1", amount: 1000, settleKind: "money" }], paidAmount: 1320 });
+    const { batch: j } = buildPay(b, undefined, 1.35);
+
+    expect(lineFor(j, acct("6350"))?.credit).toBe(30);
+    expect(isImbalanced(j)).toBe(false);
+  });
+
+  it("nets Accounts payable to ZERO across finalize and payment (d59, d60)", () => {
+    // The defect this whole pair exists to close, and the only test that spans
+    // TWO artifacts — which is where it lived. Each journal balanced on its own,
+    // so M-07 d10's Suspense could never see it and no flag was ever raised.
+    const iv = invoice({ exchangeRate: 1.35 });
+    const ij = buildInv(iv, "USD", 1.35); // USD 30 owed → A/P credited CAD 40.50
+    const pj = buildPay(
+      batch({ targets: [{ kind: "invoice", id: "inv-1", amount: 30, settleKind: "money" }], paidAmount: 42 }),
+      undefined,
+      1.35,
+    );
+
+    const apNet = [...ij.batch.lines, ...pj.batch.lines]
+      .filter((l) => l.accountId === acct("2100"))
+      .reduce((n, l) => n + l.debit - l.credit, 0);
+
+    expect(apNet).toBe(0);
+    // The bank took CAD 42.00 against CAD 40.50 booked — 1.50 of exchange loss.
+    expect(lineFor(pj.batch, acct("6350"))?.debit).toBe(1.5);
+  });
+
+  it("leaves a domestic settlement alone — no rate, no difference, no line", () => {
+    const b = batch({ targets: [{ kind: "invoice", id: "inv-1", amount: 1000, settleKind: "money" }] });
+    const { batch: j } = buildPay(b);
+
+    expect(lineFor(j, acct("2100"))?.debit).toBe(1000);
+    expect(lineFor(j, acct("6350"))).toBeUndefined();
+  });
+});
 
 describe("E-02 d54 — every intake raises a payable, second-hand included", () => {
   it("credits Accounts Payable for a second-hand intake like any other", () => {
