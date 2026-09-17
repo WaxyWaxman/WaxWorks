@@ -29,6 +29,7 @@ import {
   invoiceChargesTotal,
 } from "../lib/totals";
 import { clearedAgainst, entryIsCleared, unclearRefusal } from "../lib/payables";
+import { giftCardRedeemRefusal } from "../lib/giftCards";
 import { buildChart } from "../lib/chart";
 import { buildCloseJournal } from "../lib/closeJournal";
 import { buildAdjustmentJournal, buildInvoiceJournal, buildPaymentJournal } from "../lib/artifactJournals";
@@ -140,9 +141,11 @@ function applyTenderEffect(
   let gc = giftCards;
   let cs = customers;
   if (tender.type === "Gift Card" && tender.reference) {
-    gc = gc.map((g) =>
-      g.code === tender.reference ? { ...g, balance: Math.max(0, round2(g.balance - sign * tender.amount)) } : g,
-    );
+    // A-51 — no clamp. The balance is the sum of what moved, and the only
+    // reason it can never go below zero is that addTender refuses the tender
+    // that would take it there. Math.max(0, …) here was the silent loss A-51
+    // names, and what issue #16 reported.
+    gc = gc.map((g) => (g.code === tender.reference ? { ...g, balance: round2(g.balance - sign * tender.amount) } : g));
   }
   if ((tender.type === "Account Balance" || tender.type === "Used Credit") && customerId) {
     // The rule itself lives in lib/totals so E-07's account track can list the
@@ -863,7 +866,9 @@ interface AppContextValue extends AppState {
   ) => void;
   updateLine: (saleId: string, lineId: string, patch: Partial<SaleLine>) => void;
   removeLine: (saleId: string, lineId: string) => void;
-  addTender: (saleId: string, t: Omit<Tender, "id">) => void;
+  // A-51 — returns the refusal when a Gift Card tender would overdraw its
+  // card, and writes nothing. Every other tender returns null.
+  addTender: (saleId: string, t: Omit<Tender, "id">) => string | null;
   removeTender: (saleId: string, tenderId: string) => void;
   completeSale: (saleId: string) => number;
   holdSale: (saleId: string) => string;
@@ -2090,7 +2095,16 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
       t.type === "Account Balance" ? ` (${t.accountDirection === "add" ? "add to balance" : "draw down"})` : ""
     } ${t.amount < 0 ? "-" : ""}$${Math.abs(t.amount).toFixed(2)}`;
 
-  const addTender: AppContextValue["addTender"] = (saleId, t) =>
+  const addTender: AppContextValue["addTender"] = (saleId, t) => {
+    // A-51 — `sale_tender` is the only enforcement point for Σ movements ≥ 0,
+    // so this is where the prototype refuses rather than the pad alone: the
+    // pad disables its button, but a refusal that only lives in a screen is
+    // one more screen away from being forgotten.
+    const target = s.sales.find((x) => x.id === saleId);
+    if (target && t.type === "Gift Card" && t.amount > 0) {
+      const refusal = giftCardRedeemRefusal(s.giftCards, target, t.reference, t.amount);
+      if (refusal) return refusal;
+    }
     setS((prev) => {
       const sale = prev.sales.find((x) => x.id === saleId);
       if (!sale) return prev;
@@ -2119,6 +2133,8 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
         ),
       };
     });
+    return null;
+  };
 
   const removeTender: AppContextValue["removeTender"] = (saleId, tenderId) =>
     setS((prev) => {
