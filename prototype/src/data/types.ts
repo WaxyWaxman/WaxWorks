@@ -845,7 +845,8 @@ export interface TenderRow {
   name: string; // d4 — the display name is configurable
   behavior: TenderType; // d4 — the behaviour is not
   active: boolean;
-  glCode?: string; // d23 — reserved for a future general ledger
+  // NO GL code. M-06 d58 retired d23's reserved field; the tender-to-account
+  // mapping lives in M-07 (architecture A-64).
   // `rounding` is written by the system, never offered (d26).
   systemOwned?: boolean;
 }
@@ -936,9 +937,9 @@ export interface TaxType {
   // GST and QST are separate registrations and a receipt carries each beside
   // its own tax.
   registrationNumber?: string;
-  // Reserved and not drawn — there is no chart of accounts yet. The field
-  // exists so one needs no migration, the move A-14 makes for cover_art_path.
-  glAccount?: string;
+  // NO GL account. M-06 d58 retired d11's reserved field, and a tax type needs
+  // TWO accounts anyway — collected and paid (M-07 d5) — where this carried
+  // one. The mapping lives in M-07 (architecture A-64).
   // NO `active` FLAG, and its absence is the decision (M-06 d57,
   // architecture A-63). A tax type is the one piece of configuration here
   // with no assignments — nothing is filed under `b`, and a completed Sale

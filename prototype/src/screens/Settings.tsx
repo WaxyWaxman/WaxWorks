@@ -609,7 +609,6 @@ function TendersEditor({ by, onRun }: { by: string; onRun: (r: SettingsWriteResu
           <tr>
             <th>Name</th>
             <th>Behaviour</th>
-            <th>GL code</th>
             <th>Active</th>
           </tr>
         </thead>
@@ -625,22 +624,15 @@ function TendersEditor({ by, onRun }: { by: string; onRun: (r: SettingsWriteResu
                 {t.systemOwned && <span className="badge"> system</span>}
               </td>
               <td className="muted">{t.behavior}</td>
-              <td>
-                <input
-                  className="mini"
-                  value={t.glCode ?? ""}
-                  placeholder="—"
-                  onChange={(e) => save({ ...t, glCode: e.target.value || undefined })}
-                />
-              </td>
               <Flag on={t.active} onChange={(v) => save({ ...t, active: v })} />
             </tr>
           ))}
         </tbody>
       </table>
       <p className="small muted">
-        The GL code is reserved and unread — nothing in this system posts to a general ledger yet
-        (d23).
+        No GL code here. M-06 d58 retired the reserved fields on tenders, tax types and Sections:
+        an account mapping lives in M-07, not on the row it maps (architecture A-64), because
+        M-07 d3 means nothing resolves an account by its number.
       </p>
     </>
   );
