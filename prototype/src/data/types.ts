@@ -230,6 +230,20 @@ export interface SaleLine {
 export interface Tender {
   id: string;
   type: TenderType;
+  /**
+   * M-07 d21 — WHICH configured tender this was, as opposed to which behavior.
+   * The ledger needs the row: M-06 d22 gives Visa and Mastercard separate
+   * accounts precisely because they settle as separate deposits, and `type`
+   * says only `Credit Card` for both.
+   *
+   * Optional because the till's tender pad offers the seven BEHAVIORS rather
+   * than the configured rows, so nothing sets this yet and the journal falls
+   * back to the first active row of the behavior — see `tenderRowFor` in
+   * journal.ts, which is where the consequence is written down. Left as a seam
+   * rather than fixed here: which rows the till offers is E-05's and M-06's
+   * call, not this flow's.
+   */
+  tenderRowId?: string;
   amount: number;
   note?: string;
   reference?: string;
@@ -258,6 +272,18 @@ export interface Sale {
   lockedBy?: string; // set while Open; cleared on Hold/tender/void — E-05 locking
   replacesSaleId?: string; // Edit (Current) voids the original and duplicates it — this points back, for the audit trail
   batchId?: string; // set once a Current Sale is closed by Total Today's Sales (M-03)
+  /**
+   * M-07 d19 — a Sale's BUSINESS DATE is the calendar date of its tender
+   * (E-05 step 12), which is the moment A-57 already resolves tax at. d14 then
+   * groups journal lines by it, so a close nobody ran on Monday files Monday's
+   * revenue on Monday rather than on the day the button was pressed.
+   *
+   * A field rather than a read of the `Tendered —` log entry: the date is
+   * load-bearing for two decisions now, and deriving it from log PROSE is the
+   * shape E-04 d25 refused — a derived fact must not key on something a person
+   * can type. Seeded Sales predate it, so `businessDateOf` still falls back.
+   */
+  tenderedAt?: string;
   log: { at: string; text: string }[];
 }
 
@@ -752,16 +778,28 @@ export type ReviewFlagKind =
   | "total-adjustment"
   | "discrepancy-accepted"
   | "negative-stock"
-  | "sale-lock-broken";
+  | "sale-lock-broken"
+  // architecture A-68 — the first SYSTEM-RAISED kind. M-07 d10: a journal that
+  // did not balance had its difference posted to Suspense, and the Manager is
+  // told. It has no actor because it is not an action: it is this system's own
+  // arithmetic failing, and no Manager can cause one or clear one.
+  | "journal-imbalance";
 
 export interface ReviewFlag {
   id: string;
   kind: ReviewFlagKind;
   summary: string;
-  // architecture A-68 makes this nullable for a SYSTEM-RAISED flag, and the
-  // prototype has none: M-05 d50 found d49's case unreachable, and M-07 d10's
-  // journal imbalance is not built. Left required until something raises one.
-  recordedBy: string;
+  /**
+   * architecture A-68 — NULLABLE, and null means the system raised it. Modelled
+   * as optional here because the prototype now has one such kind:
+   * `journal-imbalance` (M-07 d10), which has no actor. M-05 d50's
+   * `money_on_cleared_entry` is still unreachable and still raises nothing.
+   *
+   * Whatever renders a flag has to read the absence as *the system*, and d10
+   * requires it to say so in those terms — a Manager cannot have caused this
+   * one and must not be invited to fix it.
+   */
+  recordedBy?: string;
   at: string;
   acknowledged: boolean;
   acknowledgedBy?: string;
@@ -1145,6 +1183,8 @@ export interface GLMapping {
  *
  * Defined here because the prototype had never modelled them as data.
  */
+export type AdjustmentReason = (typeof ADJUSTMENT_REASONS)[number];
+
 export const ADJUSTMENT_REASONS = [
   "Shrinkage",
   "Damaged",
@@ -1153,3 +1193,58 @@ export const ADJUSTMENT_REASONS = [
   "Written off",
   "Other",
 ] as const;
+
+// ---------------------------------------------------------------------------
+// M-07 Phase 3 — the journal.
+//
+// d1 keeps saying it and it governs everything below: this is a chart and a
+// journal EXPORT, not a ledger. A JournalBatch is a record of what happened,
+// stored rather than derived (d7) so that two exports of the same week can
+// never disagree. Nothing here accumulates into a balance.
+
+/**
+ * One line of one journal. Carries its OWN business date (d14) and its OWN
+ * currency code (d17) — **neither may be inferred from the batch it sits in**,
+ * because a batch can span two days (a close nobody ran on Monday sweeps
+ * Monday and Tuesday) and a supplier Invoice can be in USD.
+ *
+ * `debit` and `credit` are both present and exactly one of them is non-zero,
+ * which is the shape d15's CSV emits and the shape every destination expects.
+ */
+export interface JournalLine {
+  /** The account this posts to — resolved by role or through a GLMapping,
+   *  NEVER by number (d3). */
+  accountId: string;
+  /** d14 — the date the underlying thing happened, not the date it was posted. */
+  businessDate: string;
+  debit: number;
+  credit: number;
+  /** d17 — its own code. Nothing is ever converted, here or at export. */
+  currency: string;
+  memo: string;
+}
+
+/**
+ * A journal batch, written by the artifact that caused it, inside the same
+ * transaction (architecture A-67). Immutable once written (d8, d14): a
+ * correction posts FORWARD as a new batch dated when it was made, and nothing
+ * ever edits one of these.
+ */
+export interface JournalBatch {
+  id: string;
+  /**
+   * d15 — what the accountant's question resolves to. `close:<batch id>`,
+   * `invoice:<number>`, `payment:<reference>`, `adjustment:<id>`. It names the
+   * ARTIFACT, which is what makes *what is this $52* answerable.
+   */
+  source: string;
+  /** When the journal was written — distinct from any line's business date. */
+  writtenAt: string;
+  lines: JournalLine[];
+  /**
+   * d10 — set when the difference had to go to Suspense. Always a defect in
+   * this system and never a data-entry mistake, so it is recorded on the batch
+   * rather than left to be noticed in a total.
+   */
+  suspense?: number;
+}

@@ -29,6 +29,9 @@ import {
 } from "../lib/totals";
 import { clearedAgainst, entryIsCleared, unclearRefusal } from "../lib/payables";
 import { buildChart } from "../lib/chart";
+import { buildCloseJournal } from "../lib/closeJournal";
+import { buildAdjustmentJournal, buildInvoiceJournal, buildPaymentJournal } from "../lib/artifactJournals";
+import { isImbalanced } from "../lib/journal";
 import {
   CURRENT_USER,
   CUSTOMERS,
@@ -67,6 +70,8 @@ import type {
   InventoryItem,
   Invoice,
   InvoiceLine,
+  JournalBatch,
+  AdjustmentReason,
   NonTrackedItem,
   PayableEntry,
   PayableEntryType,
@@ -222,6 +227,17 @@ interface AppState {
   // this is a chart and a journal export, not an internal ledger.
   glAccounts: GLAccount[];
   glMappings: GLMapping[];
+  /**
+   * M-07 d7, d12 — every journal this system has written, stored rather than
+   * derived. d7: "storing rather than recomputing means a past day can never
+   * quietly restate itself" — a journal derived at export time would let two
+   * exports of the same week disagree, with the accountant holding one of them
+   * and no way to tell which.
+   *
+   * One batch per CloseBatch, and one per artifact for everything else (d12).
+   * Nothing sweeps this, nothing posts it, and there is no month-end routine.
+   */
+  journals: JournalBatch[];
   pendingOrders: PendingOrderLine[];
   reviewFlags: ReviewFlag[];
   activeSaleId: string | null;
@@ -727,6 +743,7 @@ const seed: AppState = {
   // can be left unmapped and d10's Suspense stays a defect rather than a hole.
   glAccounts: SEEDED_CHART.accounts,
   glMappings: SEEDED_CHART.mappings,
+  journals: [],
   pendingOrders: PENDING_ORDERS,
   reviewFlags: [],
   activeSaleId: null,
@@ -819,7 +836,19 @@ interface AppContextValue extends AppState {
   editSale: (saleId: string) => string | null;
   copySale: (saleId: string) => string | null;
   viewSubtotal: () => DayBreakdown;
-  totalTodaysSales: (by: string) => { batchId: string; breakdown: DayBreakdown };
+  /**
+   * M-03's close, which M-07 d7 makes produce a SECOND artifact: the journal.
+   * Returned alongside the breakdown so the close screen can tell the Manager
+   * what was written, and tell them loudly when it did not balance (d10).
+   */
+  totalTodaysSales: (by: string) => {
+    batchId: string;
+    breakdown: DayBreakdown;
+    journal: JournalBatch;
+    unresolved: string[];
+    ambiguousTenders: string[];
+    payouts: { sale: string; amount: number }[];
+  };
   undoEndOfDay: (batchId: string, by: string) => void;
   attachCustomer: (saleId: string, customerId: string | null) => void;
   addCustomer: (input: Omit<Customer, "id" | "primaryId" | "balance">) => string;
@@ -884,6 +913,17 @@ interface AppContextValue extends AppState {
     to: "sellable" | "regrade" | "writeoff",
     grade?: Grade,
     price?: number,
+    /**
+     * E-04's reason code, required by `writeoff` and meaningless otherwise.
+     *
+     * The screen has said *"reason-coded adjustment (E-04)"* since it was
+     * written and never asked which code, so the write-off had no reason on it
+     * — which is the one thing E-04's six codes exist for. M-07 d6 is what
+     * made the omission cost something: without a code there is no account to
+     * post to, and *"collapsing them in the ledger throws away the only thing
+     * that choice was for."*
+     */
+    reason?: AdjustmentReason,
   ) => void;
   toggleProvider: () => void;
 
@@ -942,7 +982,14 @@ interface AppContextValue extends AppState {
     patch: Partial<Pick<Invoice, "statedSubtotal" | "tax" | "freight" | "misc" | "paymentTerms" | "paymentMethod">>,
   ) => void;
   setInvoiceTotalOverride: (invoiceId: string, value?: number) => void;
-  finalizeInvoice: (invoiceId: string) => { itemCount: number } | null;
+  /**
+   * E-02 step 22, and M-07 d13's journal alongside it. The journal comes back
+   * so Receiving can tell the Employee what was written and, where it did not
+   * balance, say so in d10's terms rather than leaving it to the review queue.
+   */
+  finalizeInvoice: (
+    invoiceId: string,
+  ) => { itemCount: number; journal: JournalBatch; unresolved: string[] } | null;
   markInvoicePaid: (invoiceId: string, by: string) => void;
 
   // M-05 — Accounts Payable. One PaymentBatch per Record-Payment action,
@@ -1166,6 +1213,60 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
       acknowledged: false,
     };
     setS((prev) => ({ ...prev, reviewFlags: [flag, ...prev.reviewFlags] }));
+  };
+
+  /**
+   * architecture A-68 — a flag with NO ACTOR, because the system raised it.
+   * `actor_user_id` is nullable and null means the system; the review queue
+   * stops meaning *what the staff did* and starts meaning *what wants a look*,
+   * which is the loosening A-68 accepted on purpose.
+   *
+   * Separate from `raiseReviewFlag` rather than a nullable argument to it: the
+   * two have different truth conditions, and a single function taking an
+   * optional actor is how a missing one becomes a bug instead of a statement.
+   */
+  const raiseSystemReviewFlag = (kind: ReviewFlagKind, summary: string) =>
+    setS((prev) => ({
+      ...prev,
+      reviewFlags: [
+        { id: uid("flag"), kind, summary, recordedBy: undefined, at: now(), acknowledged: false },
+        ...prev.reviewFlags,
+      ],
+    }));
+
+  /**
+   * The same telling, for a journal written inside a `setS` updater.
+   *
+   * A-67 puts a journal in the same transaction as its artifact, so an artifact
+   * journal is built and stored inside the updater that writes the artifact —
+   * and `raiseSystemReviewFlag` cannot be called from in there without nesting
+   * one state update inside another. This returns the new queue instead, so the
+   * flag and the journal land in the same commit, which is the point.
+   *
+   * d10's rule is unchanged: Suspense keeps the journal balanced by
+   * construction, and this is what stops a balanced-but-wrong one going quiet.
+   */
+  const journalFlags = (
+    result: { batch: JournalBatch; unresolved: string[] },
+    what: string,
+    existing: ReviewFlag[],
+  ): ReviewFlag[] => {
+    if (!isImbalanced(result.batch)) return existing;
+    return [
+      {
+        id: uid("flag"),
+        kind: "journal-imbalance",
+        summary:
+          `The journal for ${what} did not balance by ${money(result.batch.suspense ?? 0)}, and the difference was posted to Suspense so the work could proceed. ` +
+          `This is a defect in this software, not something anyone did — there is nothing for you to correct. ` +
+          (result.unresolved.length ? `Unresolved: ${result.unresolved.join("; ")}.` : `The cause is not visible from here; report it.`),
+        // A-68 — null actor. The system raised it.
+        recordedBy: undefined,
+        at: now(),
+        acknowledged: false,
+      },
+      ...existing,
+    ];
   };
 
   const acknowledgeReviewFlag: AppContextValue["acknowledgeReviewFlag"] = (id, by) =>
@@ -2072,6 +2173,12 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
                 ...x,
                 state: "Current",
                 saleNumber: num,
+                // M-07 d19 — the Sale's BUSINESS DATE is fixed here, at the
+                // tender, for the same reason the tax snapshot is (A-57): this
+                // is the moment the money moved. d14 groups journal lines by
+                // it, so a close nobody ran on Monday still files Monday's
+                // revenue on Monday.
+                tenderedAt: now(),
                 // A-57 — THE TAX SNAPSHOT IS TAKEN HERE, at tender, because
                 // tax describes what was COLLECTED and nothing is collected
                 // until something is collected. From this moment the Sale
@@ -2258,16 +2365,69 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
     const saleIds = s.sales.filter((sale) => sale.state === "Current" && !sale.isReturn).map((sale) => sale.id);
     const batchId = uid("batch");
     const batch: CloseBatch = { id: batchId, at: now(), by, saleIds };
+
+    // M-07 d7 — the journal is a SECOND thing the close produces, written onto
+    // the CloseBatch beside the summary M-03 d13 already stores there. A-67
+    // puts it inside the same transaction, so a batch and its journal can never
+    // disagree; here that is the same setS call below.
+    //
+    // d10 — and it is written whether or not it balances. The close is a real
+    // state transition other flows depend on (M-03 d1), and a bookkeeping
+    // defect must never be able to stop the shop ending its day.
+    const journal = buildCloseJournal({
+      batchId,
+      writtenAt: now(),
+      sales: s.sales.filter((sale) => saleIds.includes(sale.id)),
+      records: s.records,
+      inventory: s.inventory,
+      genres: s.genres,
+      sections: s.sections,
+      tenders: s.tenders,
+      taxCtx: taxCtxFor(null),
+      accounts: s.glAccounts,
+      mappings: s.glMappings,
+      currency: s.homeCurrency,
+    });
+
     setS((prev) => ({
       ...prev,
       closeBatches: [batch, ...prev.closeBatches],
+      journals: [journal.batch, ...prev.journals],
       sales: prev.sales.map((sale) =>
         saleIds.includes(sale.id)
           ? { ...sale, state: "Closed", batchId, log: [...sale.log, { at: now(), text: `Closed in batch ${batchId} by ${by}` }] }
           : sale,
       ),
     }));
-    return { batchId, breakdown };
+
+    // d10's second mechanism. Suspense keeps the journal balanced BY
+    // CONSTRUCTION so the export is always a valid document; telling the
+    // Manager is what stops a balanced-but-wrong journal going quiet, which is
+    // the failure Suspense would otherwise introduce.
+    //
+    // A-68 — raised by the SYSTEM, with no actor. A journal imbalance is not an
+    // action and nobody took it: d10 records that no Manager can cause one and
+    // none can clear one, so the flag has to say so in those terms rather than
+    // inviting them to fix it.
+    if (isImbalanced(journal.batch)) {
+      raiseSystemReviewFlag(
+        "journal-imbalance",
+        `The journal for close ${batchId} did not balance by ${money(journal.batch.suspense ?? 0)}, and the difference was posted to Suspense so the close could proceed. ` +
+          `This is a defect in this software, not something anyone at the till did — there is nothing for you to correct. ` +
+          (journal.unresolved.length
+            ? `Unresolved: ${journal.unresolved.join("; ")}.`
+            : `The cause is not visible from here; report it.`),
+      );
+    }
+
+    return {
+      batchId,
+      breakdown,
+      journal: journal.batch,
+      unresolved: journal.unresolved,
+      ambiguousTenders: journal.ambiguousTenders,
+      payouts: journal.payouts,
+    };
   };
 
   // Undo End of Day — Admin (M-03 decision 4). Restores every Sale in the
@@ -2647,15 +2807,48 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
     to,
     grade,
     price,
+    reason,
   ) => {
     const note =
       to === "regrade"
         ? "Re-graded on return — own grade and price (E-06 step 6)"
         : to === "sellable"
           ? "Returned, back to sellable at original grade"
-          : "Returned, written off via reason-coded adjustment (E-04)";
+          : `Returned, written off via reason-coded adjustment (E-04) — ${reason}`;
+
+    // M-07 d12 — routing a returned copy to `writeoff` IS an on-hand
+    // adjustment, so it writes its own journal here, when it is made, to the
+    // account its reason code maps to (d6). It does not wait for a close, and
+    // there is nothing to sweep it (A-67).
+    //
+    // The close has already put the copy's cost back into Inventory, because
+    // the copy came back over the counter (d2 run backwards). This is what
+    // takes it out again, into the reason-coded account rather than leaving it
+    // in cost of goods where nobody chose to put it.
+    const item = s.inventory.find((i) => i.id === itemId);
+    const adjustment =
+      to === "writeoff" && reason && item?.cost
+        ? buildAdjustmentJournal({
+            id: uid("adj"),
+            reason,
+            cost: item.cost,
+            businessDate: now(),
+            writtenAt: now(),
+            memo: `Written off on return — ${reason}`,
+            accounts: s.glAccounts,
+            mappings: s.glMappings,
+            currency: s.homeCurrency,
+          })
+        : null;
+
     setS((prev) => ({
       ...prev,
+      ...(adjustment
+        ? {
+            journals: [adjustment.batch, ...prev.journals],
+            reviewFlags: journalFlags(adjustment, `the write-off of a returned copy`, prev.reviewFlags),
+          }
+        : {}),
       inventory: prev.inventory.map((i) =>
         i.id === itemId
           ? {
@@ -3149,8 +3342,25 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
     const derivedSubtotal = round2(invoice.lines.reduce((sum, l) => sum + l.cost * l.qty, 0));
     const mismatch = Math.abs(derivedSubtotal - invoice.statedSubtotal) > 0.01;
 
+    // M-07 d13 — the Invoice writes its journal HERE, at finalize, not at paid.
+    // Finalize is when the money becomes real: the lines just became sellable
+    // inventory (E-02 step 22) and the debt to the supplier exists. Waiting for
+    // paid would leave stock on the shelf for the length of the supplier's
+    // terms with no Inventory and no Accounts Payable behind it.
+    //
+    // d17 — in the SUPPLIER's currency. A USD Invoice exports as USD lines at
+    // the figures recorded, and nothing is converted here or at the export.
+    const journal = buildInvoiceJournal({
+      invoice: { ...invoice, lines: updatedLines },
+      writtenAt: now(),
+      accounts: s.glAccounts,
+      currency: supplier.currency || s.homeCurrency,
+    });
+
     setS((prev) => ({
       ...prev,
+      journals: [journal.batch, ...prev.journals],
+      reviewFlags: journalFlags(journal, `invoice ${invoice.invoiceNumber}`, prev.reviewFlags),
       nextInternalBarcode: barcodeSeq,
       inventory: [...(reconciledInventory ?? prev.inventory), ...allNewItems],
       invoices: prev.invoices.map((iv) =>
@@ -3183,7 +3393,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
       );
     }
 
-    return { itemCount: allNewItems.length };
+    return { itemCount: allNewItems.length, journal: journal.batch, unresolved: journal.unresolved };
   };
 
   // Only this locks an Invoice (decision — finalize alone no longer does).
@@ -3377,7 +3587,25 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
         })
         .concat(remainders);
 
-      return { ...prev, paymentBatches, invoices, payableEntries };
+      // M-07 d12 — the PaymentBatch writes its own journal at record (M-05
+      // d16), inside this same transaction (A-67). It does not wait for a
+      // close and there is no month-end routine: the batch already IS a batch,
+      // one immutable dated artifact whose journal is a fixed function of it.
+      const journal = buildPaymentJournal({
+        batch,
+        writtenAt: at,
+        accounts: prev.glAccounts,
+        currency: prev.homeCurrency,
+      });
+
+      return {
+        ...prev,
+        paymentBatches,
+        invoices,
+        payableEntries,
+        journals: [journal.batch, ...prev.journals],
+        reviewFlags: journalFlags(journal, `payment ${batch.reference || batch.id}`, prev.reviewFlags),
+      };
     });
 
   // M-05 d22 / d30 — void a PaymentBatch. Whole or not at all, appended never
@@ -3432,11 +3660,27 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
       // sum-to-zero runs on FACE and a void does not change face: the clearing
       // is still true. What is wrong is only that the money is invisible, so
       // the system says so. A-68 is what allows a flag with no actor.
+      // M-07 d8 — **a correction posts forward. The original entry always
+      // stands.** A PaymentBatch voided under M-05 d22 produces a reversing
+      // entry dated WHEN SOMEONE ACTUALLY DID IT, never an edit to the day it
+      // concerns. This is A-33a's "reverse as recorded" applied to the ledger,
+      // and it is what keeps a period that has been exported, imported and
+      // filed from moving under the person who filed it.
+      const journal = buildPaymentJournal({
+        batch,
+        writtenAt: at,
+        accounts: prev.glAccounts,
+        currency: prev.homeCurrency,
+        reversalOf: { voidId: voidRow.id, voidedAt: at },
+      });
+
       return {
         ...prev,
         batchVoids: [voidRow, ...prev.batchVoids],
         payableEntries: [...prev.payableEntries, ...reversals],
         invoices,
+        journals: [journal.batch, ...prev.journals],
+        reviewFlags: journalFlags(journal, `the void of ${batch.reference || batch.id}`, prev.reviewFlags),
       };
     });
 
