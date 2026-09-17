@@ -57,6 +57,8 @@ export function SettleTrack({
   duplicateRef,
   openBatch,
   drawableAccounts,
+  homeCurrency,
+  rateFor,
   onOpenBatch,
   onVoid,
   onUnclear,
@@ -70,7 +72,7 @@ export function SettleTrack({
   creating: boolean;
   /** M-05 d34 — what the ticked Invoices expected, or undefined if they disagree. */
   expectedMethod?: PaymentMethod;
-  form: { method: PaymentMethod; reference: string; date: string; drawnOnAccountId?: string; credit: Record<string, string>; money: Record<string, string> };
+  form: { method: PaymentMethod; reference: string; date: string; drawnOnAccountId?: string; paidAmount?: string; credit: Record<string, string>; money: Record<string, string> };
   onForm: (patch: Partial<{ method: PaymentMethod; reference: string; date: string; drawnOnAccountId?: string; credit: Record<string, string>; money: Record<string, string> }>) => void;
   onCancelCreate: () => void;
   onCreate: (input: {
@@ -96,6 +98,8 @@ export function SettleTrack({
   clearings: Clearing[];
   duplicateRef?: { reference: string; date: string; voided: boolean };
   /** A-65 — the accounts a settlement may be drawn on. */
+  homeCurrency: string;
+  rateFor: (targetId: string) => number;
   drawableAccounts: GLAccount[];
   openBatch: string | null;
   onOpenBatch: (id: string) => void;
@@ -112,6 +116,8 @@ export function SettleTrack({
         plan={plan}
         form={form}
         drawableAccounts={drawableAccounts}
+        homeCurrency={homeCurrency}
+        rateFor={rateFor}
         expectedMethod={expectedMethod}
         duplicateRef={duplicateRef}
         onForm={onForm}
@@ -455,17 +461,24 @@ function Selection({
   onForm,
   onSettle,
   drawableAccounts,
+  homeCurrency,
+  rateFor,
   onClear,
   onCancel,
 }: {
   supplier: Supplier;
   plan: SettlementPlan;
-  form: { method: PaymentMethod; reference: string; date: string; drawnOnAccountId?: string; credit: Record<string, string>; money: Record<string, string> };
+  form: { method: PaymentMethod; reference: string; date: string; drawnOnAccountId?: string; paidAmount?: string; credit: Record<string, string>; money: Record<string, string> };
   expectedMethod?: PaymentMethod;
   duplicateRef?: { reference: string; date: string; voided: boolean };
   /** A-65 — what the payment may be drawn on. Assets and the cost account a
    *  counter buy's money already sits in; not revenue, not a liability. */
   drawableAccounts: GLAccount[];
+  /** M-06 d59, d60 — the store's home currency, and the rate each targeted
+   *  Invoice was BOOKED at. Together they say what the ledger already holds
+   *  against these debits, which is the figure the Manager confirms against. */
+  homeCurrency: string;
+  rateFor: (targetId: string) => number;
   onForm: (patch: Partial<typeof form>) => void;
   onSettle: () => void;
   onClear: () => void;
@@ -474,6 +487,19 @@ function Selection({
   const auto = autoPlacement(plan);
   const creditPlaced = round2(plan.debits.reduce((n, d) => n + creditOn(form, d.key, auto), 0));
   const moneyPlaced = round2(plan.debits.reduce((n, d) => n + moneyOn(form, d.key, d.balance, auto), 0));
+
+  // M-06 d59, d60 — a foreign settlement. The ledger holds these debits in the
+  // HOME currency, at the rate each Invoice recorded when it was finalized, so
+  // that is what the payment clears and that is what the Manager confirms
+  // against. The arithmetic mirrors the journal's deliberately: what this
+  // screen shows is what the posting will do.
+  const isForeign = !!supplier.currency && supplier.currency !== homeCurrency;
+  const bookedTotal = round2(
+    plan.debits.reduce((n, d) => n + moneyOn(form, d.key, d.balance, auto) * rateFor(d.id), 0),
+  );
+  const paidEntered = form.paidAmount?.trim() ? Number(form.paidAmount) : undefined;
+  const actuallyPaid = paidEntered != null && !Number.isNaN(paidEntered) ? round2(paidEntered) : bookedTotal;
+  const fxDifference = round2(actuallyPaid - bookedTotal);
 
   // d38 — per debit, what is being put against it over and above its balance.
   // Not a problem: an artifact, and the Manager is told before they commit.
@@ -795,6 +821,40 @@ function Selection({
             </select>
             <span className="hint">Where the money came from. A counter buy clears from Second-hand purchases.</span>
           </label>
+          {/* M-06 d60 — asked ONLY when the Supplier's currency is not the
+              home currency. A domestic payment defaults and saves with no extra
+              step, because the booked figure and the actual figure are the same
+              number and always will be.
+
+              RECORDED, never derived: the bank statement is the fact and a
+              stored rate is only an estimate of it (M-05 d5). This is also why
+              no rate is needed here at all — only at finalize, where there was
+              no actual figure to have yet. */}
+          {isForeign && (
+            <label className="field">
+              <span>What left the bank</span>
+              <input
+                type="number"
+                step="0.01"
+                value={form.paidAmount ?? ""}
+                placeholder={bookedTotal.toFixed(2)}
+                onChange={(e) => onForm({ paidAmount: e.target.value })}
+              />
+              <span className="hint">
+                {supplier.currency} invoice, booked at <strong>{money(bookedTotal)}</strong> {homeCurrency}. Enter what
+                the bank actually took — the difference is exchange gain or loss.
+                {fxDifference !== 0 && (
+                  <>
+                    {" "}
+                    <strong>
+                      {money(Math.abs(fxDifference))} {fxDifference > 0 ? "loss" : "gain"}
+                    </strong>
+                    .
+                  </>
+                )}
+              </span>
+            </label>
+          )}
           <label className="field">
             <span>Reference</span>
             <input

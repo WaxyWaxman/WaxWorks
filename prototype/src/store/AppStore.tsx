@@ -1002,6 +1002,13 @@ interface AppContextValue extends AppState {
        * account, which is what every settlement assumed before A-65 was built.
        */
       drawnOnAccountId?: string;
+      /**
+       * M-06 d60 — what actually LEFT THE BANK, in the home currency. Only ever
+       * sent for a Supplier whose currency is not the home currency; absent
+       * reads as "no rate movement", which for a domestic payment is a fact
+       * rather than an assumption.
+       */
+      paidAmount?: number;
       // A-69 — a debit carries what it is being settled with, not which credit
       // funded it. The credits are named on the batch.
       debits: { kind: PayableTargetKind; id: string; credit?: number; money?: number; balance: number; reference: string }[];
@@ -3500,6 +3507,9 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
         method: input.method,
         reference: input.reference,
         drawnOnAccountId: input.drawnOnAccountId,
+        // M-06 d60 — recorded, never derived. The bank statement is the fact;
+        // a stored rate is only an estimate of it (M-05 d5).
+        ...(input.paidAmount != null ? { paidAmount: input.paidAmount } : {}),
         date: input.date,
         recordedBy: by,
         createdAt: at,
