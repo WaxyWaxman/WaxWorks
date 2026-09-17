@@ -441,6 +441,51 @@ export function unclearRefusal(clearing: Clearing | undefined): string | undefin
 }
 
 
+/**
+ * M-05 d51, d52 — aged payables for ONE Supplier, counted from the due date.
+ *
+ * d52: the buckets are **overdue-by**, not days-outstanding. E-02 d45 derives a
+ * due date from terms, and a `Net 60` Invoice forty-five days old is not late —
+ * a report calling it "45 days" sends a Manager to chase someone who is owed
+ * nothing yet.
+ *
+ * `notAged` is load-bearing rather than a leftover. COD and Prepaid produce no
+ * due date (E-02 d45), d35 says a Prepaid balance "ages nowhere", and d53
+ * leaves Credits, Adjustments and Claim placeholders without one. They are
+ * SHOWN, not dropped and not bucketed at zero: a figure missing from a total is
+ * how a total quietly stops reconciling.
+ *
+ * One Supplier at a time, per d51 — the cross-supplier report belongs to the
+ * surface PRD section 7 defers, and when it is built it must agree with this.
+ * No currency question arises here: M-06 d35 puts currency on the Supplier, so
+ * every row in one of these is already in one currency.
+ */
+export interface AgedBucket {
+  key: "current" | "d30" | "d60" | "d90" | "over90" | "notAged";
+  label: string;
+  total: number;
+  count: number;
+}
+
+export function agedBuckets(rows: LedgerRow[]): AgedBucket[] {
+  const debits = rows.filter((r) => r.role === "debit" && r.balance > 0.005);
+  const mk = (key: AgedBucket["key"], label: string, pick: (r: LedgerRow) => boolean): AgedBucket => {
+    const hit = debits.filter(pick);
+    return { key, label, total: round2(hit.reduce((n, r) => n + r.balance, 0)), count: hit.length };
+  };
+  const aged = (r: LedgerRow) => r.dueDate != null && r.overdueBy != null;
+  const by = (r: LedgerRow) => r.overdueBy ?? 0;
+  return [
+    mk("current", "Not yet due", (r) => aged(r) && by(r) <= 0),
+    mk("d30", "1–30 days", (r) => aged(r) && by(r) > 0 && by(r) <= 30),
+    mk("d60", "31–60 days", (r) => aged(r) && by(r) > 30 && by(r) <= 60),
+    mk("d90", "61–90 days", (r) => aged(r) && by(r) > 60 && by(r) <= 90),
+    mk("over90", "Over 90 days", (r) => aged(r) && by(r) > 90),
+    // d52 — no due date, so no bucket. Shown rather than dropped.
+    mk("notAged", "Not aged", (r) => !aged(r)),
+  ];
+}
+
 export function settlementPlan(rows: LedgerRow[]): SettlementPlan {
   const debits = rows.filter((r) => r.role === "debit" && r.balance > 0.005);
   // d43 — tick order, because the Manager already expressed it and can change
