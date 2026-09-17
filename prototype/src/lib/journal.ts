@@ -127,8 +127,9 @@ export interface AssembleInput {
  * failure d10's Suspense exists to make impossible. Balancing per date is
  * strictly stronger: a batch whose every date balances balances overall.
  *
- * Raised against d10 and d14 as a proposed decision, and NOT ratified — see
- * the note in M-07's open questions.
+ * **d25** settles it that way. The two rules are identical in an ordinary close
+ * — one day means one difference and one Suspense line either way — and diverge
+ * only where a close swept more than one day AND the arithmetic also failed.
  */
 export function assembleJournal(input: AssembleInput): JournalBatch {
   const groups = new Map<string, { accountId: string; businessDate: string; currency: string; memos: string[]; cents: number }>();
@@ -167,13 +168,20 @@ export function assembleJournal(input: AssembleInput): JournalBatch {
   // difference, it is our arithmetic failing, and d17 has nothing to convert
   // with. The Suspense line takes the currency the imbalance is in where there
   // is only one, which is every case this system can currently produce.
+  //
+  // **The total is GROSS, not net** (d25's accepted consequence, and it is the
+  // first thing per-date balancing changes). A batch short $3 on Monday and
+  // over $3 on Tuesday writes two Suspense lines, and netting them reports
+  // zero — so `suspense` would be absent, `isImbalanced` false, and the Manager
+  // told nothing, with two defect lines sitting in the file. Two errors are not
+  // an absence of error, and summing the magnitudes is what says so.
   let suspenseTotal = 0;
   for (const date of [...new Set(lines.map((l) => l.businessDate))].sort()) {
     const onDate = lines.filter((l) => l.businessDate === date);
     const diff = onDate.reduce((sum, l) => sum + cents(l.debit) - cents(l.credit), 0);
     if (diff === 0) continue;
     const currency = onDate[0].currency;
-    suspenseTotal += diff;
+    suspenseTotal += Math.abs(diff);
     lines.push({
       accountId: input.suspenseAccountId,
       businessDate: date,
@@ -192,7 +200,7 @@ export function assembleJournal(input: AssembleInput): JournalBatch {
     source: input.source,
     writtenAt: input.writtenAt,
     lines,
-    ...(suspenseTotal !== 0 ? { suspense: dollars(Math.abs(suspenseTotal)) } : {}),
+    ...(suspenseTotal !== 0 ? { suspense: dollars(suspenseTotal) } : {}),
   };
 }
 
