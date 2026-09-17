@@ -222,6 +222,10 @@ QST are separate registrations (decision 48).
 
 ## Inherited from other flows
 
+**From [M-07](M-07-chart-of-accounts.md):**
+
+- **Decision 20's *counts as revenue* flag now decides how a Section resolves to an account, not merely how it reports** ([M-07](M-07-chart-of-accounts.md) d28, d29). A Section carrying the flag resolves to the reserved **Sales** role and carries its Section as a **dimension** on the line ([M-08](M-08-general-ledger.md) d2); a Section without it keeps a mapping to the account it always had, because a dimension says where a figure came from and **cannot say what kind of thing it is** — d20's own example, a gift card load being *"money received against a future obligation"*, is exactly the case. **So toggling this flag on an existing Section changes where its future postings land**, which d20 did not have to consider when the flag only affected a breakdown. What this flow owes: whether toggling it is allowed once a Section has been posted to, and what the editor says when it is.
+
 **From [M-08](M-08-general-ledger.md):**
 
 - **The fiscal year end is a store setting and lives here** ([M-08](M-08-general-ledger.md) d5). A year end is set once, changed almost never, and read by anything that reports — M-06's shape exactly. [M-08](M-08-general-ledger.md) reads it to know which **seal** is a year end, rather than asking the Manager at each one, because nothing can validate that answer. **This flow owes it two things M-08 cannot provide:** a default, and a rule for what happens when a Manager changes the year end **after** a year has already been sealed under the old one — which restates which periods belong to which year, and is [M-06](M-06-settings.md)'s to refuse or to handle. This closes [M-07](M-07-chart-of-accounts.md)'s *What is a fiscal year?*, recorded there as **moot rather than answered**.
