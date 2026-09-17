@@ -2,7 +2,7 @@
 
 **Actor:** Manager (Undo End of Day is **manager-only**, not a retired *manager override* — [architecture](../architecture.md) A-28a)
 **Status:** Specified — surfaced on **Point of Sale** under **Other Functions** ([E-05](E-05-sell-a-record.md) decision 30), not a screen of its own
-**Related:** [E-05 Point of Sale](E-05-sell-a-record.md) · [E-06 Process a return](E-06-process-a-return.md) · [M-06 Settings](M-06-settings.md) · [M-07 Chart of accounts](M-07-chart-of-accounts.md)
+**Related:** [E-05 Point of Sale](E-05-sell-a-record.md) · [E-06 Process a return](E-06-process-a-return.md) · [M-06 Settings](M-06-settings.md) · [M-07 Chart of accounts](M-07-chart-of-accounts.md) · [M-08 Keep the general ledger](M-08-general-ledger.md)
 
 **Job:** As a manager, I need an end-of-day picture of what sold and what the stock position looks like.
 

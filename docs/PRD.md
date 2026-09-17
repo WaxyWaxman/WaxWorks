@@ -89,6 +89,7 @@ Each flow is its own document. Status is tracked per flow so parallel work doesn
 | M-05 | [Accounts payable](flows/M-05-accounts-payable.md) | **Specified** |
 | M-06 | [Configure the store](flows/M-06-settings.md) | **Specified** |
 | M-07 | [Chart of accounts](flows/M-07-chart-of-accounts.md) | **Specified** |
+| M-08 | [Keep the general ledger](flows/M-08-general-ledger.md) | In clarification |
 
 ---
 

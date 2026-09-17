@@ -2,7 +2,7 @@
 
 **Actor:** Employee (nothing here is gated)
 **Status:** Specified
-**Related:** [E-05 Point of Sale](E-05-sell-a-record.md) · [E-06 Process a return](E-06-process-a-return.md) · [M-02 Re-order inventory](M-02-reorder-inventory.md)
+**Related:** [E-05 Point of Sale](E-05-sell-a-record.md) · [E-06 Process a return](E-06-process-a-return.md) · [M-02 Re-order inventory](M-02-reorder-inventory.md) · [M-08 Keep the general ledger](M-08-general-ledger.md)
 
 **Job:** As an employee, I need to look someone up so I can attach them to a sale, hold something for them, give them their discount, or settle what's owed between us.
 

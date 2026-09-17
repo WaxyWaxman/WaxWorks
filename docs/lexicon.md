@@ -323,3 +323,24 @@ Appended rather than inserted, so the existing section numbers stay stable.
 | **undeposited funds** | What a tender has taken in that the bank has not yet paid out, carried at face value. **Per tender, not per behavior**, following [M-06](flows/M-06-settings.md) d22 — `Visa` and `Amex` settle as separate deposits and a merged figure cannot be tied back to a statement. The name is QuickBooks' own for this account, chosen so an export maps one-to-one instead of needing a translation. | "clearing account" — **clearing** is taken (§4); "float", which [M-03](flows/M-03-daily-summary.md) d8 rules out having at all; "cash in transit" as a second name for the same thing |
 | **card processing fee** | The difference between a card tender's **undeposited funds** and what the bank paid against them. **Derived from a BankDeposit, never configured** — no rate is stored anywhere, following [M-06](flows/M-06-settings.md) d37's shown-but-never-written boundary. Distinct from **payment processing** (§1), which is the excluded capability. | storing a rate per tender; "merchant discount rate" as something this system holds; conflating it with **payment processing** (NG-4) |
 | **Second-hand purchases** | Where the money side of a counter buy lands: the `Used Credit` tender ([E-05](flows/E-05-sell-a-record.md) d14) debits it, and the second-hand intake credits it at booked inventory cost. **Its balance is a period cost, not an error** — a lump paid for a crate and copies booked at a nominal figure differ on purpose. Same shape [E-02](flows/E-02-receive-inventory.md) d16 gives freight: a real cost of stock that is not allocated per copy. | calling it a clearing account; treating a non-zero balance as something to reconcile or age; "used purchases" (§4 prefers *second-hand*) |
+
+## 15. The ledger's periods (M-08)
+
+**Ratified vocabulary.** [M-08](flows/M-08-general-ledger.md) d4. Appended rather than
+inserted, so the existing section numbers stay stable.
+
+### The collision this section exists to prevent
+
+| The obvious word | Already means | Use instead |
+|---|---|---|
+| **close** / **closed** | The end-of-day close — moving every Current Sale to Closed and producing the day's breakdown (§11, [M-03](flows/M-03-daily-summary.md)). **CloseBatch** is its artifact | **seal** for the act, **sealed period** for the result |
+
+### Terms
+
+| Canonical | Meaning | Avoid |
+|---|---|---|
+| **seal** | The act of finalising an accounting period: every transaction in it is checked, the period is made no longer writable, and a closing transaction carrying balance-forwards is written ([M-08](flows/M-08-general-ledger.md)). *Seal the month*, *seal the year* | **close** (that is the day, §11), "post", "finalize" (E-02's), "lock" (names the mechanism, not the act) |
+| **sealed period** | A month or year that has been sealed. Its contents are not writable and its closing balances are what later periods count forward from | "closed month", "closed period" |
+| **unseal** | Returning a sealed period to writable. Whether this is possible, and how far back, is **open** in [M-08](flows/M-08-general-ledger.md) | "reopen" (harmless, but *seal*/*unseal* is the pair) |
+| **opening position** | The balances the store carried in from its previous records, held as a sealed transaction dated before the first period ([M-08](flows/M-08-general-ledger.md)). Wax Works' shop is migrating from **paper**, so these are typed from an accountant's statements rather than imported | "opening balance" for the whole set (that is one account's figure), "migration" |
+

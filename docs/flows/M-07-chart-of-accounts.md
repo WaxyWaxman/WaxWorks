@@ -2,13 +2,15 @@
 
 **Actor:** Manager
 **Status:** Specified
-**Related:** [E-02 Receive inventory](E-02-receive-inventory.md) · [E-04 Manage the inventory](E-04-manage-inventory.md) · [E-05 Point of Sale](E-05-sell-a-record.md) · [E-06 Process a return](E-06-process-a-return.md) · [M-03 Daily summary](M-03-daily-summary.md) · [M-05 Accounts payable](M-05-accounts-payable.md) · [M-06 Configure the store](M-06-settings.md)
+**Related:** [E-02 Receive inventory](E-02-receive-inventory.md) · [E-04 Manage the inventory](E-04-manage-inventory.md) · [E-05 Point of Sale](E-05-sell-a-record.md) · [E-06 Process a return](E-06-process-a-return.md) · [M-03 Daily summary](M-03-daily-summary.md) · [M-05 Accounts payable](M-05-accounts-payable.md) · [M-06 Configure the store](M-06-settings.md) · [M-08 Keep the general ledger](M-08-general-ledger.md)
 
 **Job:** As a manager, I need every movement of money to land in a named account and leave this system in a form my accountant can import, so that the shop's books are built from what actually happened at the till rather than from a shoebox of paper.
 
 *Amended by decision 9.* The original read *"so that I can see what the shop actually earned"* — decision 1 makes that something this system cannot do and decision 9 declines to half-do it, so the job is stated as what it is: a pipe, not a mirror.
 
 **Scope note:** this flow owns the **chart** — the list of accounts — and whatever posts to it. It is not [M-06](M-06-settings.md), which configures the things other flows read and which has been holding three GL columns in reserve for this flow to draw. It is not [M-05](M-05-accounts-payable.md), which owns what is owed a supplier; a supplier balance is derived from payables artifacts and stays that way. The vocabulary is reserved in [lexicon](../lexicon.md) §14, including four words this flow must **not** reuse — *deposit*, *clearing*, *settlement* and *manual ledger entry* all already mean something else.
+
+**Split note ([M-08](M-08-general-ledger.md) d1).** The **ledger** has moved to [M-08](M-08-general-ledger.md): postings a Manager types, the opening position, the period close, balances, financial statements and reconciliation. **Nothing moved out of this file** — M-07 keeps its ID and all 26 decisions, none renumbered — and this flow's own scope is unchanged: the chart, its mappings, the journals its artifacts write (d12), and the export. What does change is that **decision 1's second half is no longer true of the system**: Wax Works now holds balances and runs a period close, in [M-08](M-08-general-ledger.md). _That supersession is not yet written; until it is, read d1 as scoped to this flow and see [M-08](M-08-general-ledger.md) d1 for what reversed and why._ **Phase 4 below is not built and is on hold** pending [M-08](M-08-general-ledger.md)'s reporting surface.
 
 ---
 
