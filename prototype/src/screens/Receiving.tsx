@@ -21,9 +21,10 @@ import {
 import { readStored, writeStored } from "../lib/tillMemory";
 import { money } from "../lib/money";
 import { priceLine } from "../lib/pricing";
-import { countField, figureField, integerOnly, numericOnly } from "../lib/fields";
+import { countField, figureField, integerOnly, moneyOnly, numericOnly } from "../lib/fields";
 import { outstandingQty } from "../lib/orderLines";
-import { invoiceIsPaid, round2 } from "../lib/totals";
+import { invoiceChargesTotal, invoiceIsPaid, round2 } from "../lib/totals";
+import { storeTaxTypes } from "../lib/tax";
 import { useApp } from "../store/AppStore";
 import { useActor } from "../components/Identify";
 
@@ -255,7 +256,6 @@ function NewInvoiceModal({ onClose, onCreated }: { onClose: () => void; onCreate
   const [invoiceDate, setInvoiceDate] = useState(today);
   const [receivedDate, setReceivedDate] = useState(today);
   const [statedSubtotal, setStatedSubtotal] = useState("0.00");
-  const [tax, setTax] = useState("0.00");
   const [freight, setFreight] = useState("0.00");
 
   const numKey = invoiceNumber.trim().toLowerCase();
@@ -294,8 +294,33 @@ function NewInvoiceModal({ onClose, onCreated }: { onClose: () => void; onCreate
                   invoiceDate: invoiceDate.trim(),
                   receivedDate: receivedDate.trim(),
                   statedSubtotal: Number(statedSubtotal) || 0,
-                  tax: Number(tax) || 0,
                   freight: Number(freight) || 0,
+                  // E-02 d53 — a row per tax the STORE pays, waiting at zero.
+                  //
+                  // Derived from the store's default tax group (M-06 d14), not
+                  // from `taxTypes`: that list holds every Canadian tax so a
+                  // group can be composed per province, so seeding from it puts
+                  // NINE rows on every invoice. The group is what says which
+                  // two this shop actually pays — GST and QST in Quebec, GST
+                  // alone in Alberta.
+                  //
+                  // The Employee copies the figures across on the invoice panel
+                  // beside every other total. Nothing to add and nothing to
+                  // choose, in the common case.
+                  charges: [
+                    ...storeTaxTypes(app.taxTypes, app.taxGroupCells, app.defaultTaxGroup).map((t, i) => ({
+                      id: `chg-${t.code}-${i}`,
+                      kind: "tax" as const,
+                      taxCode: t.code,
+                      amount: 0,
+                    })),
+                    // And the Miscellaneous slot, seeded at zero like the tax
+                    // rows. Seeded rather than created on first edit because a
+                    // row that appears the moment you type into it is a row
+                    // that loses the keystroke: it swaps for the stored one
+                    // mid-entry, and the decimal point goes with it.
+                    { id: "chg-misc", kind: "misc" as const, amount: 0 },
+                  ],
                 });
                 onCreated(id);
                 onClose();
@@ -402,8 +427,8 @@ function NewInvoiceModal({ onClose, onCreated }: { onClose: () => void; onCreate
             <input type="number" step="0.01" value={statedSubtotal} onChange={(e) => setStatedSubtotal(e.target.value)} />
           </label>
           <label className="field">
-            <span>Tax</span>
-            <input type="number" step="0.01" value={tax} onChange={(e) => setTax(e.target.value)} />
+            <span>Freight</span>
+            <input type="number" step="0.01" value={freight} onChange={(e) => setFreight(e.target.value)} />
           </label>
           <label className="field">
             <span>Freight</span>
@@ -428,7 +453,7 @@ function useLinePricing(opts: {
 }) {
   const listPrice = Number(opts.listRaw) || 0;
   const discountPct = Number(opts.discountRaw) || 0;
-  // d51 — the rules live in lib/pricing so they can be exercised without
+  // d53 — the rules live in lib/pricing so they can be exercised without
   // a screen, and so the margin benchmark cannot drift from the pre-fill.
   const base = priceLine({
     listPrice,
@@ -494,7 +519,7 @@ function InvoiceEditor({
 
   const derivedSubtotal = round2(invoice.lines.reduce((sum, l) => sum + l.cost * l.qty, 0));
   const mismatch = Math.abs(derivedSubtotal - invoice.statedSubtotal) > 0.01;
-  const computedTotal = round2(derivedSubtotal + invoice.tax + invoice.freight + invoice.misc);
+  const computedTotal = round2(derivedSubtotal + invoice.freight + invoiceChargesTotal(invoice));
   const [totalOverrideRaw, setTotalOverrideRaw] = useState<string | null>(null);
   const totalRaw = totalOverrideRaw ?? computedTotal.toFixed(2);
   const enteredTotal = Number(totalRaw) || 0;
@@ -747,6 +772,9 @@ function InvoiceEditor({
         onSaveUpdates={doSaveUpdates}
         onPrintAllLabels={printAllLabels}
         mintedCount={mintedCount}
+        // d53 — the store's OWN taxes, not the nine it has configured to
+        // compose other provinces' groups with.
+        taxTypes={storeTaxTypes(app.taxTypes, app.taxGroupCells, app.defaultTaxGroup)}
       />
 
       {removing && (
@@ -1001,7 +1029,7 @@ function StageCard({
                   <input
                     {...figureField}
                     value={listRaw}
-                    onChange={(e) => setListRaw(numericOnly(e.target.value))}
+                    onChange={(e) => setListRaw(moneyOnly(e.target.value))}
                   />
                   <span className="recv-stage-hint">pre-discount</span>
                 </label>
@@ -1022,7 +1050,7 @@ function StageCard({
                     <input
                       {...figureField}
                       value={sellRaw ?? suggested.toFixed(2)}
-                      onChange={(e) => setSellRaw(numericOnly(e.target.value))}
+                      onChange={(e) => setSellRaw(moneyOnly(e.target.value))}
                     />
                   )}
                   <span className="recv-stage-hint">
@@ -1084,7 +1112,7 @@ function StageCard({
                     on every receipt (d13) — until it is, this says so rather
                     than flattering the line. */}
                 <span className="v">{listPrice > 0 ? `${marginPct.toFixed(1)}%` : "—"}</span>
-                {/* d51 — the decided price stands and the margin is complained
+                {/* d53 — the decided price stands and the margin is complained
                     about, because overriding it would quietly re-price a record a
                     customer saw last week. WARNS rather than flags: d35 already
                     raises a ReviewFlag for below-cost, which is rare and serious,
@@ -1455,7 +1483,7 @@ function EditLineRow({
           className="inline-num"
           {...figureField}
           value={listRaw}
-          onChange={(e) => setListRaw(numericOnly(e.target.value))}
+          onChange={(e) => setListRaw(moneyOnly(e.target.value))}
           aria-label="List price — pre-discount"
         />
       </td>
@@ -1473,7 +1501,7 @@ function EditLineRow({
           className="inline-num"
           {...figureField}
           value={sellRaw ?? ""}
-          onChange={(e) => setSellRaw(numericOnly(e.target.value))}
+          onChange={(e) => setSellRaw(moneyOnly(e.target.value))}
           aria-label="Sell price"
         />
       </td>

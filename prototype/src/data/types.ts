@@ -657,6 +657,24 @@ export interface BatchCredit {
   amount: number; // how much of it this batch applied — d28's "consumed whole" less any remainder
 }
 
+/**
+ * One labelled charge off the supplier's paperwork (E-02 d53) — a tax, or
+ * something miscellaneous.
+ *
+ * The **kind is what resolves the account**, which is the whole point of
+ * labelling them: a `tax` charge posts to that tax type's *paid* account
+ * ([M-07](docs/flows/M-07-chart-of-accounts.md) d5, an Input Tax Credit and so
+ * a receivable), and a `misc` charge to the reserved misc account (d23, a cost
+ * of goods). One flat figure could resolve to neither.
+ */
+export interface InvoiceCharge {
+  id: string;
+  kind: "tax" | "misc";
+  /** Set iff `kind` is `tax` — the TaxType's code (M-06 d11's single letter). */
+  taxCode?: string;
+  amount: number;
+}
+
 export interface Invoice {
   id: string;
   supplierId: string;
@@ -672,9 +690,23 @@ export interface Invoice {
   // other is the mistake this comment exists to prevent.
   paymentMethod?: PaymentMethod;
   statedSubtotal: number; // from the invoice photo/manual entry — decision 15
-  tax: number;
   freight: number;
-  misc: number;
+  /**
+   * E-02 d53 — everything else the supplier billed, **each one labelled**, and
+   * the label is what picks its ledger account.
+   *
+   * Replaces the flat `tax` and `misc` figures. Those were one number each, and
+   * [M-07](docs/flows/M-07-chart-of-accounts.md) d5 needs inbound tax **per
+   * type**: GST and QST are separate registrations remitted to separate
+   * authorities, so their input tax credits cannot share a row or the
+   * accountant cannot file either return.
+   *
+   * A list rather than one more fixed field, because how many there are is a
+   * property of **the store**, not of this software — a Quebec shop has GST and
+   * QST, an Alberta one has GST alone, and neither should be made to look at
+   * the other's boxes.
+   */
+  charges: InvoiceCharge[];
   totalOverride?: number; // reconciling to the paper total — beyond ±2% raises a ReviewFlag
   status: InvoiceStatus;
   lines: InvoiceLine[];

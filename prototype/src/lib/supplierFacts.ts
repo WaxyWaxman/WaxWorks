@@ -12,7 +12,7 @@ import type {
   Supplier,
   SupplierClaim,
 } from "../data/types";
-import { daysAgo, round2, supplierBalance } from "./totals";
+import { daysAgo, invoiceMiscTotal, round2, supplierBalance } from "./totals";
 
 // M-01 d14 — everything the ledger track shows, derived in one place so the
 // slab row, the figure and the caveat line can never disagree about what a
@@ -109,7 +109,7 @@ const TRADE_WINDOW_DAYS = 365;
  */
 export function invoiceCogs(iv: Invoice): number {
   const lines = iv.lines.reduce((n, l) => n + l.cost * l.qty, 0);
-  return round2(lines + iv.freight + iv.misc);
+  return round2(lines + iv.freight + invoiceMiscTotal(iv));
 }
 
 export function supplierApBalance(

@@ -43,7 +43,7 @@ export const countField = {
  * input stays valid — "", "12.", "-" are all things a value passes through on
  * the way to being a number, so none of them are rejected.
  */
-export function numericOnly(raw: string, allowNegative = false): string {
+export function numericOnly(raw: string, allowNegative = false, maxDecimals?: number): string {
   let out = raw.replace(allowNegative ? /[^0-9.-]/g : /[^0-9.]/g, "");
   // One leading minus at most, and only at the front.
   if (allowNegative) {
@@ -53,8 +53,34 @@ export function numericOnly(raw: string, allowNegative = false): string {
   // One decimal point at most; the rest of the digits keep their order.
   const dot = out.indexOf(".");
   if (dot !== -1) out = out.slice(0, dot + 1) + out.slice(dot + 1).replace(/\./g, "");
+  // Stop the field at the precision the figure actually has, as it is typed —
+  // the extra digits are simply not accepted, rather than accepted and rounded
+  // away later where the person who typed them never sees it happen.
+  if (maxDecimals !== undefined && dot !== -1) out = out.slice(0, dot + 1 + maxDecimals);
   return out;
 }
+
+/**
+ * A **cash** figure: the same rules, stopped at two decimal places.
+ *
+ * Money in this system is a whole number of minor units ([architecture](../../../docs/architecture.md)
+ * A-15), and every total is rounded to two ([totals.ts](totals.ts)'s `round2`,
+ * A-47's half-away-from-zero). A field that accepts `125.11111` is therefore
+ * accepting something the system cannot store: it rounds somewhere downstream,
+ * silently, and the figure on the invoice stops matching the figure on the
+ * paper. Refusing the third decimal at the keystroke is the version the person
+ * entering it can see.
+ *
+ * **Rates are not money and do not use this** — A-47 keeps tax rates in parts
+ * per million precisely because QST is 9.975%, and a supplier discount is a
+ * percentage rather than a cash amount.
+ *
+ * *Assumes two decimals for every currency.* True of CAD and USD, which is what
+ * M-06 configures; a zero-decimal currency would need this to read the
+ * currency's own precision.
+ */
+export const moneyOnly = (raw: string, allowNegative = false): string =>
+  numericOnly(raw, allowNegative, 2);
 
 /** Digits only — a quantity has no fractional part. */
 export function integerOnly(raw: string): string {

@@ -26,6 +26,7 @@ import {
   payableEntryTotal,
   round2,
   tenderedTotal,
+  invoiceChargesTotal,
 } from "../lib/totals";
 import { clearedAgainst, entryIsCleared, unclearRefusal } from "../lib/payables";
 import { buildChart } from "../lib/chart";
@@ -70,6 +71,7 @@ import type {
   IntakeMode,
   InventoryItem,
   Invoice,
+  InvoiceCharge,
   InvoiceLine,
   JournalBatch,
   AdjustmentReason,
@@ -587,9 +589,8 @@ const seed: AppState = {
       invoiceDate: "2026-08-27",
       receivedDate: "2026-08-28",
       statedSubtotal: 68.65,
-      tax: 0,
       freight: 0,
-      misc: 0,
+      charges: [],
       status: "Finalized",
       lines: [
         {
@@ -631,9 +632,8 @@ const seed: AppState = {
       invoiceDate: "2026-08-30",
       receivedDate: "2026-08-31",
       statedSubtotal: 17.25,
-      tax: 0,
       freight: 0,
-      misc: 0,
+      charges: [],
       status: "Finalized",
       lines: [
         {
@@ -665,9 +665,8 @@ const seed: AppState = {
       invoiceDate: "2026-08-18",
       receivedDate: "2026-08-19",
       statedSubtotal: 20.0,
-      tax: 0,
       freight: 0,
-      misc: 0,
+      charges: [],
       status: "Finalized",
       lines: [
         {
@@ -925,8 +924,9 @@ interface AppContextValue extends AppState {
     invoiceDate: string;
     receivedDate: string;
     statedSubtotal: number;
-    tax: number;
     freight: number;
+    /** E-02 d53 — the labelled charges, pre-seeded per configured tax type. */
+    charges: InvoiceCharge[];
   }) => string;
   createRecordManual: (input: {
     artist: string;
@@ -969,7 +969,7 @@ interface AppContextValue extends AppState {
   // them are things read off the supplier's invoice and corrected until paid.
   updateInvoiceTotals: (
     invoiceId: string,
-    patch: Partial<Pick<Invoice, "statedSubtotal" | "tax" | "freight" | "misc" | "paymentTerms" | "paymentMethod">>,
+    patch: Partial<Pick<Invoice, "statedSubtotal" | "freight" | "charges" | "invoiceDate" | "paymentTerms" | "paymentMethod">>,
   ) => void;
   setInvoiceTotalOverride: (invoiceId: string, value?: number) => void;
   /**
@@ -2897,7 +2897,6 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
       invoiceDate,
       receivedDate,
       invoiceNumber,
-      misc: 0,
       status: "Draft",
       lines: [],
       createdBy: actorName,
@@ -3291,7 +3290,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
     }));
     if (value == null) return;
     const derivedSubtotal = round2(invoice.lines.reduce((sum, l) => sum + l.cost * l.qty, 0));
-    const computedTotal = round2(derivedSubtotal + invoice.tax + invoice.freight + invoice.misc);
+    const computedTotal = round2(derivedSubtotal + invoice.freight + invoiceChargesTotal(invoice));
     const delta = round2(value - computedTotal);
     const pct = computedTotal !== 0 ? Math.abs(delta) / computedTotal : Math.abs(delta) > 0 ? 1 : 0;
     if (Math.abs(delta) > 0.005 && pct > 0.02) {
@@ -3352,6 +3351,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
       invoice: { ...invoice, lines: updatedLines },
       writtenAt: now(),
       accounts: s.glAccounts,
+      mappings: s.glMappings,
       currency: supplier.currency || s.homeCurrency,
     });
 

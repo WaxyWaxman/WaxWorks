@@ -1,7 +1,7 @@
 import { useEffect, useRef } from "react";
 import type { Invoice, Supplier } from "../data/types";
 import { money } from "../lib/money";
-import { round2 } from "../lib/totals";
+import { invoiceChargesTotal, round2 } from "../lib/totals";
 import { useApp } from "../store/AppStore";
 import { ChevronLeft, ChevronRight } from "./Chevrons";
 
@@ -70,7 +70,7 @@ export function ReceiveSlab({
   // show every tidy invoice as $0.00.
   const invoiceTotal = (iv: Invoice) =>
     iv.totalOverride ??
-    round2(iv.lines.reduce((sum, l) => sum + l.cost * l.qty, 0) + iv.tax + iv.freight + iv.misc);
+    round2(iv.lines.reduce((sum, l) => sum + l.cost * l.qty, 0) + iv.freight + invoiceChargesTotal(iv));
 
   if (!open) {
     return (
