@@ -607,6 +607,25 @@ export interface PaymentBatch {
   credits: BatchCredit[];
 }
 
+/**
+ * M-05 d46 — a clearing is an ACT WITH MEMBERS, addressable the way a
+ * PaymentBatch is: listed beside payment history, opened to see its members,
+ * with Un-clear on it where Void sits on a batch. `ap_clearings` +
+ * `ap_clearing_members` (architecture A-36).
+ *
+ * An entry is CLEARED because a clearing names it — derived, never stored on
+ * the entry. That is A-37's shape, and it is what makes d48 work: reversing a
+ * clearing REMOVES it (architecture A-70), and its members are un-cleared by
+ * the absence of the row, with nothing to flip.
+ */
+export interface Clearing {
+  id: string;
+  supplierId: string;
+  memberIds: string[]; // d15 — at least two, and their signed amounts sum to zero
+  clearedAt: string;
+  clearedBy: string;
+}
+
 export interface BatchCredit {
   creditId: string; // the SupplierClaim or Credit PayableEntry it came from
   amount: number; // how much of it this batch applied — d28's "consumed whole" less any remainder
@@ -688,7 +707,10 @@ export interface PayableEntry {
   // that eventually replaced it, say — a Manager can mark them Cleared
   // against each other. Cleared entries stay in the ledger (never deleted)
   // but drop out of what still needs attention.
-  clearedWith?: string[]; // ids of the other PayableEntry rows cleared alongside this one
+  // A d15 CLEARING no longer writes here — it is its own artifact (Clearing
+  // below, M-05 d46, architecture A-36). These three are left to d27's
+  // settlement disposal alone, which is a different act with a different
+  // reversal: its batch's void (d22), not an un-clear.
   clearedAt?: string;
   clearedBy?: string;
   /**

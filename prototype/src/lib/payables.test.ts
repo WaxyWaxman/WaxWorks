@@ -1,14 +1,16 @@
 import { describe, expect, it } from "vitest";
 import {
   batchMoneyPaid,
+  clearedAgainst,
   creditDrawdown,
   duplicateReference,
+  entryIsCleared,
   settlementPlan,
   unclearRefusal,
   type LedgerRow,
 } from "./payables";
 import { creditIsConsumed, invoiceIsFrozen } from "./totals";
-import type { Invoice, PayableEntry, PaymentBatch, PaymentBatchVoid } from "../data/types";
+import type { Clearing, Invoice, PayableEntry, PaymentBatch, PaymentBatchVoid } from "../data/types";
 
 /**
  * The first tests over payables. They exist because a scoping pass found a live
@@ -195,7 +197,15 @@ describe("M-05 d43 — credits draw down in tick order, not ledger order", () =>
   });
 });
 
-describe("M-05 d39 — a clearing is reversible; a settlement's disposal is not", () => {
+describe("M-05 d46/d47/d48 — a clearing is an artifact, reversed whole, and removed", () => {
+  const clearing = (memberIds: string[]): Clearing => ({
+    id: "clr-1",
+    supplierId: "sup",
+    memberIds,
+    clearedAt: "2026-09-16 10:00:00",
+    clearedBy: "MT",
+  });
+
   const entry = (id: string, over: Partial<PayableEntry> = {}): PayableEntry => ({
     id,
     supplierId: "sup",
@@ -212,45 +222,55 @@ describe("M-05 d39 — a clearing is reversible; a settlement's disposal is not"
     ...over,
   });
 
-  const cleared = (id: string) =>
-    entry(id, { clearedAt: "2026-09-16 10:00:00", clearedBy: "MT", clearedWith: ["other"] });
-
-  it("allows un-clearing a pair a Manager cleared by hand (d15)", () => {
-    expect(unclearRefusal([cleared("A"), cleared("B")])).toBeUndefined();
+  it("derives cleared from the clearing naming the entry, not from the entry", () => {
+    // A-37's shape. It is what lets d48 reverse by REMOVING the clearing: the
+    // members come back by the absence of the row, with nothing to flip.
+    expect(entryIsCleared("A", [clearing(["A", "B"])])).toBe(true);
+    expect(entryIsCleared("C", [clearing(["A", "B"])])).toBe(false);
   });
 
-  it("refuses a row a settlement retired, and says where to reverse it (d27, d22)", () => {
-    // d27's placeholder disposal. Before `clearedInBatchId` existed this row
-    // was indistinguishable from a d15 clearing, so an un-clear would have
-    // reversed it — answering an open question by accident.
-    const disposed = entry("PH", {
-      reference: "Claim #12",
-      clearedAt: "2026-09-16 10:00:00",
-      clearedBy: "MT",
-      clearedInBatchId: "batch-1",
-    });
-
-    expect(unclearRefusal([disposed])).toMatch(/retired by a settlement/);
-    expect(unclearRefusal([disposed])).toMatch(/Void that settlement/);
+  it("un-clears the whole clearing, so there is no partial case to refuse (d47)", () => {
+    expect(unclearRefusal(clearing(["A", "B"]))).toBeUndefined();
   });
 
-  it("refuses a mixed selection on the strength of the one disposal in it", () => {
-    const disposed = entry("PH", {
-      reference: "Claim #12",
-      clearedAt: "2026-09-16 10:00:00",
-      clearedBy: "MT",
-      clearedInBatchId: "batch-1",
-    });
-
-    expect(unclearRefusal([cleared("A"), disposed])).toMatch(/retired by a settlement/);
+  it("refuses a clearing that no longer exists — d48 removed it", () => {
+    expect(unclearRefusal(undefined)).toMatch(/no longer exists/);
   });
 
-  it("refuses a row that is not cleared at all", () => {
-    expect(unclearRefusal([entry("A")])).toMatch(/not cleared/);
+  it("refuses a clearing that cannot satisfy d15's sum-to-zero", () => {
+    expect(unclearRefusal(clearing(["A"]))).toMatch(/at least two members/);
+  });
+
+  it("names the siblings, which is A-70's fourth condition", () => {
+    // d48 removes the clearing, so "cleared against 2 other entries" would lose
+    // WHICH two. A-70 makes naming them a condition of the deletion being
+    // permitted, so this is the only place the act survives the row.
+    const members = [entry("A", { reference: "CLAIM-5000" }), entry("B", { reference: "CM-5000" })];
+
+    expect(clearedAgainst("A", members)).toBe("CM-5000");
+    expect(clearedAgainst("B", members)).toBe("CLAIM-5000");
+  });
+
+  it("names every sibling when a clearing has more than two members", () => {
+    const members = [
+      entry("A", { reference: "CLAIM-1" }),
+      entry("B", { reference: "CM-1" }),
+      entry("C", { reference: "ADJ-1" }),
+    ];
+
+    expect(clearedAgainst("A", members)).toBe("CM-1, ADJ-1");
+  });
+
+  it("leaves d27's settlement disposal alone — it is not a clearing", () => {
+    // Stamped on the entry with its batch, and reversed by that batch's void
+    // (d22), never by an un-clear. No clearing names it, so nothing here sees it.
+    const disposed = entry("PH", { clearedAt: "2026-09-16 10:00:00", clearedInBatchId: "batch-1" });
+
+    expect(entryIsCleared(disposed.id, [clearing(["A", "B"])])).toBe(false);
   });
 });
 
-describe("M-05 d37 — an Invoice is frozen while any live batch targets it", () => {
+describe("M-05 d37 â€” an Invoice is frozen while any live batch targets it", () => {
   const invoice = (over: Partial<Invoice> = {}): Invoice => ({
     id: "INV",
     supplierId: "sup",
@@ -280,18 +300,18 @@ describe("M-05 d37 — an Invoice is frozen while any live batch targets it", ()
     expect(invoiceIsFrozen(invoice(), [], [])).toBe(false);
   });
 
-  it("freezes a PARTLY paid Invoice — the gap d37 closes", () => {
+  it("freezes a PARTLY paid Invoice â€” the gap d37 closes", () => {
     // $100 invoice, $40 paid. Not paid, so A-41's invoiceIsPaid let every edit
     // through, and d22's void would then have returned money to a target that
     // no longer said what it said.
     expect(invoiceIsFrozen(invoice(), [paying(40)], [])).toBe(true);
   });
 
-  it("freezes a fully paid one too — d37 is a superset of A-41, not a swap", () => {
+  it("freezes a fully paid one too â€” d37 is a superset of A-41, not a swap", () => {
     expect(invoiceIsFrozen(invoice(), [paying(100)], [])).toBe(true);
   });
 
-  it("thaws when the batch is voided (d22, A-33a — immutable WHILE paid)", () => {
+  it("thaws when the batch is voided (d22, A-33a â€” immutable WHILE paid)", () => {
     const voided: PaymentBatchVoid[] = [
       { id: "v1", batchId: "b1", voidedAt: "2026-09-17 09:00:00", voidedBy: "MT" },
     ];
@@ -303,7 +323,6 @@ describe("M-05 d37 — an Invoice is frozen while any live batch targets it", ()
     expect(invoiceIsFrozen(invoice({ finalizedAt: undefined, status: "Draft" }), [paying(40)], [])).toBe(false);
   });
 });
-
 describe("M-05 d5/d38 — a batch records what left the bank, not what it settled", () => {
   const rem = (id: string, amount: number, over: Partial<PayableEntry> = {}): PayableEntry => ({
     id,

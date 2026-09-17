@@ -27,7 +27,7 @@ import {
   round2,
   tenderedTotal,
 } from "../lib/totals";
-import { unclearRefusal } from "../lib/payables";
+import { clearedAgainst, entryIsCleared, unclearRefusal } from "../lib/payables";
 import {
   CURRENT_USER,
   CUSTOMERS,
@@ -100,6 +100,7 @@ import type {
   ProviderTag,
   ReleaseCacheEntry,
   ClaimVoid,
+  Clearing,
   SupplierClaim,
   TaxLine,
   Tender,
@@ -211,6 +212,7 @@ interface AppState {
   payableEntries: PayableEntry[]; // M-05 — manual ledger entries: Invoice/Claim/Credit/Adjustment/Consignment, not sourced from Receiving or Supplier Claims
   paymentBatches: PaymentBatch[]; // M-05 d16 — one row per settlement, across Invoices, entries and credits
   batchVoids: PaymentBatchVoid[]; // M-05 d22 / A-33a — a void is an appended artifact, never a column on the batch
+  clearings: Clearing[]; // M-05 d46 — a clearing is an act with members, addressable like a batch
   pendingOrders: PendingOrderLine[];
   reviewFlags: ReviewFlag[];
   activeSaleId: string | null;
@@ -709,6 +711,7 @@ const seed: AppState = {
     },
   ],
   batchVoids: [],
+  clearings: [],
   pendingOrders: PENDING_ORDERS,
   reviewFlags: [],
   activeSaleId: null,
@@ -973,7 +976,8 @@ interface AppContextValue extends AppState {
   // otherwise (mismatched sum, wrong supplier, already cleared, etc).
   clearPayableEntries: (entryIds: string[], by: string) => { cleared: boolean };
   // M-05 d39 — a clearing is a REVERSIBLE MARK, not a terminal state.
-  unclearPayableEntries: (entryIds: string[], by: string) => { uncleared: boolean; reason?: string };
+  // d46 — addressed by the CLEARING, the way a void addresses a batch.
+  unclearPayableEntries: (clearingId: string, by: string) => { uncleared: boolean; reason?: string };
 
   pendingOrderFor: (id?: string) => PendingOrderLine | undefined;
   /** Logs the receipt on the line; the line SURVIVES (M-02 d21). `qty` is
@@ -3442,22 +3446,38 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
   const clearPayableEntries: AppContextValue["clearPayableEntries"] = (entryIds, by) => {
     const entries = entryIds.map((id) => s.payableEntries.find((e) => e.id === id)).filter((e): e is PayableEntry => !!e);
     if (entries.length < 2 || entries.length !== entryIds.length) return { cleared: false };
-    if (entries.some((e) => e.clearedAt)) return { cleared: false };
+    // d46 — cleared is now DERIVED from a clearing naming the entry, so the
+    // check is "is it already in one", not "does it carry a mark".
+    if (entries.some((e) => entryIsCleared(e.id, s.clearings) || e.clearedAt)) return { cleared: false };
     if (new Set(entries.map((e) => e.supplierId)).size > 1) return { cleared: false };
     const net = round2(entries.reduce((sum, e) => sum + payableEntrySignedAmount(e), 0));
     if (Math.abs(net) > 0.005) return { cleared: false };
 
     const at = now();
+    const clearing: Clearing = {
+      id: uid("clr"),
+      supplierId: entries[0].supplierId,
+      memberIds: [...entryIds],
+      clearedAt: at,
+      clearedBy: by,
+    };
     setS((prev) => ({
       ...prev,
+      clearings: [clearing, ...prev.clearings],
       payableEntries: prev.payableEntries.map((e) =>
         entryIds.includes(e.id)
           ? {
               ...e,
-              clearedWith: entryIds.filter((id) => id !== e.id),
-              clearedAt: at,
-              clearedBy: by,
-              log: [...e.log, { at, text: `Cleared against ${entryIds.length - 1} other entr${entryIds.length - 1 === 1 ? "y" : "ies"} by ${by} — net ${money(net)}` }],
+              // A-70 — the log NAMES the siblings. Deleting the clearing (d48)
+              // destroys the grouping, and "cleared against 2 others" does not
+              // say which two; this is what makes the act survive the row.
+              log: [
+                ...e.log,
+                {
+                  at,
+                  text: `Cleared against ${clearedAgainst(e.id, entries)} by ${by} — net ${money(net)} (d15)`,
+                },
+              ],
             }
           : e,
       ),
@@ -3479,27 +3499,32 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
    * batch's void (d22), and whether the void even does so is an open question
    * in M-05. Un-clearing it here would answer that question by accident.
    */
-  const unclearPayableEntries: AppContextValue["unclearPayableEntries"] = (entryIds, by) => {
-    const entries = entryIds
-      .map((id) => s.payableEntries.find((e) => e.id === id))
-      .filter((e): e is PayableEntry => !!e);
-    if (entries.length === 0 || entries.length !== entryIds.length) {
-      return { uncleared: false, reason: "Some of those entries no longer exist." };
-    }
-    const refusal = unclearRefusal(entries);
-    if (refusal) return { uncleared: false, reason: refusal };
+  const unclearPayableEntries: AppContextValue["unclearPayableEntries"] = (clearingId, by) => {
+    const clearing = s.clearings.find((c) => c.id === clearingId);
+    const refusal = unclearRefusal(clearing);
+    if (refusal || !clearing) return { uncleared: false, reason: refusal };
 
     const at = now();
+    const members = clearing.memberIds
+      .map((id) => s.payableEntries.find((e) => e.id === id))
+      .filter((e): e is PayableEntry => !!e);
     setS((prev) => ({
       ...prev,
+      // d48 / A-70 — the clearing is REMOVED, not marked. Its members are
+      // un-cleared by the absence of the row, with nothing to flip, exactly as
+      // A-33a releases an Invoice and A-37 releases a credit.
+      clearings: prev.clearings.filter((c) => c.id !== clearingId),
       payableEntries: prev.payableEntries.map((e) =>
-        entryIds.includes(e.id)
+        clearing.memberIds.includes(e.id)
           ? {
               ...e,
-              clearedWith: undefined,
-              clearedAt: undefined,
-              clearedBy: undefined,
-              log: [...e.log, { at, text: `Un-cleared by ${by} — back on the outstanding list (d39)` }],
+              log: [
+                ...e.log,
+                {
+                  at,
+                  text: `Un-cleared by ${by} — was cleared against ${clearedAgainst(e.id, members)}; back on the outstanding list (d39, d48)`,
+                },
+              ],
             }
           : e,
       ),

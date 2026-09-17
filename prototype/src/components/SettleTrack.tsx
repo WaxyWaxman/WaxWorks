@@ -2,6 +2,7 @@ import { useState } from "react";
 import {
   PAYABLE_ENTRY_TYPES,
   PAYMENT_METHODS,
+  type Clearing,
   type PayableEntryType,
   type PayableEntry,
   type PaymentBatch,
@@ -19,7 +20,7 @@ import {
   type SettlementPlan,
 } from "../lib/payables";
 import { money } from "../lib/money";
-import { round2 } from "../lib/totals";
+import { payableEntrySignedAmount, round2 } from "../lib/totals";
 
 /**
  * Track 3. Three states, in strict priority: the entry being composed, else
@@ -50,10 +51,12 @@ export function SettleTrack({
   batches,
   voids,
   entries,
+  clearings,
   duplicateRef,
   openBatch,
   onOpenBatch,
   onVoid,
+  onUnclear,
 }: {
   supplier?: Supplier;
   isCards: boolean;
@@ -86,10 +89,13 @@ export function SettleTrack({
   /** d38 — the overpayment remainders a batch emitted, for `batchMoneyPaid`. */
   entries: PayableEntry[];
   /** d41 — an earlier batch on this same reference, if there is one. */
+  /** d46 — a clearing is an act with members, listed beside payment history. */
+  clearings: Clearing[];
   duplicateRef?: { reference: string; date: string; voided: boolean };
   openBatch: string | null;
   onOpenBatch: (id: string) => void;
   onVoid: (id: string) => void;
+  onUnclear: (clearingId: string) => void;
 }) {
   if (creating && supplier) {
     return <CreateEntry supplier={supplier} onCancel={onCancelCreate} onCreate={onCreate} />;
@@ -119,9 +125,11 @@ export function SettleTrack({
       batches={batches}
       voids={voids}
       entries={entries}
+      clearings={clearings}
       openBatch={openBatch}
       onOpenBatch={onOpenBatch}
       onVoid={onVoid}
+      onUnclear={onUnclear}
       onCreateNew={onCreateNew}
     />
   );
@@ -136,9 +144,11 @@ function Standing({
   batches,
   voids,
   entries,
+  clearings,
   openBatch,
   onOpenBatch,
   onVoid,
+  onUnclear,
   onCreateNew,
 }: {
   supplier: Supplier;
@@ -147,9 +157,11 @@ function Standing({
   batches: PaymentBatch[];
   voids: PaymentBatchVoid[];
   entries: PayableEntry[];
+  clearings: Clearing[];
   openBatch: string | null;
   onOpenBatch: (id: string) => void;
   onVoid: (id: string) => void;
+  onUnclear: (clearingId: string) => void;
   onCreateNew: () => void;
 }) {
   const credits = rows.filter((r) => r.role === "credit");
@@ -327,6 +339,58 @@ function Standing({
                         Void this settlement
                       </button>
                     )}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+
+        {/* d46 — a clearing is an act with members, so it is listed the way a
+            settlement is and opened the same way, with Un-clear where Void sits
+            on a batch. This is d21's move in the other direction: a retired row
+            is reached through the act that retired it, because the reverse
+            lookup is the one someone reconciling actually needs. */}
+        <div className="wo-sec">
+          <span className="lab">Clearings</span>
+          {clearings.length === 0 && (
+            <div className="wo-sec-empty">
+              Nothing retired against anything else. A clearing moves no money (d15).
+            </div>
+          )}
+          {clearings.map((c) => {
+            const members = c.memberIds
+              .map((id) => entries.find((e) => e.id === id))
+              .filter((e): e is PayableEntry => !!e);
+            const open = openBatch === c.id;
+            return (
+              <div className="ap-batch" key={c.id}>
+                <button className="ap-batch-head" onClick={() => onOpenBatch(c.id)} aria-expanded={open}>
+                  <span className="l">
+                    {c.clearedAt.slice(0, 10)} — cleared{" "}
+                    <span className="mono">{c.memberIds.length} entries</span>
+                  </span>
+                  <span className="badge">{money(0)}</span>
+                </button>
+                {open && (
+                  <div className="ap-batch-body">
+                    {members.map((m) => (
+                      <div className="tgt" key={m.id}>
+                        <span>{m.reference}</span>
+                        <span className="mono">{money(payableEntrySignedAmount(m))}</span>
+                      </div>
+                    ))}
+                    <div className="by">
+                      Cleared by {c.clearedBy} — the members sum to zero and the balance did not move (d15).
+                    </div>
+                    <button className="btn ink danger sm" onClick={() => onUnclear(c.id)}>
+                      Un-clear
+                    </button>
+                    <div className="by">
+                      Reverses whole (d47) and <strong>removes this clearing</strong> (d48) — it moved no money and
+                      posted no journal line, so there is nothing to keep. Each entry's log names what it was cleared
+                      against ([architecture] A-70).
+                    </div>
                   </div>
                 )}
               </div>

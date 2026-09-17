@@ -83,6 +83,7 @@ export function AccountsPayable() {
     paymentBatches: app.paymentBatches,
     batchVoids: app.batchVoids,
     claimVoids: app.claimVoids,
+      clearings: app.clearings,
   };
 
   const balanceOf = (id: string) => supplierBalance(id, data);
@@ -210,10 +211,20 @@ export function AccountsPayable() {
 
   const doClear = () => {
     const before = supplier ? balanceOf(supplier.id) : 0;
-    app.clearPayableEntries(
-      selectedRows.filter((r) => r.kind === "entry").map((r) => r.id),
-      authorisedBy ?? "",
-    );
+    const ids = selectedRows.filter((r) => r.kind === "entry").map((r) => r.id);
+    const result = app.clearPayableEntries(ids, authorisedBy ?? "");
+    // The return value used to be dropped, so a refused clearing still reported
+    // "2 retired against each other" and the Manager was told an act happened
+    // that had not. d15 makes a clearing the Manager's manual call over a set
+    // summing to zero — being told the wrong set was acted on is the one thing
+    // that cannot be allowed to be silent.
+    if (!result.cleared) {
+      setMsg(
+        `Nothing was cleared. ${ids.length < 2 ? "A clearing needs at least two manual entries (d15) — a Credited claim is not one of them, which is a gap worth raising." : "Those entries do not sum to zero, or one is already cleared (d15)."}`,
+      );
+      setSel({});
+      return;
+    }
     const after = supplier ? balanceOf(supplier.id) : 0;
     setMsg(
       `${selectedRows.length} retired against each other. Balance unchanged at ${money(before)} — a credit already counted and stays counted (d15, d27)${
@@ -433,6 +444,16 @@ export function AccountsPayable() {
         rows={rows}
         plan={plan}
         entries={app.payableEntries}
+        clearings={app.clearings}
+        onUnclear={(id) => {
+          const r = app.unclearPayableEntries(id, authorisedBy ?? "");
+          setMsg(
+            r.uncleared
+              ? "Clearing reversed and removed — its members are back on the outstanding list, and each one's log names what it was cleared against (d47, d48, A-70)."
+              : (r.reason ?? "That clearing could not be reversed."),
+          );
+          setOpenBatch(null);
+        }}
         // d41 — warns, never refuses. Computed here because this is where the
         // batches are; the notice itself belongs beside the reference field.
         duplicateRef={duplicateReference(form.reference, app.paymentBatches, app.batchVoids)}

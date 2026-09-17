@@ -1,5 +1,6 @@
 import type {
   ClaimVoid,
+  Clearing,
   Invoice,
   PayableEntry,
   PayableEntrySource,
@@ -102,6 +103,8 @@ export interface PayablesData {
   // that: any query remembering only the first counts voided claims as live.
   // This is the second half, carried so `claimIsAgreed` can consult both.
   claimVoids: ClaimVoid[];
+  // M-05 d46 — cleared is derived from these, not from a mark on the entry.
+  clearings: Clearing[];
 }
 
 const addDays = (iso: string, n: number): string => {
@@ -150,7 +153,7 @@ export function ledgerRows(
   suppliers: Supplier[],
   today = new Date(),
 ): LedgerRow[] {
-  const { invoices, payableEntries, claims, paymentBatches: b, batchVoids: v } = data;
+  const { invoices, payableEntries, claims, paymentBatches: b, batchVoids: v, clearings } = data;
   const supplier = suppliers.find((s) => s.id === supplierId);
   const rows: LedgerRow[] = [];
 
@@ -205,7 +208,12 @@ export function ledgerRows(
     });
   }
 
-  for (const e of payableEntries.filter((x) => x.supplierId === supplierId && !x.clearedAt)) {
+  // d46 — a row is off the ledger because a CLEARING names it (derived), or
+  // because d27's settlement disposal stamped it. Two different acts with two
+  // different reversals; only the first is un-clearable.
+  for (const e of payableEntries.filter(
+    (x) => x.supplierId === supplierId && !entryIsCleared(x.id, clearings) && !x.clearedAt,
+  )) {
     const payable = payableEntryIsPayable(e);
     const contribution = payableEntryContribution(e, b, v);
     const isPlaceholder = e.type === "Claim";
@@ -389,15 +397,49 @@ export function batchMoneyPaid(batch: PaymentBatch, entries: PayableEntry[]): nu
   return round2(targets + over);
 }
 
-export function unclearRefusal(entries: PayableEntry[]): string | undefined {
-  if (entries.length === 0) return "Nothing selected.";
-  if (entries.some((e) => !e.clearedAt)) return "Nothing to un-clear — some of those are not cleared.";
-  const disposed = entries.find((e) => e.clearedInBatchId);
-  if (disposed) {
-    return `${disposed.reference} was retired by a settlement, not by a clearing. Void that settlement to reverse it (d22).`;
-  }
+/**
+ * M-05 d46 — an entry is CLEARED because a clearing names it. Derived from the
+ * artifact, never stored on the entry (architecture A-37's shape), which is
+ * what lets d48 reverse a clearing by REMOVING it: the members come back by
+ * the absence of the row, with nothing to flip.
+ *
+ * d27's settlement disposal is NOT this. It stamps the entry directly and is
+ * reversed by its batch's void, never by an un-clear (A-70's conditions do not
+ * reach it).
+ */
+export const entryIsCleared = (entryId: string, clearings: Clearing[]): boolean =>
+  clearings.some((c) => c.memberIds.includes(entryId));
+
+/**
+ * M-05 d47, d48, architecture A-70 — why this clearing may not be reversed, or
+ * undefined if it may.
+ *
+ * The rule, not the write, so it can be held to a test. Un-clearing is WHOLE
+ * (d47): d15 requires the members to sum to zero, so releasing one leaves a
+ * clearing that could never have been made. There is therefore no partial
+ * refusal to express here — a clearing is reversible or it does not exist.
+ */
+/**
+ * architecture A-70's fourth condition — what a clearing's member was cleared
+ * AGAINST, named rather than counted.
+ *
+ * d48 removes the clearing, which destroys the grouping: "cleared against 2
+ * other entries" does not say which two. A-70 makes naming them a CONDITION of
+ * the deletion being permitted, so this is load-bearing rather than cosmetic —
+ * it is the only place the act survives the row.
+ */
+export const clearedAgainst = (selfId: string, members: PayableEntry[]): string =>
+  members
+    .filter((o) => o.id !== selfId)
+    .map((o) => o.reference)
+    .join(", ");
+
+export function unclearRefusal(clearing: Clearing | undefined): string | undefined {
+  if (!clearing) return "That clearing no longer exists.";
+  if (clearing.memberIds.length < 2) return "A clearing needs at least two members (d15).";
   return undefined;
 }
+
 
 export function settlementPlan(rows: LedgerRow[]): SettlementPlan {
   const debits = rows.filter((r) => r.role === "debit" && r.balance > 0.005);
