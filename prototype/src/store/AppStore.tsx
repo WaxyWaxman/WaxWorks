@@ -3404,6 +3404,12 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
           : iv,
       );
 
+      // d49 — where the money returns to an entry sitting in a CLEARING, it
+      // lands on a row the ledger hides. The void still proceeds (d30 — it
+      // never refuses) and the clearing is left alone, because d15's
+      // sum-to-zero runs on FACE and a void does not change face: the clearing
+      // is still true. What is wrong is only that the money is invisible, so
+      // the system says so. A-68 is what allows a flag with no actor.
       return {
         ...prev,
         batchVoids: [voidRow, ...prev.batchVoids],

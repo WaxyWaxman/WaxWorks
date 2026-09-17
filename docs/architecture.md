@@ -328,6 +328,11 @@ review_flags (
                            -- can raise it
                            -- | negative_stock_sale | sale_lock_broken
                            -- | journal_imbalance (A-68) — system-raised
+                           -- ~~money_on_cleared_entry (M-05 d49)~~ — retired
+                           --   before it shipped: M-05 d50 found the case
+                           --   unreachable, since only a debit is ever a
+                           --   target and a clearing holds no debit (d27).
+                           --   A-68's mechanism stands; nothing uses it yet
   subject_type, subject_id,
   actor_user_id,           -- nullable since A-68: null means the system raised it,
                            -- not an Employee. Only `journal_imbalance` does so far.
@@ -541,6 +546,7 @@ Each of these has been appended to the document it affects.
 | [M-05](flows/M-05-accounts-payable.md) | A PaymentBatch names the bank account it drew on, defaulted from the Method and overridable (A-65) |
 | [lexicon](lexicon.md) | *ReviewFlag* — a flag may be raised by the system, not only by an Employee (A-68) |
 | [lexicon](lexicon.md) §14 | Ledger vocabulary ratified as decisions rather than reserved wording (A-64 to A-67, [M-07](flows/M-07-chart-of-accounts.md) d1–d14) |
+| [architecture](architecture.md) §5.2 | ~~`money_on_cleared_entry` joins the `kind` enum~~ — retired unbuilt: [M-05](flows/M-05-accounts-payable.md) d50 found d49's case unreachable. A-68's mechanism stands and nothing uses it yet |
 | [architecture](architecture.md) §2 A-37, §5.1 | A credit is consumed when a **batch** names it, not when a target does; the equality restates per batch (A-69) |
 | [architecture](architecture.md) §2 A-36 | The payables group gains `ap_batch_credits`; nothing in A-36 is struck (A-69) |
 | [architecture](architecture.md) §2 A-37 | *Cleared* is derived from membership of a clearing, not a **non-voided** one — a clearing has no void ([M-05](flows/M-05-accounts-payable.md) d39) |
