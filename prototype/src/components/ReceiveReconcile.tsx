@@ -1,5 +1,5 @@
 import { PAYMENT_METHODS, PAYMENT_TERMS } from "../data/types";
-import type { Invoice, PaymentMethod, PaymentTerms, Supplier } from "../data/types";
+import type { Invoice, InvoiceCharge, PaymentMethod, PaymentTerms, Supplier, TaxType } from "../data/types";
 import { figureField, numericOnly } from "../lib/fields";
 import { money } from "../lib/money";
 import { dueFor } from "../lib/payables";
@@ -38,12 +38,15 @@ export function ReceiveReconcile({
   onSaveUpdates,
   onPrintAllLabels,
   mintedCount,
+  taxTypes,
 }: {
   invoice: Invoice;
   supplier: Supplier;
   onPatchTotals: (
-    patch: Partial<Pick<Invoice, "statedSubtotal" | "tax" | "freight" | "misc" | "paymentTerms" | "paymentMethod">>,
+    patch: Partial<Pick<Invoice, "statedSubtotal" | "freight" | "charges" | "paymentTerms" | "paymentMethod">>,
   ) => void;
+  /** d53 — what a charge may be labelled is a property of the store. */
+  taxTypes: TaxType[];
   derivedSubtotal: number;
   mismatch: boolean;
   totalRaw: string;
@@ -119,7 +122,7 @@ export function ReceiveReconcile({
 
         <div className="recv-sec">
           <span className="lab">Theirs — off the paperwork</span>
-          <PaperworkFields invoice={invoice} locked={locked} onPatch={onPatchTotals} />
+          <PaperworkFields invoice={invoice} locked={locked} onPatch={onPatchTotals} taxTypes={taxTypes} />
           <div className={"totals-row recv-delta" + (mismatch ? " warn" : " ok")}>
             <span className="xsmall">Difference</span>
             <strong className="num">{money(statedDelta)}</strong>
@@ -411,30 +414,105 @@ function PaperworkFields({
   invoice,
   locked,
   onPatch,
+  taxTypes,
 }: {
   invoice: Invoice;
   locked: boolean;
-  onPatch: (patch: Partial<Pick<Invoice, "statedSubtotal" | "tax" | "freight" | "misc">>) => void;
+  onPatch: (patch: Partial<Pick<Invoice, "statedSubtotal" | "freight" | "charges">>) => void;
+  /** The store's tax types, which decide what a charge can be labelled (d53). */
+  taxTypes: TaxType[];
 }) {
-  const fields: { key: "statedSubtotal" | "tax" | "freight" | "misc"; label: string }[] = [
-    { key: "statedSubtotal", label: "Stated subtotal" },
-    { key: "tax", label: "Tax" },
-    { key: "freight", label: "Freight" },
-    { key: "misc", label: "Miscellaneous" },
-  ];
+  const setCharge = (id: string, patch: Partial<InvoiceCharge>) =>
+    onPatch({ charges: invoice.charges.map((c) => (c.id === id ? { ...c, ...patch } : c)) });
+
+  const labelFor = (c: InvoiceCharge) =>
+    c.kind === "misc"
+      ? "Miscellaneous"
+      : (taxTypes.find((t) => t.code === c.taxCode)?.name ?? `Tax ${c.taxCode ?? "?"}`);
+
   return (
     <>
-      {fields.map(({ key, label }) => (
-        <label className="recv-entry" key={key}>
-          <span>{label}</span>
+      <label className="recv-entry">
+        <span>Stated subtotal</span>
+        <input
+          {...figureField}
+          disabled={locked}
+          value={invoice.statedSubtotal}
+          onChange={(e) => onPatch({ statedSubtotal: Number(numericOnly(e.target.value)) || 0 })}
+        />
+      </label>
+
+      {/* d53 — each charge carries its own label, and the label is what picks
+          its ledger account: a tax row to that type's Input Tax Credit account
+          (M-07 d5), Miscellaneous to the reserved misc account (d23).
+
+          The rows for the store's configured tax types are here already, so
+          copying an invoice is reading figures across rather than deciding
+          anything. A Quebec shop opens on GST and QST; an Alberta one on GST.
+          A charge the store has no type for goes under Miscellaneous, which is
+          what that slot was always for. */}
+      {invoice.charges.map((c) => (
+        <label className="recv-entry" key={c.id}>
+          <span>
+            {c.kind === "tax" && taxTypes.some((t) => t.code === c.taxCode) ? (
+              labelFor(c)
+            ) : (
+              <select
+                aria-label="What this charge is"
+                disabled={locked}
+                value={c.kind === "tax" ? `tax:${c.taxCode}` : "misc"}
+                onChange={(e) =>
+                  setCharge(
+                    c.id,
+                    e.target.value === "misc"
+                      ? { kind: "misc", taxCode: undefined }
+                      : { kind: "tax", taxCode: e.target.value.slice(4) },
+                  )
+                }
+              >
+                <option value="misc">Miscellaneous</option>
+                {taxTypes.map((t) => (
+                  <option key={t.code} value={`tax:${t.code}`}>
+                    {t.name}
+                  </option>
+                ))}
+              </select>
+            )}
+          </span>
           <input
             {...figureField}
             disabled={locked}
-            value={invoice[key]}
-            onChange={(e) => onPatch({ [key]: Number(numericOnly(e.target.value)) || 0 })}
+            value={c.amount}
+            onChange={(e) => setCharge(c.id, { amount: Number(numericOnly(e.target.value)) || 0 })}
           />
         </label>
       ))}
+
+      <label className="recv-entry">
+        <span>Freight</span>
+        <input
+          {...figureField}
+          disabled={locked}
+          value={invoice.freight}
+          onChange={(e) => onPatch({ freight: Number(numericOnly(e.target.value)) || 0 })}
+        />
+      </label>
+
+      {!locked && (
+        <button
+          className="btn ghost sm"
+          onClick={() =>
+            onPatch({
+              charges: [
+                ...invoice.charges,
+                { id: `chg-${Date.now()}-${invoice.charges.length}`, kind: "misc", amount: 0 },
+              ],
+            })
+          }
+        >
+          ＋ Add charge
+        </button>
+      )}
     </>
   );
 }

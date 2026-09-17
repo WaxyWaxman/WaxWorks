@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { buildAdjustmentJournal, buildInvoiceJournal, buildPaymentJournal } from "./artifactJournals";
 import { buildChart } from "./chart";
 import { batchTotals, isImbalanced } from "./journal";
-import type { Invoice, InvoiceLine, PaymentBatch, SectionRow, TaxType, TenderRow } from "../data/types";
+import type { Invoice, InvoiceCharge, InvoiceLine, PaymentBatch, SectionRow, TaxType, TenderRow } from "../data/types";
 
 const SECTIONS = [
   { code: "VI", name: "VINYL", countsAsRevenue: true, tracksStockDefault: true, discountable: true, returnable: true, active: true },
@@ -28,9 +28,8 @@ const invoice = (over: Partial<Invoice> = {}): Invoice =>
     invoiceDate: "2026-09-10",
     receivedDate: "2026-09-12",
     statedSubtotal: 30,
-    tax: 0,
     freight: 0,
-    misc: 0,
+    charges: [],
     status: "Finalized",
     lines: [invLine()],
     createdBy: "Y",
@@ -40,7 +39,16 @@ const invoice = (over: Partial<Invoice> = {}): Invoice =>
   }) as Invoice;
 
 const buildInv = (iv: Invoice, currency = "CAD") =>
-  buildInvoiceJournal({ invoice: iv, writtenAt: "2026-09-12 09:30:00", accounts: CHART.accounts, currency });
+  buildInvoiceJournal({
+    invoice: iv,
+    writtenAt: "2026-09-12 09:30:00",
+    accounts: CHART.accounts,
+    mappings: CHART.mappings,
+    currency,
+  });
+
+const taxCharge = (taxCode: string, amount: number): InvoiceCharge => ({ id: `c-${taxCode}`, kind: "tax", taxCode, amount });
+const miscCharge = (amount: number): InvoiceCharge => ({ id: "c-misc", kind: "misc", amount });
 
 const lineFor = (b: { lines: { accountId: string; debit: number; credit: number; businessDate: string; currency: string }[] }, accountId: string) =>
   b.lines.find((l) => l.accountId === accountId);
@@ -71,7 +79,7 @@ describe("M-07 d13 — an Invoice writes its journal at finalize", () => {
     // d23 — a twelfth reserved role rather than a widening of freight. E-02
     // step 6 has the two entered as separate figures off the paperwork, and a
     // misc charge is a restocking fee or a pallet deposit as often as carriage.
-    const { batch, unresolved } = buildInv(invoice({ freight: 12, misc: 7 }));
+    const { batch, unresolved } = buildInv(invoice({ freight: 12, charges: [miscCharge(7)] }));
 
     expect(lineFor(batch, acct("5200"))?.debit).toBe(12);
     expect(lineFor(batch, acct("5250"))?.debit).toBe(7);
@@ -105,6 +113,36 @@ describe("M-07 d13 — an Invoice writes its journal at finalize", () => {
     expect(batch.lines[0].businessDate).toBe("2026-09-12");
   });
 
+  it("posts inbound tax per type, each to its own Input Tax Credit account (d5, E-02 d53)", () => {
+    // The change d53 bought. GST and QST are separate registrations remitted to
+    // separate authorities, so their credits cannot share a row — an accountant
+    // files GST ITCs on the GST return and QST ITCs on the QST return, and a
+    // merged figure splits into neither.
+    //
+    // Before d53 an Invoice carried ONE tax number, the split was not derivable
+    // (computing it from the rates would invent a figure the paperwork did not
+    // state, which E-02 d50 keeps the field enterable to avoid), and the whole
+    // amount went to Suspense — so an ordinary taxed invoice raised a defect
+    // report about itself.
+    const { batch, unresolved } = buildInv(invoice({ charges: [taxCharge("a", 2), taxCharge("b", 3.99)] }));
+
+    expect(lineFor(batch, acct("1300"))?.debit).toBe(2); // GST paid (ITC)
+    expect(lineFor(batch, acct("1310"))?.debit).toBe(3.99); // QST paid (ITC)
+    expect(unresolved).toEqual([]);
+    expect(isImbalanced(batch)).toBe(false);
+  });
+
+  it("keeps inbound tax out of cost of goods and inside what is owed (E-02 d34, A-29, A-36)", () => {
+    // The two halves that are easy to conflate, and both are true at once:
+    // tax is NOT a cost of the goods — it is a receivable from the government —
+    // and it IS part of the debt to the supplier. That is what makes the entry
+    // balance, a debit to the ITC account sitting inside the payable credit.
+    const { batch } = buildInv(invoice({ charges: [taxCharge("a", 2), taxCharge("b", 3.99)] }));
+
+    expect(lineFor(batch, acct("1200"))?.debit).toBe(30); // Inventory: the copies only
+    expect(lineFor(batch, acct("2100"))?.credit).toBe(35.99); // owed: 30 + 5.99
+  });
+
   it("carries the supplier's currency and converts nothing (d17)", () => {
     const { batch } = buildInv(invoice(), "USD");
     expect(batch.lines.every((l) => l.currency === "USD")).toBe(true);
@@ -116,18 +154,14 @@ describe("M-07 d13 — an Invoice writes its journal at finalize", () => {
 });
 
 describe("what an Invoice does not record", () => {
-  it("cannot split tax per type, so it reports it and lets Suspense carry the difference", () => {
-    // d5 — GST and QST are separate registrations remitted to separate
-    // authorities, so their credits cannot share a row. E-02 step 6 records ONE
-    // tax figure from the paperwork. The split is not derivable, and A-36 puts
-    // tax INSIDE what is owed — so dropping it from both sides would balance
-    // the journal and understate a liability, which is worse.
-    const { batch, unresolved } = buildInv(invoice({ tax: 4.5 }));
+  it("says which tax type it could not place, rather than pooling it", () => {
+    // A charge labelled with a tax type the chart has no mapping for. d11 maps
+    // every seam at setup, so this is a defect rather than a configuration
+    // hole, and naming the code is what makes it findable.
+    const { batch, unresolved } = buildInv(invoice({ charges: [taxCharge("zz", 4)] }));
 
-    expect(unresolved.join(" ")).toContain("Tax paid 4.5");
-    expect(lineFor(batch, acct("2100"))?.credit).toBe(34.5); // the debt is whole
-    expect(isImbalanced(batch)).toBe(true);
-    expect(batch.suspense).toBe(4.5);
+    expect(unresolved.join(" ")).toContain('no account maps tax type "zz"');
+    expect(batch.suspense).toBe(4);
     const { debit, credit } = batchTotals(batch);
     expect(debit).toBe(credit); // d10 — balanced by construction regardless
   });

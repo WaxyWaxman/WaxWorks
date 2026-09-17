@@ -70,12 +70,15 @@ export interface InvoiceJournalInput {
   writtenAt: string;
   accounts: GLAccount[];
   /**
-   * Every account this journal reaches is a RESERVED one, resolved by role
-   * (d3), so no mapping is needed: the per-seam accounts a mapping exists for
-   * are Sections, tenders, tax types and reason codes, and an Invoice touches
-   * none of them. It would touch the tax-paid mappings if the tax split were
-   * recorded — see the second `unresolved` below.
+   * Needed since E-02 d53 recorded the tax split: a **tax-paid** account is
+   * per seam (one per tax type, d5) and resolves through a mapping, where every
+   * other account an Invoice touches is reserved and resolves by role (d3).
+   *
+   * This parameter was removed when the split was not recorded and the earlier
+   * comment here said it would come back if it ever was. It has.
    */
+  mappings: GLMapping[];
+  /** d17 — the SUPPLIER's currency. A USD Invoice exports as USD lines. */
   currency: string;
 }
 
@@ -97,7 +100,7 @@ export interface InvoiceJournalInput {
  * says so out loud — which is the behaviour d10 was designed for.
  */
 export function buildInvoiceJournal(input: InvoiceJournalInput): ArtifactJournalResult {
-  const { invoice: iv, accounts, currency: cur } = input;
+  const { invoice: iv, accounts, mappings, currency: cur } = input;
   const postings: Posting[] = [];
   const unresolved: string[] = [];
   // d14, and **A-71** — the line's own business date is the **finalize**, not
@@ -142,34 +145,48 @@ export function buildInvoiceJournal(input: InvoiceJournalInput): ArtifactJournal
     );
   }
 
-  // Miscellaneous — d23, its own reserved account beside freight.
+  // The labelled charges — E-02 d53, and the reason it was worth changing the
+  // form rather than guessing here.
   //
-  // Building Phase 3 found it had none: A-29 puts it in cost of goods, and d6's
-  // seams are Sections, tenders, tax types and reason codes, so **d11's
-  // "nothing can be left unmapped" was complete over the seams it enumerates
-  // and not over the money.** d23 closes it with a twelfth reserved role rather
-  // than by widening freight, because E-02 step 6 has the two entered as
-  // separate figures off the paperwork.
-  if (iv.misc !== 0) {
-    postings.push(
-      debit(need(roleAccount(accounts, "misc-inbound"), "Miscellaneous inbound (role)"), bd, round(iv.misc), cur, `Miscellaneous — ${iv.invoiceNumber}`),
-    );
-  }
-
-  // --- 2. Tax paid is one lump and d5 needs it per type --------------------
+  // Each charge resolves its own account from its own label: a **tax** charge
+  // to that type's *paid* account (d5 — an Input Tax Credit, a receivable from
+  // the government, never a cost of the goods, per E-02 d34), and a **misc**
+  // charge to the reserved misc account (d23, which does reach cost of goods
+  // per A-29).
   //
-  // d13 and E-02's own journal note both say **tax paid per type**, and d5 is
-  // explicit that GST and QST are separate registrations remitted to separate
-  // authorities, so their credits cannot share a row. But E-02 step 6 has the
-  // Employee enter **one** tax figure from the supplier's paperwork, and that
-  // is what an Invoice stores. The split is not recorded and is not derivable:
-  // E-02 d50 leaves tax freely enterable precisely so a lump difference is
-  // recorded as the charge it is, so computing it back from the rates would be
-  // inventing a figure the paperwork did not state.
-  if (iv.tax !== 0) {
-    unresolved.push(
-      `Tax paid ${iv.tax} — the Invoice records ONE tax figure (E-02 step 6) and d5 needs it per type, which is not derivable`,
-    );
+  // Both were `unresolved` until d53, and between them they were the whole
+  // reason an ordinary Invoice raised a defect report about itself. The single
+  // `tax` figure could not be split — d5 needs GST and QST apart because they
+  // are separate registrations remitted to separate authorities — and computing
+  // the split back from the rates would have invented a figure the paperwork
+  // did not state, which is what E-02 d50 keeps the field enterable to avoid.
+  // **The fix was upstream: record what the supplier's invoice already prints.**
+  for (const ch of iv.charges) {
+    if (ch.amount === 0) continue;
+    if (ch.kind === "tax") {
+      postings.push(
+        debit(
+          need(
+            ch.taxCode ? seamAccount(accounts, mappings, "tax-paid", ch.taxCode) : undefined,
+            `Tax paid ${ch.amount} — ${ch.taxCode ? `no account maps tax type "${ch.taxCode}"` : "the charge names no tax type"}`,
+          ),
+          bd,
+          round(ch.amount),
+          cur,
+          `Tax paid — ${ch.taxCode ?? "?"} · ${iv.invoiceNumber}`,
+        ),
+      );
+    } else {
+      postings.push(
+        debit(
+          need(roleAccount(accounts, "misc-inbound"), "Miscellaneous inbound (role)"),
+          bd,
+          round(ch.amount),
+          cur,
+          `Miscellaneous — ${iv.invoiceNumber}`,
+        ),
+      );
+    }
   }
 
   // --- 3. Second-hand's nominal cost has no second number ------------------
@@ -188,9 +205,9 @@ export function buildInvoiceJournal(input: InvoiceJournalInput): ArtifactJournal
 
   // Accounts payable — what is owed, tax INCLUDED (A-36: "tax included,
   // because A-29 takes tax out of cost of goods, not out of what is owed").
-  // Which is why the lump above cannot simply be dropped: leaving it off both
-  // sides would balance the journal and understate the debt, and a quiet wrong
-  // figure in a liability is worse than a loud one in Suspense.
+  // Tax is a debit above and sits inside this credit, which is the whole double
+  // entry an Input Tax Credit is: the shop owes the supplier the tax and is
+  // owed it back by the government.
   const total = invoiceTotal(iv);
   if (total !== 0) {
     postings.push(

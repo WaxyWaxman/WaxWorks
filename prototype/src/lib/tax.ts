@@ -1,4 +1,4 @@
-import type { TaxComponent, TaxType } from "../data/types";
+import type { TaxComponent, TaxGroupCell, TaxType } from "../data/types";
 
 // M-06's tax model, as pure functions.
 //
@@ -119,4 +119,32 @@ export function cellFor(
   productTaxCode: string,
 ): string {
   return cells.find((c) => c.groupId === groupId && c.productTaxCode === productTaxCode)?.spec ?? "";
+}
+
+/**
+ * E-02 d53 — **the tax types the store itself pays**, which is not the same
+ * list as the tax types it has configured.
+ *
+ * `tax_types` holds every Canadian tax so that a **group** can be composed per
+ * province (M-06 d11, d16): the seeded store carries GST, QST, three HSTs, two
+ * PSTs, RST and zero-rated — nine — and pays two of them. Seeding a receiving
+ * form from the type list would put nine rows on every invoice; seeding it from
+ * the **store's default group** (d14) puts GST and QST on a Quebec one and GST
+ * alone on an Alberta one, which is the whole point of the group.
+ *
+ * Zero-rated types are left out: a supplier does not bill a line for a tax that
+ * is zero, so a row for one is a box nobody fills.
+ */
+export function storeTaxTypes(
+  taxTypes: TaxType[],
+  cells: TaxGroupCell[],
+  defaultGroupId: string,
+): TaxType[] {
+  const codes = new Set<string>();
+  for (const cell of cells) {
+    if (cell.groupId !== defaultGroupId) continue;
+    for (const code of parseCell(cell.spec).codes) codes.add(code);
+  }
+  // Type order, not cell order, so the form reads the same way twice running.
+  return taxTypes.filter((t) => codes.has(t.code) && (t.ratePpm > 0 || (t.pendingRatePpm ?? 0) > 0));
 }

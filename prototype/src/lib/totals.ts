@@ -229,8 +229,37 @@ export function isFollowUpOverdue(
 // applied credits, entry amounts), never edited directly (decision 8).
 export const invoiceTotal = (iv: Invoice): number => {
   const derivedSubtotal = round2(iv.lines.reduce((sum, l) => sum + l.cost * l.qty, 0));
-  return iv.totalOverride ?? round2(derivedSubtotal + iv.tax + iv.freight + iv.misc);
+  return iv.totalOverride ?? round2(derivedSubtotal + iv.freight + invoiceChargesTotal(iv));
 };
+
+/**
+ * E-02 d53 — the charges, summed. Three readings of one list, because three
+ * different things want three different slices of it.
+ */
+export const invoiceChargesTotal = (iv: Pick<Invoice, "charges">): number =>
+  round2(iv.charges.reduce((sum, c) => sum + c.amount, 0));
+
+/**
+ * Inbound tax. **Never part of cost of goods** (E-02 d34, A-29) — GST and QST
+ * are Input Tax Credits, a receivable from the government rather than a cost of
+ * the goods.
+ */
+export const invoiceTaxTotal = (iv: Pick<Invoice, "charges">): number =>
+  round2(iv.charges.reduce((sum, c) => (c.kind === "tax" ? sum + c.amount : sum), 0));
+
+/** Inbound tax, per type — which is what M-07 d5 needs and a flat figure could not give. */
+export const invoiceTaxByType = (iv: Pick<Invoice, "charges">): { taxCode: string; amount: number }[] => {
+  const by = new Map<string, number>();
+  for (const c of iv.charges) {
+    if (c.kind !== "tax" || !c.taxCode) continue;
+    by.set(c.taxCode, round2((by.get(c.taxCode) ?? 0) + c.amount));
+  }
+  return [...by.entries()].map(([taxCode, amount]) => ({ taxCode, amount }));
+};
+
+/** Everything billed that was not tax. **Does** reach cost of goods (A-29). */
+export const invoiceMiscTotal = (iv: Pick<Invoice, "charges">): number =>
+  round2(iv.charges.reduce((sum, c) => (c.kind === "misc" ? sum + c.amount : sum), 0));
 
 export const claimTotal = (c: SupplierClaim): number =>
   round2(c.lines.reduce((sum, l) => sum + l.cost * l.qty, 0));
