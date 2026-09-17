@@ -222,6 +222,10 @@ QST are separate registrations (decision 48).
 
 ## Inherited from other flows
 
+**From [M-08](M-08-general-ledger.md):**
+
+- **The fiscal year end is a store setting and lives here** ([M-08](M-08-general-ledger.md) d5). A year end is set once, changed almost never, and read by anything that reports — M-06's shape exactly. [M-08](M-08-general-ledger.md) reads it to know which **seal** is a year end, rather than asking the Manager at each one, because nothing can validate that answer. **This flow owes it two things M-08 cannot provide:** a default, and a rule for what happens when a Manager changes the year end **after** a year has already been sealed under the old one — which restates which periods belong to which year, and is [M-06](M-06-settings.md)'s to refuse or to handle. This closes [M-07](M-07-chart-of-accounts.md)'s *What is a fiscal year?*, recorded there as **moot rather than answered**.
+
 **From [architecture](../architecture.md):**
 
 - **The genre map is written by Employees; the genre list is not** ([architecture](../architecture.md) A-59). Adding a map row for a provider tag that has none is an ungated Employee action, logged with the Employee as actor; **changing or removing** a row, and setting a row's **priority**, are manager-only. The functions live in the Catalog domain beside `record_upsert_from_provider`. **Creating a Genre stays manager-only** — a Genre carries a parent Section and a product tax code, both policy, where a map row carries neither. The compensating mechanism is a **view** of tags carried by our Records with no map row, derived rather than stored.

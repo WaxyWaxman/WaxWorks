@@ -77,6 +77,10 @@ This is distinct from a supplier **Invoice** ([E-02](E-02-receive-inventory.md))
 
 ## Inherited from other flows
 
+**From [M-08](M-08-general-ledger.md):**
+
+- **This flow opens empty at migration; nothing is carried in from paper** ([M-08](M-08-general-ledger.md) d8). A supplier debt can migrate as one lump because nobody needs to know which supplier; **a customer balance cannot**, because it is owed to a named person and a total cannot tell a Manager who is owed. So the store runs its paper out — existing credits are honoured from the paper record, and every balance in this flow is one Wax Works issued. *The consequence lands on the ledger rather than here:* outstanding store credit is a real liability that will not appear on a balance sheet until it is spent, so the books understate what the shop owes, in the shop's favour, by a shrinking amount. **What the till does when a paper credit note is presented is open** — see this flow's open questions.
+
 **From [E-05](E-05-sell-a-record.md):**
 
 - Attaching a Customer pre-fills their global discount and default tax line onto Sale lines.
@@ -127,6 +131,8 @@ This is distinct from a supplier **Invoice** ([E-02](E-02-receive-inventory.md))
 ---
 
 ## Open questions
+
+- **What happens when a customer presents a paper credit note?** [M-08](M-08-general-ledger.md) d8 opens this flow empty and runs the paper out, which is settled — but the customer will arrive, and [E-05](E-05-sell-a-record.md)'s **Store Credit** tender draws on a balance that by d8 does not exist. *Three shapes, none chosen:* the Manager **creates the Customer and issues the credit at that moment**, which is d8's migration happening one customer at a time and on demand; ringing it as a **discount**, which understates revenue and loses the fact that a liability was settled; or **a tender of its own**, which is a mechanism built for a case that empties. **Owned jointly with [E-05](E-05-sell-a-record.md)**, which owns the till. Raised by [M-08](M-08-general-ledger.md) d8.
 
 - **Terms on outbound invoices.** Net 30, due dates, and whether anything chases an overdue business account is unspecified — this is the receivables side of the same problem [M-05](M-05-accounts-payable.md) solves for payables.
 - **Duplicate customers.** Two records for the same person is inevitable at a counter. Merging them — as suppliers can be merged — isn't specified.

@@ -106,6 +106,10 @@ Loading and redeeming happen at the till ([E-05](E-05-sell-a-record.md)); this i
 
 ## Inherited from other flows
 
+**From [M-08](M-08-general-ledger.md):**
+
+- **The ledger's *Accounts payable* account is this flow's balance, exactly and permanently** ([M-08](M-08-general-ledger.md) d7). Nothing is ever typed into it, so *the A/P account balance **is** the sum of what M-05 holds* is a checkable invariant rather than an approximation — and a divergence is a defect, never a leftover. **The debts the shop carried in from paper are deliberately outside this flow:** they sit in a separate *Accounts payable — opening* account with no supplier, no terms and no aging, and are drawn down by hand, because nobody retro-enters forty invoices and a half-migrated payables ledger is worse than none. **Nothing in M-05 changes** — this is a commitment about what M-05 must stay true of, not a new mechanism.
+
 **From [E-02](E-02-receive-inventory.md):**
 
 - Invoice records — number, date, linked PurchaseOrder, and amount — originate at receiving. Accounts payable consumes them and never creates one.
