@@ -845,7 +845,8 @@ export interface TenderRow {
   name: string; // d4 — the display name is configurable
   behavior: TenderType; // d4 — the behaviour is not
   active: boolean;
-  glCode?: string; // d23 — reserved for a future general ledger
+  // NO GL code. M-06 d58 retired d23's reserved field; the tender-to-account
+  // mapping lives in M-07 (architecture A-64).
   // `rounding` is written by the system, never offered (d26).
   systemOwned?: boolean;
 }
@@ -936,9 +937,9 @@ export interface TaxType {
   // GST and QST are separate registrations and a receipt carries each beside
   // its own tax.
   registrationNumber?: string;
-  // Reserved and not drawn — there is no chart of accounts yet. The field
-  // exists so one needs no migration, the move A-14 makes for cover_art_path.
-  glAccount?: string;
+  // NO GL account. M-06 d58 retired d11's reserved field, and a tax type needs
+  // TWO accounts anyway — collected and paid (M-07 d5) — where this carried
+  // one. The mapping lives in M-07 (architecture A-64).
   // NO `active` FLAG, and its absence is the decision (M-06 d57,
   // architecture A-63). A tax type is the one piece of configuration here
   // with no assignments — nothing is filed under `b`, and a completed Sale
@@ -1055,3 +1056,100 @@ export interface Genre {
   // starts taxing money the shop has merely received.
   systemOwned?: boolean;
 }
+
+// ---------------------------------------------------------------------------
+// M-07 — the chart of accounts.
+//
+// d1: this is a chart and a journal export, NOT an internal ledger. No account
+// carries a balance here; the books live with the shop's accountant.
+
+/**
+ * What the software resolves an account BY (M-07 d3). The role is fixed and not
+ * editable; the number and name belong to the store.
+ *
+ * Absent means the Manager added it (step 3): it carries no role, nothing posts
+ * to it automatically, and it exists to be a mapping target.
+ *
+ * The per-seam roles — revenue, undeposited, tax-collected, tax-paid,
+ * adjustment — are NOT unique: there is one account per Section, per tender,
+ * per tax type twice (d5) and per reason code (d6). Those resolve through a
+ * GLMapping, not through the role. The rest are one each.
+ */
+export type GLRole =
+  // one each — the reserved roles the software must be able to resolve
+  | "inventory"
+  | "cogs"
+  | "accounts-payable"
+  | "freight-inbound"
+  | "second-hand-purchases"
+  | "gift-card-liability"
+  | "customer-credit"
+  | "cash-over-short"
+  | "card-processing-fees"
+  | "bank"
+  | "suspense"
+  // one per seam — resolved through a mapping.
+  //
+  // The five tender roles are d21: every tender keeps its own account, and each
+  // takes the KIND its behavior implies. M-06 d22's reason for per-tender
+  // granularity is about deposits, and that reason does not reach a gift card
+  // redemption, where no money moves at all.
+  | "revenue"
+  | "undeposited" // cash and card — money that will reach a bank
+  | "tender-gift-card" // a redemption draws down a liability
+  | "tender-customer-credit" // store_credit and used_credit
+  | "tender-payout" // cash out for an expense (M-06)
+  | "tender-rounding" // the system-written nickel difference (M-06 d26)
+  | "tax-collected"
+  | "tax-paid"
+  | "adjustment";
+
+/**
+ * M-07 d22 — the six kinds a destination asks for. DERIVED from an account's
+ * role, and stored only on an account the Manager added, which is the only one
+ * with no role to derive it from.
+ */
+export type GLAccountType = "asset" | "liability" | "equity" | "income" | "cogs" | "expense";
+
+export interface GLAccount {
+  id: string;
+  /** Fixed (d3). Absent = added by the Manager, with nothing posting to it. */
+  role?: GLRole;
+  /** The STORE's, not ours — d3: nothing resolves an account by its number. */
+  number: string;
+  name: string;
+  /**
+   * d22 — set ONLY where `role` is absent. Deriving it from the role everywhere
+   * else keeps it from being the second copy of a fact that A-36, A-37 and
+   * A-33b each refused, and from depending on the NUMBER, which d3 makes the
+   * store's and which they are invited to change.
+   */
+  type?: GLAccountType;
+  /** M-06 d9 — an account that has been posted to is deactivated, never deleted. */
+  active: boolean;
+}
+
+/** Which seam posts where (M-07 d4 — the mapping lives here, not on the seam). */
+export type GLSeamKind = "section" | "tender" | "tax-collected" | "tax-paid" | "adjustment";
+
+export interface GLMapping {
+  seamKind: GLSeamKind;
+  seamId: string;
+  accountId: string;
+}
+
+/**
+ * E-04's six adjustment reason codes, which d6 gives an account each: "the six
+ * exist because a Manager is made to choose between them, and collapsing them
+ * in the ledger throws away the only thing that choice was for."
+ *
+ * Defined here because the prototype had never modelled them as data.
+ */
+export const ADJUSTMENT_REASONS = [
+  "Shrinkage",
+  "Damaged",
+  "Found",
+  "Miscount / correction",
+  "Written off",
+  "Other",
+] as const;

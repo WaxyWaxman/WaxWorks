@@ -632,15 +632,15 @@ export const SECTIONS: SectionRow[] = [
 ];
 
 export const TENDERS: TenderRow[] = [
-  { id: "tn-cash", name: "Cash", behavior: "Cash", active: true, glCode: "1000" },
+  { id: "tn-cash", name: "Cash", behavior: "Cash", active: true },
   // d22 — many tenders, one behaviour. Both of these settle as a card.
-  { id: "tn-visa", name: "Visa", behavior: "Credit Card", active: true, glCode: "1010" },
-  { id: "tn-mc", name: "Mastercard", behavior: "Credit Card", active: true, glCode: "1010" },
-  { id: "tn-debit", name: "Debit", behavior: "Credit Card", active: true, glCode: "1011" },
-  { id: "tn-acct", name: "On account", behavior: "Account Balance", active: true, glCode: "1200" },
-  { id: "tn-gift", name: "Gift card", behavior: "Gift Card", active: true, glCode: "2100" },
-  { id: "tn-payout", name: "Pay-out", behavior: "Pay-out", active: true, glCode: "1001" },
-  { id: "tn-used", name: "Used credit", behavior: "Used Credit", active: true, glCode: "1300" },
+  { id: "tn-visa", name: "Visa", behavior: "Credit Card", active: true },
+  { id: "tn-mc", name: "Mastercard", behavior: "Credit Card", active: true },
+  { id: "tn-debit", name: "Debit", behavior: "Credit Card", active: true },
+  { id: "tn-acct", name: "On account", behavior: "Account Balance", active: true },
+  { id: "tn-gift", name: "Gift card", behavior: "Gift Card", active: true },
+  { id: "tn-payout", name: "Pay-out", behavior: "Pay-out", active: true },
+  { id: "tn-used", name: "Used credit", behavior: "Used Credit", active: true },
   // d26 — cash rounding is its own tender, written by the system and never
   // offered at the till, so it is shown here and cannot be edited away.
   { id: "tn-round", name: "Cash rounding", behavior: "Cash", active: true, systemOwned: true },
@@ -684,18 +684,18 @@ export const STORE_DETAILS: StoreDetails = {
 // (d48), and cannot be split by rate when a period spans a change (M-03 d15).
 
 export const TAX_TYPES: TaxType[] = [
-  { code: "a", name: "GST", ratePpm: 50_000, registrationNumber: "R123456789", glAccount: "2310" },
-  { code: "b", name: "QST", ratePpm: 99_750, registrationNumber: "1234567890TQ0001", glAccount: "2320" },
+  { code: "a", name: "GST", ratePpm: 50_000, registrationNumber: "R123456789" },
+  { code: "b", name: "QST", ratePpm: 99_750, registrationNumber: "1234567890TQ0001" },
   // Each HST rate is its OWN tax type, and that is the model working rather
   // than a workaround: a tax type is "one tax that exists" carrying one rate
   // (d11), and Ontario's 13% and New Brunswick's 15% are remitted separately
   // at different rates. One "HST" row could not hold both.
-  { code: "f", name: "HST (ON)", ratePpm: 130_000, glAccount: "2330" },
-  { code: "g", name: "HST (NB/NL/PE)", ratePpm: 150_000, glAccount: "2331" },
-  { code: "h", name: "HST (NS)", ratePpm: 140_000, glAccount: "2332" },
-  { code: "c", name: "PST (BC)", ratePpm: 70_000, glAccount: "2340" },
-  { code: "d", name: "PST (SK)", ratePpm: 60_000, glAccount: "2341" },
-  { code: "e", name: "RST (MB)", ratePpm: 70_000, glAccount: "2342" },
+  { code: "f", name: "HST (ON)", ratePpm: 130_000 },
+  { code: "g", name: "HST (NB/NL/PE)", ratePpm: 150_000 },
+  { code: "h", name: "HST (NS)", ratePpm: 140_000 },
+  { code: "c", name: "PST (BC)", ratePpm: 70_000 },
+  { code: "d", name: "PST (SK)", ratePpm: 60_000 },
+  { code: "e", name: "RST (MB)", ratePpm: 70_000 },
   // d15 — taxable at 0% and REPORTABLE, which a blank cell is not.
   { code: "z", name: "Zero-rated", ratePpm: 0 },
 ];
