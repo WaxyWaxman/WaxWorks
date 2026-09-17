@@ -203,14 +203,20 @@ export function buildCloseJournal(input: CloseJournalInput): CloseJournalResult 
           // d10 working exactly as written.
           unresolved.push(`${label} — a line resolves to no Section`);
         } else {
+          // d28, d29, d33 — a Section resolves by RULE wherever a rule exists.
+          // Revenue goes to the ONE reserved Sales account and the Section
+          // rides on the line as a dimension (M-08 d2); a Section a Manager
+          // marked not-revenue keeps a mapping and must point at a liability.
+          //
+          // The memo carries the Section name because JournalLine has no
+          // `section` column yet (M-08 d2, d12 — unbuilt), so this is the only
+          // place the breakdown survives. It is a stand-in for the dimension
+          // and not a substitute for it: a memo cannot be filtered on.
+          const target = section.countsAsRevenue
+            ? need(roleAccount(accounts, "revenue"), "Sales (role)")
+            : need(seamAccount(accounts, mappings, "section", section.code), `Section ${section.name}`);
           postings.push(
-            credit(
-              need(seamAccount(accounts, mappings, "section", section.code), `Section ${section.name}`),
-              bd,
-              round(lineNet(line)),
-              cur,
-              `Revenue — ${section.name}`,
-            ),
+            credit(target, bd, round(lineNet(line)), cur, `Revenue — ${section.name}`),
           );
         }
       }

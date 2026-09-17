@@ -57,7 +57,7 @@ export function ChartOfAccounts() {
       <header className="screen-head">
         <h1>Chart of accounts</h1>
         <p className="small muted">
-          Authorised by {authorisedBy} · <strong>{app.glAccounts.length} accounts</strong>, every seam mapped
+          Authorised by {authorisedBy} · <strong>{app.glAccounts.length} accounts</strong>, every seam resolving
         </p>
         <p className="small muted">
           A chart and a journal export — <strong>this flow</strong> holds no balances (d1, still true of M-07). The
@@ -207,7 +207,9 @@ export function ChartOfAccounts() {
         what your accountant already keeps and nothing here breaks.
       </p>
       <p className="small muted">
-        The starting chart mirrors this system rather than an accountant's habits (d11): a Section each, a{" "}
+        The starting chart mirrors this system rather than an accountant's habits (d11) — plus the ordinary expense
+        accounts d32 seeds, so the first rent posting has somewhere to go. One <strong>Sales</strong> account for all
+        revenue (d28), with the Section riding on the line as a dimension rather than as an account of its own; a{" "}
         <em>tender</em> each rather than a card type (M-06 d22), and <strong>two</strong> accounts per tax — collected
         is a liability, paid is an Input Tax Credit (d5, E-02 d34). An account's <em>type</em> is
         <strong>derived from its role</strong> (d22), never from its number — so renumbering the chart cannot scramble

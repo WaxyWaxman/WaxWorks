@@ -257,13 +257,15 @@ describe("M-07 d2 — a Return only reverses the cost where the copy came back",
 
 describe("M-07 d10 — an unresolvable seam reaches Suspense and is named", () => {
   it("posts the difference and reports what it could not resolve", () => {
-    // A Section with no mapping is what d11 exists to prevent. Forced here by
-    // handing the journal a chart that predates the Section — which is exactly
-    // M-06 d58's "adding a Section creates and maps its account in the same
-    // act" failing to happen.
+    // d33 — a REVENUE Section can no longer be unresolvable: it resolves to the
+    // reserved Sales role whatever the chart's age. The one hole the sparse
+    // Section seam can still leave is a Section a MANAGER created and marked
+    // not-revenue, which has no rule to resolve by and must be mapped by hand.
+    // Unmapped, it is exactly M-06 d58's "adding a Section creates and maps its
+    // account in the same act" failing to happen.
     const stale = buildChart({ sections: [section("VI", "VINYL")], tenders: TENDERS, taxTypes: TAX_TYPES });
-    const withNewSection = [...SECTIONS, section("ME", "MERCH")];
-    const merchGenre: Genre = { id: "gn-merch", name: "Merch", section: "ME", productTaxCode: "1", active: true } as Genre;
+    const withNewSection = [...SECTIONS, section("ME", "DEPOSITS", false)];
+    const merchGenre: Genre = { id: "gn-merch", name: "Deposits", section: "ME", productTaxCode: "1", active: true } as Genre;
 
     const { batch, unresolved } = build([sale({ lines: [line({ genreId: "gn-merch", kind: "nontracked", recordId: undefined, inventoryItemId: undefined })] })], {
       sections: withNewSection,
@@ -272,7 +274,7 @@ describe("M-07 d10 — an unresolvable seam reaches Suspense and is named", () =
       mappings: stale.mappings,
     });
 
-    expect(unresolved).toContain("Section MERCH");
+    expect(unresolved).toContain("Section DEPOSITS");
     expect(isImbalanced(batch)).toBe(true);
     const { debit, credit } = batchTotals(batch);
     expect(debit).toBe(credit); // d10 — balanced BY CONSTRUCTION, always writable

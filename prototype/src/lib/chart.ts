@@ -60,6 +60,11 @@ const RESERVED: { role: GLRole; number: string; name: string }[] = [
   { role: "accounts-payable-opening", number: "2110", name: "Accounts payable — opening" },
   { role: "gift-card-liability", number: "2200", name: "Gift card liability" },
   { role: "customer-credit", number: "2300", name: "Customer account credit" },
+  // d28 — ONE Sales account, superseding d6's one-per-Section grain. The
+  // Section rides on the line as a dimension (M-08 d2), so totalling sales
+  // across every Section and within one are the same query with a different
+  // filter. d6's grain answered the first only by summing accounts.
+  { role: "revenue", number: "4100", name: "Sales" },
   // d31 — the 3000s, no longer empty. d27 reversed d1's no-equity claim.
   { role: "owners-equity", number: "3100", name: "Owner's equity" },
   // M-08 d17's year-end seal posts here, and nothing else ever does. M-08 d26
@@ -150,7 +155,7 @@ export const ROLE_PURPOSE: Record<GLRole, string> = {
   "cash-over-short": "The nickel-rounding tender the system writes (M-06 d26)",
   "card-processing-fees": "The difference a deposit reveals — derived, never configured",
   suspense: "Where an unbalanced journal's difference goes (d10). Never zero by accident",
-  revenue: "One per Section (d6) — M-06 d20 says which Sections are revenue at all",
+  revenue: "Every Section that counts as revenue (d28). The Section rides on the line as a dimension, not as its own account",
   undeposited: "Cash or card taken in, not yet paid out by the bank (d21)",
   "tender-gift-card": "A redemption drawing down the gift card liability (d21)",
   "tender-customer-credit": "Store credit spent or added (d21). A counter buy debits Second-hand purchases instead",
@@ -278,11 +283,17 @@ export function buildChart(seams: Seams): BuiltChart {
   // d6 — revenue is one account per Section, because M-06 d28 already gives
   // every Section a code and a sort order, and a single `Sales` account would
   // discard a breakdown the shop curates and M-03 already reports.
-  seams.sections.forEach((s, i) => {
-    const a = add("revenue", String(4100 + i * 10), `Sales — ${s.name}`);
-    // M-06 d28 — a Section is keyed by its two-character code, not an id.
-    mappings.push({ seamKind: "section", seamId: s.code, accountId: a.id });
-  });
+  // d28, d29, d33 — a Section resolves by RULE wherever a rule exists, and the
+  // seam is therefore SPARSE. A Section that counts as revenue resolves to the
+  // reserved Sales account above. The system-owned gift-card Section resolves
+  // to `gift-card-liability`, which is what closeJournal has always done while
+  // bypassing this mapping. Only a Section a MANAGER creates and marks
+  // not-revenue is left with nothing to resolve by, and that is the one case a
+  // mapping was ever for — its target must be a LIABILITY (d33), because
+  // "money received against a future obligation" is not revenue (M-06 d20).
+  //
+  // Nothing is seeded here: the only non-revenue Section that ships is
+  // system-owned and rule-resolved.
 
   // M-06 d22 — per TENDER, not per behavior: Visa and Amex settle as separate
   // deposits, and a merged figure cannot be tied back to a bank statement.
@@ -342,7 +353,15 @@ export function unmappedSeams(seams: Seams, mappings: GLMapping[]): string[] {
   const has = (kind: GLMapping["seamKind"], id: string) =>
     mappings.some((m) => m.seamKind === kind && m.seamId === id);
   const missing: string[] = [];
-  for (const s of seams.sections) if (!has("section", s.code)) missing.push(`Section ${s.name}`);
+  // d29, d33 — the Section seam is SPARSE, so absence is not a hole. A revenue
+  // Section resolves to the Sales role and a system-owned one to the liability
+  // its kind names; neither has a mapping row to leave null. Only a Section a
+  // Manager created and marked not-revenue needs one, and only that case can
+  // still be genuinely unmapped.
+  for (const s of seams.sections) {
+    if (s.countsAsRevenue || s.systemOwned) continue;
+    if (!has("section", s.code)) missing.push(`Section ${s.name}`);
+  }
   for (const t of seams.tenders) if (!has("tender", t.id)) missing.push(`Tender ${t.name}`);
   for (const tx of seams.taxTypes) {
     if (!has("tax-collected", tx.code)) missing.push(`${tx.name} collected`);

@@ -282,13 +282,24 @@ describe("M-07 step 5 — an account can be read back to what posts to it", () =
     expect(seamsFor(sales.id, mappings, seams)).toEqual([]);
   });
 
-  it("still names a NON-revenue Section behind its account (d29)", () => {
-    const withGc = { ...seams, sections: [...seams.sections, section("GC", "GIFT CARDS", false)] };
-    const { accounts, mappings } = buildChart(withGc);
-    const mapped = mappings.find((m) => m.seamKind === "section" && m.seamId === "GC")!;
+  it("names a Manager-created non-revenue Section once it is mapped by hand (d33)", () => {
+    // d33 — buildChart seeds no Section mapping at all: revenue resolves to the
+    // Sales role and the system-owned gift-card Section to the liability its
+    // kind names. A Section a Manager creates and marks not-revenue is the one
+    // case left with nothing to resolve by, so the Manager maps it — and d33
+    // constrains the target to a LIABILITY, because money received against a
+    // future obligation is not revenue (M-06 d20).
+    const withDeposits = { ...seams, sections: [...seams.sections, section("DE", "DEPOSITS", false)] };
+    const { accounts, mappings } = buildChart(withDeposits);
 
-    expect(seamsFor(mapped.accountId, mappings, withGc)).toContain("GIFT CARDS");
-    expect(accounts.find((a) => a.id === mapped.accountId)).toBeDefined();
+    expect(mappings.find((m) => m.seamKind === "section")).toBeUndefined();
+    expect(unmappedSeams(withDeposits, mappings)).toEqual(["Section DEPOSITS"]);
+
+    const liability = accounts.find((a) => a.role === "gift-card-liability")!;
+    const mapped = [...mappings, { seamKind: "section" as const, seamId: "DE", accountId: liability.id }];
+
+    expect(seamsFor(liability.id, mapped, withDeposits)).toContain("DEPOSITS");
+    expect(accountType(liability)).toBe("liability");
   });
 
   it("names both seams when two are pointed at one account", () => {
