@@ -33,6 +33,17 @@ import { buildChart } from "../lib/chart";
 import { buildCloseJournal } from "../lib/closeJournal";
 import { buildAdjustmentJournal, buildInvoiceJournal, buildPaymentJournal } from "../lib/artifactJournals";
 import { isImbalanced } from "../lib/journal";
+// M-08 — the books. Every rule these enforce lives in the lib, never in a
+// screen and never here (A-74, A-4, A-48: a bound enforced in the client is
+// not a bound). The store calls the refusal and stores the result.
+import { postingJournal, type LedgerPosting } from "../lib/ledgerPostings";
+import {
+  sealOpeningPosition,
+  type OpeningPositionDraft,
+} from "../lib/ledgerOpeningPosition";
+import { closingTransactionFor, divergenceFlag } from "../lib/ledgerBalances";
+import type { LedgerIssuance } from "../lib/ledgerStatements";
+import type { LedgerReconciliation } from "../lib/ledgerReconciliation";
 import { toCalendarDate } from "../lib/calendarDate";
 import {
   CURRENT_USER,
@@ -66,6 +77,10 @@ import type {
   ClaimLineAgainst,
   CloseBatch,
   Customer,
+  LedgerClosingTransaction,
+  LedgerPeriodSeal,
+  LedgerPeriodUnseal,
+  LedgerYearFiling,
   GiftCard,
   Grade,
   IntakeMode,
@@ -231,6 +246,26 @@ interface AppState {
    * Nothing sweeps this, nothing posts it, and there is no month-end routine.
    */
   journals: JournalBatch[];
+  /**
+   * M-08 — the books. Everything below is what M-07 d1 declined and d27
+   * reversed: a period close, held balances, and a stated profit.
+   *
+   * A period's state is DERIVED from the seal and unseal rows and is never
+   * stored (A-75) — there is deliberately no `sealed` flag here to forget.
+   */
+  ledgerSeals: LedgerPeriodSeal[];
+  ledgerUnseals: LedgerPeriodUnseal[];
+  ledgerYearFilings: LedgerYearFiling[];
+  ledgerPostings: LedgerPosting[];
+  /** A-78 — a draft until it is sealed, and the one place unbalanced figures
+   *  legitimately exist. Null before the shop has migrated. */
+  ledgerOpening: OpeningPositionDraft | null;
+  ledgerOpeningSealed: boolean;
+  /** d20, A-76 — the materialised recomputations. */
+  ledgerClosings: LedgerClosingTransaction[];
+  ledgerReconciliations: LedgerReconciliation[];
+  /** A-77 — what has left the building. */
+  ledgerIssuances: LedgerIssuance[];
   pendingOrders: PendingOrderLine[];
   reviewFlags: ReviewFlag[];
   activeSaleId: string | null;
@@ -740,6 +775,15 @@ const seed: AppState = {
   // can be left unmapped and d10's Suspense stays a defect rather than a hole.
   glAccounts: SEEDED_CHART.accounts,
   glMappings: SEEDED_CHART.mappings,
+  ledgerSeals: [],
+  ledgerUnseals: [],
+  ledgerYearFilings: [],
+  ledgerPostings: [],
+  ledgerOpening: null,
+  ledgerOpeningSealed: false,
+  ledgerClosings: [],
+  ledgerReconciliations: [],
+  ledgerIssuances: [],
   journals: [],
   pendingOrders: PENDING_ORDERS,
   reviewFlags: [],
@@ -876,6 +920,19 @@ interface AppContextValue extends AppState {
   releaseHoldLine: (itemId: string) => { holdRef: string; holdClosed: boolean } | null;
   forceUnlockSale: (saleId: string) => void;
   acknowledgeReviewFlag: (id: string, by: string) => void;
+
+  // ---- M-08, the books ----------------------------------------------------
+  // Every one is MANAGER-ONLY (A-74), so every one takes the authorising
+  // Manager's initials. None of them decides anything: the refusal functions in
+  // lib/ledger*.ts are the rules, and these store whatever those permit.
+  ledgerSaveOpening: (draft: OpeningPositionDraft) => void;
+  ledgerSealOpening: (by: string) => void;
+  ledgerPost: (posting: Omit<LedgerPosting, "writtenAt">, by: string) => void;
+  ledgerSeal: (period: string, suspenseGross: number, by: string) => void;
+  ledgerUnseal: (period: string, reason: string, by: string) => void;
+  ledgerMarkYearFiled: (fiscalYearEnd: string, by: string) => void;
+  ledgerReconcile: (reconciliation: LedgerReconciliation) => void;
+  ledgerIssue: (issuance: LedgerIssuance) => void;
   reconcileOversold: (recordId: string, by: string) => number;
   addLog: (saleId: string, text: string) => void;
 
@@ -1286,6 +1343,144 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
         f.id === id ? { ...f, acknowledged: true, acknowledgedBy: by, acknowledgedAt: now() } : f,
       ),
     }));
+
+  // -------------------------------------------------------------------------
+  // M-08 - the books
+  // -------------------------------------------------------------------------
+  //
+  // Thin on purpose. A-74 moves M-08's invariants into the definer function and
+  // out of the screen, and in the prototype the lib modules ARE that function:
+  // every refusal is a *Refusal() in lib/ledger*.ts, tested there, and called by
+  // the screen before it calls any of these. A second copy of a rule here would
+  // be the divergence A-48 warns about wearing a different hat.
+
+  const ledgerSaveOpening: AppContextValue["ledgerSaveOpening"] = (draft) =>
+    setS((prev) => ({ ...prev, ledgerOpening: draft }));
+
+  // A-78 - sealing MATERIALISES equity as a journal line. Until this runs the
+  // opening position is a draft carrying assets and liabilities only, and
+  // nothing may read it as though it were a journal.
+  const ledgerSealOpening: AppContextValue["ledgerSealOpening"] = () =>
+    setS((prev) => {
+      if (!prev.ledgerOpening || prev.ledgerOpeningSealed) return prev;
+      const equity = prev.glAccounts.find((a) => a.role === "owners-equity");
+      const suspense = prev.glAccounts.find((a) => a.role === "suspense");
+      if (!equity || !suspense) return prev;
+      const sealed = sealOpeningPosition(
+        prev.ledgerOpening,
+        prev.glAccounts,
+        equity.id,
+        suspense.id,
+        now(),
+      );
+      return {
+        ...prev,
+        ledgerOpeningSealed: true,
+        journals: [sealed.batch, ...prev.journals],
+        // d28's typed figure is DISCARDED; only the acknowledgement survives,
+        // carried on the sealed artifact.
+        ledgerOpening: { ...prev.ledgerOpening, accountantsEquity: undefined },
+      };
+    });
+
+  // Step 15 - the posting joins the journal beside everything artifacts wrote.
+  const ledgerPost: AppContextValue["ledgerPost"] = (posting, by) =>
+    setS((prev) => {
+      const suspense = prev.glAccounts.find((a) => a.role === "suspense");
+      if (!suspense) return prev;
+      const full: LedgerPosting = { ...posting, writtenAt: now(), authorizedByInitials: by };
+      // Throws rather than writing a Suspense line if it does not balance - the
+      // screen has already called postingRefusal, so reaching that throw means
+      // the screen skipped its own gate.
+      const batch = postingJournal(full, suspense.id, prev.homeCurrency);
+      return {
+        ...prev,
+        ledgerPostings: [full, ...prev.ledgerPostings],
+        journals: [batch, ...prev.journals],
+      };
+    });
+
+  // A-75 - a seal APPENDS a row, and d20/A-76 write the closing transaction as
+  // the result of the recomputation. The two happen together because A-76's
+  // "stored is by definition the last recomputed" is only true if nothing can
+  // seal without recomputing.
+  const ledgerSeal: AppContextValue["ledgerSeal"] = (period, suspenseGross, by) =>
+    setS((prev) => {
+      const seal: LedgerPeriodSeal = {
+        id: "seal-" + period + "-" + (prev.ledgerSeals.length + 1),
+        period,
+        sealedAt: now(),
+        actorInitials: by,
+        authorizedByInitials: by,
+      };
+      return {
+        ...prev,
+        ledgerSeals: [...prev.ledgerSeals, seal],
+        ledgerClosings: [
+          ...prev.ledgerClosings,
+          closingTransactionFor(period, seal.id, prev.journals, suspenseGross, now()),
+        ],
+      };
+    });
+
+  // d18 - an unseal is an artifact: who, when, a required reason, and which
+  // period it reopened. A-76 has a divergence against what was stored raise a
+  // system flag with a null actor.
+  const ledgerUnseal: AppContextValue["ledgerUnseal"] = (period, reason, by) =>
+    setS((prev) => {
+      const live = prev.ledgerSeals
+        .filter((x) => x.period === period)
+        .find((x) => !prev.ledgerUnseals.some((u) => u.sealId === x.id));
+      if (!live) return prev;
+
+      const stored = prev.ledgerClosings.find((c) => c.sealId === live.id);
+      const flag = stored
+        ? divergenceFlag(stored, prev.journals, prev.ledgerSeals, prev.ledgerUnseals, now())
+        : undefined;
+
+      return {
+        ...prev,
+        ledgerUnseals: [
+          ...prev.ledgerUnseals,
+          {
+            id: "unseal-" + period + "-" + (prev.ledgerUnseals.length + 1),
+            sealId: live.id,
+            unsealedAt: now(),
+            actorInitials: by,
+            authorizedByInitials: by,
+            reason,
+          },
+        ],
+        ...(flag ? { reviewFlags: [flag, ...prev.reviewFlags] } : {}),
+      };
+    });
+
+  // d22 - the only permanently irreversible state in this system.
+  const ledgerMarkYearFiled: AppContextValue["ledgerMarkYearFiled"] = (fiscalYearEnd, by) =>
+    setS((prev) => ({
+      ...prev,
+      ledgerYearFilings: [
+        ...prev.ledgerYearFilings,
+        {
+          id: "filed-" + fiscalYearEnd,
+          fiscalYearEnd,
+          filedAt: now(),
+          actorInitials: by,
+          authorizedByInitials: by,
+        },
+      ],
+    }));
+
+  // d25 - a mark that moves no money. No journal is written here, ever.
+  const ledgerReconcile: AppContextValue["ledgerReconcile"] = (reconciliation) =>
+    setS((prev) => ({
+      ...prev,
+      ledgerReconciliations: [...prev.ledgerReconciliations, reconciliation],
+    }));
+
+  // d31, A-77 - what left the building, with its figures frozen.
+  const ledgerIssue: AppContextValue["ledgerIssue"] = (issuance) =>
+    setS((prev) => ({ ...prev, ledgerIssuances: [issuance, ...prev.ledgerIssuances] }));
 
   const recordFor = (id?: string) => s.records.find((r) => r.id === id);
   const customerFor = (id?: string) => s.customers.find((c) => c.id === id);
@@ -4243,6 +4438,14 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
       releaseHoldLine,
       forceUnlockSale,
       acknowledgeReviewFlag,
+      ledgerSaveOpening,
+      ledgerSealOpening,
+      ledgerPost,
+      ledgerSeal,
+      ledgerUnseal,
+      ledgerMarkYearFiled,
+      ledgerReconcile,
+      ledgerIssue,
       reconcileOversold,
       addLog,
       raiseClaim,

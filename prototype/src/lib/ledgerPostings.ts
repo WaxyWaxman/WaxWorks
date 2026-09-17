@@ -213,6 +213,15 @@ export function untypeableReason(account: GLAccount): string | undefined {
       // d14 — NOT RATIFIED.
       return `${account.name} is cleared by its own act, not by a posting (d14, not ratified).`;
     case "gift-card-liability":
+    // M-07 d21 gives every TENDER its own account, and a gift card redemption's
+    // lands at 2210 "Gift card liability - Gift card" under the reserved 2200.
+    // Both are the same liability, and d33 locks the LIABILITY: locking only the
+    // reserved role would leave the shadow account - which is the one
+    // redemptions actually post to - open to typing, and a door beside a locked
+    // door is not a lock. Found by running the screen against the real seeded
+    // chart; every test fixture here had been hand-built with reserved roles
+    // only, so none of them could see it.
+    case "tender-gift-card":
       // d33 — d13's argument with E-05 in M-05's place. E-05 loads a card as a
       // line and draws it down as a tender, E-06 can return onto one, and M-05
       // d10 keeps the registry whose total IS the liability. So the balance is

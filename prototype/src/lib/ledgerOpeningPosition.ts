@@ -124,13 +124,17 @@ export function untypeableInOpeningReason(account: GLAccount): string | undefine
   if (account.role === "accounts-payable") {
     return `${account.name} is M-05's balance. Type the paper-era debts into the opening account instead (d7).`;
   }
-  if (account.role === "customer-credit") {
+  // M-07 d21's per-tender accounts SHADOW the reserved ones: store credit
+  // spent lands at 2310 under the reserved 2300, and a redemption at 2210 under
+  // 2200. d8 empties the customer side and d33 locks the gift card liability,
+  // and each means the liability rather than one row of it.
+  if (account.role === "customer-credit" || account.role === "tender-customer-credit") {
     return `${account.name} opens empty — the paper credit notes are honoured on paper and never migrated (d8).`;
   }
   if (account.role === "inventory") {
     return `${account.name} is supplied by the system — on hand × cost (step 3).`;
   }
-  if (account.role === "gift-card-liability") {
+  if (account.role === "gift-card-liability" || account.role === "tender-gift-card") {
     // d33 — the balance IS the sum of what is outstanding on live cards, and
     // E-05 writes every movement (loaded as a line, redeemed as a tender). d8
     // already keeps the customer side empty here for a related reason; this is

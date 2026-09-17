@@ -16,6 +16,8 @@ import {
   type PostingContext,
   type TypedPostingLine,
 } from "./ledgerPostings";
+import { buildChart } from "./chart";
+import { SECTIONS, TENDERS, TAX_TYPES } from "../data/seed";
 
 const acct = (id: string, name: string, role?: GLRole, active = true): GLAccount => ({
   id,
@@ -452,5 +454,51 @@ describe("M-08 d19 — an accrual is two ordinary postings, and nothing prevents
     // The pair nets to nothing, which is what makes it a reversal.
     const net = postingBalance([...estimate.lines, ...reversal.lines]);
     expect(net.debits).toBe(net.credits);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Against the REAL chart, not a hand-built fixture
+// ---------------------------------------------------------------------------
+
+describe("M-08 d13, d33 — the locks hold against the chart the shop actually gets", () => {
+  // Every fixture above is hand-built and carries the RESERVED roles only.
+  // buildChart also emits M-07 d21's per-tender accounts, which SHADOW the
+  // reserved ones — 2210 "Gift card liability — Gift card" sits under the
+  // reserved 2200, and it is the one a redemption posts to. A lock on the
+  // reserved role alone left a door beside a locked door, and no hand-built
+  // fixture could see it: the tender accounts only exist once the real chart
+  // is built from the real seams. Found by opening the screen.
+  const chart = buildChart({ sections: SECTIONS, tenders: TENDERS, taxTypes: TAX_TYPES });
+
+  it("emits both the reserved account and its tender shadow", () => {
+    expect(chart.accounts.some((a) => a.role === "gift-card-liability")).toBe(true);
+    expect(chart.accounts.some((a) => a.role === "tender-gift-card")).toBe(true);
+    expect(chart.accounts.some((a) => a.role === "customer-credit")).toBe(true);
+    expect(chart.accounts.some((a) => a.role === "tender-customer-credit")).toBe(true);
+  });
+
+  it("refuses the gift card liability at BOTH accounts (d33)", () => {
+    for (const a of chart.accounts.filter(
+      (x) => x.role === "gift-card-liability" || x.role === "tender-gift-card",
+    )) {
+      expect(untypeableReason(a)).toBeDefined();
+    }
+  });
+
+  it("offers no gift card or retained-earnings account anywhere in the picker", () => {
+    const offered = offerableAccounts(chart.accounts);
+    expect(offered.some((a) => a.role === "gift-card-liability")).toBe(false);
+    expect(offered.some((a) => a.role === "tender-gift-card")).toBe(false);
+    expect(offered.some((a) => a.role === "retained-earnings")).toBe(false);
+    expect(offered.some((a) => a.role === "accounts-payable")).toBe(false);
+    expect(offered.some((a) => a.role === "suspense")).toBe(false);
+  });
+
+  it("still offers what d13 and d34 deliberately permit", () => {
+    const offered = offerableAccounts(chart.accounts);
+    expect(offered.some((a) => a.role === "inventory")).toBe(true);
+    expect(offered.some((a) => a.role === "accounts-payable-opening")).toBe(true);
+    expect(offered.some((a) => a.role === "tax-collected")).toBe(true);
   });
 });

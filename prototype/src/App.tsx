@@ -16,6 +16,7 @@ import { AccountsPayable } from "./screens/AccountsPayable";
 import { Users } from "./screens/Users";
 import { Settings } from "./screens/Settings";
 import { ChartOfAccounts } from "./screens/ChartOfAccounts";
+import { Ledger } from "./screens/Ledger";
 import { ReviewQueueBadge } from "./components/ReviewQueue";
 import { useEffect as useEffectShell } from "react";
 
@@ -66,6 +67,7 @@ const MORE_NAV: { group: string; items: { to: string; label: string; flow: strin
       { to: "/users", label: "Users", flow: "M-04" },
       { to: "/settings", label: "Settings", flow: "M-06" },
       { to: "/chart", label: "Chart of accounts", flow: "M-07" },
+      { to: "/ledger", label: "General ledger", flow: "M-08" },
     ],
   },
   {
@@ -296,6 +298,7 @@ function AppShell() {
           <Route path="/users" element={<Users />} />
           <Route path="/users/:userId" element={<Users />} />
           <Route path="/chart" element={<ChartOfAccounts />} />
+          <Route path="/ledger" element={<Ledger />} />
           <Route path="/settings" element={<Settings />} />
           <Route path="/settings/:group" element={<Settings />} />
         </Routes>
