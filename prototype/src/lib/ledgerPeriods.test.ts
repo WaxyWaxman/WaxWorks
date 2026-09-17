@@ -20,13 +20,12 @@ import {
   unsealRefusal,
 } from "./ledgerPeriods";
 
-const seal = (id: string, period: string, suspenseGross = 0): LedgerPeriodSeal => ({
+const seal = (id: string, period: string): LedgerPeriodSeal => ({
   id,
   period,
   sealedAt: `${period}-28 17:00:00`,
   actorInitials: "WW",
   authorizedByInitials: "WW",
-  suspenseGross,
 });
 
 const unseal = (id: string, sealId: string, reason = "Accountant's adjustment"): LedgerPeriodUnseal => ({
@@ -159,11 +158,15 @@ describe("M-08 A-75 — a second live seal is refused, and the balance-forwards 
     expect(sealRefusal("2026-08", seals, [unseal("u1", "s1")])).toBeUndefined();
   });
 
-  it("carries the live seal's Suspense total GROSS onto the closing transaction", () => {
-    // M-07 d25 — short three dollars on one date and over three on another is
-    // two defects, and a net of zero is the one answer that hides both.
-    const seals = [seal("s1", "2026-08", 6)];
-    expect(liveSeal("2026-08", seals, [])?.suspenseGross).toBe(6);
+  it("hands the Suspense total to the CLOSING TRANSACTION, not to the seal", () => {
+    // d15, step 20 — the closing transaction is where the figure lives, so
+    // there is one figure in one place. sealReport computes it; ledgerBalances
+    // stores it. A total two artifacts each held could disagree, which is what
+    // A-36, A-37 and A-33b each refused.
+    const seals = [seal("s1", "2026-08")];
+    expect(liveSeal("2026-08", seals, [])).toBeDefined();
+    expect("suspenseGross" in liveSeal("2026-08", seals, [])!).toBe(false);
+    expect(sealReport("2026-08", DEC, [], 6).suspenseGross).toBe(6);
   });
 });
 

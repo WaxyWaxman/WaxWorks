@@ -862,7 +862,14 @@ export type ReviewFlagKind =
   // did not balance had its difference posted to Suspense, and the Manager is
   // told. It has no actor because it is not an action: it is this system's own
   // arithmetic failing, and no Manager can cause one or clear one.
-  | "journal-imbalance";
+  | "journal-imbalance"
+  // architecture A-76 — the SECOND system-raised kind. A stored balance-forward
+  // is a materialised recomputation, so a later recomputation of a SEALED
+  // period that differs from what is stored means something is genuinely wrong.
+  // Null actor, like journal-imbalance: no Manager can cause one, and A-71's
+  // test is what it has to pass — a flag that cannot fire reads like coverage,
+  // and this one can fire.
+  | "ledger-balance-divergence";
 
 export interface ReviewFlag {
   id: string;
@@ -1392,12 +1399,6 @@ export interface LedgerPeriodSeal {
   actorInitials: string;
   /** A-74 — manager-only, so the authorizing Manager is recorded too. */
   authorizedByInitials: string;
-  /**
-   * d15, M-07 d25 — the period's Suspense total, GROSS, carried onto the
-   * closing transaction so any statement drawn from the period can say so.
-   * A Suspense line never blocked the seal; it is reported and carried.
-   */
-  suspenseGross: number;
 }
 
 /**
@@ -1430,4 +1431,69 @@ export interface LedgerYearFiling {
   filedAt: string;
   actorInitials: string;
   authorizedByInitials: string;
+}
+
+/**
+ * M-08 d20, architecture A-76 — the closing transaction a seal writes.
+ *
+ * **A stored balance-forward is a materialised recomputation.** It is written
+ * as the RESULT of the recomputation at seal and rewritten at unseal, so
+ * *stored* is by definition the last *recomputed* and **which one wins stops
+ * being a question anyone can ask.** Reporting reads it rather than re-summing
+ * history (d20); a later recomputation that disagrees raises
+ * `ledger-balance-divergence` with a null actor.
+ *
+ * A-76 corrects d20's own reasoning on the way past: d20 claimed A-30 and M-07
+ * d7 as precedent for storing-and-recomputing, and **A-30 stores precisely in
+ * order to have NO second path.** The storage is still right; the reassurance
+ * was borrowed. The apt precedents are A-33a and A-66.
+ */
+export interface LedgerClosingTransaction {
+  id: string;
+  /** `YYYY-MM`. */
+  period: string;
+  /** A-75, A-76 — which seal produced it. Rewritten when that seal is replaced. */
+  sealId: string;
+  /** The recomputation's result, at the full grain (M-08 d2). */
+  balances: LedgerClosingBalance[];
+  /**
+   * M-08 d15, M-07 d25, step 20 — the period's Suspense total, GROSS, carried
+   * here because *"any statement drawn from that period can say so."* Gross and
+   * not net: short three dollars on one date and over three on another is two
+   * defects, and a net of zero is the one answer that hides both.
+   *
+   * It lives on the closing transaction and NOT on the seal, so there is one
+   * figure in one place — this system refuses a second copy of a fact (A-36,
+   * A-37, A-33b), and a Suspense total that two artifacts each held could
+   * disagree.
+   */
+  suspenseGross: number;
+  computedAt: string;
+}
+
+/**
+ * One balance forward, at the grain M-08 d2 gives a journal line:
+ * `(account, section, location)`.
+ *
+ * **Stored at the full grain deliberately.** d2's promise is that *"totalling
+ * an account across all Sections and totalling it within one are the same query
+ * with a different filter"* — and a closing transaction stored per ACCOUNT
+ * alone breaks that promise for balance-forwards specifically, because a
+ * section-filtered enquiry would have to re-sum history while the unfiltered
+ * one read storage. Two different code paths for what d2 says is one query.
+ *
+ * d20 leaves the shape open in terms — *"whether the closing transaction is a
+ * balanced set of journal lines like the reference model's, or a stored summary
+ * beside the journal, is a data-model question this flow does not settle"* — so
+ * this is a prototype choice and a candidate for `/architecture`, not a
+ * recorded decision.
+ */
+export interface LedgerClosingBalance {
+  accountId: string;
+  /** M-08 d12 — optional, and blank means *not applicable*. */
+  section?: string;
+  /** M-08 d12, d27, A-72 — required. */
+  location: string;
+  /** Signed: positive is a debit balance, negative a credit balance. */
+  balance: number;
 }

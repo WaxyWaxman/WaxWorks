@@ -56,7 +56,6 @@ const seal = (id: string, period: string): LedgerPeriodSeal => ({
   sealedAt: `${period}-28 17:00:00`,
   actorInitials: "WW",
   authorizedByInitials: "WW",
-  suspenseGross: 0,
 });
 
 /** Assets 61,200 + 18,000 = 79,200. Liabilities 11,300 + 20,000 = 31,300. Equity 47,900. */
