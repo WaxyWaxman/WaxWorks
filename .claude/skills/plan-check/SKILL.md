@@ -73,6 +73,12 @@ Propose the wording, cite what breaks downstream (every flow that inherited the 
 commitment needs its "Inherited from other flows" entry updated in the same change),
 and let the user decide. Do not supersede a decision on your own judgement.
 
+**A supersession also reaches the tests.** Before proposing, `grep` the decision in
+`docs/qa/e2e-register.md` and in the test tree, and list every register row that
+asserts it. Those rows go `Stale` in the same change (`/qa stale <decision>`) — a
+test that still passes against a retired rule is the failure mode the register
+exists to catch. Say in the proposal which rows are affected.
+
 ## Routing
 
 Once the verdict is clear, hand off rather than doing everything here:

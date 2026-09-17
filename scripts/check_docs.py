@@ -336,6 +336,64 @@ for flow_id, flow in sorted(flows.items()):
 
 
 # --------------------------------------------------------------------------
+# 7. End-to-end register -- docs/qa/e2e-register.md
+#
+# The register is a table of claims about the tests. These are the claims with
+# one right answer: row IDs are well-formed, contiguous, and append-only within
+# a flow; each row names a flow that exists; statuses use the vocabulary; a row
+# that says Automated names a spec file that exists. Whether a row asserts the
+# right decision stays with /qa and the qa-reviewer.
+# --------------------------------------------------------------------------
+
+REGISTER = os.path.join(ROOT, "docs", "qa", "e2e-register.md")
+REGISTER_STATUS = {"Planned", "Walked", "Automated", "Stale", "Blocked", "—", "-"}
+REGISTER_ROW_RE = re.compile(r"^\|\s*(~~)?([EM]-\d{2})-T(\d+)(~~)?\s*\|(.*)$")
+
+if not os.path.exists(REGISTER):
+    warn("docs/qa/e2e-register.md is missing -- no end-to-end register")
+else:
+    rows_by_flow: dict[str, list[int]] = {}
+    for lineno, line in enumerate(read(REGISTER).splitlines(), 1):
+        m = REGISTER_ROW_RE.match(line.strip())
+        if not m:
+            continue
+        struck_open, flow_id, num, struck_close, rest = m.groups()
+        where = f"{rel(REGISTER)}:{lineno}"
+        row_id = f"{flow_id}-T{num}"
+        if flow_id not in flows:
+            err(f"{where}: row {row_id} names {flow_id}, which is not a flow")
+        rows_by_flow.setdefault(flow_id, []).append(int(num))
+        cells = [c.strip() for c in rest.split("|")]
+        # Scenario | Steps | Asserts | Needs | Prototype | Product | Spec | (trailing)
+        if len(cells) < 7:
+            err(f"{where}: row {row_id} has {len(cells)} cells; expected Scenario, Steps, Asserts, Needs, Prototype, Product, Spec")
+            continue
+        scenario, steps, asserts, needs, proto, product, spec = cells[:7]
+        for target, status in (("Prototype", proto), ("Product", product)):
+            if status.strip("`") not in REGISTER_STATUS:
+                err(f"{where}: row {row_id} {target} status '{status}' is not Planned, Walked, Automated, Stale, Blocked, or an em dash")
+        if "Automated" in (proto, product):
+            if not spec:
+                err(f"{where}: row {row_id} is Automated but names no Spec file")
+            elif not os.path.exists(os.path.join(ROOT, spec.strip("`"))):
+                err(f"{where}: row {row_id} is Automated but Spec {spec} does not exist")
+        if not asserts or asserts.lower() in {"-", "—", "none"}:
+            warn(f"{where}: row {row_id} asserts nothing -- a scenario with no decision behind it")
+    for flow_id, nums in sorted(rows_by_flow.items()):
+        expected = list(range(1, len(set(nums)) + 1))
+        if sorted(set(nums)) != expected:
+            err(
+                f"{rel(REGISTER)}: {flow_id} rows must run T1..T{len(set(nums))} with no gaps "
+                f"(append only, never renumber); found {sorted(set(nums))}"
+            )
+        if len(nums) != len(set(nums)):
+            err(f"{rel(REGISTER)}: {flow_id} has a duplicated row number")
+    for flow_id, flow in sorted(flows.items()):
+        if flow.status == "Specified" and flow_id not in rows_by_flow:
+            warn(f"{flow_id} is Specified but has no rows in docs/qa/e2e-register.md")
+
+
+# --------------------------------------------------------------------------
 # Report
 # --------------------------------------------------------------------------
 
@@ -356,6 +414,8 @@ print(
     % (len(flows), ", ".join(f"{n} {s}" for s, n in sorted(by_status.items())) or "none")
 )
 print(f"{tbd_total} _TBD_ markers outstanding")
+if os.path.exists(REGISTER):
+    print("%d end-to-end register rows across %d flows" % (sum(len(v) for v in rows_by_flow.values()), len(rows_by_flow)))
 print(f"{len(errors)} error(s), {len(warnings)} warning(s)")
 
 sys.exit(1 if errors else 0)
