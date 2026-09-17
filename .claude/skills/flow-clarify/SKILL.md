@@ -92,6 +92,11 @@ stop at any point and keep what was settled.
 - If the flow settled something cross-cutting (a rule that will bind flows not yet
   written), raise it via `/architecture` as a candidate **A-n** decision in
   `docs/architecture.md` §2.
+- **If the flow reached `Specified`, it is now testable end to end.** Hand it to
+  `/qa register <ID>`, which derives the scenario rows from the numbered steps into
+  `docs/qa/e2e-register.md`. If the flow was already `Specified` and this session
+  appended or superseded decisions, hand those numbers to `/qa stale` instead —
+  rows asserting the old rule must not keep passing.
 - Tell the user what is still open, and what the next flow to work is and why.
 
 ## Promotion rules

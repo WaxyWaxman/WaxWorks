@@ -15,8 +15,8 @@ anyone's personal configuration:
 
 | Path | What the clone gets you |
 |---|---|
-| `.claude/skills/` | `/plan-check`, `/flow-clarify`, `/flow-new`, `/architecture`, `/qa`, `/spec-audit` |
-| `.claude/agents/` | `spec-auditor`, `architect`, `qa-reviewer` — read-only sweeps |
+| `.claude/skills/` | `/plan-check`, `/flow-clarify`, `/flow-new`, `/architecture`, `/qa`, `/spec-audit`, `/work-order`, `/develop` |
+| `.claude/agents/` | `spec-auditor`, `architect`, `qa-reviewer` — read-only sweeps; `developer` — builds one work order in a worktree, with a hook (`scripts/hooks/developer_paths.py`) that refuses writes outside its lane |
 | `.claude/settings.json` | Shared permissions, so neither of us re-approves the same tools |
 | `CLAUDE.md` | The conventions, loaded into every session automatically |
 
@@ -79,9 +79,21 @@ git push -u origin e05-payment
 gh pr create
 ```
 
-CI re-runs `check_docs.py` on the pull request. It does not run the model —
-there is no API key in CI, and the judgement half of the audit is yours to run
-locally before you open the PR.
+CI re-runs `check_docs.py` on the pull request, and `check_coverage.py` for the
+decision-to-test report. It does not run the model — there is no API key in CI,
+and the judgement half of the audit is yours to run locally before you open the PR.
+
+## Building past the prototype
+
+Code is built to **work orders** — [docs/build/workflow.md](docs/build/workflow.md).
+The short version: `/work-order <ID> <D|U>` derives a checklist from the flow's
+decisions; a human approves it; `/develop` (or the `developer` subagent) builds
+test-first and fills in the evidence; `/work-order check` runs
+`scripts/check_coverage.py --order` and hands the order and the diff — never the
+developer's report — to `qa-reviewer`, `architect` and `/code-review`; a human
+merges; when both tracks of a milestone are in
+[docs/build/status.md](docs/build/status.md), `/qa ready` opens end-to-end
+automation. Every report ends with **Needs a human**.
 
 ## Why branch per flow
 

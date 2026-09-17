@@ -52,7 +52,10 @@ Three things make a recorded decision complete:
   through. Name the downside next to it.
 - **What it amends.** If it changes a flow decision or a PRD section, append the
   amendment to that document *and* add the row to §9. Both, in the same change —
-  §9 is what makes the amendment findable later.
+  §9 is what makes the amendment findable later. Then `grep` the amended decision
+  in `docs/qa/e2e-register.md`: every row asserting it goes `Stale`
+  (`/qa stale <decision>`) in the same change, or the test keeps holding the code
+  to the rule you just retired.
 - **The alternatives.** The value is in the roads not taken and why.
 
 **Supersession never deletes.** A decision that turns out wrong is struck through in

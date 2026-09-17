@@ -22,3 +22,5 @@ jobs:
           python-version: "3.12"
       - name: Check specification consistency
         run: python scripts/check_docs.py
+      - name: Decision-to-test coverage (report; the build gate is --order, run per work order)
+        run: python scripts/check_coverage.py
