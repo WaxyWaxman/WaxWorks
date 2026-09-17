@@ -1,10 +1,11 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { PayableSlab, type PayableChip, type PayableSort } from "../components/PayableSlab";
 import { SettleTrack } from "../components/SettleTrack";
 import type { PayableEntryType, PaymentMethod } from "../data/types";
 import {
   autoPlacement,
   creditOn,
+  duplicateReference,
   ledgerRows,
   moneyOn,
   settlementPlan,
@@ -59,7 +60,12 @@ export function AccountsPayable() {
   const [query, setQuery] = useState("");
   const [chip, setChip] = useState<PayableChip>("all");
   const [sort, setSort] = useState<PayableSort>("name");
-  const [sel, setSel] = useState<Record<string, boolean>>({});
+  // d43 — the VALUE is the tick sequence, not a boolean. Credits draw down in
+  // the order the Manager ticked them, so the order has to survive being read
+  // back out; `rows.filter` would otherwise hand back ledger order, which is
+  // oldest-first and is exactly what d43 refuses.
+  const [sel, setSel] = useState<Record<string, number>>({});
+  const tickSeq = useRef(0);
   const [creating, setCreating] = useState(false);
   const [showSettled, setShowSettled] = useState(false);
   const [openBatch, setOpenBatch] = useState<string | null>(null);
@@ -77,6 +83,7 @@ export function AccountsPayable() {
     paymentBatches: app.paymentBatches,
     batchVoids: app.batchVoids,
     claimVoids: app.claimVoids,
+      clearings: app.clearings,
   };
 
   const balanceOf = (id: string) => supplierBalance(id, data);
@@ -107,7 +114,9 @@ export function AccountsPayable() {
     [supplier?.id, isCards, app.invoices, app.payableEntries, app.claims, app.paymentBatches, app.batchVoids],
   );
 
-  const selectedRows = rows.filter((r) => sel[r.key]);
+  const selectedRows = rows
+    .filter((r) => sel[r.key] != null)
+    .map((r) => (r.role === "credit" ? { ...r, tickOrder: sel[r.key] } : r));
   const plan = settlementPlan(selectedRows);
   // d34 — what the Invoices expected, which the Manager may override. What the
   // batch RECORDS is what actually happened, never this.
@@ -117,8 +126,24 @@ export function AccountsPayable() {
   // the method from what was ticked, and any typed money override belongs to
   // the selection it was typed against, not to the screen.
   const selKey = Object.keys(sel).sort().join(",");
+  // d40 — a re-record may pre-fill from the batch it replaces. The reset below
+  // would wipe it, so a pending pre-fill is carried in a ref and consumed by
+  // the same effect rather than racing it.
+  const prefill = useRef<Partial<SettleForm> | null>(null);
   useEffect(() => {
-    setForm((f) => ({ ...f, method: expectedMethod ?? "Cheque", credit: {}, money: {} }));
+    setForm((f) => {
+      const p = prefill.current;
+      prefill.current = null;
+      if (!p) return { ...f, method: expectedMethod ?? "Cheque", credit: {}, money: {} };
+      return {
+        ...f,
+        method: p.method ?? expectedMethod ?? "Cheque",
+        reference: p.reference ?? f.reference,
+        date: p.date ?? f.date,
+        credit: p.credit ?? {},
+        money: p.money ?? {},
+      };
+    });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selKey, expectedMethod]);
 
@@ -127,8 +152,8 @@ export function AccountsPayable() {
     setCreating(false);
     setSel((prev) => {
       const next = { ...prev };
-      if (next[row.key]) delete next[row.key];
-      else next[row.key] = true;
+      if (next[row.key] != null) delete next[row.key];
+      else next[row.key] = (tickSeq.current += 1); // d43 — when, not whether
       return next;
     });
   };
@@ -163,6 +188,10 @@ export function AccountsPayable() {
           id: d.id,
           credit: creditOn(form, d.key, auto),
           money: moneyOn(form, d.key, d.balance, auto),
+          // d38 — the write path needs the balance to know what is excess. The
+          // invariant belongs there, not in this screen (A-4).
+          balance: d.balance,
+          reference: `${d.type} ${d.reference}`,
         })),
         credits: plan.credits.map((c) => ({ id: c.creditId!, amount: -c.balance, label: c.reference })),
         placeholderIds: plan.holds.map((h) => h.id),
@@ -182,10 +211,20 @@ export function AccountsPayable() {
 
   const doClear = () => {
     const before = supplier ? balanceOf(supplier.id) : 0;
-    app.clearPayableEntries(
-      selectedRows.filter((r) => r.kind === "entry").map((r) => r.id),
-      authorisedBy ?? "",
-    );
+    const ids = selectedRows.filter((r) => r.kind === "entry").map((r) => r.id);
+    const result = app.clearPayableEntries(ids, authorisedBy ?? "");
+    // The return value used to be dropped, so a refused clearing still reported
+    // "2 retired against each other" and the Manager was told an act happened
+    // that had not. d15 makes a clearing the Manager's manual call over a set
+    // summing to zero — being told the wrong set was acted on is the one thing
+    // that cannot be allowed to be silent.
+    if (!result.cleared) {
+      setMsg(
+        `Nothing was cleared. ${ids.length < 2 ? "A clearing needs at least two manual entries (d15) — a Credited claim is not one of them, which is a gap worth raising." : "Those entries do not sum to zero, or one is already cleared (d15)."}`,
+      );
+      setSel({});
+      return;
+    }
     const after = supplier ? balanceOf(supplier.id) : 0;
     setMsg(
       `${selectedRows.length} retired against each other. Balance unchanged at ${money(before)} — a credit already counted and stays counted (d15, d27)${
@@ -198,11 +237,46 @@ export function AccountsPayable() {
   const doVoid = (batchId: string) => {
     if (!supplier) return;
     const before = balanceOf(supplier.id);
+    const batch = app.paymentBatches.find((b) => b.id === batchId);
     app.voidPaymentBatch(batchId, authorisedBy ?? "");
-    setMsg(
-      `Settlement voided. Balance was ${money(before)} — nothing was deleted; where it emitted a remainder, a reversing Adjustment was appended beside it (d30).`,
-    );
     setOpenBatch(null);
+
+    // d40 — pre-fill the replacement from what was just voided. d18's objection
+    // does not reach this: d18 refused a pre-filled CLAIM SPLIT because that was
+    // the system inventing a distribution, and a voided batch is this Manager's
+    // own prior choice replayed. d37 makes it matter — freezing a part-paid
+    // Invoice turns void-and-re-record into the routine way a cost is fixed.
+    if (!batch) {
+      setMsg(`Settlement voided. Balance was ${money(before)} (d30).`);
+      return;
+    }
+    const keyFor = (kind: string, id: string) => `${kind === "invoice" ? "invoice" : "entry"}:${id}`;
+    const nextSel: Record<string, number> = {};
+    const nextMoney: Record<string, string> = {};
+    for (const tg of batch.targets) {
+      const key = keyFor(tg.kind, tg.id);
+      if (nextSel[key] == null) nextSel[key] = (tickSeq.current += 1);
+      if (tg.settleKind === "money") {
+        nextMoney[key] = (round2(Number(nextMoney[key] ?? 0) + tg.amount)).toFixed(2);
+      }
+    }
+    // A-69 — the credits are named on the batch, so re-ticking them is a read
+    // of that list rather than a hunt through its targets.
+    for (const c of batch.credits) {
+      const isClaim = app.claims.some((cl) => cl.id === c.creditId);
+      const key = `${isClaim ? "claim" : "entry"}:${c.creditId}`;
+      if (nextSel[key] == null) nextSel[key] = (tickSeq.current += 1);
+    }
+    prefill.current = { method: batch.method, reference: batch.reference, date: batch.date, money: nextMoney };
+    setSel(nextSel);
+
+    const overpaid = app.payableEntries.some((e) => e.fromBatchId === batch.id && !e.fromCreditId);
+    setMsg(
+      `Settlement voided and re-opened for re-recording (d40). Balance was ${money(before)} — nothing was deleted; where it emitted a remainder, a reversing Adjustment was appended beside it (d30).` +
+        (overpaid
+          ? " The money shown is what the targets settled; the overpayment came back as its own Credit and is not pre-filled."
+          : " Check every row before settling — something in this batch was wrong."),
+    );
   };
 
   const [form, setForm] = useState<SettleForm>({
@@ -369,6 +443,20 @@ export function AccountsPayable() {
         net={net}
         rows={rows}
         plan={plan}
+        entries={app.payableEntries}
+        clearings={app.clearings}
+        onUnclear={(id) => {
+          const r = app.unclearPayableEntries(id, authorisedBy ?? "");
+          setMsg(
+            r.uncleared
+              ? "Clearing reversed and removed — its members are back on the outstanding list, and each one's log names what it was cleared against (d47, d48, A-70)."
+              : (r.reason ?? "That clearing could not be reversed."),
+          );
+          setOpenBatch(null);
+        }}
+        // d41 — warns, never refuses. Computed here because this is where the
+        // batches are; the notice itself belongs beside the reference field.
+        duplicateRef={duplicateReference(form.reference, app.paymentBatches, app.batchVoids)}
         creating={creating}
         form={form}
         expectedMethod={expectedMethod}
@@ -419,7 +507,7 @@ function Band({
   say: string;
   total: number;
   rows: LedgerRow[];
-  sel: Record<string, boolean>;
+  sel: Record<string, number>; // d43 — the tick sequence, not a flag
   onPick: (r: LedgerRow) => void;
   onOpenReceiving: (r: LedgerRow) => void;
   tone?: "uncounted";
@@ -446,7 +534,7 @@ function LedgerTable({
   batchesFor,
 }: {
   rows: LedgerRow[];
-  sel: Record<string, boolean>;
+  sel: Record<string, number>; // d43 — the tick sequence, not a flag
   onPick: (r: LedgerRow) => void;
   onOpenReceiving: (r: LedgerRow) => void;
   batchesFor?: (r: LedgerRow) => { id: string; date: string; method: string; reference: string }[];
@@ -477,7 +565,7 @@ function LedgerTable({
               key={r.key}
               className={
                 "ap-row" +
-                (sel[r.key] ? " on" : "") +
+                (sel[r.key] != null ? " on" : "") +
                 (settled ? " settled" : "") +
                 (over ? " over" : "") +
                 (r.source === "remainder" ? " remainder" : "")
@@ -486,7 +574,7 @@ function LedgerTable({
             >
               <td>
                 {!settled && (
-                  <input type="checkbox" checked={!!sel[r.key]} readOnly aria-label={`Select ${r.type} ${r.reference}`} />
+                  <input type="checkbox" checked={sel[r.key] != null} readOnly aria-label={`Select ${r.type} ${r.reference}`} />
                 )}
               </td>
               <td>

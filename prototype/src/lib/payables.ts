@@ -1,5 +1,6 @@
 import type {
   ClaimVoid,
+  Clearing,
   Invoice,
   PayableEntry,
   PayableEntrySource,
@@ -68,7 +69,8 @@ export interface LedgerRow {
   band: RowBand;
   role: RowRole;
   source?: PayableEntrySource;
-  /** Which credit this row IS, for attaching (A-37 derives consumption from targets). */
+  /** Which credit this row IS, for attaching. Not the retired pairing: A-37/A-69
+   *  derive consumption from the BATCH naming the credit, not from a target. */
   creditId?: string;
   /** Terms and the derived due date — only a bill has one. */
   terms?: PaymentTerms;
@@ -81,6 +83,13 @@ export interface LedgerRow {
   method?: PaymentMethod;
   canOpenInReceiving?: boolean;
   isPaidInvoice?: boolean;
+  /**
+   * M-05 d43 — when this row was ticked. Set by the screen on a selected
+   * row, not by `ledgerRows`. Credits draw down in this order, so it is what
+   * decides which credit overflows into a remainder. Debits ignore it and
+   * keep ledger order, which is what d33 governs.
+   */
+  tickOrder?: number;
 }
 
 export interface PayablesData {
@@ -94,6 +103,8 @@ export interface PayablesData {
   // that: any query remembering only the first counts voided claims as live.
   // This is the second half, carried so `claimIsAgreed` can consult both.
   claimVoids: ClaimVoid[];
+  // M-05 d46 — cleared is derived from these, not from a mark on the entry.
+  clearings: Clearing[];
 }
 
 const addDays = (iso: string, n: number): string => {
@@ -142,7 +153,7 @@ export function ledgerRows(
   suppliers: Supplier[],
   today = new Date(),
 ): LedgerRow[] {
-  const { invoices, payableEntries, claims, paymentBatches: b, batchVoids: v } = data;
+  const { invoices, payableEntries, claims, paymentBatches: b, batchVoids: v, clearings } = data;
   const supplier = suppliers.find((s) => s.id === supplierId);
   const rows: LedgerRow[] = [];
 
@@ -197,7 +208,12 @@ export function ledgerRows(
     });
   }
 
-  for (const e of payableEntries.filter((x) => x.supplierId === supplierId && !x.clearedAt)) {
+  // d46 — a row is off the ledger because a CLEARING names it (derived), or
+  // because d27's settlement disposal stamped it. Two different acts with two
+  // different reversals; only the first is un-clearable.
+  for (const e of payableEntries.filter(
+    (x) => x.supplierId === supplierId && !entryIsCleared(x.id, clearings) && !x.clearedAt,
+  )) {
     const payable = payableEntryIsPayable(e);
     const contribution = payableEntryContribution(e, b, v);
     const isPlaceholder = e.type === "Claim";
@@ -281,18 +297,167 @@ export interface SettlementPlan {
   money: number;
   /** d25/d28 — what cannot attach comes back as its own artifact. */
   remainder: number;
+  /**
+   * d43 — per credit, in tick order: what it applied and what is left. The
+   * one with `touched` and a non-zero `left` is the credit being partly
+   * applied, and the summary has to name it before the Manager commits.
+   */
+  drawdown: { id: string; drawn: number; left: number; touched: boolean }[];
   /** d27 — no debit means nothing to attach to: this is d15's clearing. */
   isClearing: boolean;
 }
 
+/**
+ * M-05 d27 — "credits in the selection attach to the debits in the selection;
+ * whatever cannot attach STAYS AS IT WAS." A credit the drawdown never reaches
+ * is therefore not part of the settlement at all: it is not consumed, and it
+ * emits no remainder.
+ *
+ * d28's "every credit consumed by a settlement is consumed whole" governs the
+ * credits the drawdown DID reach — in practice the one it straddles. Reading it
+ * as "every credit ticked" is what produced the double count this replaces: an
+ * untouched credit emitted a remainder for its full value while staying
+ * un-consumed, so the entry and its remainder both reduced the balance, moving
+ * it by money nobody paid and no agreement granted. d26 forbids exactly that.
+ *
+ * The order is the order given. d43 makes that tick order and is separate work.
+ */
+export function creditDrawdown(
+  credits: { id: string; amount: number }[],
+  attach: number,
+): { id: string; drawn: number; left: number; touched: boolean }[] {
+  let pool = round2(attach);
+  return credits.map((c) => {
+    const drawn = round2(Math.min(pool, round2(c.amount)));
+    pool = round2(pool - drawn);
+    return { id: c.id, drawn, left: round2(round2(c.amount) - drawn), touched: drawn > 0.005 };
+  });
+}
+
+/**
+ * M-05 d39 — why a set of rows may not be un-cleared, or undefined if it may.
+ *
+ * The rule, not the write, so it can be held to a test. d39 makes a CLEARING
+ * reversible: it moves no money and writes no journal lines, so reversing one
+ * reverses nothing real. It says nothing about d27's placeholder disposal
+ * inside a settlement — that is its batch's void to reverse (d22), and whether
+ * the void even does so is an open question in M-05. `clearedInBatchId` is the
+ * discriminator; before it existed both acts wrote the same two fields and an
+ * un-clear would have silently reversed the wrong one.
+ */
+/**
+ * M-05 d5, d38 — what actually left the bank for this batch.
+ *
+ * NOT the sum of its targets. A target records what a debit was settled BY, and
+ * d38 caps it at what that debit owed so the Invoice's derived balance stays at
+ * zero rather than going negative (d8). The excess is a remainder Credit, so
+ * the money that left is the money targets PLUS this batch's overpayment
+ * remainders — derived from rows, never stored beside them.
+ *
+ * This is the figure d5's reference has to reconcile against: a $80.00 cheque
+ * on a $68.65 Invoice is $80.00 on the statement, and a payment history saying
+ * $68.65 is the one screen that must not disagree with the bank.
+ */
+/**
+ * M-05 d41 — an earlier batch carrying this same bank reference, or undefined.
+ *
+ * It warns and NEVER refuses. d5 makes the reference free text on purpose,
+ * because the bank's formats are not the store's to control, and one cheque
+ * legitimately covering two settlements is a real thing.
+ *
+ * The case worth catching is not the one that raised the question. After a
+ * void and a re-record (d40) the same cheque appears twice by design, and the
+ * warning says so by reporting whether the match is voided. What it is really
+ * for is a GENUINE double entry — the same cheque recorded twice as two live
+ * settlements — which nothing else in this flow would see.
+ *
+ * Matching is case-insensitive and trimmed: "cheque 101" and "Cheque 101 " are
+ * the same cheque to everyone except a string comparison.
+ */
+export function duplicateReference(
+  reference: string,
+  batches: PaymentBatch[],
+  voids: PaymentBatchVoid[],
+  excludeBatchId?: string,
+): { reference: string; date: string; voided: boolean } | undefined {
+  const needle = reference.trim().toLowerCase();
+  if (!needle) return undefined;
+  const hit = batches.find(
+    (b) => b.id !== excludeBatchId && b.reference.trim().toLowerCase() === needle,
+  );
+  if (!hit) return undefined;
+  return { reference: hit.reference, date: hit.date, voided: voids.some((v) => v.batchId === hit.id) };
+}
+
+export function batchMoneyPaid(batch: PaymentBatch, entries: PayableEntry[]): number {
+  const targets = batch.targets.filter((t) => t.settleKind === "money").reduce((n, t) => n + t.amount, 0);
+  const over = entries
+    .filter((e) => e.source === "remainder" && e.fromBatchId === batch.id && !e.fromCreditId)
+    .reduce((n, e) => n + payableEntryTotal(e), 0);
+  return round2(targets + over);
+}
+
+/**
+ * M-05 d46 — an entry is CLEARED because a clearing names it. Derived from the
+ * artifact, never stored on the entry (architecture A-37's shape), which is
+ * what lets d48 reverse a clearing by REMOVING it: the members come back by
+ * the absence of the row, with nothing to flip.
+ *
+ * d27's settlement disposal is NOT this. It stamps the entry directly and is
+ * reversed by its batch's void, never by an un-clear (A-70's conditions do not
+ * reach it).
+ */
+export const entryIsCleared = (entryId: string, clearings: Clearing[]): boolean =>
+  clearings.some((c) => c.memberIds.includes(entryId));
+
+/**
+ * M-05 d47, d48, architecture A-70 — why this clearing may not be reversed, or
+ * undefined if it may.
+ *
+ * The rule, not the write, so it can be held to a test. Un-clearing is WHOLE
+ * (d47): d15 requires the members to sum to zero, so releasing one leaves a
+ * clearing that could never have been made. There is therefore no partial
+ * refusal to express here — a clearing is reversible or it does not exist.
+ */
+/**
+ * architecture A-70's fourth condition — what a clearing's member was cleared
+ * AGAINST, named rather than counted.
+ *
+ * d48 removes the clearing, which destroys the grouping: "cleared against 2
+ * other entries" does not say which two. A-70 makes naming them a CONDITION of
+ * the deletion being permitted, so this is load-bearing rather than cosmetic —
+ * it is the only place the act survives the row.
+ */
+export const clearedAgainst = (selfId: string, members: PayableEntry[]): string =>
+  members
+    .filter((o) => o.id !== selfId)
+    .map((o) => o.reference)
+    .join(", ");
+
+export function unclearRefusal(clearing: Clearing | undefined): string | undefined {
+  if (!clearing) return "That clearing no longer exists.";
+  if (clearing.memberIds.length < 2) return "A clearing needs at least two members (d15).";
+  return undefined;
+}
+
+
 export function settlementPlan(rows: LedgerRow[]): SettlementPlan {
   const debits = rows.filter((r) => r.role === "debit" && r.balance > 0.005);
-  const credits = rows.filter((r) => r.role === "credit");
+  // d43 — tick order, because the Manager already expressed it and can change
+  // it by re-ticking. Explicitly NOT oldest-first, which is what ledger order
+  // gives and which is d11's automatic distribution on a second axis (d18).
+  const credits = rows
+    .filter((r) => r.role === "credit")
+    .sort((a, b) => (a.tickOrder ?? 0) - (b.tickOrder ?? 0));
   const holds = rows.filter((r) => r.role === "placeholder");
   const counters = rows.filter((r) => r.role === "counter");
   const debitTotal = round2(debits.reduce((n, r) => n + r.balance, 0));
   const creditTotal = round2(credits.reduce((n, r) => n - r.balance, 0));
   const attach = round2(Math.min(creditTotal, debitTotal));
+  const drawdown = creditDrawdown(
+    credits.map((c) => ({ id: c.key, amount: -c.balance })),
+    attach,
+  );
   return {
     rows,
     debits,
@@ -303,7 +468,11 @@ export function settlementPlan(rows: LedgerRow[]): SettlementPlan {
     creditTotal,
     attach,
     money: round2(debitTotal - attach),
-    remainder: round2(creditTotal - attach),
+    // d27 — only a credit the drawdown reached can leave a remainder behind.
+    // `creditTotal - attach` counted untouched credits too, which is the figure
+    // the store then emitted artifacts for.
+    remainder: round2(drawdown.filter((c) => c.touched).reduce((n, c) => n + c.left, 0)),
+    drawdown,
     isClearing: debits.length === 0 && rows.length > 0,
   };
 }

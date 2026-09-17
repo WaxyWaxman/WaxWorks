@@ -21,12 +21,13 @@ import { lineTaxComponents, type TaxContext } from "../lib/totals";
 import * as usersLib from "../lib/users";
 import {
   customerBalanceDelta,
-  invoiceIsPaid,
+  invoiceIsFrozen,
   payableEntrySignedAmount,
   payableEntryTotal,
   round2,
   tenderedTotal,
 } from "../lib/totals";
+import { clearedAgainst, entryIsCleared, unclearRefusal } from "../lib/payables";
 import {
   CURRENT_USER,
   CUSTOMERS,
@@ -99,6 +100,7 @@ import type {
   ProviderTag,
   ReleaseCacheEntry,
   ClaimVoid,
+  Clearing,
   SupplierClaim,
   TaxLine,
   Tender,
@@ -210,6 +212,7 @@ interface AppState {
   payableEntries: PayableEntry[]; // M-05 — manual ledger entries: Invoice/Claim/Credit/Adjustment/Consignment, not sourced from Receiving or Supplier Claims
   paymentBatches: PaymentBatch[]; // M-05 d16 — one row per settlement, across Invoices, entries and credits
   batchVoids: PaymentBatchVoid[]; // M-05 d22 / A-33a — a void is an appended artifact, never a column on the batch
+  clearings: Clearing[]; // M-05 d46 — a clearing is an act with members, addressable like a batch
   pendingOrders: PendingOrderLine[];
   reviewFlags: ReviewFlag[];
   activeSaleId: string | null;
@@ -704,9 +707,11 @@ const seed: AppState = {
       recordedBy: MANAGER_NAME,
       createdAt: "2026-08-20 14:00:00",
       targets: [{ kind: "invoice", id: "inv-seed-crate-paid", amount: 20.0, settleKind: "money" }],
+      credits: [], // A-69 — money only, so no credit funded it
     },
   ],
   batchVoids: [],
+  clearings: [],
   pendingOrders: PENDING_ORDERS,
   reviewFlags: [],
   activeSaleId: null,
@@ -939,7 +944,9 @@ interface AppContextValue extends AppState {
       method: PaymentMethod;
       reference: string;
       date: string;
-      debits: { kind: PayableTargetKind; id: string; credit?: number; money?: number; creditId?: string }[];
+      // A-69 — a debit carries what it is being settled with, not which credit
+      // funded it. The credits are named on the batch.
+      debits: { kind: PayableTargetKind; id: string; credit?: number; money?: number; balance: number; reference: string }[];
       credits: { id: string; amount: number; label: string }[];
       placeholderIds: string[];
     },
@@ -968,6 +975,9 @@ interface AppContextValue extends AppState {
   // amounts sum to zero. Returns { cleared: false } and changes nothing
   // otherwise (mismatched sum, wrong supplier, already cleared, etc).
   clearPayableEntries: (entryIds: string[], by: string) => { cleared: boolean };
+  // M-05 d39 — a clearing is a REVERSIBLE MARK, not a terminal state.
+  // d46 — addressed by the CLEARING, the way a void addresses a batch.
+  unclearPayableEntries: (clearingId: string, by: string) => { uncleared: boolean; reason?: string };
 
   pendingOrderFor: (id?: string) => PendingOrderLine | undefined;
   /** Logs the receipt on the line; the line SURVIVES (M-02 d21). `qty` is
@@ -2915,7 +2925,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
 
   const addInvoiceLine: AppContextValue["addInvoiceLine"] = (invoiceId, line) => {
     const invoice = s.invoices.find((iv) => iv.id === invoiceId);
-    if (!invoice || invoiceIsPaid(invoice, s.paymentBatches, s.batchVoids)) return;
+    if (!invoice || invoiceIsFrozen(invoice, s.paymentBatches, s.batchVoids)) return;
     const cost = round2(line.listPrice * (1 - line.discountPct / 100));
     let newLine: InvoiceLine = { id: uid("invline"), ...line, cost };
 
@@ -2984,7 +2994,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
   const updateInvoiceLine: AppContextValue["updateInvoiceLine"] = (invoiceId, lineId, patch) => {
     const invoice = s.invoices.find((iv) => iv.id === invoiceId);
     const existing = invoice?.lines.find((l) => l.id === lineId);
-    if (!invoice || invoiceIsPaid(invoice, s.paymentBatches, s.batchVoids) || !existing) return;
+    if (!invoice || invoiceIsFrozen(invoice, s.paymentBatches, s.batchVoids) || !existing) return;
     const merged = { ...existing, ...patch };
     const newCost = round2(merged.listPrice * (1 - merged.discountPct / 100));
     const updatedLine: InvoiceLine = { ...merged, cost: newCost };
@@ -3022,7 +3032,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
   const removeInvoiceLine: AppContextValue["removeInvoiceLine"] = (invoiceId, lineId) => {
     const invoice = s.invoices.find((iv) => iv.id === invoiceId);
     const line = invoice?.lines.find((l) => l.id === lineId);
-    if (!invoice || invoiceIsPaid(invoice, s.paymentBatches, s.batchVoids) || !line) return { blocked: true };
+    if (!invoice || invoiceIsFrozen(invoice, s.paymentBatches, s.batchVoids) || !line) return { blocked: true };
     const itemIds = line.itemIds ?? [];
     const anySold = itemIds.some((id) => s.inventory.find((i) => i.id === id)?.status === "sold");
     if (anySold) return { blocked: true };
@@ -3055,13 +3065,13 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
     setS((prev) => ({
       ...prev,
       invoices: prev.invoices.map((iv) =>
-        iv.id === invoiceId && !invoiceIsPaid(iv, prev.paymentBatches, prev.batchVoids) ? { ...iv, ...patch } : iv,
+        iv.id === invoiceId && !invoiceIsFrozen(iv, prev.paymentBatches, prev.batchVoids) ? { ...iv, ...patch } : iv,
       ),
     }));
 
   const setInvoiceTotalOverride: AppContextValue["setInvoiceTotalOverride"] = (invoiceId, value) => {
     const invoice = s.invoices.find((iv) => iv.id === invoiceId);
-    if (!invoice || invoiceIsPaid(invoice, s.paymentBatches, s.batchVoids)) return;
+    if (!invoice || invoiceIsFrozen(invoice, s.paymentBatches, s.batchVoids)) return;
     setS((prev) => ({
       ...prev,
       invoices: prev.invoices.map((iv) => (iv.id === invoiceId ? { ...iv, totalOverride: value } : iv)),
@@ -3187,29 +3197,44 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
       const at = now();
       const targets: PaymentTarget[] = [];
 
-      // WHICH credit funds a given target is not something d18 governs — d18 is
-      // about which INVOICES a credit lands on, and that stays the Manager's.
-      // The drawdown here is deterministic, in the order they were ticked, and
-      // one target is written per (debit, credit) pair so provenance is exact:
-      // d22's void has to put each credit back, and a pool with no provenance
-      // cannot be reversed. (M-05 records the open question of whether the
-      // Manager should get to choose this too.)
+      // M-05 d42 / A-69 — a target names the Invoice, the amount and the kind,
+      // and NOT which credit funded it. The credits are named on the batch
+      // instead (`batch.credits`), which is where A-37's `consumed` now reads
+      // from. d18 is untouched: it was always about which INVOICES a credit
+      // lands on, which stays the Manager's.
+      //
+      // The drawdown is still ordered, because d43 needs one — whichever credit
+      // it straddles is the one that emits the remainder. The order used is the
+      // order given; making that TICK order is d43's own work.
       const pool = input.credits.map((c) => ({ ...c, left: round2(c.amount) }));
 
+      const overpayments: { ref: string; amount: number }[] = [];
       for (const d of input.debits) {
         let credit = round2(d.credit ?? 0);
+        let creditApplied = 0;
         while (credit > 0.005) {
           const src = pool.find((p) => p.left > 0.005);
           if (!src) break;
           const take = round2(Math.min(credit, src.left));
           src.left = round2(src.left - take);
           credit = round2(credit - take);
-          targets.push({ kind: d.kind, id: d.id, amount: take, settleKind: "credit", creditId: src.id });
+          creditApplied = round2(creditApplied + take);
+          targets.push({ kind: d.kind, id: d.id, amount: take, settleKind: "credit" });
         }
+        // d38 — money over and above what this debit owes is NOT refused and is
+        // NOT written onto the target: the target takes what the debit owed,
+        // and the excess becomes a remainder Credit below. That keeps the
+        // Invoice's derived balance at zero rather than negative (d8 — balances
+        // are derived, never edited), while the money that actually left the
+        // bank is still the sum of the target and the artifact.
         const moneyPart = round2(d.money ?? 0);
-        if (moneyPart > 0.005) {
-          targets.push({ kind: d.kind, id: d.id, amount: moneyPart, settleKind: "money" });
+        const room = round2(Math.max(0, round2(d.balance) - creditApplied));
+        const applied = round2(Math.min(moneyPart, room));
+        if (applied > 0.005) {
+          targets.push({ kind: d.kind, id: d.id, amount: applied, settleKind: "money" });
         }
+        const excess = round2(moneyPart - applied);
+        if (excess > 0.005) overpayments.push({ ref: d.reference ?? d.id, amount: excess });
       }
       if (targets.length === 0 && input.placeholderIds.length === 0) return prev;
 
@@ -3222,20 +3247,36 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
         recordedBy: by,
         createdAt: at,
         targets,
+        // A-69 — the credits that funded this batch, each with what it applied.
+        // d27: only a credit the drawdown reached is named, so one ticked but
+        // never drawn stays as it was and is not consumed by this settlement.
+        credits: pool
+          .filter((c) => round2(c.amount) - c.left > 0.005)
+          .map((c) => ({ creditId: c.id, amount: round2(round2(c.amount) - c.left) })),
       };
 
-      // d28 — every credit ticked is consumed WHOLE, claim or entry alike, so
-      // nothing carries a partial state. d25 — what could not attach comes back
-      // as its own artifact, ONE PER SOURCE CREDIT (A-36), carrying provenance.
+      // d28 — every credit CONSUMED BY a settlement is consumed whole, claim or
+      // entry alike, so nothing carries a partial state. d25 — what could not
+      // attach comes back as its own artifact, ONE PER SOURCE CREDIT (A-36),
+      // carrying provenance.
+      //
+      // d27 — "whatever cannot attach STAYS AS IT WAS". A credit the drawdown
+      // never reached is not consumed by this settlement and emits nothing. It
+      // used to emit a remainder for its full value while staying un-consumed,
+      // so the credit and its remainder both reduced the balance — a move with
+      // no money and no agreement behind it, which d26 forbids, and it left the
+      // credit on the list to be spent again at full value (A-37's hazard).
       const remainders: PayableEntry[] = [];
       for (const c of pool) {
         const left = c.left;
-        if (left > 0.005) {
+        const touched = left < round2(c.amount) - 0.005;
+        if (touched && left > 0.005) {
           remainders.push({
             id: uid("rem"),
             supplierId: input.supplierId,
             type: "Credit",
             source: "remainder",
+            fromBatchId: batch.id,
             fromCreditId: c.id,
             reference: `Remainder of ${c.label}`,
             date: input.date,
@@ -3248,6 +3289,35 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
             log: [{ at, text: `Remainder of ${money(left)} from ${c.label} — nothing left to attach it to (d25)` }],
           });
         }
+      }
+
+      // d38's first door — money paid over and above what a debit owed. Same
+      // artifact as a credit's remainder, because it is the same fact: money
+      // that ended up in the store's favour. It carries no `fromCreditId`, no
+      // credit having produced it, and the supplier balance goes negative by
+      // this much until it is spent (d25).
+      for (const o of overpayments) {
+        remainders.push({
+          id: uid("rem"),
+          supplierId: input.supplierId,
+          type: "Credit",
+          source: "remainder",
+          fromBatchId: batch.id,
+          reference: `Overpayment on ${o.ref}`,
+          date: input.date,
+          subtotal: o.amount,
+          tax: 0,
+          freight: 0,
+          misc: 0,
+          createdBy: by,
+          createdAt: at,
+          log: [
+            {
+              at,
+              text: `${money(o.amount)} paid over the balance of ${o.ref} — recorded as paid and returned as a Credit (d38, d25)`,
+            },
+          ],
+        });
       }
 
       const paymentBatches = [batch, ...prev.paymentBatches];
@@ -3275,6 +3345,9 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
               ...e,
               clearedAt: at,
               clearedBy: by,
+              // The discriminator d39 needs: this was a SETTLEMENT's disposal,
+              // not a Manager's d15 clearing, so un-clear must not touch it.
+              clearedInBatchId: batch.id,
               log: [...e.log, { at, text: `Retired in a settlement by ${by} — contributed nothing (d27)` }],
             };
           }
@@ -3304,7 +3377,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
 
       // d30 — one reversing Adjustment per remainder this batch emitted.
       const reversals: PayableEntry[] = prev.payableEntries
-        .filter((e) => e.source === "remainder" && e.createdAt === batch.createdAt && e.supplierId === batch.supplierId)
+        .filter((e) => e.source === "remainder" && e.fromBatchId === batch.id)
         .map((rem) => ({
           id: uid("rev"),
           supplierId: rem.supplierId,
@@ -3373,27 +3446,90 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
   const clearPayableEntries: AppContextValue["clearPayableEntries"] = (entryIds, by) => {
     const entries = entryIds.map((id) => s.payableEntries.find((e) => e.id === id)).filter((e): e is PayableEntry => !!e);
     if (entries.length < 2 || entries.length !== entryIds.length) return { cleared: false };
-    if (entries.some((e) => e.clearedAt)) return { cleared: false };
+    // d46 — cleared is now DERIVED from a clearing naming the entry, so the
+    // check is "is it already in one", not "does it carry a mark".
+    if (entries.some((e) => entryIsCleared(e.id, s.clearings) || e.clearedAt)) return { cleared: false };
     if (new Set(entries.map((e) => e.supplierId)).size > 1) return { cleared: false };
     const net = round2(entries.reduce((sum, e) => sum + payableEntrySignedAmount(e), 0));
     if (Math.abs(net) > 0.005) return { cleared: false };
 
     const at = now();
+    const clearing: Clearing = {
+      id: uid("clr"),
+      supplierId: entries[0].supplierId,
+      memberIds: [...entryIds],
+      clearedAt: at,
+      clearedBy: by,
+    };
     setS((prev) => ({
       ...prev,
+      clearings: [clearing, ...prev.clearings],
       payableEntries: prev.payableEntries.map((e) =>
         entryIds.includes(e.id)
           ? {
               ...e,
-              clearedWith: entryIds.filter((id) => id !== e.id),
-              clearedAt: at,
-              clearedBy: by,
-              log: [...e.log, { at, text: `Cleared against ${entryIds.length - 1} other entr${entryIds.length - 1 === 1 ? "y" : "ies"} by ${by} — net ${money(net)}` }],
+              // A-70 — the log NAMES the siblings. Deleting the clearing (d48)
+              // destroys the grouping, and "cleared against 2 others" does not
+              // say which two; this is what makes the act survive the row.
+              log: [
+                ...e.log,
+                {
+                  at,
+                  text: `Cleared against ${clearedAgainst(e.id, entries)} by ${by} — net ${money(net)} (d15)`,
+                },
+              ],
             }
           : e,
       ),
     }));
     return { cleared: true };
+  };
+
+  /**
+   * M-05 d39 — un-clear. A clearing moves no money and writes no journal lines
+   * ([M-07] d12 has nothing to post), so reversing one reverses nothing real:
+   * the mark comes off and both rows return to the outstanding list. No void
+   * artifact is built, and architecture A-36 already agreed — it gives
+   * `ap_payment_batch_voids` and `supplier_claim_voids` and no clearing
+   * equivalent.
+   *
+   * REFUSES on a row a SETTLEMENT retired (d27's placeholder disposal), which
+   * `clearedInBatchId` is what distinguishes. d39 makes a CLEARING reversible
+   * and says nothing about a settlement's disposal — reversing that is its
+   * batch's void (d22), and whether the void even does so is an open question
+   * in M-05. Un-clearing it here would answer that question by accident.
+   */
+  const unclearPayableEntries: AppContextValue["unclearPayableEntries"] = (clearingId, by) => {
+    const clearing = s.clearings.find((c) => c.id === clearingId);
+    const refusal = unclearRefusal(clearing);
+    if (refusal || !clearing) return { uncleared: false, reason: refusal };
+
+    const at = now();
+    const members = clearing.memberIds
+      .map((id) => s.payableEntries.find((e) => e.id === id))
+      .filter((e): e is PayableEntry => !!e);
+    setS((prev) => ({
+      ...prev,
+      // d48 / A-70 — the clearing is REMOVED, not marked. Its members are
+      // un-cleared by the absence of the row, with nothing to flip, exactly as
+      // A-33a releases an Invoice and A-37 releases a credit.
+      clearings: prev.clearings.filter((c) => c.id !== clearingId),
+      payableEntries: prev.payableEntries.map((e) =>
+        clearing.memberIds.includes(e.id)
+          ? {
+              ...e,
+              log: [
+                ...e.log,
+                {
+                  at,
+                  text: `Un-cleared by ${by} — was cleared against ${clearedAgainst(e.id, members)}; back on the outstanding list (d39, d48)`,
+                },
+              ],
+            }
+          : e,
+      ),
+    }));
+    return { uncleared: true };
   };
 
   const pendingOrderFor = (id?: string) => s.pendingOrders.find((o) => o.id === id);
@@ -3782,6 +3918,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
       payableEntryFor,
       addPayableEntry,
       clearPayableEntries,
+      unclearPayableEntries,
       pendingOrderFor,
       receivePendingOrderLine,
       setPendingOrderLineStatus,

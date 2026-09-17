@@ -2,15 +2,25 @@ import { useState } from "react";
 import {
   PAYABLE_ENTRY_TYPES,
   PAYMENT_METHODS,
+  type Clearing,
   type PayableEntryType,
+  type PayableEntry,
   type PaymentBatch,
   type PaymentBatchVoid,
   type PaymentMethod,
   type Supplier,
 } from "../data/types";
-import { autoPlacement, clearsToZero, creditOn, moneyOn, type LedgerRow, type SettlementPlan } from "../lib/payables";
+import {
+  autoPlacement,
+  batchMoneyPaid,
+  clearsToZero,
+  creditOn,
+  moneyOn,
+  type LedgerRow,
+  type SettlementPlan,
+} from "../lib/payables";
 import { money } from "../lib/money";
-import { round2 } from "../lib/totals";
+import { payableEntrySignedAmount, round2 } from "../lib/totals";
 
 /**
  * Track 3. Three states, in strict priority: the entry being composed, else
@@ -40,9 +50,13 @@ export function SettleTrack({
   onCreateNew,
   batches,
   voids,
+  entries,
+  clearings,
+  duplicateRef,
   openBatch,
   onOpenBatch,
   onVoid,
+  onUnclear,
 }: {
   supplier?: Supplier;
   isCards: boolean;
@@ -72,9 +86,16 @@ export function SettleTrack({
   onCreateNew: () => void;
   batches: PaymentBatch[];
   voids: PaymentBatchVoid[];
+  /** d38 — the overpayment remainders a batch emitted, for `batchMoneyPaid`. */
+  entries: PayableEntry[];
+  /** d41 — an earlier batch on this same reference, if there is one. */
+  /** d46 — a clearing is an act with members, listed beside payment history. */
+  clearings: Clearing[];
+  duplicateRef?: { reference: string; date: string; voided: boolean };
   openBatch: string | null;
   onOpenBatch: (id: string) => void;
   onVoid: (id: string) => void;
+  onUnclear: (clearingId: string) => void;
 }) {
   if (creating && supplier) {
     return <CreateEntry supplier={supplier} onCancel={onCancelCreate} onCreate={onCreate} />;
@@ -86,6 +107,7 @@ export function SettleTrack({
         plan={plan}
         form={form}
         expectedMethod={expectedMethod}
+        duplicateRef={duplicateRef}
         onForm={onForm}
         onSettle={onSettle}
         onClear={onClear}
@@ -102,9 +124,12 @@ export function SettleTrack({
       rows={rows}
       batches={batches}
       voids={voids}
+      entries={entries}
+      clearings={clearings}
       openBatch={openBatch}
       onOpenBatch={onOpenBatch}
       onVoid={onVoid}
+      onUnclear={onUnclear}
       onCreateNew={onCreateNew}
     />
   );
@@ -118,9 +143,12 @@ function Standing({
   rows,
   batches,
   voids,
+  entries,
+  clearings,
   openBatch,
   onOpenBatch,
   onVoid,
+  onUnclear,
   onCreateNew,
 }: {
   supplier: Supplier;
@@ -128,9 +156,12 @@ function Standing({
   rows: LedgerRow[];
   batches: PaymentBatch[];
   voids: PaymentBatchVoid[];
+  entries: PayableEntry[];
+  clearings: Clearing[];
   openBatch: string | null;
   onOpenBatch: (id: string) => void;
   onVoid: (id: string) => void;
+  onUnclear: (clearingId: string) => void;
   onCreateNew: () => void;
 }) {
   const credits = rows.filter((r) => r.role === "credit");
@@ -260,10 +291,15 @@ function Standing({
           {batches.length === 0 && <div className="wo-sec-empty">No settlement recorded yet.</div>}
           {batches.map((b) => {
             const voided = voids.find((v) => v.batchId === b.id);
-            const total = round2(b.targets.reduce((n, t) => n + t.amount, 0));
+            // d5/d38 — what LEFT THE BANK, not what the targets settled. An
+            // overpayment is capped on its target and returned as a Credit, so
+            // summing targets would show $68.65 against an $80.00 cheque on the
+            // one screen that reconciles against the statement.
+            const money_ = batchMoneyPaid(b, entries);
             const cr = round2(
               b.targets.filter((t) => t.settleKind === "credit").reduce((n, t) => n + t.amount, 0),
             );
+            const total = round2(money_ + cr);
             const open = openBatch === b.id;
             return (
               <div className={"ap-batch" + (voided ? " voided" : "")} key={b.id}>
@@ -309,6 +345,58 @@ function Standing({
             );
           })}
         </div>
+
+        {/* d46 — a clearing is an act with members, so it is listed the way a
+            settlement is and opened the same way, with Un-clear where Void sits
+            on a batch. This is d21's move in the other direction: a retired row
+            is reached through the act that retired it, because the reverse
+            lookup is the one someone reconciling actually needs. */}
+        <div className="wo-sec">
+          <span className="lab">Clearings</span>
+          {clearings.length === 0 && (
+            <div className="wo-sec-empty">
+              Nothing retired against anything else. A clearing moves no money (d15).
+            </div>
+          )}
+          {clearings.map((c) => {
+            const members = c.memberIds
+              .map((id) => entries.find((e) => e.id === id))
+              .filter((e): e is PayableEntry => !!e);
+            const open = openBatch === c.id;
+            return (
+              <div className="ap-batch" key={c.id}>
+                <button className="ap-batch-head" onClick={() => onOpenBatch(c.id)} aria-expanded={open}>
+                  <span className="l">
+                    {c.clearedAt.slice(0, 10)} — cleared{" "}
+                    <span className="mono">{c.memberIds.length} entries</span>
+                  </span>
+                  <span className="badge">{money(0)}</span>
+                </button>
+                {open && (
+                  <div className="ap-batch-body">
+                    {members.map((m) => (
+                      <div className="tgt" key={m.id}>
+                        <span>{m.reference}</span>
+                        <span className="mono">{money(payableEntrySignedAmount(m))}</span>
+                      </div>
+                    ))}
+                    <div className="by">
+                      Cleared by {c.clearedBy} — the members sum to zero and the balance did not move (d15).
+                    </div>
+                    <button className="btn ink danger sm" onClick={() => onUnclear(c.id)}>
+                      Un-clear
+                    </button>
+                    <div className="by">
+                      Reverses whole (d47) and <strong>removes this clearing</strong> (d48) — it moved no money and
+                      posted no journal line, so there is nothing to keep. Each entry's log names what it was cleared
+                      against ([architecture] A-70).
+                    </div>
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
       </div>
 
       <div className="ap-track-foot">
@@ -330,6 +418,7 @@ function Selection({
   plan,
   form,
   expectedMethod,
+  duplicateRef,
   onForm,
   onSettle,
   onClear,
@@ -339,6 +428,7 @@ function Selection({
   plan: SettlementPlan;
   form: { method: PaymentMethod; reference: string; date: string; credit: Record<string, string>; money: Record<string, string> };
   expectedMethod?: PaymentMethod;
+  duplicateRef?: { reference: string; date: string; voided: boolean };
   onForm: (patch: Partial<typeof form>) => void;
   onSettle: () => void;
   onClear: () => void;
@@ -348,17 +438,30 @@ function Selection({
   const creditPlaced = round2(plan.debits.reduce((n, d) => n + creditOn(form, d.key, auto), 0));
   const moneyPlaced = round2(plan.debits.reduce((n, d) => n + moneyOn(form, d.key, d.balance, auto), 0));
 
+  // d38 — per debit, what is being put against it over and above its balance.
+  // Not a problem: an artifact, and the Manager is told before they commit.
+  const overpaid = plan.debits
+    .map((d) => ({
+      d,
+      by: round2(creditOn(form, d.key, auto) + moneyOn(form, d.key, d.balance, auto) - d.balance),
+    }))
+    .filter((o) => o.by > 0.005);
+  const overpaidTotal = round2(overpaid.reduce((n, o) => n + o.by, 0));
+
   const problems: string[] = [];
   if (!plan.isClearing) {
     // d33 — there is no "place the credit exactly" check any more, because
     // there is nothing to place: the fill is computed and is exact by
     // construction. What remains is the money, which IS the Manager's.
-    for (const d of plan.debits) {
-      const sum = round2(creditOn(form, d.key, auto) + moneyOn(form, d.key, d.balance, auto));
-      if (sum > d.balance + 0.005) {
-        problems.push(`${d.type} ${d.reference}: ${money(sum)} against a balance of ${money(d.balance)}.`);
-      }
-    }
+    // d38 — an overpayment is NOT refused. Money that ends up in the store's
+    // favour always gets an artifact: a remainder Credit, on d25's terms, with
+    // the supplier balance allowed to go negative because of it. Refusing it
+    // here forced the Manager to mis-record what they actually paid, which is
+    // the one thing a payables ledger must never make them do (d34 — "the
+    // batch records the event, never the expectation").
+    //
+    // It is surfaced rather than blocked: `overpaid` below drives a notice, and
+    // the Settle button stays enabled.
     if (moneyPlaced > 0.005 && !form.reference.trim()) {
       problems.push("A reference is required for the money half — it is what reconciles against the statement (d5).");
     }
@@ -477,6 +580,28 @@ function Selection({
               <span className="mono">−{money(plan.creditTotal)}</span>
             </div>
           )}
+          {/* d43 — where the ticked credits are worth more than is owed, the
+              summary has to name the credit being partly applied and the
+              remainder it will emit, BEFORE the Manager commits rather than
+              after. One aggregate figure cannot say which credit it came from,
+              and the drawdown order is only as visible as this makes it. */}
+          {plan.credits.length > 1 && (
+            <div className="ap-credit-order">
+              {plan.credits.map((c, i) => {
+                const d = plan.drawdown[i];
+                return (
+                  <div className="ap-split sub" key={c.key}>
+                    <span>
+                      {i + 1}. {c.reference}
+                      {!d.touched && " — not drawn on, stays as it is (d27)"}
+                      {d.touched && d.left > 0.005 && " — partly applied"}
+                    </span>
+                    <span className="mono">{d.drawn > 0.005 ? `−${money(d.drawn)}` : "—"}</span>
+                  </div>
+                );
+              })}
+            </div>
+          )}
           {plan.holds.length > 0 && (
             <div className="ap-split">
               <span>Claim placeholders — {plan.holds.length}</span>
@@ -493,10 +618,34 @@ function Selection({
               a decision to stop chasing it.
             </div>
           )}
+          {overpaidTotal > 0.005 && (
+            <div className="wo-caveat warn">
+              {money(overpaidTotal)} more than is owed
+              {overpaid.length === 1 ? ` on ${overpaid[0].d.type} ${overpaid[0].d.reference}` : ""}. This is recorded as
+              paid, not refused — it comes back as a <strong>remainder Credit</strong> and the supplier balance goes
+              negative by that much until it is used (d38, d25). The batch records what you actually paid (d34).
+            </div>
+          )}
           {plan.remainder > 0.005 && (
             <div className="wo-caveat warn">
-              {money(plan.remainder)} of credit cannot attach to anything ticked. It comes back as a{" "}
-              <strong>remainder Credit</strong> and stays in the store’s favour (d25, d28).
+              {(() => {
+                // d43 — name the credit that overflows. It is the last one the
+                // drawdown touched, since the ones before it were used up.
+                const over = [...plan.drawdown].reverse().find((d) => d.touched && d.left > 0.005);
+                const row = over ? plan.credits.find((c) => c.key === over.id) : undefined;
+                return row ? (
+                  <>
+                    {money(plan.remainder)} of <strong>{row.reference}</strong> cannot attach to anything ticked. It is
+                    consumed whole and the {money(plan.remainder)} comes back as a <strong>remainder Credit</strong>,
+                    staying in the store’s favour (d25, d28, d43).
+                  </>
+                ) : (
+                  <>
+                    {money(plan.remainder)} of credit cannot attach to anything ticked. It comes back as a{" "}
+                    <strong>remainder Credit</strong> and stays in the store’s favour (d25, d28).
+                  </>
+                );
+              })()}
             </div>
           )}
         </div>
@@ -595,6 +744,24 @@ function Selection({
               onChange={(e) => onForm({ reference: e.target.value })}
             />
           </label>
+          {/* d41 — warns, never refuses. The reference is free text on purpose
+              (d5) and one cheque can legitimately cover two settlements. Naming
+              the match and whether it is VOIDED is what stops this becoming
+              noise the Manager learns to click through: after a void and a
+              re-record (d40) the repeat is expected, and the warning says so. */}
+          {duplicateRef && (
+            <div className={"wo-caveat" + (duplicateRef.voided ? "" : " warn")}>
+              <strong>{duplicateRef.reference}</strong> is already on a settlement dated {duplicateRef.date}
+              {duplicateRef.voided ? (
+                <> — a <strong>voided</strong> one, so re-using it here is expected (d40).</>
+              ) : (
+                <>
+                  , and that one is <strong>live</strong>. Recording it twice would double the payment. Proceeding is
+                  allowed — a single cheque covering two settlements is a real thing (d5, d41).
+                </>
+              )}
+            </div>
+          )}
           {expectedMethod ? (
             <div className="wo-caveat">
               {expectedMethod === form.method ? (
