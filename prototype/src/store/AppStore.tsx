@@ -2383,6 +2383,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
       accounts: s.glAccounts,
       mappings: s.glMappings,
       currency: s.homeCurrency,
+      location: s.storeDetails.storeId, // M-08 d12, d27 / A-72 — the line's own Store
     });
 
     setS((prev) => ({
@@ -2833,6 +2834,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
             accounts: s.glAccounts,
             mappings: s.glMappings,
             currency: s.homeCurrency,
+            location: s.storeDetails.storeId, // M-08 d12, d27 / A-72 — the line's own Store
           })
         : null;
 
@@ -3359,6 +3361,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
       accounts: s.glAccounts,
       mappings: s.glMappings,
       currency: supplier.currency || s.homeCurrency,
+      location: s.storeDetails.storeId, // M-08 d12, d27 / A-72 — the line's own Store
     });
 
     setS((prev) => ({
@@ -3601,6 +3604,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
         writtenAt: at,
         accounts: prev.glAccounts,
         currency: prev.homeCurrency,
+        location: prev.storeDetails.storeId, // M-08 d12, d27 / A-72 — the line's own Store
       });
 
       return {
@@ -3676,6 +3680,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
         writtenAt: at,
         accounts: prev.glAccounts,
         currency: prev.homeCurrency,
+        location: prev.storeDetails.storeId, // M-08 d12, d27 / A-72 — the line's own Store
         reversalOf: { voidId: voidRow.id, voidedAt: at },
       });
 

@@ -1280,6 +1280,23 @@ export interface JournalLine {
   /** The account this posts to — resolved by role or through a GLMapping,
    *  NEVER by number (d3). */
   accountId: string;
+  /**
+   * M-08 d2, d12, d27 — the two dimensions beside the account.
+   *
+   * `location` names **which Store** the line happened at and is REQUIRED.
+   * architecture A-72 keeps the ledger inside A-5 for v1, so it is the line's
+   * own store and is **deliberately redundant** — the axis exists so it is
+   * populated from day one rather than back-filled the day a second store
+   * reports in, which is the migration M-08 d2 was chosen to avoid.
+   *
+   * `section` is OPTIONAL and its blank means *not applicable* rather than
+   * *not bothered* (d12): a bank transfer, a loan repayment and an owner's draw
+   * have no section, and inventing one would put noise in the axis. Where a
+   * section IS meaningful the posting already knows it — a revenue line
+   * resolves its Section through the Sale line (E-05).
+   */
+  location: string;
+  section?: string;
   /** d14 — the date the underlying thing happened, not the date it was posted. */
   businessDate: string;
   debit: number;

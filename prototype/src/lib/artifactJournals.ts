@@ -66,6 +66,10 @@ function businessDateOr(raw: string, writtenAt: string, label: string, unresolve
 // ---------------------------------------------------------------------------
 
 export interface InvoiceJournalInput {
+  /** M-08 d12, d27 / A-72 — the Store this journal belongs to. Stamped on
+   *  every line, Suspense included. One value per batch, because A-72 keeps
+   *  the ledger inside A-5 and a batch cannot span Stores. */
+  location: string;
   invoice: Invoice;
   writtenAt: string;
   accounts: GLAccount[];
@@ -215,6 +219,7 @@ export function buildInvoiceJournal(input: InvoiceJournalInput): ArtifactJournal
       source: `invoice:${iv.invoiceNumber}`,
       writtenAt: input.writtenAt,
       postings,
+      location: input.location,
       suspenseAccountId: roleAccount(accounts, "suspense")?.id ?? "",
     }),
     unresolved,
@@ -226,6 +231,10 @@ export function buildInvoiceJournal(input: InvoiceJournalInput): ArtifactJournal
 // ---------------------------------------------------------------------------
 
 export interface PaymentJournalInput {
+  /** M-08 d12, d27 / A-72 — the Store this journal belongs to. Stamped on
+   *  every line, Suspense included. One value per batch, because A-72 keeps
+   *  the ledger inside A-5 and a batch cannot span Stores. */
+  location: string;
   batch: PaymentBatch;
   writtenAt: string;
   accounts: GLAccount[];
@@ -315,6 +324,7 @@ export function buildPaymentJournal(input: PaymentJournalInput): ArtifactJournal
       source: reversing ? `payment-void:${input.reversalOf!.voidId}` : `payment:${b.id}`,
       writtenAt: input.writtenAt,
       postings,
+      location: input.location,
       suspenseAccountId: roleAccount(accounts, "suspense")?.id ?? "",
     }),
     unresolved,
@@ -326,6 +336,10 @@ export function buildPaymentJournal(input: PaymentJournalInput): ArtifactJournal
 // ---------------------------------------------------------------------------
 
 export interface AdjustmentJournalInput {
+  /** M-08 d12, d27 / A-72 — the Store this journal belongs to. Stamped on
+   *  every line, Suspense included. One value per batch, because A-72 keeps
+   *  the ledger inside A-5 and a batch cannot span Stores. */
+  location: string;
   id: string;
   /** E-04's reason code, which d6 gives an account each. */
   reason: AdjustmentReason;
@@ -381,6 +395,7 @@ export function buildAdjustmentJournal(input: AdjustmentJournalInput): ArtifactJ
       source: `adjustment:${input.id}`,
       writtenAt: input.writtenAt,
       postings,
+      location: input.location,
       suspenseAccountId: roleAccount(accounts, "suspense")?.id ?? "",
     }),
     unresolved,

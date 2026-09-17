@@ -81,6 +81,7 @@ const sale = (over: Partial<Sale>): Sale =>
 const build = (sales: Sale[], over: Partial<CloseJournalInput> = {}) =>
   buildCloseJournal({
     batchId: "batch-1",
+    location: "0041982",
     writtenAt: "2026-09-16 18:00:00",
     sales,
     records: RECORDS,
@@ -252,6 +253,51 @@ describe("M-07 d2 — a Return only reverses the cost where the copy came back",
 
     expect(lineFor(batch, acct("1200"))?.debit).toBe(8);
     expect(isImbalanced(batch)).toBe(false);
+  });
+});
+
+describe("M-08 d2, d12, d27 — the two dimensions beside the account", () => {
+  it("puts the Section on the revenue line as a dimension, not only in the memo", () => {
+    const { batch } = build([sale({})]);
+    const sales = CHART.accounts.find((a) => a.role === "revenue")!;
+    const line = batch.lines.find((l) => l.accountId === sales.id)!;
+
+    expect(line.section).toBe("VI");
+  });
+
+  it("keeps two Sections apart on one account and one date (d2)", () => {
+    // This is what the dimension is FOR. Under d28 both Sections credit the
+    // same Sales account, so without the section in the grouping key they
+    // would net into one line and the breakdown M-03 reports would be gone.
+    const merch = section("ME", "MERCH");
+    const merchGenre: Genre = { id: "gn-merch", name: "Merch", section: "ME", productTaxCode: "1", active: true } as Genre;
+    const { batch } = build(
+      [sale({}), sale({ id: "s-2", lines: [line({ id: "l-2", genreId: "gn-merch", kind: "nontracked", recordId: undefined, inventoryItemId: undefined, qty: 1, price: 10, tax: [] })], tenders: [tender({ amount: 10 })] })],
+      { sections: [...SECTIONS, merch], genres: [...GENRES, merchGenre] },
+    );
+    const sales = CHART.accounts.find((a) => a.role === "revenue")!;
+    const onSales = batch.lines.filter((l) => l.accountId === sales.id);
+
+    // Both on ONE date, or this test would pass on d14's date grouping alone
+    // and prove nothing about the section.
+    expect(new Set(onSales.map((l) => l.businessDate)).size).toBe(1);
+    expect(onSales.map((l) => l.section).sort()).toEqual(["ME", "VI"]);
+    expect(isImbalanced(batch)).toBe(false);
+  });
+
+  it("leaves the section blank where one does not apply (d12)", () => {
+    // A blank means NOT APPLICABLE rather than not bothered. Cost of goods,
+    // tax and the tender all belong to the shop rather than to a Section.
+    const { batch } = build([sale({})]);
+    const cogs = CHART.accounts.find((a) => a.role === "cogs")!;
+
+    expect(batch.lines.find((l) => l.accountId === cogs.id)?.section).toBeUndefined();
+  });
+
+  it("stamps the Store on every line, Suspense included (d27, A-72)", () => {
+    const { batch } = build([sale({})]);
+
+    expect(batch.lines.every((l) => l.location === "0041982")).toBe(true);
   });
 });
 

@@ -101,6 +101,10 @@ export const tenderIsAmbiguous = (t: Tender, rows: TenderRow[]): boolean =>
 // ---------------------------------------------------------------------------
 
 export interface CloseJournalInput {
+  /** M-08 d12, d27 / A-72 — the Store this journal belongs to. Stamped on
+   *  every line, Suspense included. One value per batch, because A-72 keeps
+   *  the ledger inside A-5 and a batch cannot span Stores. */
+  location: string;
   batchId: string;
   writtenAt: string;
   /** The Sales this CloseBatch closed — not every Sale in the system. */
@@ -208,15 +212,16 @@ export function buildCloseJournal(input: CloseJournalInput): CloseJournalResult 
           // rides on the line as a dimension (M-08 d2); a Section a Manager
           // marked not-revenue keeps a mapping and must point at a liability.
           //
-          // The memo carries the Section name because JournalLine has no
-          // `section` column yet (M-08 d2, d12 — unbuilt), so this is the only
-          // place the breakdown survives. It is a stand-in for the dimension
-          // and not a substitute for it: a memo cannot be filtered on.
+          // M-08 d2, d12 — the Section rides on the line as a DIMENSION, which
+          // is what makes d28's single Sales account reportable: totalling
+          // revenue across every Section and within one become the same query
+          // with a different filter. The memo still names it for a human
+          // reading the file; the dimension is what a report reads.
           const target = section.countsAsRevenue
             ? need(roleAccount(accounts, "revenue"), "Sales (role)")
             : need(seamAccount(accounts, mappings, "section", section.code), `Section ${section.name}`);
           postings.push(
-            credit(target, bd, round(lineNet(line)), cur, `Revenue — ${section.name}`),
+            credit(target, bd, round(lineNet(line)), cur, `Revenue — ${section.name}`, section.code),
           );
         }
       }
@@ -291,6 +296,7 @@ export function buildCloseJournal(input: CloseJournalInput): CloseJournalResult 
       source: `close:${input.batchId}`,
       writtenAt: input.writtenAt,
       postings,
+      location: input.location,
       suspenseAccountId: suspense?.id ?? "",
     }),
     unresolved,

@@ -42,6 +42,7 @@ const buildInv = (iv: Invoice, currency = "CAD") =>
   buildInvoiceJournal({
     invoice: iv,
     writtenAt: "2026-09-12 09:30:00",
+    location: "0041982",
     accounts: CHART.accounts,
     mappings: CHART.mappings,
     currency,
@@ -212,7 +213,7 @@ const batch = (over: Partial<PaymentBatch> = {}): PaymentBatch =>
   }) as PaymentBatch;
 
 const buildPay = (b: PaymentBatch, reversalOf?: { voidId: string; voidedAt: string }) =>
-  buildPaymentJournal({ batch: b, writtenAt: "2026-09-13 11:00:00", accounts: CHART.accounts, currency: "CAD", reversalOf });
+  buildPaymentJournal({ batch: b, writtenAt: "2026-09-13 11:00:00", location: "0041982", accounts: CHART.accounts, currency: "CAD", reversalOf });
 
 describe("E-02 d54 — every intake raises a payable, second-hand included", () => {
   it("credits Accounts Payable for a second-hand intake like any other", () => {
@@ -346,7 +347,8 @@ describe("M-07 d6/d12 — an adjustment posts to the account its reason code map
       businessDate: "2026-09-16",
       writtenAt: "2026-09-16 14:00:00",
       memo: "Copy written off on return",
-      accounts: CHART.accounts,
+      location: "0041982",
+    accounts: CHART.accounts,
       mappings: CHART.mappings,
       currency: "CAD",
     });
