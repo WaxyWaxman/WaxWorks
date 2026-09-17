@@ -11,6 +11,7 @@ import {
   type Supplier,
 } from "../data/types";
 import {
+  agedBuckets,
   autoPlacement,
   batchMoneyPaid,
   clearsToZero,
@@ -232,6 +233,33 @@ function Standing({
       <div className="wo-rule" />
 
       <div className="ap-track-mid">
+        {/* d51 — aging lives here, one Supplier at a time. The cross-supplier
+            report belongs to the surface PRD section 7 defers, and must agree
+            with these buckets when it is built. d52 — counted from the DUE
+            DATE, so a Net 60 invoice 45 days old sits in "Not yet due" rather
+            than being reported as 45 days old and chased. */}
+        {owed > 0.005 && (
+          <div className="wo-sec">
+            <span className="lab">Aged — overdue by</span>
+            {agedBuckets(rows)
+              .filter((b) => b.count > 0)
+              .map((b) => (
+                <div className={"ap-split" + (b.key === "over90" ? " warn" : "")} key={b.key}>
+                  <span>
+                    {b.label} <span className="muted">· {b.count}</span>
+                  </span>
+                  <span className="mono">{money(b.total)}</span>
+                </div>
+              ))}
+            <div className="wo-caveat">
+              Counted from the <strong>due date</strong>, not the invoice date (d52) — a <code>Net 60</code> bill
+              forty-five days old is not late. What is <strong>owed</strong> and has no due date — <code>COD</code>,{" "}
+              <code>Prepaid</code> (d35), a hand-entered Adjustment (d53) — is shown as <strong>Not aged</strong>{" "}
+              rather than dropped. Credit in hand is not here at all: it is not owed, and it has its own figure above.
+              Across every Supplier is a report this flow does not own (d51).
+            </div>
+          </div>
+        )}
         <div className="wo-sec">
           <span className="lab">Standing</span>
           <div className="cust-standing">

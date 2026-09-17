@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  agedBuckets,
   batchMoneyPaid,
   clearedAgainst,
   creditDrawdown,
@@ -407,5 +408,54 @@ describe("M-05 d41 — a duplicate bank reference warns, and says whether the ma
 
   it("does not match a batch against itself", () => {
     expect(duplicateReference("Cheque 101", [withRef("b1", "Cheque 101")], [], "b1")).toBeUndefined();
+  });
+});
+
+describe("M-05 d51/d52 — aged payables, per Supplier, counted from the due date", () => {
+  const bill = (key: string, balance: number, overdueBy?: number): LedgerRow => ({
+    ...debit(key, balance),
+    dueDate: overdueBy == null ? undefined : "2026-09-01",
+    overdueBy,
+  });
+  const at = (rows: LedgerRow[], k: string) => agedBuckets(rows).find((b) => b.key === k)!;
+
+  it("counts overdue-by, so a Net 60 invoice 45 days old is not late", () => {
+    // d52's whole point. Days-outstanding would call this "45 days" and send a
+    // Manager after someone who is owed nothing yet.
+    const rows = [bill("INV", 100, -15)];
+
+    expect(at(rows, "current")).toMatchObject({ total: 100, count: 1 });
+    expect(at(rows, "d30").count).toBe(0);
+  });
+
+  it("puts each bill in exactly one bucket, on the boundaries", () => {
+    const rows = [bill("A", 10, 30), bill("B", 20, 31), bill("C", 30, 60), bill("D", 40, 61), bill("E", 50, 91)];
+
+    expect(at(rows, "d30")).toMatchObject({ total: 10, count: 1 });
+    expect(at(rows, "d60")).toMatchObject({ total: 50, count: 2 }); // 31 and 60
+    expect(at(rows, "d90")).toMatchObject({ total: 40, count: 1 });
+    expect(at(rows, "over90")).toMatchObject({ total: 50, count: 1 });
+  });
+
+  it("shows a bill with no due date as Not aged rather than dropping it (d52)", () => {
+    // COD and Prepaid produce no due date, d35 says a Prepaid balance "ages
+    // nowhere", and d53 leaves non-Invoice entries without one. A figure absent
+    // from a total is how a total quietly stops reconciling.
+    const rows = [bill("COD", 75)];
+
+    expect(at(rows, "notAged")).toMatchObject({ total: 75, count: 1 });
+    expect(agedBuckets(rows).reduce((n, b) => n + b.total, 0)).toBe(75);
+  });
+
+  it("every bucket together sums to what is owed", () => {
+    const rows = [bill("A", 10, -5), bill("B", 20, 15), bill("C", 30, 95), bill("D", 40)];
+
+    expect(agedBuckets(rows).reduce((n, b) => n + b.total, 0)).toBe(100);
+  });
+
+  it("ignores credits and placeholders — only a debit can be overdue", () => {
+    const rows = [bill("A", 10, 15), credit("C1", 500)];
+
+    expect(agedBuckets(rows).reduce((n, b) => n + b.total, 0)).toBe(10);
   });
 });
