@@ -4,7 +4,8 @@ import { BarcodeInput } from "../components/BarcodeInput";
 import { Modal } from "../components/Modal";
 import { TillRail } from "../components/TillRail";
 import { VoidSaleModal } from "../components/VoidSaleModal";
-import type { InventoryItem, RecordEntry, Sale, SaleLine, TenderType } from "../data/types";
+import type { InventoryItem, RecordEntry, Sale, SaleLine, TenderRow, TenderType } from "../data/types";
+import { defaultTenderRow, offerableTenders } from "../lib/tenders";
 import { money } from "../lib/money";
 import { genreNameFor, sectionSearchTerms } from "../lib/taxonomy";
 import { resolveScan } from "../lib/resolve";
@@ -12,7 +13,12 @@ import { availableOnHand, balanceDue, lineTaxComponents, saleTotals } from "../l
 import { useApp } from "../store/AppStore";
 import { useIdentify, useActor } from "../components/Identify";
 
-const TENDERS: TenderType[] = ["Cash", "Credit Card", "Account Balance", "Gift Card", "Pay-out", "Used Credit"];
+// E-05 d36 — the pad is built from the store's CONFIGURED tenders, not from a
+// hardcoded list of behaviours. M-06 d4 always said the display name is
+// configurable; a pad of behaviour names ignored that, and a Sale recorded only
+// which KIND of tender it was, so M-06 d22's whole reason for giving Visa and
+// Mastercard separate accounts — they settle as separate deposits — could never
+// be acted on.
 
 export function PointOfSale() {
   const app = useApp();
@@ -97,7 +103,7 @@ function SaleEditor() {
   const [gcRedeem, setGcRedeem] = useState<{ code: string; balance: number } | null>(null);
   // The slab offers all six tender types directly, so opening the modal
   // carries which one was pressed rather than defaulting to Cash.
-  const [showTender, setShowTender] = useState<TenderType | null>(null);
+  const [showTender, setShowTender] = useState<string | null>(null);
   const [custPick, setCustPick] = useState(false);
   const [receipt, setReceipt] = useState<number | null>(null);
   const [scanNote, setScanNote] = useState<string | null>(null);
@@ -391,9 +397,9 @@ function SaleEditor() {
                 Take payment
               </div>
               <div className="tender-grid">
-                {TENDERS.map((t) => (
-                  <button key={t} className="btn" onClick={() => setShowTender(t)}>
-                    {t}
+                {offerableTenders(app.tenders).map((row) => (
+                  <button key={row.id} className="btn" onClick={() => setShowTender(row.id)}>
+                    {row.name}
                   </button>
                 ))}
               </div>
@@ -570,7 +576,14 @@ function SaleEditor() {
                 className="btn primary"
                 onClick={() => {
                   const amt = Math.min(gcRedeem.balance, Math.max(0, due));
-                  app.addTender(sale.id, { type: "Gift Card", amount: amt, reference: gcRedeem.code });
+                  app.addTender(sale.id, {
+                    type: "Gift Card",
+                    amount: amt,
+                    reference: gcRedeem.code,
+                    // Raised on the customer's behalf rather than from the pad,
+                    // so it resolves the row the same way the journal would.
+                    tenderRowId: defaultTenderRow("Gift Card", app.tenders)?.id,
+                  });
                   setGcRedeem(null);
                 }}
               >
@@ -598,7 +611,8 @@ function SaleEditor() {
 
       {showTender && (
         <TenderModal
-          initialType={showTender}
+          initialRowId={showTender}
+          rows={offerableTenders(app.tenders)}
           due={due}
           hasCustomer={!!customer}
           onClose={() => setShowTender(null)}
@@ -993,17 +1007,21 @@ function PricePrompt({
 }
 
 function TenderModal({
-  initialType = "Cash",
+  initialRowId,
+  rows,
   due,
   hasCustomer,
   onAdd,
   onClose,
 }: {
-  initialType?: TenderType;
+  /** The row whose button was pressed (E-05 d36). */
+  initialRowId?: string;
+  rows: TenderRow[];
   due: number;
   hasCustomer: boolean;
   onAdd: (t: {
     type: TenderType;
+    tenderRowId?: string;
     amount: number;
     note?: string;
     reference?: string;
@@ -1011,7 +1029,13 @@ function TenderModal({
   }) => void;
   onClose: () => void;
 }) {
-  const [type, setType] = useState<TenderType>(initialType);
+  const [rowId, setRowId] = useState<string>(initialRowId ?? rows[0]?.id ?? "");
+  // The BEHAVIOUR still drives everything the pad does — what needs a note, a
+  // customer, a gift card code, a direction. M-06 d4 fixes a row's behaviour
+  // permanently, so reading it back off the row cannot disagree with what was
+  // chosen, and the Sale does not need a second copy of it.
+  const row = rows.find((r) => r.id === rowId);
+  const type: TenderType = row?.behavior ?? "Cash";
   const [raw, setRaw] = useState(String(Math.max(0, due).toFixed(2)));
   const [note, setNote] = useState("");
   const [reference, setReference] = useState("");
@@ -1044,6 +1068,11 @@ function TenderModal({
             onClick={() =>
               onAdd({
                 type,
+                // E-05 d36 — WHICH tender, not just which kind. M-06 d22 gives
+                // Visa and Mastercard separate accounts because they settle as
+                // separate deposits; this is the field that makes that
+                // reconcilable from a Sale.
+                tenderRowId: rowId,
                 amount: isNegativeType ? -Math.abs(amount) : amount,
                 note: note.trim() || undefined,
                 reference: reference.trim() || undefined,
@@ -1059,11 +1088,11 @@ function TenderModal({
     >
       <div className="stack">
         <label className="field">
-          <span>Type</span>
-          <select value={type} onChange={(e) => setType(e.target.value as TenderType)}>
-            {TENDERS.map((t) => (
-              <option key={t} value={t}>
-                {t}
+          <span>Tender</span>
+          <select value={rowId} onChange={(e) => setRowId(e.target.value)}>
+            {rows.map((r) => (
+              <option key={r.id} value={r.id}>
+                {r.name}
               </option>
             ))}
           </select>

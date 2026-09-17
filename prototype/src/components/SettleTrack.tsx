@@ -3,6 +3,7 @@ import {
   PAYABLE_ENTRY_TYPES,
   PAYMENT_METHODS,
   type Clearing,
+  type GLAccount,
   type PayableEntryType,
   type PayableEntry,
   type PaymentBatch,
@@ -55,6 +56,7 @@ export function SettleTrack({
   clearings,
   duplicateRef,
   openBatch,
+  drawableAccounts,
   onOpenBatch,
   onVoid,
   onUnclear,
@@ -68,8 +70,8 @@ export function SettleTrack({
   creating: boolean;
   /** M-05 d34 — what the ticked Invoices expected, or undefined if they disagree. */
   expectedMethod?: PaymentMethod;
-  form: { method: PaymentMethod; reference: string; date: string; credit: Record<string, string>; money: Record<string, string> };
-  onForm: (patch: Partial<{ method: PaymentMethod; reference: string; date: string; credit: Record<string, string>; money: Record<string, string> }>) => void;
+  form: { method: PaymentMethod; reference: string; date: string; drawnOnAccountId?: string; credit: Record<string, string>; money: Record<string, string> };
+  onForm: (patch: Partial<{ method: PaymentMethod; reference: string; date: string; drawnOnAccountId?: string; credit: Record<string, string>; money: Record<string, string> }>) => void;
   onCancelCreate: () => void;
   onCreate: (input: {
     type: PayableEntryType;
@@ -93,6 +95,8 @@ export function SettleTrack({
   /** d46 — a clearing is an act with members, listed beside payment history. */
   clearings: Clearing[];
   duplicateRef?: { reference: string; date: string; voided: boolean };
+  /** A-65 — the accounts a settlement may be drawn on. */
+  drawableAccounts: GLAccount[];
   openBatch: string | null;
   onOpenBatch: (id: string) => void;
   onVoid: (id: string) => void;
@@ -107,6 +111,7 @@ export function SettleTrack({
         supplier={supplier}
         plan={plan}
         form={form}
+        drawableAccounts={drawableAccounts}
         expectedMethod={expectedMethod}
         duplicateRef={duplicateRef}
         onForm={onForm}
@@ -449,14 +454,18 @@ function Selection({
   duplicateRef,
   onForm,
   onSettle,
+  drawableAccounts,
   onClear,
   onCancel,
 }: {
   supplier: Supplier;
   plan: SettlementPlan;
-  form: { method: PaymentMethod; reference: string; date: string; credit: Record<string, string>; money: Record<string, string> };
+  form: { method: PaymentMethod; reference: string; date: string; drawnOnAccountId?: string; credit: Record<string, string>; money: Record<string, string> };
   expectedMethod?: PaymentMethod;
   duplicateRef?: { reference: string; date: string; voided: boolean };
+  /** A-65 — what the payment may be drawn on. Assets and the cost account a
+   *  counter buy's money already sits in; not revenue, not a liability. */
+  drawableAccounts: GLAccount[];
   onForm: (patch: Partial<typeof form>) => void;
   onSettle: () => void;
   onClear: () => void;
@@ -763,6 +772,29 @@ function Selection({
               <input type="date" value={form.date} onChange={(e) => onForm({ date: e.target.value })} />
             </label>
           </div>
+          {/* architecture A-65 — the account this payment DREW ON, on the
+              settlement rather than inferred from the Method: "a shop paying
+              some suppliers from one chequing account and others from a second,
+              both by cheque, is not distinguishable by `Cheque`".
+
+              It is also what lets a counter buy be cleared. E-02 d54 raises a
+              payable for a second-hand intake like any other, and the money for
+              one went out at the till into Second-hand purchases (M-07 d26) —
+              so that is the account it is settled from, not a bank. */}
+          <label className="field">
+            <span>Drawn on</span>
+            <select
+              value={form.drawnOnAccountId ?? drawableAccounts.find((a) => a.role === "bank")?.id ?? ""}
+              onChange={(e) => onForm({ drawnOnAccountId: e.target.value || undefined })}
+            >
+              {drawableAccounts.map((a) => (
+                <option key={a.id} value={a.id}>
+                  {a.number} {a.name}
+                </option>
+              ))}
+            </select>
+            <span className="hint">Where the money came from. A counter buy clears from Second-hand purchases.</span>
+          </label>
           <label className="field">
             <span>Reference</span>
             <input

@@ -16,6 +16,7 @@ import { money } from "../lib/money";
 import { readStored, writeStored } from "../lib/tillMemory";
 import { round2, supplierBalance } from "../lib/totals";
 import { useApp } from "../store/AppStore";
+import { accountType } from "../lib/chart";
 import { useNavigate } from "react-router-dom";
 import { ManagerAuthorize } from "../components/ManagerAuthorize";
 
@@ -41,6 +42,8 @@ interface SettleForm {
   method: PaymentMethod;
   reference: string;
   date: string;
+  /** A-65 — the account the payment drew on. Defaults to the reserved bank. */
+  drawnOnAccountId?: string;
   credit: Record<string, string>;
   money: Record<string, string>;
 }
@@ -183,6 +186,7 @@ export function AccountsPayable() {
         method: form.method,
         reference: form.reference.trim(),
         date: form.date,
+        drawnOnAccountId: form.drawnOnAccountId,
         debits: plan.debits.map((d) => ({
           kind: d.kind === "invoice" ? ("invoice" as const) : ("entry" as const),
           id: d.id,
@@ -283,6 +287,10 @@ export function AccountsPayable() {
     method: "Cheque",
     reference: "",
     date: new Date().toLocaleDateString("en-CA"),
+    // A-65 defaults it from the Method; the reserved bank is the Method-less
+    // default, and the Manager overrides it where the money came from
+    // somewhere else — a counter buy clears from Second-hand purchases.
+    drawnOnAccountId: undefined,
     credit: {} as Record<string, string>,
     money: {} as Record<string, string>,
   });
@@ -445,6 +453,12 @@ export function AccountsPayable() {
         plan={plan}
         entries={app.payableEntries}
         clearings={app.clearings}
+        // A-65 — assets, plus the cost account a counter buy's money already
+        // sits in (E-02 d54, M-07 d26). Not revenue and not a liability: a
+        // payment comes out of something the store holds.
+        drawableAccounts={app.glAccounts.filter(
+          (a) => accountType(a) === "asset" || a.role === "second-hand-purchases",
+        )}
         onUnclear={(id) => {
           const r = app.unclearPayableEntries(id, authorisedBy ?? "");
           setMsg(

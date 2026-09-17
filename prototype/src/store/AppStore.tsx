@@ -996,6 +996,12 @@ interface AppContextValue extends AppState {
       method: PaymentMethod;
       reference: string;
       date: string;
+      /**
+       * architecture A-65 — the account this payment drew on, defaulted from
+       * the Method and overridable. Absent falls back to the reserved bank
+       * account, which is what every settlement assumed before A-65 was built.
+       */
+      drawnOnAccountId?: string;
       // A-69 — a debit carries what it is being settled with, not which credit
       // funded it. The credits are named on the batch.
       debits: { kind: PayableTargetKind; id: string; credit?: number; money?: number; balance: number; reference: string }[];
@@ -3473,6 +3479,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
         supplierId: input.supplierId,
         method: input.method,
         reference: input.reference,
+        drawnOnAccountId: input.drawnOnAccountId,
         date: input.date,
         recordedBy: by,
         createdAt: at,

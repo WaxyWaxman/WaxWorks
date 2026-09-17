@@ -16,6 +16,33 @@ const seams: Seams = {
   taxTypes: [tax("a", "GST"), tax("b", "QST")],
 };
 
+describe("M-07 d26 — a counter buy debits Second-hand purchases", () => {
+  it("maps the Used Credit tender to the reserved account rather than minting one", () => {
+    const rows: TenderRow[] = [
+      { id: "t-cash", name: "Cash", behavior: "Cash", active: true },
+      { id: "t-used", name: "Used credit", behavior: "Used Credit", active: true },
+    ] as TenderRow[];
+    const { accounts, mappings } = buildChart({ ...seams, tenders: rows });
+
+    const reserved = accounts.find((a) => a.role === "second-hand-purchases")!;
+    const mapped = mappings.find((m) => m.seamKind === "tender" && m.seamId === "t-used");
+
+    expect(mapped?.accountId).toBe(reserved.id);
+    // And nothing extra was created for it — step 5 expressly allows two seams
+    // pointing at one account, which is what this is.
+    expect(accounts.filter((a) => a.role === "second-hand-purchases")).toHaveLength(1);
+  });
+
+  it("leaves every seam mapped, Used Credit included (d11)", () => {
+    const rows: TenderRow[] = [
+      { id: "t-cash", name: "Cash", behavior: "Cash", active: true },
+      { id: "t-used", name: "Used credit", behavior: "Used Credit", active: true },
+    ] as TenderRow[];
+    const s = { ...seams, tenders: rows };
+    expect(unmappedSeams(s, buildChart(s).mappings)).toEqual([]);
+  });
+});
+
 describe("M-07 d11 — setup creates and maps every seam before anyone sees it", () => {
   it("leaves nothing unmapped, which is what makes Suspense a defect and not a hole", () => {
     const { mappings } = buildChart(seams);
@@ -73,7 +100,12 @@ describe("M-07 d5/d6 — the chart follows the seams that already exist", () => 
     expect(roleOf("Visa")).toBe("undeposited");
     expect(roleOf("Gift card")).toBe("tender-gift-card");
     expect(roleOf("On account")).toBe("tender-customer-credit");
-    expect(roleOf("Used credit")).toBe("tender-customer-credit");
+    // `Used credit` gets NO account of its own — it maps to the reserved
+    // Second-hand purchases account, which is the one place d21 and the
+    // lexicon disagreed and the lexicon was right (M-07 d26). What a counter
+    // buy debits is the goods; what the customer is owed for them is a
+    // separate tender on the same Sale.
+    expect(roleOf("Used credit")).toBeUndefined();
     expect(roleOf("Pay-out")).toBe("tender-payout");
   });
 

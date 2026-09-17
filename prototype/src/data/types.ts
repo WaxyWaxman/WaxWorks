@@ -617,6 +617,22 @@ export interface PaymentBatch {
   supplierId: string;
   method: PaymentMethod;
   reference: string; // free text — "Cheque 101", "Credit card 1278" — what reconciles against the bank statement
+  /**
+   * architecture A-65 — **the account this payment drew on**, defaulted from
+   * the Method and overridable. A-65's own reason: *"a shop paying some
+   * suppliers from one chequing account and others from a second, both by
+   * cheque, is not distinguishable by `Cheque`"*, so the account is a field on
+   * the settlement rather than a property of the Method.
+   *
+   * Decided by A-65 and unbuilt until E-02 d54 needed it: a counter buy's
+   * payable is settled drawing on **Second-hand purchases**, where the till
+   * already put the money (M-07 d26) — which the hardcoded bank account it
+   * used to assume could not express.
+   *
+   * Optional only so that settlements recorded before this existed still read;
+   * the journal falls back to the reserved bank account and says so.
+   */
+  drawnOnAccountId?: string;
   date: string;
   recordedBy: string;
   createdAt: string;

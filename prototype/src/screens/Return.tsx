@@ -8,6 +8,7 @@ import { money } from "../lib/money";
 import { genreNameFor } from "../lib/taxonomy";
 import { resolveScan } from "../lib/resolve";
 import { balanceDue, saleTotals } from "../lib/totals";
+import { defaultTenderRow } from "../lib/tenders";
 import { useApp } from "../store/AppStore";
 import { useActor } from "../components/Identify";
 
@@ -274,6 +275,9 @@ function ReturnEditor({ saleId }: { saleId: string }) {
                       type: "Cash",
                       amount: totals.grand,
                       note: "Refund paid from till",
+                      // E-05 d36 — a refund is raised for the customer, not
+                      // chosen from the pad, so it takes the default row.
+                      tenderRowId: defaultTenderRow("Cash", app.tenders)?.id,
                     })
                   }
                 >
@@ -289,6 +293,7 @@ function ReturnEditor({ saleId }: { saleId: string }) {
                       amount: totals.grand,
                       accountDirection: "add",
                       note: "Refund to account balance",
+                      tenderRowId: defaultTenderRow("Account Balance", app.tenders)?.id,
                     })
                   }
                 >

@@ -88,7 +88,7 @@ export const ROLE_PURPOSE: Record<GLRole, string> = {
   revenue: "One per Section (d6) — M-06 d20 says which Sections are revenue at all",
   undeposited: "Cash or card taken in, not yet paid out by the bank (d21)",
   "tender-gift-card": "A redemption drawing down the gift card liability (d21)",
-  "tender-customer-credit": "Store credit spent, or a counter buy creating it (d21)",
+  "tender-customer-credit": "Store credit spent or added (d21). A counter buy debits Second-hand purchases instead",
   "tender-payout": "Cash out of the till for an expense (M-06, d21)",
   "tender-rounding": "The nickel difference the system writes (M-06 d26, d21)",
   "tax-collected": "Charged on a Sale. A liability (d5)",
@@ -132,7 +132,6 @@ function tenderAccount(tn: TenderRow): { role: GLRole; base: number; prefix: str
     case "Gift Card":
       return { role: "tender-gift-card", base: 2210, prefix: "Gift card liability" };
     case "Account Balance":
-    case "Used Credit":
       return { role: "tender-customer-credit", base: 2310, prefix: "Customer account credit" };
     case "Pay-out":
       return { role: "tender-payout", base: 6300, prefix: "Pay-out" };
@@ -221,7 +220,25 @@ export function buildChart(seams: Seams): BuiltChart {
   // the seven behaviors are not assets, and putting them all in "undeposited
   // funds" is what building this screen made visible.
   const seen: Record<string, number> = {};
+  const secondHand = accounts.find((a) => a.role === "second-hand-purchases")!;
   seams.tenders.forEach((tn) => {
+    // `Used Credit` is the one tender that does not get an account of its own:
+    // it maps to the RESERVED Second-hand purchases account.
+    //
+    // d21 grouped it with `store_credit` under a customer account credit, on
+    // the grounds that both touch a Customer's balance. The lexicon §14 has
+    // always said otherwise — *"the `Used Credit` tender debits it"* — and the
+    // lexicon is right, because what a counter buy DEBITS is the goods. What
+    // the customer is owed for them is the other side, and the till already
+    // records it as its own tender: store credit through `Account Balance`, or
+    // cash. Posting the customer's side here as well would count it twice, and
+    // a mixed Sale — trade in $20, buy $36.20, pay $16.20 — stops balancing.
+    //
+    // Two seams pointing at one account is expressly allowed (step 5).
+    if (tn.behavior === "Used Credit") {
+      mappings.push({ seamKind: "tender", seamId: tn.id, accountId: secondHand.id });
+      return;
+    }
     const spec = tenderAccount(tn);
     const n = (seen[spec.role] = (seen[spec.role] ?? 0) + 1);
     const a = add(spec.role, String(spec.base + (n - 1) * 10), `${spec.prefix} — ${tn.name}`);
