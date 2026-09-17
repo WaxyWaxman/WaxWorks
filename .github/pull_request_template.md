@@ -22,6 +22,14 @@ section in THIS pull request. List them, or say "none".
 
 <!-- e.g. "E-05: Stub -> In clarification". All three places updated? -->
 
+## Work order
+
+<!--
+Code changes only. The order this PR lands: docs/build/orders/<ID>-<track>-M<n>.md,
+its Status (In review / Accepted), and "Build order: M<n> / D | U / complete or
+partial". Say "none" for a docs-only PR.
+-->
+
 ## End-to-end register
 
 <!--
@@ -39,3 +47,4 @@ rows it makes Stale. A flow promoted to Specified gets rows. Say "none" if none.
 - [ ] Status matches in the flow file, `docs/README.md`, and `docs/PRD.md` §3
 - [ ] If a decision was superseded, it is called out above — a textual merge cannot see it
 - [ ] Register rows asserting any superseded or amended decision are marked `Stale`; a flow promoted to `Specified` has rows
+- [ ] Code PRs: the work order is linked above, `python scripts/check_coverage.py --order <file>` passes, and the reviewers' findings are in the order — a human merges

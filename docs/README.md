@@ -13,6 +13,7 @@ Point-of-sale and inventory management for independent vinyl record stores.
 | [reference/](reference/) | Worked examples and external-system notes |
 | [prototype.md](prototype.md) | The clickable prototype — what it's for, how to run it, flow ↔ screen map |
 | [qa/e2e-register.md](qa/e2e-register.md) | The end-to-end test register — one row per whole-flow scenario, tracked against the prototype and the product |
+| [build/](build/) | How code gets built past the prototype: the [workflow](build/workflow.md), the [build-status table](build/status.md), and the work orders |
 | [templates/](templates/) | Starting point for a new flow document |
 
 ## Flows
@@ -81,4 +82,6 @@ shared through this repository so both of us get the same behaviour. See
 | `/plan-check` | Check a proposal against recorded decisions before anything is written |
 | `/architecture` | Derive architecture docs and ADRs from the specified flows |
 | `/qa` | Write and run tests, keep the [end-to-end register](qa/e2e-register.md); `register`, `walk`, `automate`, `run`, `stale`, `ready` |
+| `/work-order <ID> <D\|U>` | Draft, check, accept or return a [work order](build/workflow.md) — the checklist in, the evidence out |
+| `/develop <order>` | Build an approved work order, test-first; the `developer` subagent runs one to completion in a worktree |
 | `/spec-audit` | Check the doc set for contradictions, drift, and dangling links |

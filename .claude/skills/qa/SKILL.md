@@ -57,11 +57,16 @@ weakening the rule for everything.
 
 ## 2. Levels
 
-| Level | Holds | Example | Tracked in |
-|---|---|---|---|
-| **Unit** | A rule with a worked example in the spec | A pricing or rounding rule with numbers attached | Test names (§1) |
-| **Integration** | A phase of a flow across components | Scan → resolve barcode → catalog provider → price | Test names (§1) |
-| **End-to-end** | A whole flow as the actor performs it | Open invoice → scan five items → reconcile → finalise | [`docs/qa/e2e-register.md`](../../../docs/qa/e2e-register.md) (§6) |
+| Level | Holds | Example | Lives in | Tracked by |
+|---|---|---|---|---|
+| **Unit** | A rule with a worked example in the spec | A pricing or rounding rule with numbers attached | vitest — `prototype/src/lib/*.test.ts` today (`npm --prefix prototype test`), `apps/web` later; pgTAP under `supabase/tests` for database functions | Test names (§1); `scripts/check_coverage.py` |
+| **Integration** | A phase of a flow across components, or a contract against the real function | Scan → resolve barcode → catalog provider → price; `sale_tender` called through `packages/contracts` against local Supabase | The track's test tree | Test names (§1); `scripts/check_coverage.py` |
+| **End-to-end** | A whole flow as the actor performs it | Open invoice → scan five items → reconcile → finalise | `e2e/` (Playwright) | [`docs/qa/e2e-register.md`](../../../docs/qa/e2e-register.md) (§6) |
+
+`python scripts/check_coverage.py` is the deterministic half of §1: it lists, per
+`Specified` flow, every live decision with no test named for it. `--order <file>`
+is the build gate a work order must pass ([workflow](../../../docs/build/workflow.md)
+§3). Run it before judging coverage by hand.
 
 Take the worked examples straight from the spec — its numeric examples are test
 cases already written. Using the spec's own numbers means a disagreement between
@@ -165,7 +170,14 @@ product**; the register tracks them separately.
 ### `/qa walk <ID>` or `/qa walk <row>`
 
 Drive the row's steps as the actor would, and write down where the target
-disagrees with the flow.
+disagrees with the flow. **Every walk begins with a session**: the prototype's
+shell asks for initials before anything attributable (E-01), so open one — or
+deliberately do not, when the row is about the inline prompt — and say which.
+
+**Walks are for the design reviewers, not the milestone.** A prototype walk
+catches prototype-vs-spec divergence, which is what the prototype exists for.
+Nothing in the register's prototype column gates a milestone; M6 counts the
+product column only.
 
 ```bash
 playwright-cli open http://localhost:5273/receiving
@@ -216,7 +228,9 @@ Only after `/qa ready` passes for the row (§8). Then:
 ### `/qa run`
 
 ```bash
-npx playwright test                            # everything
+npm --prefix prototype test                    # the unit suites (vitest); pgTAP once supabase/tests exists
+python scripts/check_coverage.py --flow E-05   # which live decisions have no test named for them
+npx playwright test                            # everything end to end
 npx playwright test e2e/E-05                   # one flow
 npx playwright test --grep "E-05-T7"           # one row
 npx playwright test --list                     # what would run — compare against the register's Automated rows
@@ -262,8 +276,14 @@ it. Reuse `/plan-check`'s verdict vocabulary — consistent, conflicts, blocked.
    names contains it.
 6. **Nothing blocking.** No open question in the flow stops a step in the row from
    being stated.
+7. **Covered below end-to-end.** Every decision the row asserts has a unit or
+   integration test named for it (`python scripts/check_coverage.py --flow <ID>`
+   lists the gaps), and those suites are green in a run you made — not one you
+   were told about. A work order's `Accepted` verdict is the evidence for this,
+   and [`docs/build/status.md`](../../../docs/build/status.md) is where step 3's
+   "both tracks landed" is read from; a milestone with no row there is not ready.
 
-For the prototype, 3 and 4 collapse to "the screen exists in the map" — the
+For the prototype, 3, 4 and 7 collapse to "the screen exists in the map" — the
 prototype has no contracts and its store is in memory.
 
 For a milestone, run the check for every row the register's milestone view lists

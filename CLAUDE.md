@@ -18,6 +18,7 @@ colliding or quietly contradicting each other.
 | `docs/lexicon.md` | Controlled vocabulary — the canonical term for each concept |
 | `docs/prototype.md` | The clickable prototype and its flow ↔ screen map |
 | `docs/qa/e2e-register.md` | The end-to-end test register — one row per whole-flow scenario, its status against the prototype and the product |
+| `docs/build/` | The build workflow (`workflow.md`), the build-status table (`status.md`), and the work orders (`orders/`) |
 | `docs/reference/` | Worked examples and external-system notes |
 | `docs/templates/` | Starting point for a new flow document |
 | `.claude/skills/` | The planning skills (see below) |
@@ -94,7 +95,19 @@ would flood the conversation.
 | Entry point | Use it to |
 |---|---|
 | `/qa` | Write, maintain, and run tests; decision-to-test traceability; keep the end-to-end register. Modes: `register`, `walk`, `automate`, `run`, `stale`, `ready` |
-| `qa-reviewer` | Read-only conformance review, error states, abuse paths, register drift |
+| `qa-reviewer` | Read-only conformance review, error states, abuse paths, register drift, and the evidence on a work order |
+
+### 4. Development
+
+Past the prototype, code is built to **work orders** under the workflow in
+[`docs/build/workflow.md`](docs/build/workflow.md). The developer never writes
+its own checklist and never judges its own evidence.
+
+| Entry point | Use it to |
+|---|---|
+| `/work-order <ID> <D\|U>` | Draft the per-flow, per-track, per-milestone order — checklist derived from the decisions; `check` reads the evidence; `accept` / `return` closes it |
+| `/develop <order>` | Build an approved order interactively, test-first, filling in its Evidence |
+| `developer` | The same protocol as a subagent, in its own worktree, with a hook that refuses writes outside its lane |
 
 ### Routing
 
@@ -106,6 +119,8 @@ would flood the conversation.
 | Structure, security, reliability, tech choice | `/architecture` |
 | Whether code or the prototype matches the spec; tests; edge cases | `/qa` |
 | "Is this flow ready to test end to end?" / "what do we test at this milestone?" | `/qa ready` |
+| "Build E-05 for M4" / "what does E-05 need for M4" | `/work-order E-05 <D\|U>`, then `/develop` or `developer` |
+| "Is the developer done?" | `/work-order check` — never the developer's own report |
 | Consistency of the whole set | `/spec-audit` |
 
 `/plan-check` comes first when a proposal might contradict something recorded.
@@ -123,7 +138,8 @@ own close-out, so nothing depends on remembering this table.
 | A decision is superseded, or an A-n amends a flow | `/plan-check` supersession, `/architecture` | `/qa stale <decision>` | Rows asserting it → `Stale` |
 | A prototype screen for a `Specified` flow lands or changes its `docs/prototype.md` map row | The pull request | `/qa walk <ID>` | Prototype column → `Walked`; divergences reported |
 | A `packages/contracts` entry changes | The contract pull request — both review it | `/qa stale` for rows calling it | Product column → `Stale` |
-| Both the **D** and **U** rows of an `architecture.md` §8 milestone are merged | The second of the two pull requests | `/qa ready <milestone>`, then `/qa automate` per row | Product column → `Automated` |
+| A work order is `Accepted` and its pull request merged | `/work-order accept` | The coordinator writes the row in `docs/build/status.md` | — |
+| Both the **D** and **U** rows of an `architecture.md` §8 milestone show in `docs/build/status.md` | The second `Accepted` order | `/qa ready <milestone>`, then `/qa automate` per row | Product column → `Automated` |
 | M6 hardening opens | The coordinator | `/qa ready M6` | Every v1 row `Automated`; a seeded trading day runs them all |
 
 "Development complete" for end-to-end purposes means **both tracks**: the screen
@@ -146,7 +162,12 @@ invention is more expensive here than a gap: gaps get noticed, inventions get bu
 - **Propose, don't ratify.** A newly drafted A-n decision is not binding until the
   user confirms it, and is not cited elsewhere as settled before then.
 - **Deterministic checks before model judgement.** `python scripts/check_docs.py`
-  answers the mechanical questions; do not re-derive its output by hand.
+  answers the mechanical questions about the documents and
+  `python scripts/check_coverage.py` the mechanical questions about which
+  decisions have tests; do not re-derive their output by hand.
+- **Evidence, not narrative.** A claim that work is done is checked by a role
+  that did not do it, against the work order's Evidence and its own run of the
+  tests — never against the report of whoever did the work.
 - **Read the file, don't recall it.** Re-read decision tables before citing them,
   even if they appeared earlier in the conversation — and never carry a domain fact
   in from a previous session or from an agent's own prompt. This project supersedes
@@ -158,6 +179,7 @@ invention is more expensive here than a gap: gaps get noticed, inventions get bu
 
 ```bash
 python scripts/check_docs.py
+python scripts/check_coverage.py
 ```
 
 Deterministic gate -- status drift across the three index locations, renumbered

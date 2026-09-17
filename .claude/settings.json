@@ -20,6 +20,8 @@
       "Bash(gh pr list:*)",
       "Bash(gh pr diff:*)",
       "Bash(python scripts/check_docs.py)",
+      "Bash(python scripts/check_coverage.py:*)",
+      "Bash(npm --prefix prototype test:*)",
       "Bash(npx playwright test:*)",
       "Bash(npx playwright show-report:*)",
       "Bash(playwright-cli snapshot:*)",
