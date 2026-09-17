@@ -251,6 +251,13 @@ Held copies count against **available** stock but remain on hand.
 
 ## Open questions
 
+- ~~**What happens when a customer presents a paper credit note?**~~ — **Resolved by
+  [E-07](E-07-manage-customers.md) d22**: it is rung as a **discount**. No Customer is
+  created and no balance is issued, so the **Store Credit** tender is not involved at all
+  and this pad needs nothing new. *The cost lands on this flow's figures:* revenue reads
+  low and discounts read high for as long as the paper lasts, and the copy's cost still
+  posts, so the sale's gross margin reads as a loss.
+
 - ~~**Rounding at the till**~~ — **Resolved** by decision 26: rounding is a suggestion everywhere, receiving included.
 - ~~**Layaway / deposits**~~ — **Resolved** by decision 25: a line-less Sale tendered to the Customer's account.
 - **Receipt content and format.** Settled for v1 as an emailed template — logo, header, itemized lines, subtotal, tax per tax line, total, tender breakdown ([architecture](../architecture.md) §4). Paper size stays open until the thermal print agent lands.

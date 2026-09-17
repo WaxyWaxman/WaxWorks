@@ -2,7 +2,7 @@
 
 **Actor:** Manager (Undo End of Day is **manager-only**, not a retired *manager override* — [architecture](../architecture.md) A-28a)
 **Status:** Specified — surfaced on **Point of Sale** under **Other Functions** ([E-05](E-05-sell-a-record.md) decision 30), not a screen of its own
-**Related:** [E-05 Point of Sale](E-05-sell-a-record.md) · [E-06 Process a return](E-06-process-a-return.md) · [M-06 Settings](M-06-settings.md) · [M-07 Chart of accounts](M-07-chart-of-accounts.md)
+**Related:** [E-05 Point of Sale](E-05-sell-a-record.md) · [E-06 Process a return](E-06-process-a-return.md) · [M-06 Settings](M-06-settings.md) · [M-07 Chart of accounts](M-07-chart-of-accounts.md) · [M-08 Keep the general ledger](M-08-general-ledger.md)
 
 **Job:** As a manager, I need an end-of-day picture of what sold and what the stock position looks like.
 
@@ -56,6 +56,10 @@ Pay-outs are the one cash movement that is captured, because money leaving the t
 ---
 
 ## Inherited from other flows
+
+**From [M-08](M-08-general-ledger.md):**
+
+- **Undo End of Day must refuse while the day it would reopen sits in a sealed period** ([M-08](M-08-general-ledger.md) d11, d22, d29, [architecture](../architecture.md) A-75). Decision 4's undo is the one reversal in this system that does **not** post forward — it un-closes, returning Sales to Current and restating the day itself — so unlike an Invoice correction ([E-02](E-02-receive-inventory.md) d40) or a PaymentBatch void ([M-05](M-05-accounts-payable.md) d22), it cannot be absorbed by [M-07](M-07-chart-of-accounts.md) d8's post-forward rule. **This is [architecture](../architecture.md) A-66's shape with a second trigger** — A-66 already refuses `close_undo` while a non-voided BankDeposit references the batch, and a sealed period is the same kind of outside dependency, one step further out. **A sealed month releases**: unseal it and the undo becomes available again — though only the **most recently sealed** period may be unsealed ([M-08](M-08-general-ledger.md) d29), so reaching an older day means walking backwards a period at a time. **A year marked *filed* never releases** (d22, superseding d21) — so a day inside a filed year can never be reopened by anyone, which is the only permanently unreachable state in this flow and worth the refusal saying so in those words rather than offering a route that does not exist.
 
 **From [E-02](E-02-receive-inventory.md):**
 

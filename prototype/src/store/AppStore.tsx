@@ -631,6 +631,13 @@ const seed: AppState = {
       intakeMode: "New",
       invoiceDate: "2026-08-30",
       receivedDate: "2026-08-31",
+      // M-06 d59 — this supplier bills in USD, so the Invoice carries the rate
+      // it was booked at. Seeded because the fallback for an Invoice with no
+      // recorded rate is 1, which is correct for an artifact written before the
+      // field existed and makes the prototype demonstrate the opposite of what
+      // it now does: a USD invoice settling at par, which is the defect d59
+      // closed. 1.42 matches the seeded USD rate in CURRENCIES.
+      exchangeRate: 1.42,
       statedSubtotal: 17.25,
       freight: 0,
       charges: [],
@@ -1002,6 +1009,13 @@ interface AppContextValue extends AppState {
        * account, which is what every settlement assumed before A-65 was built.
        */
       drawnOnAccountId?: string;
+      /**
+       * M-06 d60 — what actually LEFT THE BANK, in the home currency. Only ever
+       * sent for a Supplier whose currency is not the home currency; absent
+       * reads as "no rate movement", which for a domestic payment is a fact
+       * rather than an assumption.
+       */
+      paidAmount?: number;
       // A-69 — a debit carries what it is being settled with, not which credit
       // funded it. The credits are named on the batch.
       debits: { kind: PayableTargetKind; id: string; credit?: number; money?: number; balance: number; reference: string }[];
@@ -2383,6 +2397,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
       accounts: s.glAccounts,
       mappings: s.glMappings,
       currency: s.homeCurrency,
+      location: s.storeDetails.storeId, // M-08 d12, d27 / A-72 — the line's own Store
     });
 
     setS((prev) => ({
@@ -2833,6 +2848,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
             accounts: s.glAccounts,
             mappings: s.glMappings,
             currency: s.homeCurrency,
+            location: s.storeDetails.storeId, // M-08 d12, d27 / A-72 — the line's own Store
           })
         : null;
 
@@ -3351,14 +3367,28 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
     // paid would leave stock on the shelf for the length of the supplier's
     // terms with no Inventory and no Accounts Payable behind it.
     //
-    // d17 — in the SUPPLIER's currency. A USD Invoice exports as USD lines at
-    // the figures recorded, and nothing is converted here or at the export.
+    // M-06 d59 — the ledger is kept in the HOME currency, and the rate the
+    // conversion used is recorded on the Invoice. This amends M-07 d17, whose
+    // "nothing is ever converted" was right for a system that only exported:
+    // a set of journal lines has to balance in one currency to be double entry,
+    // and a USD payable settled from a CAD bank balances in neither.
+    //
+    // d61 — the rate is a property of the CURRENCY (d33), not of the Supplier.
+    const invoiceCurrency = supplier.currency || s.homeCurrency;
+    const exchangeRate =
+      invoiceCurrency === s.homeCurrency
+        ? 1
+        : (s.currencies.find((c) => c.code === invoiceCurrency)?.rate ?? 1);
+    const finalized = { ...invoice, lines: updatedLines, exchangeRate };
     const journal = buildInvoiceJournal({
-      invoice: { ...invoice, lines: updatedLines },
+      invoice: finalized,
       writtenAt: now(),
       accounts: s.glAccounts,
       mappings: s.glMappings,
-      currency: supplier.currency || s.homeCurrency,
+      currency: invoiceCurrency,
+      homeCurrency: s.homeCurrency,
+      rate: exchangeRate,
+      location: s.storeDetails.storeId, // M-08 d12, d27 / A-72 — the line's own Store
     });
 
     setS((prev) => ({
@@ -3373,6 +3403,10 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
               ...iv,
               status: "Finalized",
               lines: updatedLines,
+              // M-06 d59 — the rate rides on the ARTIFACT. Stored here so a
+              // void reverses the figures this Invoice used (A-33a's "reverse
+              // as recorded") and a later rate move cannot leak into it.
+              exchangeRate,
               finalizedAt: now(),
               log: [
                 ...iv.log,
@@ -3480,6 +3514,9 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
         method: input.method,
         reference: input.reference,
         drawnOnAccountId: input.drawnOnAccountId,
+        // M-06 d60 — recorded, never derived. The bank statement is the fact;
+        // a stored rate is only an estimate of it (M-05 d5).
+        ...(input.paidAmount != null ? { paidAmount: input.paidAmount } : {}),
         date: input.date,
         recordedBy: by,
         createdAt: at,
@@ -3601,6 +3638,12 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
         writtenAt: at,
         accounts: prev.glAccounts,
         currency: prev.homeCurrency,
+        location: prev.storeDetails.storeId, // M-08 d12, d27 / A-72 — the line's own Store
+        // M-06 d59 — clear the payable at the rate the INVOICE recorded, not
+        // at today's. Without this a USD 1,000 Invoice booked at 1.35 credits
+        // A/P CAD 1,350 and a payment clearing "1,000" debits CAD 1,000,
+        // leaving 350 of residue that nothing ever clears.
+        bookedRateFor: (targetId) => prev.invoices.find((iv) => iv.id === targetId)?.exchangeRate ?? 1,
       });
 
       return {
@@ -3676,6 +3719,12 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
         writtenAt: at,
         accounts: prev.glAccounts,
         currency: prev.homeCurrency,
+        location: prev.storeDetails.storeId, // M-08 d12, d27 / A-72 — the line's own Store
+        // M-06 d59 — clear the payable at the rate the INVOICE recorded, not
+        // at today's. Without this a USD 1,000 Invoice booked at 1.35 credits
+        // A/P CAD 1,350 and a payment clearing "1,000" debits CAD 1,000,
+        // leaving 350 of residue that nothing ever clears.
+        bookedRateFor: (targetId) => prev.invoices.find((iv) => iv.id === targetId)?.exchangeRate ?? 1,
         reversalOf: { voidId: voidRow.id, voidedAt: at },
       });
 

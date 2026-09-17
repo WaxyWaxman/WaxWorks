@@ -452,7 +452,9 @@ function JournalNotice({
           ) : (
             <> dated {dates[0] ?? "—"}.</>
           )}{" "}
-          Balanced. It posts nowhere else and nothing runs at month end (d12) — it waits for the export.
+          Balanced. It posts nowhere else, and it is written by the close itself (d12) — no sweep, no posting queue.
+          A month end now runs in <strong>Keep the general ledger</strong> (M-08), where a period is sealed; d12's
+          objection to a month-end routine was answered by M-07 d27 and architecture A-75, not ignored.
           {/* d24 — a balanced journal can still have had a date guessed for it,
               and Suspense cannot see that. Shown on the balanced branch too, or
               the one case that needs saying is the one case never said. */}

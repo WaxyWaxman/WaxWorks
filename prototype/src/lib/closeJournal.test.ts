@@ -81,6 +81,7 @@ const sale = (over: Partial<Sale>): Sale =>
 const build = (sales: Sale[], over: Partial<CloseJournalInput> = {}) =>
   buildCloseJournal({
     batchId: "batch-1",
+    location: "0041982",
     writtenAt: "2026-09-16 18:00:00",
     sales,
     records: RECORDS,
@@ -102,12 +103,16 @@ const lineFor = (b: JournalBatch, accountId: string, date?: string) =>
 // ---------------------------------------------------------------------------
 
 describe("M-07 d9 — the close's lines come from figures the close already has", () => {
-  it("credits the Section's revenue account, net of tax (d6)", () => {
+  // M-07 d28 — SUPERSEDES d6's grain. There is ONE reserved Sales account and
+  // the Section rides on the line as a dimension (M-08 d2), so this resolves by
+  // ROLE. Finding it by number was always the test apologising for itself: d3
+  // forbids the software from resolving that way.
+  it("credits the single reserved Sales account, net of tax (d28)", () => {
     const { batch } = build([sale({})]);
-    // 4100 is VINYL's suggested number. The account is found by NUMBER only
-    // here, in the test — d3 forbids the software from resolving that way, and
-    // buildChart is what puts the number on it.
-    expect(lineFor(batch, acct("4100"))?.credit).toBe(20);
+    const sales = CHART.accounts.find((a) => a.role === "revenue")!;
+
+    expect(CHART.accounts.filter((a) => a.role === "revenue")).toHaveLength(1);
+    expect(lineFor(batch, sales.id)?.credit).toBe(20);
   });
 
   it("credits tax collected per type, and never the paid half (d5)", () => {
@@ -192,7 +197,14 @@ describe("M-06 d20 — a gift card load is a liability, never a revenue bucket",
     const { batch } = build([load]);
 
     expect(lineFor(batch, acct("2200"))?.credit).toBe(25);
-    expect(lineFor(batch, acct("4110"))).toBeUndefined(); // the GIFT CARDS Section's own account
+    // M-07 d29 — a load touches no revenue account at all. Under d6 this
+    // asserted the absence of the GIFT CARDS Section's OWN revenue account;
+    // d28 leaves one Sales account for the whole shop, so what matters now is
+    // that a liability never reaches it. A dimension cannot decide
+    // revenue-versus-liability, which is the whole reason d29 keeps the
+    // non-revenue mapping.
+    const sales = CHART.accounts.find((a) => a.role === "revenue")!;
+    expect(lineFor(batch, sales.id)).toBeUndefined();
     expect(isImbalanced(batch)).toBe(false);
   });
 });
@@ -244,15 +256,62 @@ describe("M-07 d2 — a Return only reverses the cost where the copy came back",
   });
 });
 
+describe("M-08 d2, d12, d27 — the two dimensions beside the account", () => {
+  it("puts the Section on the revenue line as a dimension, not only in the memo", () => {
+    const { batch } = build([sale({})]);
+    const sales = CHART.accounts.find((a) => a.role === "revenue")!;
+    const line = batch.lines.find((l) => l.accountId === sales.id)!;
+
+    expect(line.section).toBe("VI");
+  });
+
+  it("keeps two Sections apart on one account and one date (d2)", () => {
+    // This is what the dimension is FOR. Under d28 both Sections credit the
+    // same Sales account, so without the section in the grouping key they
+    // would net into one line and the breakdown M-03 reports would be gone.
+    const merch = section("ME", "MERCH");
+    const merchGenre: Genre = { id: "gn-merch", name: "Merch", section: "ME", productTaxCode: "1", active: true } as Genre;
+    const { batch } = build(
+      [sale({}), sale({ id: "s-2", lines: [line({ id: "l-2", genreId: "gn-merch", kind: "nontracked", recordId: undefined, inventoryItemId: undefined, qty: 1, price: 10, tax: [] })], tenders: [tender({ amount: 10 })] })],
+      { sections: [...SECTIONS, merch], genres: [...GENRES, merchGenre] },
+    );
+    const sales = CHART.accounts.find((a) => a.role === "revenue")!;
+    const onSales = batch.lines.filter((l) => l.accountId === sales.id);
+
+    // Both on ONE date, or this test would pass on d14's date grouping alone
+    // and prove nothing about the section.
+    expect(new Set(onSales.map((l) => l.businessDate)).size).toBe(1);
+    expect(onSales.map((l) => l.section).sort()).toEqual(["ME", "VI"]);
+    expect(isImbalanced(batch)).toBe(false);
+  });
+
+  it("leaves the section blank where one does not apply (d12)", () => {
+    // A blank means NOT APPLICABLE rather than not bothered. Cost of goods,
+    // tax and the tender all belong to the shop rather than to a Section.
+    const { batch } = build([sale({})]);
+    const cogs = CHART.accounts.find((a) => a.role === "cogs")!;
+
+    expect(batch.lines.find((l) => l.accountId === cogs.id)?.section).toBeUndefined();
+  });
+
+  it("stamps the Store on every line, Suspense included (d27, A-72)", () => {
+    const { batch } = build([sale({})]);
+
+    expect(batch.lines.every((l) => l.location === "0041982")).toBe(true);
+  });
+});
+
 describe("M-07 d10 — an unresolvable seam reaches Suspense and is named", () => {
   it("posts the difference and reports what it could not resolve", () => {
-    // A Section with no mapping is what d11 exists to prevent. Forced here by
-    // handing the journal a chart that predates the Section — which is exactly
-    // M-06 d58's "adding a Section creates and maps its account in the same
-    // act" failing to happen.
+    // d33 — a REVENUE Section can no longer be unresolvable: it resolves to the
+    // reserved Sales role whatever the chart's age. The one hole the sparse
+    // Section seam can still leave is a Section a MANAGER created and marked
+    // not-revenue, which has no rule to resolve by and must be mapped by hand.
+    // Unmapped, it is exactly M-06 d58's "adding a Section creates and maps its
+    // account in the same act" failing to happen.
     const stale = buildChart({ sections: [section("VI", "VINYL")], tenders: TENDERS, taxTypes: TAX_TYPES });
-    const withNewSection = [...SECTIONS, section("ME", "MERCH")];
-    const merchGenre: Genre = { id: "gn-merch", name: "Merch", section: "ME", productTaxCode: "1", active: true } as Genre;
+    const withNewSection = [...SECTIONS, section("ME", "DEPOSITS", false)];
+    const merchGenre: Genre = { id: "gn-merch", name: "Deposits", section: "ME", productTaxCode: "1", active: true } as Genre;
 
     const { batch, unresolved } = build([sale({ lines: [line({ genreId: "gn-merch", kind: "nontracked", recordId: undefined, inventoryItemId: undefined })] })], {
       sections: withNewSection,
@@ -261,7 +320,7 @@ describe("M-07 d10 — an unresolvable seam reaches Suspense and is named", () =
       mappings: stale.mappings,
     });
 
-    expect(unresolved).toContain("Section MERCH");
+    expect(unresolved).toContain("Section DEPOSITS");
     expect(isImbalanced(batch)).toBe(true);
     const { debit, credit } = batchTotals(batch);
     expect(debit).toBe(credit); // d10 — balanced BY CONSTRUCTION, always writable

@@ -615,6 +615,22 @@ export interface PaymentBatchVoid {
 export interface PaymentBatch {
   id: string;
   supplierId: string;
+  /**
+   * M-06 d60 — **what actually left the bank**, in the store's home currency.
+   *
+   * Recorded rather than derived, which is M-05 d5's own rule: the bank
+   * statement is the fact and a stored rate is only an estimate of it. The
+   * difference against what the payable was BOOKED at (the rate on the
+   * Invoice, M-06 d59) is the exchange gain or loss, and it posts to the
+   * reserved role.
+   *
+   * Undefined for a domestic settlement and for every batch recorded before
+   * this existed — both read as *the booked amount*, which is to say no rate
+   * movement, which for a domestic payment is not an assumption but a fact.
+   * The Manager is only asked when the Supplier's currency is not the home
+   * currency (d60).
+   */
+  paidAmount?: number;
   method: PaymentMethod;
   reference: string; // free text — "Cheque 101", "Credit card 1278" — what reconciles against the bank statement
   /**
@@ -693,6 +709,21 @@ export interface InvoiceCharge {
 
 export interface Invoice {
   id: string;
+  /**
+   * M-06 d59, d61 — the rate from the supplier's currency to the store's home
+   * currency, **as it stood at finalize**, recorded here and never looked up
+   * again. d39's own mechanism: *"a rate belongs beside the money it converted,
+   * not in a table of every rate that ever was"* — so M-06 d33's one-current-
+   * rate, which makes a past rate unrecoverable, stops mattering.
+   *
+   * Undefined on a domestic Invoice and on every Invoice finalized before this
+   * existed; both read as 1.
+   *
+   * It is what makes A-33a's *reverse as recorded* true across a rate move: a
+   * void reverses the figures this Invoice used, and a later rate change
+   * cannot leak into it.
+   */
+  exchangeRate?: number;
   supplierId: string;
   invoiceNumber: string;
   intakeMode: IntakeMode;
@@ -1178,6 +1209,24 @@ export type GLRole =
   | "card-processing-fees"
   | "bank"
   | "suspense"
+  // d31 — three roles added for M-08, each passing d3's test that the SOFTWARE
+  // must resolve it. M-08 d17's year-end seal posts to retained earnings;
+  // M-08 d7 rests a permanent invariant on `accounts-payable-opening` being a
+  // DIFFERENT account from `accounts-payable`, which must equal M-05's balance
+  // exactly and forever; and an owner's draw needs a destination the software
+  // can offer rather than one the Manager has to think of.
+  //
+  // Names are still the store's (d3) — the reference model calls the last one
+  // Shareholder's Loan for a limited company and Owner's Equity otherwise,
+  // which is one role wearing the name the shop's incorporation calls for.
+  | "retained-earnings"
+  | "accounts-payable-opening"
+  | "owners-equity"
+  // M-06 d60 — where the difference lands between what a foreign payable was
+  // BOOKED at (the rate on the Invoice, d59) and what actually LEFT THE BANK.
+  // One role, signed either way, like `cash-over-short` already is: a period
+  // with both a gain and a loss shows the net, and the sign says which it was.
+  | "exchange-gain-or-loss"
   // one per seam — resolved through a mapping.
   //
   // The five tender roles are d21: every tender keeps its own account, and each
@@ -1267,6 +1316,23 @@ export interface JournalLine {
   /** The account this posts to — resolved by role or through a GLMapping,
    *  NEVER by number (d3). */
   accountId: string;
+  /**
+   * M-08 d2, d12, d27 — the two dimensions beside the account.
+   *
+   * `location` names **which Store** the line happened at and is REQUIRED.
+   * architecture A-72 keeps the ledger inside A-5 for v1, so it is the line's
+   * own store and is **deliberately redundant** — the axis exists so it is
+   * populated from day one rather than back-filled the day a second store
+   * reports in, which is the migration M-08 d2 was chosen to avoid.
+   *
+   * `section` is OPTIONAL and its blank means *not applicable* rather than
+   * *not bothered* (d12): a bank transfer, a loan repayment and an owner's draw
+   * have no section, and inventing one would put noise in the axis. Where a
+   * section IS meaningful the posting already knows it — a revenue line
+   * resolves its Section through the Sale line (E-05).
+   */
+  location: string;
+  section?: string;
   /** d14 — the date the underlying thing happened, not the date it was posted. */
   businessDate: string;
   debit: number;

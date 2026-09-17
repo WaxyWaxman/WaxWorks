@@ -57,12 +57,13 @@ export function ChartOfAccounts() {
       <header className="screen-head">
         <h1>Chart of accounts</h1>
         <p className="small muted">
-          Authorised by {authorisedBy} · <strong>{app.glAccounts.length} accounts</strong>, every seam mapped
+          Authorised by {authorisedBy} · <strong>{app.glAccounts.length} accounts</strong>, every seam resolving
         </p>
         <p className="small muted">
-          A chart and a journal export, <strong>not a ledger</strong> (d1). No account here carries a balance, and
-          nothing in this system can tell you a profit — the books live with your accountant. Set it up once, then
-          export (d9).
+          A chart and a journal export — <strong>this flow</strong> holds no balances (d1, still true of M-07). The
+          books themselves live in <strong>Keep the general ledger</strong> (M-08), which d27 reversed d1 to allow:
+          Wax Works now runs a period close, states a profit, and keeps the accounts this chart names. Set the chart
+          up once here, and read the books there (d9, as amended by M-08 d31).
         </p>
       </header>
 
@@ -85,9 +86,10 @@ export function ChartOfAccounts() {
               <p className="small muted">
                 {kind === "equity" ? (
                   <>
-                    <strong>Empty on purpose.</strong> d1 runs no period close and holds no equity, so there is no
-                    Retained Earnings and no Net Profit here. An accountant seeing no 3000s knows at once that this
-                    file does not carry them — renumbering to close the gap would hide the fact.
+                    <strong>Nothing here yet</strong>, which should not happen — d31 seeds{" "}
+                    <em>Owner's equity</em> and <em>Retained earnings</em>, and M-08 d17's year-end seal posts into
+                    the second. <em>Net Profit</em> and <em>Current Profits</em> are absent on purpose and always
+                    will be: M-08 d24 derives both when a statement is drawn and posts neither.
                   </>
                 ) : (
                   "Nothing here yet."
@@ -205,7 +207,9 @@ export function ChartOfAccounts() {
         what your accountant already keeps and nothing here breaks.
       </p>
       <p className="small muted">
-        The starting chart mirrors this system rather than an accountant's habits (d11): a Section each, a{" "}
+        The starting chart mirrors this system rather than an accountant's habits (d11) — plus the ordinary expense
+        accounts d32 seeds, so the first rent posting has somewhere to go. One <strong>Sales</strong> account for all
+        revenue (d28), with the Section riding on the line as a dimension rather than as an account of its own; a{" "}
         <em>tender</em> each rather than a card type (M-06 d22), and <strong>two</strong> accounts per tax — collected
         is a liability, paid is an Input Tax Credit (d5, E-02 d34). An account's <em>type</em> is
         <strong>derived from its role</strong> (d22), never from its number — so renumbering the chart cannot scramble

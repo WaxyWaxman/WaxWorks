@@ -42,8 +42,8 @@ const dollars = (c: number): number => c / 100;
 // ---------------------------------------------------------------------------
 
 /**
- * A reserved role resolves to exactly one account (the eleven in chart.ts's
- * RESERVED). The per-seam roles do not, and are never resolved this way —
+ * A reserved role resolves to exactly one account (the ones in chart.ts's
+ * RESERVED — fifteen since d31, and a count in prose is how it went stale). The per-seam roles do not, and are never resolved this way —
  * they go through `seamAccount` below.
  *
  * d18 — an account that has been DEACTIVATED still resolves. *Active* governs
@@ -88,14 +88,21 @@ export interface Posting {
   amount: number;
   currency: string;
   memo: string;
+  /**
+   * M-08 d12 — optional, and its blank means *not applicable*. Only a posting
+   * that genuinely has a Section sets it; `location` is not here because
+   * A-72 makes it the batch's Store on every line, so `assembleJournal` stamps
+   * it rather than asking eighteen call sites to repeat it.
+   */
+  section?: string;
 }
 
 /** Convenience so callers read as double entry rather than as sign arithmetic. */
-export const debit = (accountId: string, businessDate: string, amount: number, currency: string, memo: string): Posting =>
-  ({ accountId, businessDate, amount, currency, memo });
+export const debit = (accountId: string, businessDate: string, amount: number, currency: string, memo: string, section?: string): Posting =>
+  ({ accountId, businessDate, amount, currency, memo, ...(section ? { section } : {}) });
 
-export const credit = (accountId: string, businessDate: string, amount: number, currency: string, memo: string): Posting =>
-  ({ accountId, businessDate, amount: -amount, currency, memo });
+export const credit = (accountId: string, businessDate: string, amount: number, currency: string, memo: string, section?: string): Posting =>
+  ({ accountId, businessDate, amount: -amount, currency, memo, ...(section ? { section } : {}) });
 
 // ---------------------------------------------------------------------------
 // Assembling a batch
@@ -109,6 +116,20 @@ export interface AssembleInput {
   postings: Posting[];
   /** d10's destination. Resolved by the caller, by role. */
   suspenseAccountId: string;
+  /**
+   * M-08 d12, d27, architecture A-72 — the Store this batch belongs to, stamped
+   * on **every** line including Suspense.
+   *
+   * It sits on the batch rather than on each Posting because A-72 keeps the
+   * ledger inside A-5: a batch cannot span Stores, so the location is provably
+   * one value for the whole batch and asking eighteen call sites to repeat it
+   * would be ceremony. It still reaches the LINE, which is where d2 puts it.
+   *
+   * This also answers the one case a Posting could not: the **Suspense** line
+   * is written by no artifact and has no caller to ask, and the defect is the
+   * Store's like everything else here.
+   */
+  location: string;
 }
 
 /**
@@ -132,15 +153,22 @@ export interface AssembleInput {
  * only where a close swept more than one day AND the arithmetic also failed.
  */
 export function assembleJournal(input: AssembleInput): JournalBatch {
-  const groups = new Map<string, { accountId: string; businessDate: string; currency: string; memos: string[]; cents: number }>();
+  const groups = new Map<string, { accountId: string; businessDate: string; currency: string; section?: string; memos: string[]; cents: number }>();
 
   for (const p of input.postings) {
     if (!p.accountId) continue; // an unresolved seam is caught by the caller, loudly
-    const key = `${p.businessDate}|${p.accountId}|${p.currency}`;
+    // M-08 d2, d12 — the SECTION joins the grouping key. Two postings to one
+    // account on one date from two Sections are two facts and not one sum,
+    // which is the whole point of the dimension: totalling an account across
+    // every Section and within one become the same query with a different
+    // filter. `location` is not in the key because A-72 makes it one value for
+    // the batch.
+    const key = `${p.businessDate}|${p.accountId}|${p.currency}|${p.section ?? ""}`;
     const g = groups.get(key) ?? {
       accountId: p.accountId,
       businessDate: p.businessDate,
       currency: p.currency,
+      ...(p.section ? { section: p.section } : {}),
       memos: [],
       cents: 0,
     };
@@ -157,6 +185,8 @@ export function assembleJournal(input: AssembleInput): JournalBatch {
     .map((g) => ({
       accountId: g.accountId,
       businessDate: g.businessDate,
+      location: input.location,
+      ...(g.section ? { section: g.section } : {}),
       debit: g.cents > 0 ? dollars(g.cents) : 0,
       credit: g.cents < 0 ? dollars(-g.cents) : 0,
       currency: g.currency,
@@ -185,6 +215,9 @@ export function assembleJournal(input: AssembleInput): JournalBatch {
     lines.push({
       accountId: input.suspenseAccountId,
       businessDate: date,
+      // No section: a defect belongs to no part of the shop (d12's blank means
+      // "not applicable"). The location is the batch's, like every other line.
+      location: input.location,
       // A debit-heavy day needs a credit to Suspense to close it, and vice versa.
       debit: diff < 0 ? dollars(-diff) : 0,
       credit: diff > 0 ? dollars(diff) : 0,

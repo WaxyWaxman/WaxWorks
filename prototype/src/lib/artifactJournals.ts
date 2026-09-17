@@ -66,6 +66,10 @@ function businessDateOr(raw: string, writtenAt: string, label: string, unresolve
 // ---------------------------------------------------------------------------
 
 export interface InvoiceJournalInput {
+  /** M-08 d12, d27 / A-72 — the Store this journal belongs to. Stamped on
+   *  every line, Suspense included. One value per batch, because A-72 keeps
+   *  the ledger inside A-5 and a batch cannot span Stores. */
+  location: string;
   invoice: Invoice;
   writtenAt: string;
   accounts: GLAccount[];
@@ -78,8 +82,30 @@ export interface InvoiceJournalInput {
    * comment here said it would come back if it ever was. It has.
    */
   mappings: GLMapping[];
-  /** d17 — the SUPPLIER's currency. A USD Invoice exports as USD lines. */
+  /**
+   * The **supplier's** currency. It no longer denominates the journal — see
+   * `homeCurrency` — and survives because the rate needs a source and the memo
+   * needs to say what was actually billed.
+   *
+   * *Amended by [M-06](../../..) d59.* M-07 d17's *"a journal line carries its
+   * own currency and nothing is ever converted"* was right for a system that
+   * only exported. A set of journal lines has to balance in ONE currency to be
+   * double entry, and a USD payable settled from a CAD bank balances in
+   * neither.
+   */
   currency: string;
+  /** M-06 d59 — the ledger is kept in the home currency. Every line this
+   *  writes is denominated in it. */
+  homeCurrency: string;
+  /**
+   * M-06 d59, d61 — the rate from `currency` to `homeCurrency`, taken from the
+   * store's one current rate per currency (M-06 d33) at the moment of finalize
+   * and **recorded on the Invoice**, which is d39's own mechanism: *"a rate
+   * belongs beside the money it converted, not in a table of every rate that
+   * ever was."* Nothing ever looks a past rate up, so d33's unrecoverable
+   * history stops mattering. 1 for a domestic supplier.
+   */
+  rate: number;
 }
 
 /**
@@ -100,7 +126,11 @@ export interface InvoiceJournalInput {
  * says so out loud — which is the behaviour d10 was designed for.
  */
 export function buildInvoiceJournal(input: InvoiceJournalInput): ArtifactJournalResult {
-  const { invoice: iv, accounts, mappings, currency: cur } = input;
+  const { invoice: iv, accounts, mappings, homeCurrency: cur, rate } = input;
+  // M-06 d59 — convert once, here, at the rate the artifact recorded. Every
+  // amount below goes through this, so the whole journal is denominated in the
+  // home currency and the payment that settles it can balance against it.
+  const book = (n: number) => round(n * rate);
   const postings: Posting[] = [];
   const unresolved: string[] = [];
   // d14, and **A-71** — the line's own business date is the **finalize**, not
@@ -131,7 +161,7 @@ export function buildInvoiceJournal(input: InvoiceJournalInput): ArtifactJournal
   // Inventory — the copies' own costs (d2, perpetual). E-02 d16 keeps freight,
   // tax and misc at invoice level and never allocates them down to copies, so
   // this is exactly the sum of the line costs and nothing more.
-  const derivedSubtotal = round(iv.lines.reduce((sum, l) => sum + l.cost * l.qty, 0));
+  const derivedSubtotal = book(iv.lines.reduce((sum, l) => sum + l.cost * l.qty, 0));
   if (derivedSubtotal !== 0) {
     postings.push(
       debit(need(roleAccount(accounts, "inventory"), "Inventory (role)"), bd, derivedSubtotal, cur, `Inventory — ${iv.invoiceNumber}`),
@@ -141,7 +171,7 @@ export function buildInvoiceJournal(input: InvoiceJournalInput): ArtifactJournal
   // Freight inbound — invoice level, never per copy (E-02 d16).
   if (iv.freight !== 0) {
     postings.push(
-      debit(need(roleAccount(accounts, "freight-inbound"), "Freight inbound (role)"), bd, round(iv.freight), cur, `Freight — ${iv.invoiceNumber}`),
+      debit(need(roleAccount(accounts, "freight-inbound"), "Freight inbound (role)"), bd, book(iv.freight), cur, `Freight — ${iv.invoiceNumber}`),
     );
   }
 
@@ -171,7 +201,7 @@ export function buildInvoiceJournal(input: InvoiceJournalInput): ArtifactJournal
             `Tax paid ${ch.amount} — ${ch.taxCode ? `no account maps tax type "${ch.taxCode}"` : "the charge names no tax type"}`,
           ),
           bd,
-          round(ch.amount),
+          book(ch.amount),
           cur,
           `Tax paid — ${ch.taxCode ?? "?"} · ${iv.invoiceNumber}`,
         ),
@@ -181,7 +211,7 @@ export function buildInvoiceJournal(input: InvoiceJournalInput): ArtifactJournal
         debit(
           need(roleAccount(accounts, "misc-inbound"), "Miscellaneous inbound (role)"),
           bd,
-          round(ch.amount),
+          book(ch.amount),
           cur,
           `Miscellaneous — ${iv.invoiceNumber}`,
         ),
@@ -202,7 +232,7 @@ export function buildInvoiceJournal(input: InvoiceJournalInput): ArtifactJournal
   // settlement artifact for every payment, and the same period cost left
   // behind either way — the alternative special-cased the credit side by
   // payment terms and left a counter buy with no record that it had been paid.
-  const total = invoiceTotal(iv);
+  const total = book(invoiceTotal(iv));
   if (total !== 0) {
     postings.push(
       credit(need(roleAccount(accounts, "accounts-payable"), "Accounts payable (role)"), bd, total, cur, `Accounts payable — ${iv.invoiceNumber}`),
@@ -215,6 +245,7 @@ export function buildInvoiceJournal(input: InvoiceJournalInput): ArtifactJournal
       source: `invoice:${iv.invoiceNumber}`,
       writtenAt: input.writtenAt,
       postings,
+      location: input.location,
       suspenseAccountId: roleAccount(accounts, "suspense")?.id ?? "",
     }),
     unresolved,
@@ -226,6 +257,10 @@ export function buildInvoiceJournal(input: InvoiceJournalInput): ArtifactJournal
 // ---------------------------------------------------------------------------
 
 export interface PaymentJournalInput {
+  /** M-08 d12, d27 / A-72 — the Store this journal belongs to. Stamped on
+   *  every line, Suspense included. One value per batch, because A-72 keeps
+   *  the ledger inside A-5 and a batch cannot span Stores. */
+  location: string;
   batch: PaymentBatch;
   writtenAt: string;
   accounts: GLAccount[];
@@ -236,6 +271,17 @@ export interface PaymentJournalInput {
    * second journal rather than the removal of the first.
    */
   reversalOf?: { voidId: string; voidedAt: string };
+  /**
+   * M-06 d59, d60 — the rate each targeted Invoice was **booked** at, so this
+   * journal can debit Accounts payable by what it was credited rather than by
+   * the figure printed on the supplier's paperwork.
+   *
+   * Without it the two halves do not meet: a USD 1,000 Invoice finalized at
+   * 1.35 credits A/P **CAD 1,350**, and a payment clearing "1,000" would debit
+   * **CAD 1,000** and leave 350 of residue that nothing ever clears. That is
+   * not a rounding difference — it is the whole exchange movement, invisible.
+   */
+  bookedRateFor?: (targetId: string) => number;
 }
 
 /**
@@ -270,7 +316,23 @@ export function buildPaymentJournal(input: PaymentJournalInput): ArtifactJournal
   };
 
   const money = (t: PaymentTarget) => t.settleKind === "money";
-  const paid = round(b.targets.filter(money).reduce((sum, t) => sum + t.amount, 0));
+  // M-06 d59 — the payable is cleared at what it was BOOKED at. A target's
+  // amount is the figure on the supplier's paperwork, in the supplier's
+  // currency; the ledger holds the home-currency figure the Invoice's own
+  // recorded rate produced. Converting here, per target, is what makes the two
+  // halves meet — and the rate comes from the artifact rather than from
+  // today's table, so a rate move between finalize and payment cannot leak
+  // into the clearing (A-33a's "reverse as recorded").
+  // A-36 gives a target a typed `kind` and an `id`; the lookup answers 1 for
+  // anything that is not a foreign Invoice, which is every domestic settlement
+  // and every manual ledger entry.
+  const rateFor = (t: PaymentTarget) => input.bookedRateFor?.(t.id) ?? 1;
+  const paid = round(b.targets.filter(money).reduce((sum, t) => sum + t.amount * rateFor(t), 0));
+  // M-06 d60 — what actually left the bank, confirmed by the Manager where the
+  // Supplier's currency is not the home currency. Absent means no rate
+  // movement, which for a domestic payment is a fact rather than an assumption.
+  const actuallyPaid = round(b.paidAmount ?? paid);
+  const fxDifference = round(actuallyPaid - paid);
   const byCredit = round(b.targets.filter((t) => !money(t)).reduce((sum, t) => sum + t.amount, 0));
 
   if (byCredit !== 0) {
@@ -303,9 +365,24 @@ export function buildPaymentJournal(input: PaymentJournalInput): ArtifactJournal
     const bank = need(drawnOn, b.drawnOnAccountId ? `the account this payment drew on` : "Bank (role)");
     const memo = reversing ? `Void of ${b.reference}` : b.reference || "Payment";
     if (reversing) {
-      postings.push(credit(ap, bd, paid, cur, memo), debit(bank, bd, paid, cur, memo));
+      postings.push(credit(ap, bd, paid, cur, memo), debit(bank, bd, actuallyPaid, cur, memo));
     } else {
-      postings.push(debit(ap, bd, paid, cur, memo), credit(bank, bd, paid, cur, memo));
+      postings.push(debit(ap, bd, paid, cur, memo), credit(bank, bd, actuallyPaid, cur, memo));
+    }
+    // M-06 d60 — the difference IS the exchange gain or loss, and it is
+    // recorded rather than computed from a rate: the bank statement is the
+    // fact. A void reverses it by the same arithmetic, because `paidAmount`
+    // rides on the batch (A-33a, "reverse as recorded").
+    if (fxDifference !== 0) {
+      const fx = need(roleAccount(accounts, "exchange-gain-or-loss"), "Exchange gain or loss (role)");
+      const fxMemo = `Exchange ${fxDifference > 0 ? "loss" : "gain"} — ${b.reference || "payment"}`;
+      postings.push(
+        reversing
+          ? credit(fx, bd, Math.abs(fxDifference), cur, fxMemo)
+          : fxDifference > 0
+            ? debit(fx, bd, fxDifference, cur, fxMemo)
+            : credit(fx, bd, -fxDifference, cur, fxMemo),
+      );
     }
   }
 
@@ -315,6 +392,7 @@ export function buildPaymentJournal(input: PaymentJournalInput): ArtifactJournal
       source: reversing ? `payment-void:${input.reversalOf!.voidId}` : `payment:${b.id}`,
       writtenAt: input.writtenAt,
       postings,
+      location: input.location,
       suspenseAccountId: roleAccount(accounts, "suspense")?.id ?? "",
     }),
     unresolved,
@@ -326,6 +404,10 @@ export function buildPaymentJournal(input: PaymentJournalInput): ArtifactJournal
 // ---------------------------------------------------------------------------
 
 export interface AdjustmentJournalInput {
+  /** M-08 d12, d27 / A-72 — the Store this journal belongs to. Stamped on
+   *  every line, Suspense included. One value per batch, because A-72 keeps
+   *  the ledger inside A-5 and a batch cannot span Stores. */
+  location: string;
   id: string;
   /** E-04's reason code, which d6 gives an account each. */
   reason: AdjustmentReason;
@@ -381,6 +463,7 @@ export function buildAdjustmentJournal(input: AdjustmentJournalInput): ArtifactJ
       source: `adjustment:${input.id}`,
       writtenAt: input.writtenAt,
       postings,
+      location: input.location,
       suspenseAccountId: roleAccount(accounts, "suspense")?.id ?? "",
     }),
     unresolved,
