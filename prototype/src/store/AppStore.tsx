@@ -3353,6 +3353,9 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
       accounts: s.glAccounts,
       mappings: s.glMappings,
       currency: supplier.currency || s.homeCurrency,
+      // E-02 d45 — the Invoice's own terms beat the Supplier's, because the
+      // paperwork in hand is the agreement. d54 reads `Prepaid` off the result.
+      paymentTerms: invoice.paymentTerms ?? supplier.paymentTerms,
     });
 
     setS((prev) => ({

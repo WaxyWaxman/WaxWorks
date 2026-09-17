@@ -1,5 +1,6 @@
 import type {
   AdjustmentReason,
+  PaymentTerms,
   GLAccount,
   GLMapping,
   Invoice,
@@ -80,6 +81,12 @@ export interface InvoiceJournalInput {
   mappings: GLMapping[];
   /** d17 — the SUPPLIER's currency. A USD Invoice exports as USD lines. */
   currency: string;
+  /**
+   * The RESOLVED payment terms — the Invoice's own, else the Supplier's
+   * (E-02 d45). `Prepaid` is what tells a second-hand intake that the money
+   * already moved, so it owes nobody. See the credit side below.
+   */
+  paymentTerms?: PaymentTerms;
 }
 
 /**
@@ -189,29 +196,46 @@ export function buildInvoiceJournal(input: InvoiceJournalInput): ArtifactJournal
     }
   }
 
-  // --- 3. Second-hand's nominal cost has no second number ------------------
+  // The credit side — what the intake owes, and to whom.
   //
-  // d2 applies to both intake modes: a second-hand copy is booked at a nominal
-  // figure, and **the difference between it and what was actually paid stays in
-  // Second-hand purchases**. That needs two numbers — what the crate cost and
-  // what the copies are booked at — and E-02's second-hand intake records one
-  // cost per line and nothing else. So the account the chart provisions for it
-  // has no producer, here or at the close.
-  if (iv.intakeMode === "Second-hand" && Math.abs(iv.statedSubtotal - derivedSubtotal) > 0.005) {
-    unresolved.push(
-      `Second-hand purchases — stated ${iv.statedSubtotal} against booked ${derivedSubtotal}. d2 puts the difference here; nothing records which figure is the nominal one`,
-    );
-  }
-
-  // Accounts payable — what is owed, tax INCLUDED (A-36: "tax included,
-  // because A-29 takes tax out of cost of goods, not out of what is owed").
-  // Tax is a debit above and sits inside this credit, which is the whole double
-  // entry an Input Tax Credit is: the shop owes the supplier the tax and is
-  // owed it back by the government.
+  // **Accounts payable**, ordinarily: what is owed, tax INCLUDED (A-36 — "tax
+  // included, because A-29 takes tax out of cost of goods, not out of what is
+  // owed"). Tax is a debit above and sits inside this credit, which is the
+  // whole double entry an Input Tax Credit is: the shop owes the supplier the
+  // tax and is owed it back by the government.
+  //
+  // **Second-hand purchases** where a second-hand intake is `Prepaid` — E-02
+  // d54. Prepaid says the money already moved, and for a counter buy it moved
+  // through the till as a `Used Credit` tender, which debited that same
+  // account (d26, lexicon §14). So the intake credits it back at booked
+  // inventory cost and the residue is the period cost the lexicon describes:
+  // *"a lump paid for a crate and copies booked at a nominal figure differ on
+  // purpose."* Crediting Accounts Payable here instead would raise a debt to a
+  // walk-in who was paid at the counter and will never be paid again.
+  //
+  // The supplier does not decide this and must not: a shop may file a
+  // collection under its own supplier to analyse that stock's sales later,
+  // and where the money went is a different question from whose records these
+  // are. Terms answer it; the supplier is for reading.
   const total = invoiceTotal(iv);
+  const prepaidSecondHand = iv.intakeMode === "Second-hand" && input.paymentTerms === "Prepaid";
   if (total !== 0) {
     postings.push(
-      credit(need(roleAccount(accounts, "accounts-payable"), "Accounts payable (role)"), bd, total, cur, `Accounts payable — ${iv.invoiceNumber}`),
+      prepaidSecondHand
+        ? credit(
+            need(roleAccount(accounts, "second-hand-purchases"), "Second-hand purchases (role)"),
+            bd,
+            total,
+            cur,
+            `Second-hand purchases — booked cost, ${iv.invoiceNumber}`,
+          )
+        : credit(
+            need(roleAccount(accounts, "accounts-payable"), "Accounts payable (role)"),
+            bd,
+            total,
+            cur,
+            `Accounts payable — ${iv.invoiceNumber}`,
+          ),
     );
   }
 

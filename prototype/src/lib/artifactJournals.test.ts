@@ -38,13 +38,14 @@ const invoice = (over: Partial<Invoice> = {}): Invoice =>
     ...over,
   }) as Invoice;
 
-const buildInv = (iv: Invoice, currency = "CAD") =>
+const buildInv = (iv: Invoice, currency = "CAD", paymentTerms?: Invoice["paymentTerms"]) =>
   buildInvoiceJournal({
     invoice: iv,
     writtenAt: "2026-09-12 09:30:00",
     accounts: CHART.accounts,
     mappings: CHART.mappings,
     currency,
+    paymentTerms,
   });
 
 const taxCharge = (taxCode: string, amount: number): InvoiceCharge => ({ id: `c-${taxCode}`, kind: "tax", taxCode, amount });
@@ -193,13 +194,6 @@ describe("what an Invoice does not record", () => {
     expect(isImbalanced(j)).toBe(false);
   });
 
-  it("has no second figure to put in Second-hand purchases (d2)", () => {
-    // d2 wants the difference between a copy's nominal booked cost and what was
-    // actually paid. E-02's second-hand intake records one cost per line.
-    const { unresolved } = buildInv(invoice({ intakeMode: "Second-hand", statedSubtotal: 20 }));
-
-    expect(unresolved.join(" ")).toContain("Second-hand purchases");
-  });
 });
 
 // ---------------------------------------------------------------------------
@@ -220,6 +214,48 @@ const batch = (over: Partial<PaymentBatch> = {}): PaymentBatch =>
 
 const buildPay = (b: PaymentBatch, reversalOf?: { voidId: string; voidedAt: string }) =>
   buildPaymentJournal({ batch: b, writtenAt: "2026-09-13 11:00:00", accounts: CHART.accounts, currency: "CAD", reversalOf });
+
+describe("E-02 d54 — a prepaid second-hand intake owes nobody", () => {
+  it("credits Second-hand purchases instead of raising a payable", () => {
+    // Prepaid says the money already moved, and for a counter buy it moved
+    // through the till as a Used Credit tender that debited this same account
+    // (M-07 d26). The intake credits it back at booked inventory cost, and the
+    // residue is the period cost lexicon §14 describes — "a lump paid for a
+    // crate and copies booked at a nominal figure differ on purpose".
+    //
+    // Crediting Accounts Payable here would raise a debt to a walk-in who was
+    // paid at the counter and will never be paid again.
+    const { batch, unresolved } = buildInv(invoice({ intakeMode: "Second-hand" }), "CAD", "Prepaid");
+
+    expect(lineFor(batch, acct("1200"))?.debit).toBe(30); // the copies, booked
+    expect(lineFor(batch, acct("5300"))?.credit).toBe(30); // Second-hand purchases
+    expect(lineFor(batch, acct("2100"))).toBeUndefined(); // nothing owed
+    expect(unresolved).toEqual([]);
+    expect(isImbalanced(batch)).toBe(false);
+  });
+
+  it("still raises a payable for second-hand bought on terms", () => {
+    // A collection filed under its own supplier and paid later is an ordinary
+    // invoice. The SUPPLIER does not decide this and must not — a shop may file
+    // a collection under its own supplier purely to analyse that stock's sales
+    // later, and whose records these are is a different question from where the
+    // money went. Terms answer it.
+    const { batch } = buildInv(invoice({ intakeMode: "Second-hand" }), "CAD", "Net 30");
+
+    expect(lineFor(batch, acct("2100"))?.credit).toBe(30);
+    expect(lineFor(batch, acct("5300"))).toBeUndefined();
+  });
+
+  it("leaves NEW stock alone whatever its terms", () => {
+    // d54 is about the second-hand path. A prepaid new-stock invoice raising a
+    // payable that is never settled is a real question and a separate one,
+    // recorded in E-02 rather than answered here.
+    const { batch } = buildInv(invoice({ intakeMode: "New" }), "CAD", "Prepaid");
+
+    expect(lineFor(batch, acct("2100"))?.credit).toBe(30);
+    expect(lineFor(batch, acct("5300"))).toBeUndefined();
+  });
+});
 
 describe("M-07 d12 — a PaymentBatch writes its own journal at record", () => {
   it("debits Accounts Payable and credits the bank it drew on (A-65)", () => {
