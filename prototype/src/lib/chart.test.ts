@@ -134,3 +134,42 @@ describe("M-07 step 5 — an account can be read back to what posts to it", () =
     expect(seamsFor(paid.id, mappings, seams)).toEqual(["GST paid"]);
   });
 });
+
+describe("M-07 — the suggested numbering groups by account type, not by subject", () => {
+  const band = (n: string) => Math.floor(Number(n) / 1000);
+
+  it("puts a tax type's two halves in different bands, which is d5 made visible", () => {
+    // Collected is a liability; paid is an Input Tax Credit and therefore a
+    // receivable (E-02 d34). A subject-based scheme would file both under "tax"
+    // and hide that they are opposite sides of the balance sheet.
+    const { accounts } = buildChart(seams);
+    const collected = accounts.find((a) => a.name === "GST collected")!;
+    const paid = accounts.find((a) => a.name === "GST paid (ITC)")!;
+
+    expect(band(paid.number)).toBe(1); // asset
+    expect(band(collected.number)).toBe(2); // liability
+  });
+
+  it("leaves the 3000s empty, because d1 holds no equity", () => {
+    // An accountant seeing no 3000s knows at once this file does not carry
+    // equity. Renumbering to close the gap would hide the fact.
+    const { accounts } = buildChart(seams);
+
+    expect(accounts.filter((a) => band(a.number) === 3)).toEqual([]);
+  });
+
+  it("files revenue in the 4000s and cost of goods in the 5000s", () => {
+    const { accounts } = buildChart(seams);
+
+    expect(accounts.filter((a) => a.role === "revenue").every((a) => band(a.number) === 4)).toBe(true);
+    expect(accounts.filter((a) => a.role === "adjustment").every((a) => band(a.number) === 5)).toBe(true);
+  });
+
+  it("gives every account a distinct suggested number", () => {
+    // They are the store's to change (d3), but shipping a collision would make
+    // the first thing a Manager does be fixing ours.
+    const { accounts } = buildChart(seams);
+
+    expect(new Set(accounts.map((a) => a.number)).size).toBe(accounts.length);
+  });
+});

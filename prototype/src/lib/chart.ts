@@ -22,21 +22,44 @@ import { ADJUSTMENT_REASONS } from "../data/types";
  * by a GLMapping for the per-seam ones.
  */
 
-/** The reserved roles, with a suggested number and name for each. */
+/**
+ * The suggested numbering, grouped by ACCOUNT TYPE:
+ *
+ *     1000s assets · 2000s liabilities · 3000s equity · 4000s revenue
+ *     5000s cost of goods · 6000s expenses · 9999 suspense
+ *
+ * Grouped by type rather than by subject, because a subject cuts across the
+ * balance sheet and a type does not: tax is one subject and TWO types — GST
+ * collected is a liability at 2400 and GST paid is an Input Tax Credit at 1300
+ * (d5, E-02 d34) — and a tender is one subject and three, since `payout` is an
+ * expense and `rounding` is income or expense (M-06).
+ *
+ * **3000s stays empty on purpose.** d1 runs no period close and holds no
+ * equity, so an accountant seeing no 3000s knows at once that this file does
+ * not carry it. Renumbering to hide the gap would hide the fact.
+ *
+ * Suggestions only. d3 makes the number the store's the moment it opens the
+ * screen, and nothing resolves an account by it — the reserved accounts resolve
+ * by `role`, the per-seam ones through a GLMapping. Which is also why the
+ * grouping cannot be relied on to tell a destination what TYPE an account is:
+ * a shop that renumbers would silently change what an inferred type said, and
+ * M-07 carries that as an open question against d15's export.
+ */
 const RESERVED: { role: GLRole; number: string; name: string }[] = [
-  { role: "bank", number: "110", name: "Chequing" },
-  { role: "inventory", number: "200", name: "Inventory" },
-  { role: "accounts-payable", number: "300", name: "Accounts payable" },
-  { role: "gift-card-liability", number: "310", name: "Gift card liability" },
-  { role: "customer-credit", number: "320", name: "Customer account credit" },
-  { role: "cogs", number: "500", name: "Cost of goods" },
-  { role: "freight-inbound", number: "510", name: "Freight inbound" },
-  { role: "second-hand-purchases", number: "520", name: "Second-hand purchases" },
-  { role: "cash-over-short", number: "705", name: "Cash over / short" },
-  { role: "card-processing-fees", number: "710", name: "Card processing fees" },
+  { role: "bank", number: "1010", name: "Chequing" },
+  { role: "inventory", number: "1200", name: "Inventory" },
+  { role: "accounts-payable", number: "2100", name: "Accounts payable" },
+  { role: "gift-card-liability", number: "2200", name: "Gift card liability" },
+  { role: "customer-credit", number: "2300", name: "Customer account credit" },
+  { role: "cogs", number: "5100", name: "Cost of goods" },
+  { role: "freight-inbound", number: "5200", name: "Freight inbound" },
+  { role: "second-hand-purchases", number: "5300", name: "Second-hand purchases" },
+  { role: "card-processing-fees", number: "6100", name: "Card processing fees" },
+  { role: "cash-over-short", number: "6200", name: "Cash over / short" },
   // d10 — a non-zero balance here is ALWAYS a defect in this system, never a
-  // data-entry mistake. It sits last on purpose.
-  { role: "suspense", number: "999", name: "Suspense" },
+  // data-entry mistake. 9999 is where a suspense account conventionally sits,
+  // and last is the right place for something that should never have a figure.
+  { role: "suspense", number: "9999", name: "Suspense" },
 ];
 
 /**
@@ -97,7 +120,7 @@ export function buildChart(seams: Seams): BuiltChart {
   // every Section a code and a sort order, and a single `Sales` account would
   // discard a breakdown the shop curates and M-03 already reports.
   seams.sections.forEach((s, i) => {
-    const a = add("revenue", String(400 + i * 10), `Sales — ${s.name}`);
+    const a = add("revenue", String(4100 + i * 10), `Sales — ${s.name}`);
     // M-06 d28 — a Section is keyed by its two-character code, not an id.
     mappings.push({ seamKind: "section", seamId: s.code, accountId: a.id });
   });
@@ -105,22 +128,24 @@ export function buildChart(seams: Seams): BuiltChart {
   // M-06 d22 — per TENDER, not per behavior: Visa and Amex settle as separate
   // deposits, and a merged figure cannot be tied back to a bank statement.
   seams.tenders.forEach((t, i) => {
-    const a = add("undeposited", String(120 + i), `Undeposited funds — ${t.name}`);
+    const a = add("undeposited", String(1100 + i * 10), `Undeposited funds — ${t.name}`);
     mappings.push({ seamKind: "tender", seamId: t.id, accountId: a.id });
   });
 
   // d5 — TWO per tax type. Netting them would merge an asset and a liability in
   // one row, which the export's destination will refuse.
   seams.taxTypes.forEach((tx, i) => {
-    const collected = add("tax-collected", String(800 + i * 10), `${tx.name} collected`);
-    const paid = add("tax-paid", String(805 + i * 10), `${tx.name} paid (ITC)`);
+    // The two halves land in different THOUSANDS, which is d5 made visible: a
+    // liability at 2400 and a receivable at 1300, not neighbours in one block.
+    const collected = add("tax-collected", String(2400 + i * 10), `${tx.name} collected`);
+    const paid = add("tax-paid", String(1300 + i * 10), `${tx.name} paid (ITC)`);
     mappings.push({ seamKind: "tax-collected", seamId: tx.code, accountId: collected.id });
     mappings.push({ seamKind: "tax-paid", seamId: tx.code, accountId: paid.id });
   });
 
   // d6 — one per E-04 reason code.
   ADJUSTMENT_REASONS.forEach((reason, i) => {
-    const a = add("adjustment", String(530 + i), `Inventory adjustment — ${reason}`);
+    const a = add("adjustment", String(5400 + i * 10), `Inventory adjustment — ${reason}`);
     mappings.push({ seamKind: "adjustment", seamId: reason, accountId: a.id });
   });
 
