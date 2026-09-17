@@ -350,6 +350,37 @@ export function creditDrawdown(
  * on a $68.65 Invoice is $80.00 on the statement, and a payment history saying
  * $68.65 is the one screen that must not disagree with the bank.
  */
+/**
+ * M-05 d41 — an earlier batch carrying this same bank reference, or undefined.
+ *
+ * It warns and NEVER refuses. d5 makes the reference free text on purpose,
+ * because the bank's formats are not the store's to control, and one cheque
+ * legitimately covering two settlements is a real thing.
+ *
+ * The case worth catching is not the one that raised the question. After a
+ * void and a re-record (d40) the same cheque appears twice by design, and the
+ * warning says so by reporting whether the match is voided. What it is really
+ * for is a GENUINE double entry — the same cheque recorded twice as two live
+ * settlements — which nothing else in this flow would see.
+ *
+ * Matching is case-insensitive and trimmed: "cheque 101" and "Cheque 101 " are
+ * the same cheque to everyone except a string comparison.
+ */
+export function duplicateReference(
+  reference: string,
+  batches: PaymentBatch[],
+  voids: PaymentBatchVoid[],
+  excludeBatchId?: string,
+): { reference: string; date: string; voided: boolean } | undefined {
+  const needle = reference.trim().toLowerCase();
+  if (!needle) return undefined;
+  const hit = batches.find(
+    (b) => b.id !== excludeBatchId && b.reference.trim().toLowerCase() === needle,
+  );
+  if (!hit) return undefined;
+  return { reference: hit.reference, date: hit.date, voided: voids.some((v) => v.batchId === hit.id) };
+}
+
 export function batchMoneyPaid(batch: PaymentBatch, entries: PayableEntry[]): number {
   const targets = batch.targets.filter((t) => t.settleKind === "money").reduce((n, t) => n + t.amount, 0);
   const over = entries

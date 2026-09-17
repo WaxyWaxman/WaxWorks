@@ -5,6 +5,7 @@ import type { PayableEntryType, PaymentMethod } from "../data/types";
 import {
   autoPlacement,
   creditOn,
+  duplicateReference,
   ledgerRows,
   moneyOn,
   settlementPlan,
@@ -124,8 +125,24 @@ export function AccountsPayable() {
   // the method from what was ticked, and any typed money override belongs to
   // the selection it was typed against, not to the screen.
   const selKey = Object.keys(sel).sort().join(",");
+  // d40 — a re-record may pre-fill from the batch it replaces. The reset below
+  // would wipe it, so a pending pre-fill is carried in a ref and consumed by
+  // the same effect rather than racing it.
+  const prefill = useRef<Partial<SettleForm> | null>(null);
   useEffect(() => {
-    setForm((f) => ({ ...f, method: expectedMethod ?? "Cheque", credit: {}, money: {} }));
+    setForm((f) => {
+      const p = prefill.current;
+      prefill.current = null;
+      if (!p) return { ...f, method: expectedMethod ?? "Cheque", credit: {}, money: {} };
+      return {
+        ...f,
+        method: p.method ?? expectedMethod ?? "Cheque",
+        reference: p.reference ?? f.reference,
+        date: p.date ?? f.date,
+        credit: p.credit ?? {},
+        money: p.money ?? {},
+      };
+    });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selKey, expectedMethod]);
 
@@ -209,11 +226,46 @@ export function AccountsPayable() {
   const doVoid = (batchId: string) => {
     if (!supplier) return;
     const before = balanceOf(supplier.id);
+    const batch = app.paymentBatches.find((b) => b.id === batchId);
     app.voidPaymentBatch(batchId, authorisedBy ?? "");
-    setMsg(
-      `Settlement voided. Balance was ${money(before)} — nothing was deleted; where it emitted a remainder, a reversing Adjustment was appended beside it (d30).`,
-    );
     setOpenBatch(null);
+
+    // d40 — pre-fill the replacement from what was just voided. d18's objection
+    // does not reach this: d18 refused a pre-filled CLAIM SPLIT because that was
+    // the system inventing a distribution, and a voided batch is this Manager's
+    // own prior choice replayed. d37 makes it matter — freezing a part-paid
+    // Invoice turns void-and-re-record into the routine way a cost is fixed.
+    if (!batch) {
+      setMsg(`Settlement voided. Balance was ${money(before)} (d30).`);
+      return;
+    }
+    const keyFor = (kind: string, id: string) => `${kind === "invoice" ? "invoice" : "entry"}:${id}`;
+    const nextSel: Record<string, number> = {};
+    const nextMoney: Record<string, string> = {};
+    for (const tg of batch.targets) {
+      const key = keyFor(tg.kind, tg.id);
+      if (nextSel[key] == null) nextSel[key] = (tickSeq.current += 1);
+      if (tg.settleKind === "money") {
+        nextMoney[key] = (round2(Number(nextMoney[key] ?? 0) + tg.amount)).toFixed(2);
+      }
+    }
+    // A-69 — the credits are named on the batch, so re-ticking them is a read
+    // of that list rather than a hunt through its targets.
+    for (const c of batch.credits) {
+      const isClaim = app.claims.some((cl) => cl.id === c.creditId);
+      const key = `${isClaim ? "claim" : "entry"}:${c.creditId}`;
+      if (nextSel[key] == null) nextSel[key] = (tickSeq.current += 1);
+    }
+    prefill.current = { method: batch.method, reference: batch.reference, date: batch.date, money: nextMoney };
+    setSel(nextSel);
+
+    const overpaid = app.payableEntries.some((e) => e.fromBatchId === batch.id && !e.fromCreditId);
+    setMsg(
+      `Settlement voided and re-opened for re-recording (d40). Balance was ${money(before)} — nothing was deleted; where it emitted a remainder, a reversing Adjustment was appended beside it (d30).` +
+        (overpaid
+          ? " The money shown is what the targets settled; the overpayment came back as its own Credit and is not pre-filled."
+          : " Check every row before settling — something in this batch was wrong."),
+    );
   };
 
   const [form, setForm] = useState<SettleForm>({
@@ -381,6 +433,9 @@ export function AccountsPayable() {
         rows={rows}
         plan={plan}
         entries={app.payableEntries}
+        // d41 — warns, never refuses. Computed here because this is where the
+        // batches are; the notice itself belongs beside the reference field.
+        duplicateRef={duplicateReference(form.reference, app.paymentBatches, app.batchVoids)}
         creating={creating}
         form={form}
         expectedMethod={expectedMethod}

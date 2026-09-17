@@ -50,6 +50,7 @@ export function SettleTrack({
   batches,
   voids,
   entries,
+  duplicateRef,
   openBatch,
   onOpenBatch,
   onVoid,
@@ -84,6 +85,8 @@ export function SettleTrack({
   voids: PaymentBatchVoid[];
   /** d38 — the overpayment remainders a batch emitted, for `batchMoneyPaid`. */
   entries: PayableEntry[];
+  /** d41 — an earlier batch on this same reference, if there is one. */
+  duplicateRef?: { reference: string; date: string; voided: boolean };
   openBatch: string | null;
   onOpenBatch: (id: string) => void;
   onVoid: (id: string) => void;
@@ -98,6 +101,7 @@ export function SettleTrack({
         plan={plan}
         form={form}
         expectedMethod={expectedMethod}
+        duplicateRef={duplicateRef}
         onForm={onForm}
         onSettle={onSettle}
         onClear={onClear}
@@ -350,6 +354,7 @@ function Selection({
   plan,
   form,
   expectedMethod,
+  duplicateRef,
   onForm,
   onSettle,
   onClear,
@@ -359,6 +364,7 @@ function Selection({
   plan: SettlementPlan;
   form: { method: PaymentMethod; reference: string; date: string; credit: Record<string, string>; money: Record<string, string> };
   expectedMethod?: PaymentMethod;
+  duplicateRef?: { reference: string; date: string; voided: boolean };
   onForm: (patch: Partial<typeof form>) => void;
   onSettle: () => void;
   onClear: () => void;
@@ -674,6 +680,24 @@ function Selection({
               onChange={(e) => onForm({ reference: e.target.value })}
             />
           </label>
+          {/* d41 — warns, never refuses. The reference is free text on purpose
+              (d5) and one cheque can legitimately cover two settlements. Naming
+              the match and whether it is VOIDED is what stops this becoming
+              noise the Manager learns to click through: after a void and a
+              re-record (d40) the repeat is expected, and the warning says so. */}
+          {duplicateRef && (
+            <div className={"wo-caveat" + (duplicateRef.voided ? "" : " warn")}>
+              <strong>{duplicateRef.reference}</strong> is already on a settlement dated {duplicateRef.date}
+              {duplicateRef.voided ? (
+                <> — a <strong>voided</strong> one, so re-using it here is expected (d40).</>
+              ) : (
+                <>
+                  , and that one is <strong>live</strong>. Recording it twice would double the payment. Proceeding is
+                  allowed — a single cheque covering two settlements is a real thing (d5, d41).
+                </>
+              )}
+            </div>
+          )}
           {expectedMethod ? (
             <div className="wo-caveat">
               {expectedMethod === form.method ? (

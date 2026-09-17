@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   batchMoneyPaid,
   creditDrawdown,
+  duplicateReference,
   settlementPlan,
   unclearRefusal,
   type LedgerRow,
@@ -347,5 +348,45 @@ describe("M-05 d5/d38 — a batch records what left the bank, not what it settle
     const other = rem("rem-3", 50, { fromBatchId: "b2" });
 
     expect(batchMoneyPaid(paid(68.65), [other])).toBe(68.65);
+  });
+});
+
+describe("M-05 d41 — a duplicate bank reference warns, and says whether the match is voided", () => {
+  const withRef = (id: string, reference: string, date = "2026-09-16"): PaymentBatch => ({
+    ...batch(id, []),
+    reference,
+    date,
+  });
+
+  it("finds an earlier batch on the same reference", () => {
+    const hit = duplicateReference("Cheque 101", [withRef("b1", "Cheque 101")], []);
+
+    expect(hit).toEqual({ reference: "Cheque 101", date: "2026-09-16", voided: false });
+  });
+
+  it("reports the match as voided, which is the expected d40 case", () => {
+    // After a void and a re-record the same cheque legitimately appears twice.
+    // Saying so is what keeps the warning from becoming noise.
+    const voids: PaymentBatchVoid[] = [
+      { id: "v1", batchId: "b1", voidedAt: "2026-09-17 09:00:00", voidedBy: "MT" },
+    ];
+
+    expect(duplicateReference("Cheque 101", [withRef("b1", "Cheque 101")], voids)?.voided).toBe(true);
+  });
+
+  it("matches case-insensitively and ignores surrounding space", () => {
+    // "cheque 101" and "Cheque 101 " are the same cheque to everyone except a
+    // string comparison.
+    expect(duplicateReference("  cheque 101 ", [withRef("b1", "Cheque 101")], [])).toBeDefined();
+  });
+
+  it("says nothing about an empty reference, or one nothing matches", () => {
+    expect(duplicateReference("", [withRef("b1", "Cheque 101")], [])).toBeUndefined();
+    expect(duplicateReference("   ", [withRef("b1", "Cheque 101")], [])).toBeUndefined();
+    expect(duplicateReference("Cheque 999", [withRef("b1", "Cheque 101")], [])).toBeUndefined();
+  });
+
+  it("does not match a batch against itself", () => {
+    expect(duplicateReference("Cheque 101", [withRef("b1", "Cheque 101")], [], "b1")).toBeUndefined();
   });
 });
