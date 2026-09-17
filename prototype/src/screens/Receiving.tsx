@@ -363,13 +363,21 @@ function NewInvoiceModal({ onClose, onCreated }: { onClose: () => void; onCreate
         )}
 
         <div className="grid cols-2">
+          {/* Both are `type="date"`, as everywhere else a date is entered
+              (SettleTrack, TillFunctions, the bulk order sheet): the control
+              hands back one calendar day as `YYYY-MM-DD` and nothing else.
+              Typed free-hand, the invoice date reached the due-date
+              derivation (d45) — and everything else that reads a date off an
+              Invoice — as `DD/MM/YYYY`, which compares against no other date
+              in the system. `startInvoice` normalizes too: this field is not
+              the only way a date could arrive. */}
           <label className="field">
             <span>Invoice date (from paperwork)</span>
-            <input type="text" value={invoiceDate} onChange={(e) => setInvoiceDate(e.target.value)} placeholder="DD/MM/YYYY" />
+            <input type="date" value={invoiceDate} onChange={(e) => setInvoiceDate(e.target.value)} />
           </label>
           <label className="field">
             <span>Received date</span>
-            <input type="text" value={receivedDate} onChange={(e) => setReceivedDate(e.target.value)} />
+            <input type="date" value={receivedDate} onChange={(e) => setReceivedDate(e.target.value)} />
           </label>
         </div>
 

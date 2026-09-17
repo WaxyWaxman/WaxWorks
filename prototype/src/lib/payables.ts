@@ -12,6 +12,7 @@ import type {
   SupplierClaim,
 } from "../data/types";
 import { TERM_RULE } from "../data/types";
+import { isCalendarDate } from "./calendarDate";
 import {
   claimCreditAmount,
   claimIsAgreed,
@@ -137,6 +138,13 @@ export function dueFor(
   today: Date,
 ): { terms?: PaymentTerms; dueDate?: string; overdueBy?: number } {
   if (!terms) return {};
+  // Nothing to count from. An Invoice can genuinely carry no invoice date —
+  // a second-hand intake has no supplier paperwork to copy one off (E-02 d39)
+  // — and the arithmetic below reads the parts out of the string, so a blank
+  // or any other shape yields `NaN-NaN-NaN` as the due date and `NaN` days
+  // overdue. Both render: A/P shows a row dated `NaN-NaN-NaN` due `in NaNd`.
+  // No date means no derived due date, which every caller already handles.
+  if (!isCalendarDate(termsFrom)) return { terms };
   const rule = TERM_RULE[terms];
   if (rule.kind === "none") {
     // COD / Prepaid: no due date. Still worth knowing how long it has sat.

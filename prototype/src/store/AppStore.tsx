@@ -32,6 +32,7 @@ import { buildChart } from "../lib/chart";
 import { buildCloseJournal } from "../lib/closeJournal";
 import { buildAdjustmentJournal, buildInvoiceJournal, buildPaymentJournal } from "../lib/artifactJournals";
 import { isImbalanced } from "../lib/journal";
+import { toCalendarDate } from "../lib/calendarDate";
 import {
   CURRENT_USER,
   CUSTOMERS,
@@ -157,22 +158,12 @@ function applyTenderEffect(
 const now = () => new Date().toLocaleString("en-CA", { hour12: false }).replace(",", "");
 
 // E-02 d39 — `SH-YYMMDD-n` for a second-hand intake with no supplier
-// paperwork. Accepts the received date in either the ISO form the seed uses
-// or DD/MM/YYYY as typed at the desk; anything unparseable falls back to
-// today, because a reference that exists beats a blank one.
+// paperwork. Takes the received date as one calendar day; anything
+// unparseable falls back to today, because a reference that exists beats a
+// blank one.
 function mintSecondHandRef(receivedDate: string, invoices: Invoice[]): string {
-  const raw = (receivedDate ?? "").trim();
-  const iso = /^(\d{4})-(\d{2})-(\d{2})/.exec(raw);
-  const dmy = /^(\d{2})\/(\d{2})\/(\d{4})/.exec(raw);
-  let y: string, m: string, d: string;
-  if (iso) [, y, m, d] = iso;
-  else if (dmy) [, d, m, y] = dmy;
-  else {
-    const t = new Date();
-    y = String(t.getFullYear());
-    m = String(t.getMonth() + 1).padStart(2, "0");
-    d = String(t.getDate()).padStart(2, "0");
-  }
+  const iso = toCalendarDate(receivedDate) || new Date().toLocaleDateString("en-CA");
+  const [y, m, d] = iso.split("-");
   const stem = `SH-${y.slice(2)}${m}${d}`;
   // Sequence against what already exists for that day rather than a counter,
   // so the number cannot drift from the references actually on file.
@@ -2880,6 +2871,13 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
 
   const startInvoice: AppContextValue["startInvoice"] = (input) => {
     const id = uid("inv");
+    // Both dates are pinned to one calendar day here, not just at the field
+    // that collects them. A date in any other shape compares against nothing
+    // else in the system — the due date derived from it (E-02 d45) comes out
+    // `NaN-NaN-NaN`, and anything filed by date is filed outside every range
+    // rather than in the wrong one.
+    const invoiceDate = toCalendarDate(input.invoiceDate);
+    const receivedDate = toCalendarDate(input.receivedDate);
     // No supplier paperwork to key off — auto-generate our own reference
     // rather than block opening the invoice on a number that doesn't exist.
     //
@@ -2893,11 +2891,13 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
     const invoiceNumber =
       input.invoiceNumber.trim() ||
       (input.intakeMode === "Second-hand"
-        ? mintSecondHandRef(input.receivedDate, s.invoices)
+        ? mintSecondHandRef(receivedDate, s.invoices)
         : `REF${String(s.nextInvoiceRef).padStart(4, "0")}`);
     const invoice: Invoice = {
       id,
       ...input,
+      invoiceDate,
+      receivedDate,
       invoiceNumber,
       misc: 0,
       status: "Draft",
