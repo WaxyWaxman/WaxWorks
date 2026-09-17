@@ -102,11 +102,11 @@ describe("M-07 d10 — an unbalanced journal posts its difference to Suspense an
   });
 
   it("balances EACH business date, so a range export of one day is still a valid document", () => {
-    // Proposed, not ratified. d10 speaks of "the journal", which reads as the
-    // batch — but step 15 gathers lines by the dates they CARRY, so a range
-    // covering Monday and not Tuesday slices a two-day batch. A Suspense line
-    // sitting on Tuesday would leave Monday's export unbalanced, which is the
-    // exact failure Suspense exists to make impossible.
+    // d25. d10 speaks of "the journal", which reads as the batch — but step 15
+    // gathers lines by the dates they CARRY, so a range covering Monday and not
+    // Tuesday slices a two-day batch. A Suspense line sitting on Tuesday would
+    // leave Monday's export unbalanced, which is the exact failure Suspense
+    // exists to make impossible.
     const b = assemble([
       credit("acc-vinyl", "2026-09-14", 40, "CAD", "Revenue — VINYL"),
       debit("acc-cash", "2026-09-14", 37, "CAD", "Undeposited funds — Cash"),
@@ -124,6 +124,26 @@ describe("M-07 d10 — an unbalanced journal posts its difference to Suspense an
     const susp = b.lines.filter((l) => l.accountId === "acc-suspense");
     expect(susp).toHaveLength(1);
     expect(susp[0].businessDate).toBe("2026-09-14");
+  });
+
+  it("reports two offsetting daily differences rather than netting them to nothing", () => {
+    // d25's accepted consequence, and the first thing per-date balancing
+    // changes. Short $3 on Monday, over $3 on Tuesday: two Suspense lines get
+    // written, and a NET total reports zero — so the batch would read as
+    // balanced, no flag would be raised, and two defect lines would sit in the
+    // file unmentioned. Two errors are not an absence of error.
+    const b = assemble([
+      credit("acc-vinyl", "2026-09-14", 40, "CAD", "Revenue — VINYL"),
+      debit("acc-cash", "2026-09-14", 37, "CAD", "Undeposited funds — Cash"),
+      credit("acc-vinyl", "2026-09-15", 25, "CAD", "Revenue — VINYL"),
+      debit("acc-cash", "2026-09-15", 28, "CAD", "Undeposited funds — Cash"),
+    ]);
+
+    expect(b.lines.filter((l) => l.accountId === "acc-suspense")).toHaveLength(2);
+    expect(isImbalanced(b)).toBe(true);
+    expect(b.suspense).toBe(6); // gross — $3 each way, not $0
+    const { debit: d, credit: c } = batchTotals(b);
+    expect(d).toBe(c);
   });
 });
 

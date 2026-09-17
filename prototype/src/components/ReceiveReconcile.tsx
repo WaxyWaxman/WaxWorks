@@ -389,6 +389,11 @@ function InvoiceTerms({
             Derived from the <strong>invoice date</strong> ({invoice.invoiceDate}) plus the terms — never the received
             date (d45). This is the only thing that lets Accounts Payable call a balance overdue.
           </>
+        ) : terms && !invoice.invoiceDate ? (
+          <>
+            No <strong>invoice date</strong> on this invoice, so there is nothing for <strong>{terms}</strong> to run
+            from and nothing ages in Accounts Payable (d45). Add the date off the paperwork and the due date follows.
+          </>
         ) : terms ? (
           <>
             <strong>{terms}</strong> produces no due date, so nothing on these terms ages in Accounts Payable.

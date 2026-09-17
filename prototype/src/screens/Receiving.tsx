@@ -237,8 +237,23 @@ function NewInvoiceModal({ onClose, onCreated }: { onClose: () => void; onCreate
   const [supplierId, setSupplierId] = useState(app.suppliers[0]?.id ?? "");
   const [mode, setMode] = useState<IntakeMode>("New");
   const [invoiceNumber, setInvoiceNumber] = useState("");
-  const [invoiceDate, setInvoiceDate] = useState("");
-  const [receivedDate, setReceivedDate] = useState(new Date().toLocaleDateString("en-CA"));
+  // Both default to TODAY, and `en-CA` is what gives `YYYY-MM-DD` — the one
+  // shape `toCalendarDate` keeps and everything else in the system compares
+  // against.
+  //
+  // The invoice date defaulting is the newer half and is worth saying why:
+  // most stock is received the day the paperwork arrives, so today is right
+  // more often than blank is, and E-02 d45 runs payment terms from this field —
+  // leaving it empty means an Invoice that ages nowhere in Accounts Payable.
+  // It is a DEFAULT and not a constraint: blank stays legal, because a
+  // second-hand intake has no supplier paperwork to copy a date off (d39), and
+  // the Employee clears or changes it off the invoice in hand.
+  //
+  // It no longer touches the ledger either way — architecture A-71 dates an
+  // Invoice's journal by its finalize, which the system stamps.
+  const today = new Date().toLocaleDateString("en-CA");
+  const [invoiceDate, setInvoiceDate] = useState(today);
+  const [receivedDate, setReceivedDate] = useState(today);
   const [statedSubtotal, setStatedSubtotal] = useState("0.00");
   const [tax, setTax] = useState("0.00");
   const [freight, setFreight] = useState("0.00");
@@ -363,13 +378,21 @@ function NewInvoiceModal({ onClose, onCreated }: { onClose: () => void; onCreate
         )}
 
         <div className="grid cols-2">
+          {/* Both are `type="date"`, as everywhere else a date is entered
+              (SettleTrack, TillFunctions, the bulk order sheet): the control
+              hands back one calendar day as `YYYY-MM-DD` and nothing else.
+              Typed free-hand, the invoice date reached the due-date
+              derivation (d45) — and everything else that reads a date off an
+              Invoice — as `DD/MM/YYYY`, which compares against no other date
+              in the system. `startInvoice` normalizes too: this field is not
+              the only way a date could arrive. */}
           <label className="field">
             <span>Invoice date (from paperwork)</span>
-            <input type="text" value={invoiceDate} onChange={(e) => setInvoiceDate(e.target.value)} placeholder="DD/MM/YYYY" />
+            <input type="date" value={invoiceDate} onChange={(e) => setInvoiceDate(e.target.value)} />
           </label>
           <label className="field">
             <span>Received date</span>
-            <input type="text" value={receivedDate} onChange={(e) => setReceivedDate(e.target.value)} />
+            <input type="date" value={receivedDate} onChange={(e) => setReceivedDate(e.target.value)} />
           </label>
         </div>
 
@@ -502,6 +525,11 @@ function InvoiceEditor({
     if (delta !== 0) app.setInvoiceTotalOverride(invoiceId, enteredTotal);
     const res = app.finalizeInvoice(invoiceId);
     if (res) setFinalizedCount(res.itemCount);
+    // M-07 d24 — where this system had to GUESS a line's business date, the
+    // substitution has to read as a guess. It balances, so d10's Suspense never
+    // fires and the review queue is never reached; saying it here, at the act,
+    // is what stops a date nobody chose looking like a date someone did.
+    if (res?.unresolved.length) setToast(res.unresolved.join(" · "));
   });;
 
   const doSaveUpdates = () => {

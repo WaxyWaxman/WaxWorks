@@ -35,6 +35,32 @@ export interface ArtifactJournalResult {
 
 const round = (n: number): number => Math.round(n * 100) / 100;
 
+/**
+ * d24 — **a journal line's business date is a calendar date, and a line that
+ * cannot produce one takes the date it was written rather than none.**
+ *
+ * d14 has a line carry its own business date, d19 makes it a calendar day, and
+ * step 15's export gathers a range by it — three decisions resting on a field
+ * nothing checked. **Suspense structurally cannot catch a bad one**, because it
+ * is not an arithmetic failure: the journal balances perfectly and is filed in
+ * no period at all, so a string like `10/09/2026` sorts before every real date
+ * and the lines vanish from every export rather than appearing in the wrong one.
+ *
+ * Falling forward to the written date is d10's house style rather than a new
+ * one: proceed and record, never block. A line in the wrong period is visible
+ * and correctable; a line in no period is neither. The Manager is told either
+ * way, because the substitution is a guess and has to read as one.
+ */
+function businessDateOr(raw: string, writtenAt: string, label: string, unresolved: string[]): string {
+  const bd = raw.slice(0, 10);
+  if (isBusinessDate(bd)) return bd;
+  const fallback = writtenAt.slice(0, 10);
+  unresolved.push(
+    `${label} is not a calendar date (d14, d19) — these lines were filed under ${fallback}, the day the journal was written, so they are not lost from the export (d24). The date on the artifact still needs correcting.`,
+  );
+  return fallback;
+}
+
 // ---------------------------------------------------------------------------
 // An Invoice, at finalize (d13)
 // ---------------------------------------------------------------------------
@@ -74,14 +100,24 @@ export function buildInvoiceJournal(input: InvoiceJournalInput): ArtifactJournal
   const { invoice: iv, accounts, currency: cur } = input;
   const postings: Posting[] = [];
   const unresolved: string[] = [];
-  // d14 — the line's own business date. An Invoice's is the date on the
-  // paperwork, not the day someone got round to finalizing it.
-  const bd = iv.invoiceDate.slice(0, 10);
-  if (!isBusinessDate(bd)) {
-    unresolved.push(
-      `Invoice date "${iv.invoiceDate}" is not a calendar date, so these lines carry no usable business date (d14, d19)`,
-    );
-  }
+  // d14, and **A-71** — the line's own business date is the **finalize**, not
+  // the date on the supplier's paperwork.
+  //
+  // d13 already located the economic event here: *"finalize is when the money
+  // becomes real — lines become sellable inventory and the debt to the supplier
+  // exists."* The first build of this function dated the lines by
+  // `invoiceDate` anyway, which is a fact about the supplier's paperwork rather
+  // than about when the shop's position changed. d19 set the precedent for
+  // Sales by dating them at the tender, the moment the money moved.
+  //
+  // **What settles it is d8.** An Invoice dated 28 August and finalized 16
+  // September would post lines into a month the shop may already have exported,
+  // filed and had imported — the harm d8 exists to prevent, arriving as a new
+  // line rather than as a restatement and doing the same damage quietly.
+  //
+  // The supplier's invoice date keeps its own job untouched: E-02 d45 runs
+  // payment terms from it, never from the received date.
+  const bd = businessDateOr(input.writtenAt, input.writtenAt, `Finalize timestamp "${input.writtenAt}"`, unresolved);
 
   const need = (a: GLAccount | undefined, what: string): string => {
     if (a) return a.id;
@@ -106,16 +142,17 @@ export function buildInvoiceJournal(input: InvoiceJournalInput): ArtifactJournal
     );
   }
 
-  // --- 1. Miscellaneous has no account ------------------------------------
+  // Miscellaneous — d23, its own reserved account beside freight.
   //
-  // A-29 puts it in cost of goods — `invoice_cogs = subtotal + freight + misc`
-  // — and d6's seam list does not contain it. d11 creates an account for every
-  // Section, tender, tax type and reason code; **invoice-level misc is a money
-  // seam none of those four counts**, so d11's "nothing can be left unmapped"
-  // is complete over the seams it enumerates and not over the money.
+  // Building Phase 3 found it had none: A-29 puts it in cost of goods, and d6's
+  // seams are Sections, tenders, tax types and reason codes, so **d11's
+  // "nothing can be left unmapped" was complete over the seams it enumerates
+  // and not over the money.** d23 closes it with a twelfth reserved role rather
+  // than by widening freight, because E-02 step 6 has the two entered as
+  // separate figures off the paperwork.
   if (iv.misc !== 0) {
-    unresolved.push(
-      `Miscellaneous ${iv.misc} — no account exists for invoice-level misc (A-29 puts it in cost of goods; d6's seams do not include it)`,
+    postings.push(
+      debit(need(roleAccount(accounts, "misc-inbound"), "Miscellaneous inbound (role)"), bd, round(iv.misc), cur, `Miscellaneous — ${iv.invoiceNumber}`),
     );
   }
 
@@ -212,10 +249,8 @@ export function buildPaymentJournal(input: PaymentJournalInput): ArtifactJournal
   // d8 — the reversing entry is dated WHEN IT WAS MADE, never back onto the
   // day it concerns. "This is what keeps a period that has been exported,
   // imported and filed from moving under the person who filed it."
-  const bd = (reversing ? input.reversalOf!.voidedAt : b.date).slice(0, 10);
-  if (!isBusinessDate(bd)) {
-    unresolved.push(`Payment date "${b.date}" is not a calendar date, so these lines carry no usable business date (d14, d19)`);
-  }
+  const raw = reversing ? input.reversalOf!.voidedAt : b.date;
+  const bd = businessDateOr(raw, input.writtenAt, `Payment date "${raw}"`, unresolved);
 
   const need = (a: GLAccount | undefined, what: string): string => {
     if (a) return a.id;

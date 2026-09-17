@@ -457,6 +457,15 @@ function JournalNotice({
             <> dated {dates[0] ?? "—"}.</>
           )}{" "}
           Balanced. It posts nowhere else and nothing runs at month end (d12) — it waits for the export.
+          {/* d24 — a balanced journal can still have had a date guessed for it,
+              and Suspense cannot see that. Shown on the balanced branch too, or
+              the one case that needs saying is the one case never said. */}
+          {unresolved.length > 0 && (
+            <>
+              {" "}
+              <strong>But:</strong> {unresolved.join("; ")}
+            </>
+          )}
         </>
       )}
       {payouts.length > 0 && (

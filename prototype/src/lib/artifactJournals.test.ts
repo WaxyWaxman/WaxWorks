@@ -67,10 +67,42 @@ describe("M-07 d13 — an Invoice writes its journal at finalize", () => {
     expect(isImbalanced(batch)).toBe(false);
   });
 
-  it("dates the lines by the INVOICE date, not by when someone finalized it (d14)", () => {
-    const { batch } = buildInv(invoice());
+  it("puts miscellaneous in its own account beside freight (d23)", () => {
+    // d23 — a twelfth reserved role rather than a widening of freight. E-02
+    // step 6 has the two entered as separate figures off the paperwork, and a
+    // misc charge is a restocking fee or a pallet deposit as often as carriage.
+    const { batch, unresolved } = buildInv(invoice({ freight: 12, misc: 7 }));
+
+    expect(lineFor(batch, acct("5200"))?.debit).toBe(12);
+    expect(lineFor(batch, acct("5250"))?.debit).toBe(7);
+    expect(lineFor(batch, acct("2100"))?.credit).toBe(49);
+    expect(unresolved).toEqual([]);
+    expect(isImbalanced(batch)).toBe(false);
+  });
+
+  it("dates the lines by the FINALIZE, not by the supplier's invoice date (A-71)", () => {
+    // d13 already put the economic event here — finalize is when the stock
+    // becomes sellable and the debt exists — and d19 dates a Sale at the
+    // tender for the same reason. What settles it is d8: an invoice dated
+    // 2026-09-10 and finalized on the 12th is harmless, but one dated in
+    // August and finalized in September would post a line into a month the
+    // shop may already have exported, filed and had imported.
+    const { batch } = buildInv(invoice({ invoiceDate: "2026-08-27" }));
+
     expect(batch.writtenAt).toBe("2026-09-12 09:30:00");
-    expect(batch.lines.every((l) => l.businessDate === "2026-09-10")).toBe(true);
+    expect(batch.lines.every((l) => l.businessDate === "2026-09-12")).toBe(true);
+    expect(batch.lines.some((l) => l.businessDate === "2026-08-27")).toBe(false);
+  });
+
+  it("leaves the supplier's invoice date to do its own job (E-02 d45)", () => {
+    // A-71 changes which date the LEDGER uses, not which date the TERMS use.
+    // Stated as a test because the two are one field away from each other and
+    // the amendment reads, at a glance, like it moved both.
+    const iv = invoice({ invoiceDate: "2026-08-27" });
+    const { batch } = buildInv(iv);
+
+    expect(iv.invoiceDate).toBe("2026-08-27");
+    expect(batch.lines[0].businessDate).toBe("2026-09-12");
   });
 
   it("carries the supplier's currency and converts nothing (d17)", () => {
@@ -100,27 +132,31 @@ describe("what an Invoice does not record", () => {
     expect(debit).toBe(credit); // d10 — balanced by construction regardless
   });
 
-  it("has no account for invoice-level miscellaneous", () => {
-    // A-29 puts misc in cost of goods; d6's seams are Sections, tenders, tax
-    // types and reason codes, and misc is none of them. d11's "nothing can be
-    // left unmapped" is complete over the seams it enumerates, not over money.
-    const { batch, unresolved } = buildInv(invoice({ misc: 7 }));
+  it("is no longer reachable through a typed invoice date at all (A-71)", () => {
+    // This is the case that raised d24: the intake form stored `10/09/2026`
+    // verbatim, it became a line's business date, and because it sorts before
+    // every real date the lines fell out of every export rather than landing in
+    // the wrong month — invisible to Suspense, which only sees arithmetic.
+    //
+    // A-71 removes the condition rather than notifying about it. The business
+    // date is the finalize, which the system stamps, so what the supplier's
+    // paperwork says cannot reach the ledger however badly it is typed.
+    const { batch, unresolved } = buildInv(invoice({ invoiceDate: "10/09/2026" }));
 
-    expect(unresolved.join(" ")).toContain("Miscellaneous 7");
-    expect(batch.suspense).toBe(7);
+    expect(batch.lines.every((l) => l.businessDate === "2026-09-12")).toBe(true);
+    expect(unresolved).toEqual([]);
+    expect(isImbalanced(batch)).toBe(false);
   });
 
-  it("refuses to treat a non-calendar invoice date as a business date", () => {
-    // The new-intake form accepts DD/MM/YYYY and stores it raw — already
-    // visible on the screen as a due date of "NaN-NaN-NaN". It costs more here:
-    // d14 has the line carry its own business date, d19 makes that a calendar
-    // day, and step 15's export gathers a range BY those dates. `10/09/2026`
-    // sorts before `2026-01-01`, so the line is dropped from every range rather
-    // than filed in the wrong one — and Suspense cannot catch it, because the
-    // journal is perfectly balanced and in no period at all.
-    const { unresolved } = buildInv(invoice({ invoiceDate: "10/09/2026" }));
+  it("still guards the date it is handed, because an Invoice is not the only writer", () => {
+    // d24's fall-forward survives as a belt on A-71's brace. A PaymentBatch's
+    // date IS entered by a Manager (M-05 d34's shape), so the guard has a live
+    // caller even after the Invoice stopped being one.
+    const { batch: j, unresolved } = buildPay(batch({ date: "13/09/2026" }));
 
+    expect(j.lines.every((l) => l.businessDate === "2026-09-13")).toBe(true);
     expect(unresolved.join(" ")).toContain("not a calendar date");
+    expect(isImbalanced(j)).toBe(false);
   });
 
   it("has no second figure to put in Second-hand purchases (d2)", () => {
