@@ -74,6 +74,7 @@ import {
   GENRES,
   DEFAULT_TAX_GROUP,
 } from "../data/seed";
+import { buildHistory } from "../data/history";
 import type {
   ClaimLineAgainst,
   CloseBatch,
@@ -287,12 +288,178 @@ interface AppState {
 // flow READ it and never ask. One constant until M-06's settings screens land.
 const FISCAL_YEAR_END_MONTH = 12;
 
+// Hoisted out of the seed literal below so the history generator can be
+// handed them: they are artifacts this prototype wrote before anything in
+// it wrote journals, and `data/history.ts` explains why they need one.
+const SEED_INVOICES: Invoice[] = [
+  {
+    id: "inv-seed-fab",
+    supplierId: "sup-fab",
+    invoiceNumber: "55021",
+    intakeMode: "New",
+    invoiceDate: "2026-08-27",
+    receivedDate: "2026-08-28",
+    statedSubtotal: 68.65,
+    freight: 0,
+    charges: [],
+    status: "Finalized",
+    lines: [
+      {
+        id: "invline-seed-1",
+        recordId: "r-blue",
+        listPrice: 15.5,
+        discountPct: 20,
+        cost: 12.4,
+        acceptedPrice: 28.99,
+        grade: "NM",
+        qty: 1,
+        itemIds: ["i-blue-1"],
+      },
+      {
+        id: "invline-seed-2",
+        recordId: "r-rumours",
+        listPrice: 25.0,
+        discountPct: 25,
+        cost: 18.75,
+        acceptedPrice: 34.99,
+        grade: "M",
+        qty: 3,
+        itemIds: ["i-rum-1", "i-rum-2", "i-rum-3"],
+      },
+    ],
+    createdBy: CURRENT_USER,
+    createdAt: "2026-08-28 09:00:00",
+    finalizedAt: "2026-08-28 10:00:00",
+    log: [
+      { at: "2026-08-28 09:00:00", text: "Invoice opened — New intake, invoice 55021" },
+      { at: "2026-08-28 10:00:00", text: "Finalized — 4 copies now sellable" },
+    ],
+  },
+  {
+    id: "inv-seed-indie",
+    supplierId: "sup-indie",
+    invoiceNumber: "3390",
+    intakeMode: "New",
+    invoiceDate: "2026-08-30",
+    receivedDate: "2026-08-31",
+    // M-06 d59 — this supplier bills in USD, so the Invoice carries the rate
+    // it was booked at. Seeded because the fallback for an Invoice with no
+    // recorded rate is 1, which is correct for an artifact written before the
+    // field existed and makes the prototype demonstrate the opposite of what
+    // it now does: a USD invoice settling at par, which is the defect d59
+    // closed. 1.42 matches the seeded USD rate in CURRENCIES.
+    exchangeRate: 1.42,
+    statedSubtotal: 17.25,
+    freight: 0,
+    charges: [],
+    status: "Finalized",
+    lines: [
+      {
+        id: "invline-seed-3",
+        recordId: "r-purple",
+        listPrice: 34.5,
+        discountPct: 50,
+        cost: 17.25,
+        acceptedPrice: 32.99,
+        grade: "M",
+        qty: 1,
+        itemIds: ["i-pr-1"],
+      },
+    ],
+    createdBy: CURRENT_USER,
+    createdAt: "2026-08-31 09:00:00",
+    finalizedAt: "2026-08-31 09:30:00",
+    log: [
+      { at: "2026-08-31 09:00:00", text: "Invoice opened — New intake, invoice 3390" },
+      { at: "2026-08-31 09:30:00", text: "Finalized — 1 copy now sellable" },
+    ],
+  },
+  // Already settled — gives Accounts Payable's payment history something to show.
+  {
+    id: "inv-seed-crate-paid",
+    supplierId: "sup-crate",
+    invoiceNumber: "CD-777",
+    intakeMode: "Second-hand",
+    invoiceDate: "2026-08-18",
+    receivedDate: "2026-08-19",
+    statedSubtotal: 20.0,
+    freight: 0,
+    charges: [],
+    status: "Finalized",
+    lines: [
+      {
+        id: "invline-seed-4",
+        recordId: "r-illmatic",
+        listPrice: 25.0,
+        discountPct: 20,
+        cost: 20.0,
+        acceptedPrice: 45.0,
+        grade: "VG",
+        qty: 1,
+        itemIds: [],
+      },
+    ],
+    createdBy: CURRENT_USER,
+    createdAt: "2026-08-19 09:00:00",
+    finalizedAt: "2026-08-19 09:30:00",
+    paidAt: "2026-08-20 14:00:00",
+    paidBy: MANAGER_NAME,
+    log: [
+      { at: "2026-08-19 09:00:00", text: "Invoice opened — Second-hand intake, invoice CD-777" },
+      { at: "2026-08-19 09:30:00", text: "Finalized — 1 copy now sellable" },
+      { at: "2026-08-20 14:00:00", text: `Payment recorded — EFT EFT-88214 ${money(20)} by ${MANAGER_NAME}` },
+      { at: "2026-08-20 14:00:00", text: `Balance settled — marked paid by ${MANAGER_NAME}` },
+    ],
+  },
+];
+
+const SEED_PAYMENT_BATCHES: PaymentBatch[] = [
+  {
+    id: "batch-seed-1",
+    supplierId: "sup-crate",
+    method: "EFT",
+    reference: "EFT-88214",
+    date: "2026-08-20",
+    recordedBy: MANAGER_NAME,
+    createdAt: "2026-08-20 14:00:00",
+    targets: [{ kind: "invoice", id: "inv-seed-crate-paid", amount: 20.0, settleKind: "money" }],
+    credits: [], // A-69 — money only, so no credit funded it
+  },
+];
+
 const SEEDED_CHART = buildChart({ sections: SECTIONS, tenders: TENDERS, taxTypes: TAX_TYPES });
 
+/**
+ * A month of trading, generated at load against the real calendar — see
+ * `data/history.ts` for what it is and, more importantly, what it is not.
+ *
+ * It is built HERE rather than in `seed.ts` because it needs the chart above:
+ * every artifact it makes writes its own journal (M-07 d12, A-67) through the
+ * same builders the app calls, and a journal needs accounts to resolve into.
+ *
+ * `SEED_JOURNALLED` hands it the artifacts `seed.ts` already held so those get
+ * journals too — without which the ledger's Accounts payable would exclude the
+ * shop's own seeded debt.
+ */
+const SEED_JOURNALLED_INVOICES = SEED_INVOICES.filter((iv) => iv.status === "Finalized");
+
+const HISTORY = buildHistory({
+  accounts: SEEDED_CHART.accounts,
+  mappings: SEEDED_CHART.mappings,
+  sections: SECTIONS,
+  tenders: TENDERS,
+  taxTypes: TAX_TYPES,
+  taxGroupCells: TAX_GROUP_CELLS,
+  defaultTaxGroup: DEFAULT_TAX_GROUP,
+  homeCurrency: HOME_CURRENCY,
+  storeId: STORE_DETAILS.storeId,
+  legacy: { invoices: SEED_JOURNALLED_INVOICES, paymentBatches: SEED_PAYMENT_BATCHES },
+});
+
 const seed: AppState = {
-  records: RECORDS,
-  inventory: INVENTORY,
-  customers: CUSTOMERS,
+  records: [...RECORDS, ...HISTORY.records],
+  inventory: [...INVENTORY, ...HISTORY.inventory],
+  customers: [...CUSTOMERS, ...HISTORY.customers],
   users: USERS,
   sections: SECTIONS,
   tenders: TENDERS,
@@ -312,86 +479,25 @@ const seed: AppState = {
   sessionUserId: null,
   sessionLastActivity: Date.now(),
   sessionLapseSeconds: 300,
-  suppliers: SUPPLIERS,
+  suppliers: [...SUPPLIERS, ...HISTORY.suppliers],
   giftCards: GIFT_CARDS,
   taxLines: TAX_LINES,
   nonTracked: NON_TRACKED,
   sales: [
-    // a prior tendered Sale, so E-06 return-linking has something to match
-    {
-      id: "sale-hist-1",
-      state: "Closed",
-      saleNumber: 100238,
-      customerId: "c-ramona",
-      createdBy: CURRENT_USER,
-      createdAt: "2026-09-05 11:04:00",
-      tenders: [{ id: "t-hist-1", type: "Credit Card", amount: 25.11 }],
-      log: [{ at: "2026-09-05 11:04:00", text: "Tendered — Sale number 100238 assigned" }],
-      lines: [
-        {
-          id: "l-hist-1",
-          kind: "item",
-          recordId: "r-kind",
-          inventoryItemId: "i-kob-1",
-          title: "Miles Davis — Kind of Blue",
-          grade: "VG+",
-          qty: 1,
-          price: 24.0,
-          discountPct: 10,
-          productTaxCode: "1",
-        },
-      ],
-    },
-    // Two older Sales of titles we no longer hold a copy of. Without these,
-    // the "had before" stock state in Search has nothing to describe — every
-    // seeded Record is either on the floor, on order, or catalog-only. The
-    // dates are deliberately far apart so the recency stamp shows both a
-    // recent sell-out and a long-cold one.
-    {
-      id: "sale-hist-2",
-      state: "Closed",
-      saleNumber: 100241,
-      createdBy: CURRENT_USER,
-      createdAt: "2026-08-21 16:40:00",
-      tenders: [{ id: "t-hist-2", type: "Cash", amount: 69.28 }],
-      log: [{ at: "2026-08-21 16:40:00", text: "Tendered — Sale number 100241 assigned" }],
-      lines: [
-        {
-          id: "l-hist-2",
-          kind: "item",
-          recordId: "r-madvillainy",
-          title: "Madvillain — Madvillainy",
-          grade: "M",
-          qty: 2,
-          price: 32.99,
-          discountPct: 0,
-          productTaxCode: "1",
-        },
-      ],
-    },
-    {
-      id: "sale-hist-3",
-      state: "Closed",
-      saleNumber: 100177,
-      createdBy: CURRENT_USER,
-      createdAt: "2026-03-14 12:12:00",
-      tenders: [{ id: "t-hist-3", type: "Credit Card", amount: 28.87 }],
-      log: [{ at: "2026-03-14 12:12:00", text: "Tendered — Sale number 100177 assigned" }],
-      lines: [
-        {
-          id: "l-hist-3",
-          kind: "item",
-          recordId: "r-astral",
-          title: "Van Morrison — Astral Weeks",
-          grade: "VG+",
-          qty: 1,
-          price: 27.5,
-          discountPct: 0,
-          productTaxCode: "1",
-        },
-      ],
-    },
-    // one pre-existing Held sale so E-05's "select an existing Held sale" is real
+    // ONE hand-written Sale, and it is Held: a hold is a live document that
+    // belongs to no CloseBatch and writes no journal, so it is the one shape
+    // that can be authored here without lying about the books. E-05's
+    // "select an existing Held sale" needs it, and it carries no Sale number,
+    // so it cannot collide with the numbering the generated month issues.
+    //
+    // The three Closed Sales that used to sit above it are gone. Two of them
+    // carried no InventoryItem at all, so `costPostings` (lib/closeJournal.ts)
+    // returned nothing for their lines and a journal over them would have
+    // balanced while reporting revenue with NO cost of goods behind it. What
+    // they were fixtures for — E-03's *Had before* band, at both ends of the
+    // recency stamp, and a prior Sale for E-06 to link a Return against — the
+    // generated month now supplies with copies, an Invoice, a close and a
+    // journal behind each one (see SELL_OUTS in data/history.ts).
     {
       id: "sale-held-1",
       state: "Held",
@@ -419,8 +525,13 @@ const seed: AppState = {
         },
       ],
     },
+    // The month of trading — see `data/history.ts`. Appended rather than
+    // replacing the four above: those exist to give E-06's return-linking and
+    // Search's "had before" state something specific to match, and the
+    // generator does not know about either.
+    ...HISTORY.sales,
   ],
-  closeBatches: [],
+  closeBatches: HISTORY.closeBatches,
   // Seeded Finalized so Accounts Payable (M-05) has real outstanding balances
   // without first walking a Receiving session — lines mirror the InventoryItems
   // INVENTORY already seeds as "arrived on" these same invoice numbers.
@@ -620,127 +731,7 @@ const seed: AppState = {
       by: MANAGER_NAME,
     },
   ],
-  invoices: [
-    {
-      id: "inv-seed-fab",
-      supplierId: "sup-fab",
-      invoiceNumber: "55021",
-      intakeMode: "New",
-      invoiceDate: "2026-08-27",
-      receivedDate: "2026-08-28",
-      statedSubtotal: 68.65,
-      freight: 0,
-      charges: [],
-      status: "Finalized",
-      lines: [
-        {
-          id: "invline-seed-1",
-          recordId: "r-blue",
-          listPrice: 15.5,
-          discountPct: 20,
-          cost: 12.4,
-          acceptedPrice: 28.99,
-          grade: "NM",
-          qty: 1,
-          itemIds: ["i-blue-1"],
-        },
-        {
-          id: "invline-seed-2",
-          recordId: "r-rumours",
-          listPrice: 25.0,
-          discountPct: 25,
-          cost: 18.75,
-          acceptedPrice: 34.99,
-          grade: "M",
-          qty: 3,
-          itemIds: ["i-rum-1", "i-rum-2", "i-rum-3"],
-        },
-      ],
-      createdBy: CURRENT_USER,
-      createdAt: "2026-08-28 09:00:00",
-      finalizedAt: "2026-08-28 10:00:00",
-      log: [
-        { at: "2026-08-28 09:00:00", text: "Invoice opened — New intake, invoice 55021" },
-        { at: "2026-08-28 10:00:00", text: "Finalized — 4 copies now sellable" },
-      ],
-    },
-    {
-      id: "inv-seed-indie",
-      supplierId: "sup-indie",
-      invoiceNumber: "3390",
-      intakeMode: "New",
-      invoiceDate: "2026-08-30",
-      receivedDate: "2026-08-31",
-      // M-06 d59 — this supplier bills in USD, so the Invoice carries the rate
-      // it was booked at. Seeded because the fallback for an Invoice with no
-      // recorded rate is 1, which is correct for an artifact written before the
-      // field existed and makes the prototype demonstrate the opposite of what
-      // it now does: a USD invoice settling at par, which is the defect d59
-      // closed. 1.42 matches the seeded USD rate in CURRENCIES.
-      exchangeRate: 1.42,
-      statedSubtotal: 17.25,
-      freight: 0,
-      charges: [],
-      status: "Finalized",
-      lines: [
-        {
-          id: "invline-seed-3",
-          recordId: "r-purple",
-          listPrice: 34.5,
-          discountPct: 50,
-          cost: 17.25,
-          acceptedPrice: 32.99,
-          grade: "M",
-          qty: 1,
-          itemIds: ["i-pr-1"],
-        },
-      ],
-      createdBy: CURRENT_USER,
-      createdAt: "2026-08-31 09:00:00",
-      finalizedAt: "2026-08-31 09:30:00",
-      log: [
-        { at: "2026-08-31 09:00:00", text: "Invoice opened — New intake, invoice 3390" },
-        { at: "2026-08-31 09:30:00", text: "Finalized — 1 copy now sellable" },
-      ],
-    },
-    // Already settled — gives Accounts Payable's payment history something to show.
-    {
-      id: "inv-seed-crate-paid",
-      supplierId: "sup-crate",
-      invoiceNumber: "CD-777",
-      intakeMode: "Second-hand",
-      invoiceDate: "2026-08-18",
-      receivedDate: "2026-08-19",
-      statedSubtotal: 20.0,
-      freight: 0,
-      charges: [],
-      status: "Finalized",
-      lines: [
-        {
-          id: "invline-seed-4",
-          recordId: "r-illmatic",
-          listPrice: 25.0,
-          discountPct: 20,
-          cost: 20.0,
-          acceptedPrice: 45.0,
-          grade: "VG",
-          qty: 1,
-          itemIds: [],
-        },
-      ],
-      createdBy: CURRENT_USER,
-      createdAt: "2026-08-19 09:00:00",
-      finalizedAt: "2026-08-19 09:30:00",
-      paidAt: "2026-08-20 14:00:00",
-      paidBy: MANAGER_NAME,
-      log: [
-        { at: "2026-08-19 09:00:00", text: "Invoice opened — Second-hand intake, invoice CD-777" },
-        { at: "2026-08-19 09:30:00", text: "Finalized — 1 copy now sellable" },
-        { at: "2026-08-20 14:00:00", text: `Payment recorded — EFT EFT-88214 ${money(20)} by ${MANAGER_NAME}` },
-        { at: "2026-08-20 14:00:00", text: `Balance settled — marked paid by ${MANAGER_NAME}` },
-      ],
-    },
-  ],
+  invoices: [...SEED_INVOICES, ...HISTORY.invoices],
   payableEntries: [
     // A manual Adjustment — a freight correction Indie Direct Supply billed
     // separately from the Invoice, demonstrating a ledger entry that isn't
@@ -760,20 +751,9 @@ const seed: AppState = {
       createdAt: "2026-09-02 10:00:00",
       log: [{ at: "2026-09-02 10:00:00", text: "Adjustment entered — Freight correction — INDI-3390" }],
     },
+    ...HISTORY.payableEntries,
   ],
-  paymentBatches: [
-    {
-      id: "batch-seed-1",
-      supplierId: "sup-crate",
-      method: "EFT",
-      reference: "EFT-88214",
-      date: "2026-08-20",
-      recordedBy: MANAGER_NAME,
-      createdAt: "2026-08-20 14:00:00",
-      targets: [{ kind: "invoice", id: "inv-seed-crate-paid", amount: 20.0, settleKind: "money" }],
-      credits: [], // A-69 — money only, so no credit funded it
-    },
-  ],
+  paymentBatches: [...SEED_PAYMENT_BATCHES, ...HISTORY.paymentBatches],
   batchVoids: [],
   clearings: [],
   // M-07 d11 — created and mapped before anyone sees the screen, so nothing
@@ -789,19 +769,19 @@ const seed: AppState = {
   ledgerClosings: [],
   ledgerReconciliations: [],
   ledgerIssuances: [],
-  journals: [],
+  journals: HISTORY.journals,
   pendingOrders: PENDING_ORDERS,
   reviewFlags: [],
   activeSaleId: null,
   lastViewedSupplierId: null,
   lastViewedCustomerId: null,
-  nextSaleNumber: 100241,
+  nextSaleNumber: HISTORY.nextSaleNumber,
   nextHold: 2,
   nextClaimNumber: 42, // d26 — 36, 40 and 41 are spent; gaps are expected
   nextPoNumber: 0,
-  nextInternalBarcode: 9000,
+  nextInternalBarcode: HISTORY.nextInternalBarcode,
   nextInvoiceRef: 1,
-  nextCustomerPrimaryId: CUSTOMERS.length + 1,
+  nextCustomerPrimaryId: CUSTOMERS.length + HISTORY.customers.length + 1,
   providerUp: true,
 };
 

@@ -33,7 +33,10 @@ can compute is an activity total and not a position (decision 9).
 3. **Inventory is supplied by the system, not typed** — on hand × cost, which this system
    knows because the shop had to enter its stock to use Wax Works at all. Where it disagrees
    with the accountant's figure, **the counted figure wins** and the difference falls into
-   equity, which is where a stock difference belongs.
+   equity, which is where a stock difference belongs. *Amended by decision 44 — on hand **as at
+   this position's own date**, not as at the moment it is drawn, since decision 35 lets the books
+   start on a day the shop has already traded past. The figure reports how many copies it could
+   not date rather than assuming they were present.*
 4. Manager types the remaining balance sheet figures from the accountant's statements —
    bank, loans, equity. **No revenue or expense** (decision 9).
 5. Paper-era supplier debts are typed as one figure into *Accounts payable — opening*, never
@@ -255,6 +258,8 @@ _Numbered so they can be cited precisely. Append only — never renumber or dele
 | 42 | **A period carrying a Suspense balance seals. Supersedes decision 40 and restores the outcome decision 15 had — on the reference model's reasoning rather than on decision 15's, which was wrong.** The [reference](../reference/) manual was read in full on 2026-09-18 and its nearest thing to Suspense is **account 121, Cash Clearing** — *"entries that we were unsure of where to post at the time"* — which is **reviewed monthly and explicitly permitted to carry**: *"Reallocate or reconcile those that you can. **The remaining entries should only be those that you will be able to deal with at a later date.**"* The month closes over it. **Decision 40 was stricter than the trade and is withdrawn.** *This is a strange row and the strangeness is the point:* d15 said a period seals over Suspense **because nothing could clear one**, d14 removed that premise, d40 reversed the outcome, and the reference now restores the outcome **on grounds d15 never gave** — that a clearing balance which somebody can explain is a normal thing for a set of books to carry between months. **d15's conclusion was right and its argument was not**, and it stays struck because the argument is what a decision is. *What the reference pairs the carry with, and we do not:* it expects the remainder to be **explicable** — *"the remaining unreconciled entries will total and equal the current balance of the 121 account. You should be able to tell your accountant what this amount relates to."* That is a review step in their guidance and **nothing in their software enforces it**, which is the same shape this flow already found for the unreconciled-account question. The seal therefore **reports** the gross total (d15's surviving half, [M-07](M-07-chart-of-accounts.md) d25) and refuses nothing. *Accepted consequence, and it is decision 15's word for word because the outcome is the same:* **a sealed period can contain a known bug, permanently.** What is different now is that d14 and d39 give a route to clear it before the seal, so carrying one is a **choice** rather than the only thing available — and a choice nobody is required to explain is one that will sometimes go unexplained |
 | 43 | **A *cleared* set balances against the statement's own opening and closing balances, and reaches zero like every other reconciliation. Amends decision 37, which had it netting to nothing at all.** d37 was right that there are two kinds and wrong about how the second one closes. The [reference](../reference/) runs **one routine with two uses**, and the difference is whether an outside document is supplied: give it a **close date and the statement's opening and closing balance** and you are doing a bank reconciliation — *"Your goal is to Mark entries so that a zero Balance results"*, where the balance begins as the **difference between the two statement figures** and falls as entries are marked; leave those blank and *"you are reconciling entries within an account but not balancing to an external document"*, which is d37's **matched** set, pairing entries that cancel. **So both kinds reach zero, and d37's mistake was not modelling the quantity the second one reaches it against.** *What this buys is the guarantee d37 gave up:* d37 accepted that a cleared set is balance-neutral *"by convention"* and that *"nothing but the Manager's attention stands behind a cleared mark"* — **with the statement's two figures there is something behind it**, and the mark is neutral by construction again, exactly as a matched set is. *And the remainder stops being a leftover and becomes the output:* *"The remaining unmarked entries are considered to be outstanding… Under no circumstances is there any reason for entries to remain unmarked unless they are truly just waiting for bank clearance."* **The outstanding list is what a bank reconciliation is for**, and it is only trustworthy because the marked set balanced. *Accepted consequence:* a cleared set now needs **two figures a Manager copies off paper**, which is two more chances to mistype than d37 had — and a mistyped opening balance makes the reconciliation refuse to close with no indication which of the two was wrong |
 
+| 44 | **The opening position's Inventory figure is on-hand *as at the position's own date*, not as at the moment it is drawn. Amends step 3.** Step 3 supplies the figure rather than asking for it because the shop *"had to enter its stock to use Wax Works at all"*, and decision 35 then let the books start on **any day** — so a shop that has traded since the opening date has every copy received in between counted **twice**: once inside the supplied figure, and once again by its own Invoice journal ([M-07](M-07-chart-of-accounts.md) d13, [architecture](../architecture.md) A-71). Walked on the prototype at **4,128.60** of book inventory against **1,934.88** on the shelf, and the sign follows the period's net movement, so it understates as readily as it overstates. **The artifact's own definition settles it:** Phase 1 calls the opening position *"the balances of one day"*, and that day is the day before the books start — not today. **Decision 26 is why this could not be left alone.** Equity is the figure that balances, so a wrong inventory figure becomes invented or destroyed worth and nothing disagrees with it; and decision 28's read-back cannot catch it, because it compares against the **accountant's** equity, a figure from before the switchover. That is the loss d26 already accepts, arriving through the one figure in this artifact a Manager never types and therefore has no reason to check. *Accepted consequence, and it is the bill for this:* **as-at-date on-hand is not always computable.** A copy knows only the InvoiceLine it was minted from ([architecture](../architecture.md) A-45), so an oversold copy, or stock entered before this system held its paperwork, has no arrival date to test against the opening date. The figure therefore **reports how many copies it could not date** rather than quietly assuming they were present — decision 30's exclusion note in a second place, and for the same reason |
+| 45 | **A journal line dated before the opening position is outside the books: excluded from every statement, and the exclusion is named. The mirror of decision 30, and it closes the gap [architecture](../architecture.md) A-73 left.** A-73 bounds a **typed** line at the opening position *"because both would file a line in a period that is closed or does not exist"*; A-71 dates an artifact's line by its artifact, and **nothing bounds that at the same edge** — a Sale tendered before the books open writes its journal regardless. Walked: lines dated 2026-03-14 and 2026-03-15 sat five months before books opening 2026-08-01, a P&L for 2026-03 drew **55.00** of revenue over them, and step 16 never offered those months because it walks forward from the opening position, so they were **reportable and permanently unsealable at the same time**. **Refusing to write the journal was never available:** A-67 puts an artifact and its journal in one transaction *"so that an artifact and its journal can never disagree"*. So the line is still written — it is simply not **read**. Decision 30 already decided this shape at the other end, excluding lines dated after a statement's as-at date and having the statement say how many it excluded and which was first; this is that rule pointing backwards, which is why it costs a sentence rather than a mechanism. **It also repairs decision 35's reasoning**, which retired the no-future-start-date guess on the ground that A-73 *"already refuses a posting dated on or before the opening position"* — true of what a Manager types, false of what the shop does, and now true of what a statement reports. *Accepted consequence:* **the lines remain, and nothing will ever seal them.** A day before the books open can still be reopened by [M-03](M-03-daily-summary.md)'s Undo End of Day, because no seal protects it — harmless precisely because nothing that day wrote is in the books, and it would stop being harmless the moment anything read them |
 ## Open questions
 
 **None of these blocks scaffolding, and all of them block building.** The first two are
@@ -454,3 +459,65 @@ owned elsewhere and are the real dependencies; the rest are this flow's own.
   declined to add a second kind, recording that *"a flag that cannot fire is worse than no
   flag, because it reads like coverage."* Unsettled whether an unbalanced period, a failed
   close or a stale reconciliation belongs in the review queue or somewhere else.
+
+- ~~**The opening position's Inventory figure is *as of now*, not *as at the opening date*.**~~ — **Resolved by decision 44**, which supplies it as at the position's own date and has it report what it could not date.
+  Step 3 supplies it — *on hand × cost*, the one figure in this artifact nobody types — and decision
+  35 lets the books start on **any day**. The two agree only while nothing has traded between that
+  day and the moment the figure is drawn. Where something has, every copy received since the opening
+  date is counted **twice**: once inside the supplied figure, and once again by its own Invoice
+  journal ([M-07](M-07-chart-of-accounts.md) d13, [architecture](../architecture.md) A-71). Walked on
+  the prototype against a seeded month of trading: books opened 2026-08-01 supplied **1,934.88**, and
+  the figure did not move when the opening date did, because it reads on-hand *now*. The books then
+  closed September at **4,128.60** of inventory against **1,934.88** actually on the shelf. The sign
+  follows the period's net movement, so it understates exactly as readily as it overstates.
+  **Decision 26 is what makes this quiet.** Equity is the figure that balances, so a wrong inventory
+  figure becomes invented or destroyed worth and nothing ever disagrees with it — the loss d26
+  already names as its accepted cost, except that it arrives here through the one figure a Manager
+  never typed and therefore has no reason to check. Decision 28's read-back is the only detector, and
+  it detects a difference against the *accountant's* equity, which is a number from before the
+  switchover and will not catch this.
+  **Phase 1's premise is the thing actually in tension.** Its preamble says *"the shop is migrating
+  off paper — there is no prior system to export from"*, which assumes no prior Wax Works trading;
+  d35 then permitted a past opening date without restoring that assumption. A shop that trades for a
+  month before a Manager gets round to typing the opening position reaches this in the product, not
+  only in a seeded prototype.
+
+  _Recommendation: supply on-hand **as at the opening position's date** rather than as of now — the
+  artifact is defined as "the balances of one day" (Phase 1 preamble), and this is the only figure in
+  it the system can actually get right, which is the same reason d35 gave for not validating the
+  others. Accepted consequence, and it is why this is not free: **as-at-date on-hand is not always
+  computable.** A copy knows the InvoiceLine it was minted from and nothing else
+  ([architecture](../architecture.md) A-45), so a copy with no Invoice behind it — an oversold one,
+  or stock entered before this system held its paperwork — has no arrival date to compare against the
+  opening date. The figure would have to say how many copies it could not date rather than silently
+  assuming they were present, which is the same shape as decision 30's exclusion note._
+  _Ratified 2026-09-18 as decision 44._
+
+- ~~**Nothing bounds an artifact's journal at the opening position, although the screen says it does.**~~ — **Resolved by decision 45**, which leaves the line written and takes it out of what a statement reads.
+  [architecture](../architecture.md) A-73 refuses a **typed** line dated on or before the opening
+  position *"because both would file a line in a period that is closed or does not exist"*. A-71
+  dates an artifact's line by its artifact, and **nothing bounds that at the same edge.** Walked on
+  the prototype: journal lines dated 2026-03-14 and 2026-03-15 sat five months before books opening
+  2026-08-01; a P&L for 2026-03 drew **55.00** of revenue over them; and *Seal a period* never
+  offered those months, because step 16 walks forward from the opening position — so those lines are
+  **reportable and permanently unsealable at the same time**. [M-03](M-03-daily-summary.md)'s Undo
+  End of Day offers those days freely for the same reason, since no seal can ever protect them.
+  **Decision 35's own reasoning rests on this bound being universal.** It retired the
+  no-future-start-date guess on the ground that *"A-73 already refuses a posting dated on or before
+  the opening position, so books that start next month are books nothing can be posted to until
+  then — visible and self-correcting rather than silent"*. That is true of what a Manager types and
+  false of what the shop does: a Sale tendered before the books open writes its journal regardless.
+  **Decision 9 is adjacent and may already be in tension** — *"the first annual statement covers only
+  the months since the switchover"* — which a drawable P&L over a pre-switchover month contradicts if
+  an annual statement is assembled from the same lines.
+
+  _Recommendation: decide it the way decision 30 already decided the other end. d30 excludes lines
+  dated **after** a statement's as-at date and has the statement **say how many it excluded and what
+  the first one was**; the prototype renders exactly that. The mirror — lines dated **before the
+  books open** are outside the books, excluded from every statement, and named in the same breath —
+  costs one rule, reuses a pattern the flow already has, and keeps this visible rather than silent.
+  It also leaves the artifacts themselves untouched, which A-67 requires: an artifact and its journal
+  must not disagree, so refusing to write the journal is not available. What it does **not** settle
+  is whether the Manager should be stopped earlier — the opening-date field could name how many lines
+  it is about to orphan, which is the same warning one step sooner._
+  _Ratified 2026-09-18 as decision 45._

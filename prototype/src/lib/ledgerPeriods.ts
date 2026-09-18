@@ -362,6 +362,29 @@ export const nextPeriod = (period: LedgerPeriod): LedgerPeriod => {
   return m === 12 ? `${y + 1}-01` : `${y}-${String(m + 1).padStart(2, "0")}`;
 };
 
+/**
+ * The **half-open** range one period covers — `[from, toExclusive)` — which is
+ * the shape an issuance stores and the shape the overlap check compares
+ * ([M-08](../../../docs/flows/M-08-general-ledger.md) d31, d25).
+ *
+ * Half-open is not a detail here. M-08 step 26's export range is half-open
+ * *"so two adjacent exports cannot both claim the boundary day"*, and an
+ * issuance is compared against those, so it has to be measured the same way or
+ * the comparison is between two different things. **`toExclusive` is therefore
+ * the first day of the NEXT period, never the last day of this one, and never
+ * the first day of this one** — the last would double-count the boundary day
+ * against the following range, and the first makes the range empty, which
+ * matches nothing and overlaps nothing.
+ *
+ * Exists because `Ledger.tsx` built this inline and built it wrong: `from` and
+ * `toExclusive` were both `${period}-01`, so a statement covering September
+ * stored as covering no days at all.
+ */
+export const periodRange = (period: LedgerPeriod): { from: string; toExclusive: string } => ({
+  from: periodStart(period),
+  toExclusive: periodStart(nextPeriod(period)),
+});
+
 // ---------------------------------------------------------------------------
 // d11 — nothing writes into a sealed period, BY ANY ROUTE
 // ---------------------------------------------------------------------------

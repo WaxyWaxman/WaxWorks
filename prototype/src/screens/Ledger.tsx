@@ -9,7 +9,9 @@ import {
   markFiledRefusal,
   mostRecentlySealed,
   oldestUnsealed,
+  periodEnd,
   periodOf,
+  periodRange,
   sealRefusal,
   sealReport,
   suspenseNotice,
@@ -868,7 +870,10 @@ function ReadPhase({ by }: { by: string }) {
   );
 
   const from = `${period}-01`;
-  const to = new Date(Number(period.slice(0, 4)), Number(period.slice(5, 7)), 0).toISOString().slice(0, 10);
+  // `periodEnd` rather than the Date arithmetic this used to inline: that built
+  // a local midnight and then read it back through `toISOString`, so east of
+  // UTC it named the second-to-last day of the month.
+  const to = periodEnd(period);
   const pl = profitAndLoss(from, to, app.glAccounts, app.journals, app.ledgerSeals, app.ledgerUnseals);
   // E-07 d21 — each Customer's SIGNED balance, so the sheet can classify by
   // sign and never net across Customers. The ledger alone cannot do this: the
@@ -1008,7 +1013,11 @@ function ReadPhase({ by }: { by: string }) {
                 app.ledgerIssue(
                   issueProfitAndLoss(
                     `iss-${Date.now()}`,
-                    { kind: "range", from, toExclusive: `${period}-01` },
+                    // d31 — the range an issuance stores is HALF-OPEN, and is the
+                    // same shape step 26's export range is compared in. This set
+                    // both ends to the first of the month, so a statement over a
+                    // whole period claimed no days at all.
+                    { kind: "range", ...periodRange(period) },
                     pl,
                     issuedBy,
                   ),
