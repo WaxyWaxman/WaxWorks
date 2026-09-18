@@ -980,6 +980,13 @@ interface AppContextValue extends AppState {
      */
     by?: string,
     /**
+     * The resolved Manager's id — what the write path actually gates on
+     * (architecture §6: the id is trusted, the initials are displayed). `by`
+     * beside it is the display name, kept for the log, where both names are
+     * recorded (A-28a).
+     */
+    byUserId?: string,
+    /**
      * The re-grade route only — what the copy is assessed at now that it has
      * come back in a different condition. **Capped at the cost the sold copy
      * carried** (A-82, E-06 d19); the write path refuses above it, because the
@@ -3074,13 +3081,19 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
     price,
     reason,
     by,
+    byUserId,
     assessedCost,
   ) => {
     // A-81, A-28a — the write-off route is manager-only, because routing a
     // returned copy to *written off* IS adjusting on hand. The rule and its
     // reasoning live in lib/returnRouting.ts, never here and never in the
     // screen (A-4, A-48); the store calls the refusal and stores the result.
-    const refusal = routeStockRefusal(to, by);
+    // Resolve the id to a row before asking; the lib checks the role. A name
+    // typed at a screen is a label, and M-04 d16 releases a departed User's
+    // initials to a new hire, so a string resolves to a different person over
+    // time (§6).
+    const authorizer = byUserId ? s.users.find((u) => u.id === byUserId) : undefined;
+    const refusal = routeStockRefusal(to, authorizer);
     if (refusal) return { routed: false, refusal };
 
     const soldCopy = s.inventory.find((i) => i.id === itemId);

@@ -808,7 +808,7 @@ function RouteStock({
   // authorizing Manager (A-4, A-48); this is how one is asked for.
   const [authorizing, setAuthorizing] = useState(false);
 
-  const apply = (by?: string) => {
+  const apply = (by?: string, byUserId?: string) => {
     const res = app.routeReturnLine(
       saleId,
       lineId,
@@ -818,6 +818,7 @@ function RouteStock({
       mode === "regrade" ? Number(price) || 0 : undefined,
       mode === "writeoff" ? reason : undefined,
       by,
+      byUserId,
       mode === "regrade" ? Number(cost) || 0 : undefined,
     );
     // The store is the one that decides. If it refused, the modal stays open
@@ -833,9 +834,9 @@ function RouteStock({
         title="Manager only — write off"
         reason={`Write off ${item.grade} copy of this returned record as ${reason}, removing it from stock. Adjusting on hand is manager-only (A-28a); E-06's ungated Return covers the refund, not the disposition.`}
         onCancel={() => setAuthorizing(false)}
-        onConfirm={(by) => {
+        onConfirm={(by, managerUserId) => {
           setAuthorizing(false);
-          apply(by);
+          apply(by, managerUserId);
         }}
       />
     );

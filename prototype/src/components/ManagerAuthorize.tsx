@@ -37,7 +37,15 @@ export function ManagerAuthorize({
 }: {
   reason: string;
   title?: string;
-  onConfirm: (by: string) => void;
+  /**
+   * `by` is the display name; `managerUserId` is the resolved Manager.
+   *
+   * Architecture §6 — *"the id is what the function trusts and the initials are
+   * what it displays"*, because M-04 d16 releases a deactivated User's initials
+   * to a new hire, so a string alone resolves to a different person over time.
+   * A write path that gates on the string is gating on a label.
+   */
+  onConfirm: (by: string, managerUserId: string) => void;
   onCancel: () => void;
 }) {
   const app = useApp();
@@ -66,7 +74,7 @@ export function ManagerAuthorize({
     if (!who || !isManager || person) return;
     const t = setTimeout(() => {
       if (who.password) setPending(who.id);
-      else onConfirm(`${who.name} (Manager)`);
+      else onConfirm(`${who.name} (Manager)`, who.id);
     }, 140);
     return () => clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -85,7 +93,7 @@ export function ManagerAuthorize({
 
   const submitPw = () => {
     if (!person) return;
-    if (passwordAccepted(person, pw)) onConfirm(`${person.name} (Manager)`);
+    if (passwordAccepted(person, pw)) onConfirm(`${person.name} (Manager)`, person.id);
     else {
       setPwBad(true);
       setPw("");

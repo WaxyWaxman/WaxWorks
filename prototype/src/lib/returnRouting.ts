@@ -1,4 +1,4 @@
-import type { ItemStatus } from "../data/types";
+import type { ItemStatus, UserRole } from "../data/types";
 
 /**
  * E-06 step 6 — where a returned copy goes once the Employee has assessed it.
@@ -27,10 +27,40 @@ export type ReturnRoute = "sellable" | "regrade" | "writeoff";
  * stock with no Manager anywhere in the act — the shrinkage path, ungated, in
  * the one flow deliberately ungated everywhere else.
  */
-export function routeStockRefusal(to: ReturnRoute, by: string | undefined): string | undefined {
+/**
+ * The authorizing Manager, as the write path receives them: a **resolved row**,
+ * not a typed string. Architecture §6 — *"the id is what the function trusts
+ * and the initials are what it displays"*.
+ */
+export interface AuthorizingManager {
+  role: UserRole;
+  active: boolean;
+  name: string;
+}
+
+export function routeStockRefusal(
+  to: ReturnRoute,
+  manager: AuthorizingManager | undefined,
+): string | undefined {
   if (to !== "writeoff") return undefined;
-  if (by && by.trim()) return undefined;
-  return "Writing off a returned copy adjusts on hand — a Manager has to authorize it (A-28a).";
+  if (!manager) {
+    return "Writing off a returned copy adjusts on hand — a Manager has to authorize it (A-28a).";
+  }
+  // A ROLE CHECK, not a presence check. This took any non-empty string, so
+  // `routeStockRefusal("writeoff", "Marty Ng (Employee)")` was permitted and
+  // the only thing testing Manager-ness was ManagerAuthorize — the screen.
+  // That is the shape A-4 and A-48 exist to refuse, and A-81 says it of this
+  // gate by name: "the enforcement point is the definer function and nowhere
+  // else". The product enforces it in `manager_authorize`, which resolves an
+  // active Manager at the moment of the call (§6); this is the prototype
+  // standing in the same place, so a walk of the gate means something.
+  if (!manager.active) {
+    return `${manager.name} is not an active User — this needs a Manager (A-28a).`;
+  }
+  if (manager.role !== "Manager") {
+    return `${manager.name} is an ${manager.role} — this needs a Manager (A-28a).`;
+  }
+  return undefined;
 }
 
 /**

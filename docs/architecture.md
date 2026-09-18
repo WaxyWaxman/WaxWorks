@@ -392,7 +392,7 @@ A flag is written **inside the same transaction as the action it describes**, so
 
 ## 6. Database functions
 
-Every function takes `p_actor_user_id` and the `p_actor_initials` it was resolved from. Functions marked **M** are manager-only and also take the authorizing Manager's id and initials, recording both names (A-28a, A-55). The id is what is trusted; the initials are what is displayed. Nothing else blocks — actions worth a second look raise flags instead.
+Every function takes `p_actor_user_id` and the `p_actor_initials` it was resolved from. Functions marked **M** are manager-only and also take the authorizing Manager's id and initials, recording both names (A-28a, A-55). The id is what is trusted; the initials are what is displayed. **An M function resolves `p_manager_user_id` to an active Manager itself, in the same transaction, and refuses otherwise** — it does not take on trust that `manager_authorize` was called first. A-4 leaves no room for a parameter that is simply believed: *invariants hold regardless of caller*, and a caller able to invoke the function is equally able to invent the id. Stated because *the id is what is trusted* reads both ways, and the wrong reading builds the gate as a trusted input. Nothing else blocks — actions worth a second look raise flags instead.
 
 **Pure helpers**, which encode the pricing rules and are the highest-value tests in the system:
 
