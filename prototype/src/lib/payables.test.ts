@@ -4,8 +4,10 @@ import {
   batchMoneyPaid,
   clearedAgainst,
   creditDrawdown,
+  dueFor,
   duplicateReference,
   entryIsCleared,
+  isOverdue,
   settlementPlan,
   unclearRefusal,
   type LedgerRow,
@@ -411,6 +413,14 @@ describe("M-05 d41 — a duplicate bank reference warns, and says whether the ma
 });
 
 describe("M-05 d51/d52 — aged payables, per Supplier, counted from the due date", () => {
+  /**
+   * A bill with terms that DO produce a due date. Note the shape it cannot
+   * express: `dueDate` absent while `overdueBy` is set, which is exactly what
+   * `dueFor` returns for `COD` and `Prepaid`. Tying the two together here is
+   * how a Prepaid balance was counted as overdue on four screens while every
+   * bucket test below passed — so the Prepaid cases are built from `dueFor`
+   * itself rather than from this helper.
+   */
   const bill = (key: string, balance: number, overdueBy?: number): LedgerRow => ({
     ...debit(key, balance),
     dueDate: overdueBy == null ? undefined : "2026-09-01",
@@ -444,6 +454,51 @@ describe("M-05 d51/d52 — aged payables, per Supplier, counted from the due dat
 
     expect(at(rows, "notAged")).toMatchObject({ total: 75, count: 1 });
     expect(agedBuckets(rows).reduce((n, b) => n + b.total, 0)).toBe(75);
+  });
+
+  it("M-05 d35, d52 — a bill whose terms give no due date is never overdue, however long it sits", () => {
+    // The regression this suite could not see. `dueFor` returns `overdueBy` for
+    // Prepaid — days since the INVOICE date, which d52 calls outstanding rather
+    // than overdue — and no `dueDate`. Built from `dueFor` on purpose: a
+    // hand-written row cannot reproduce the shape that caused the bug.
+    const prepaid = dueFor("Prepaid", "2026-08-29", new Date(2026, 8, 18));
+    expect(prepaid.dueDate).toBeUndefined();
+    expect(prepaid.overdueBy).toBe(20);
+
+    const row: LedgerRow = { ...debit("CD-7719", 657.52), ...prepaid };
+
+    // d35 — "outstanding without ever being overdue".
+    expect(isOverdue(row)).toBe(false);
+    // d52 — and it is shown, not dropped, so the buckets still reconcile.
+    expect(at([row], "notAged")).toMatchObject({ total: 657.52, count: 1 });
+    expect(agedBuckets([row]).reduce((n, b) => n + b.total, 0)).toBe(657.52);
+  });
+
+  it("M-05 d35 — COD falls under the same rule", () => {
+    const row: LedgerRow = { ...debit("COD-1", 75), ...dueFor("COD", "2026-06-01", new Date(2026, 8, 18)) };
+
+    expect(row.dueDate).toBeUndefined();
+    expect(row.overdueBy).toBeGreaterThan(90); // long enough to hit "Over 90 days" if it were aged
+    expect(isOverdue(row)).toBe(false);
+    expect(at([row], "over90").count).toBe(0);
+    expect(at([row], "notAged").count).toBe(1);
+  });
+
+  it("M-05 d52 — a bill that HAS a due date and is past it is still overdue", () => {
+    // The other half — the gate must not silence a real late bill.
+    const row: LedgerRow = { ...debit("FAB-55198", 1121.8), ...dueFor("Net 30", "2026-07-26", new Date(2026, 8, 18)) };
+
+    expect(row.dueDate).toBe("2026-08-25");
+    expect(isOverdue(row)).toBe(true);
+    expect(at([row], "d30")).toMatchObject({ total: 1121.8, count: 1 });
+  });
+
+  it("M-05 d52 — a bill not yet due is not overdue either", () => {
+    const row: LedgerRow = { ...debit("FAB-55310", 565.85), ...dueFor("Net 30", "2026-09-12", new Date(2026, 8, 18)) };
+
+    expect(row.dueDate).toBe("2026-10-12");
+    expect(isOverdue(row)).toBe(false);
+    expect(at([row], "current").count).toBe(1);
   });
 
   it("every bucket together sums to what is owed", () => {

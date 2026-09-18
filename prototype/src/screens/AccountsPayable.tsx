@@ -6,6 +6,7 @@ import {
   autoPlacement,
   creditOn,
   duplicateReference,
+  isOverdue,
   ledgerRows,
   moneyOn,
   settlementPlan,
@@ -176,7 +177,8 @@ export function AccountsPayable() {
   const counted = rows.filter((r) => r.band === "counted");
   const uncounted = rows.filter((r) => r.band === "uncounted");
   const settled = rows.filter((r) => r.band === "settled");
-  const overdue = counted.filter((r) => r.overdueBy != null && r.overdueBy > 0 && r.balance > 0.005);
+  // d35/d52 — no due date, never overdue.
+  const overdue = counted.filter((r) => isOverdue(r) && r.balance > 0.005);
 
   const giftTotal = round2(app.giftCards.reduce((n, g) => n + g.balance, 0));
 
@@ -586,7 +588,10 @@ function LedgerTable({
       <tbody>
         {rows.map((r) => {
           const shown = r.band === "uncounted" ? r.face : r.balance;
-          const over = r.overdueBy != null && r.overdueBy > 0 && r.balance > 0.005;
+          // d35/d52 — this drives the row TINT as well as the badge. The due
+          // cell below already branched on dueDate, so a Prepaid row read
+          // "20D UNPAID" in red: the words were right and the colour was not.
+          const over = isOverdue(r) && r.balance > 0.005;
           const settled = r.band === "settled";
           const batches = batchesFor?.(r) ?? [];
           return (
@@ -635,8 +640,23 @@ function LedgerTable({
                     </>
                   ) : (
                     <>
-                      <span className={"due" + (over ? " over" : " none")}>{r.terms}</span>
-                      {r.overdueBy != null && r.overdueBy > 0 && <span className="terms">{r.overdueBy}d unpaid</span>}
+                      {/* No due date, so nothing here may imply a bill is due
+                          (d35). `over` cannot be true in this branch now that
+                          isOverdue gates it, so the tint is unconditional. */}
+                      <span className="due none">{r.terms}</span>
+                      {r.terms === "Prepaid" ? (
+                        // d35 names this copy exactly: the row says "prepaid —
+                        // confirm it". The money left at ordering, weeks before
+                        // this Invoice existed; confirming is a person asserting
+                        // that, and it is the only record the system will hold.
+                        <span className="terms">prepaid — confirm it</span>
+                      ) : (
+                        // COD falls under the same rule (d35) but the store does
+                        // not ship COD, so no affordance is built — just the
+                        // days-since figure, which d52 calls outstanding.
+                        r.overdueBy != null &&
+                        r.overdueBy > 0 && <span className="terms">{r.overdueBy}d outstanding</span>
+                      )}
                     </>
                   )
                 ) : (

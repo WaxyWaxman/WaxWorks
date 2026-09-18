@@ -76,7 +76,12 @@ export interface LedgerRow {
   /** Terms and the derived due date — only a bill has one. */
   terms?: PaymentTerms;
   dueDate?: string;
-  /** Days past due. Negative = not yet due. Undefined = nothing to age. */
+  /**
+   * Days past `dueDate`. Negative = not yet due. Undefined = nothing to count
+   * from. **Meaningless on its own:** where there is no `dueDate` this carries
+   * days since the invoice date instead — outstanding, not overdue (d52) — so
+   * never call a row late without checking `dueDate`. Use `isOverdue`.
+   */
   overdueBy?: number;
   /** E-04 d20 — what was claimed, when the memo granted less. */
   claimed?: number;
@@ -153,6 +158,18 @@ export function dueFor(
   const dueDate = rule.kind === "eom" ? endOfMonth(termsFrom) : addDays(termsFrom, rule.days);
   return { terms, dueDate, overdueBy: daysBetween(dueDate, today) };
 }
+
+/**
+ * M-05 d35 / d52 — **overdue requires a due date.** `COD` and `Prepaid` produce
+ * none ([E-02] d45), so such a balance is *"outstanding without ever being
+ * overdue"* (d35): it ages nowhere, and d52 puts anything with no due date in no
+ * bucket. `dueFor` still returns `overdueBy` for them because how long it has sat
+ * is worth knowing — which is exactly why reading `overdueBy` alone is wrong.
+ * Every screen that calls a row late goes through here, so the rule is in one
+ * place rather than repeated at each render site.
+ */
+export const isOverdue = (r: LedgerRow): boolean =>
+  r.dueDate != null && r.overdueBy != null && r.overdueBy > 0;
 
 /** Everything on one supplier's ledger, banded. `live` excludes what has been retired. */
 export function ledgerRows(
