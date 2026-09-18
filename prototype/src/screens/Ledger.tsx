@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import type { ManagerAuth } from "../lib/managerAuth";
 import { useNavigate } from "react-router-dom";
 import { useApp } from "../store/AppStore";
 import { ManagerAuthorize } from "../components/ManagerAuthorize";
@@ -102,7 +103,7 @@ const today = () => new Date().toISOString().slice(0, 10);
 export function Ledger() {
   const app = useApp();
   const nav = useNavigate();
-  const [authorisedBy, setAuthorisedBy] = useState<string | null>(null);
+  const [authorisedBy, setAuthorisedBy] = useState<ManagerAuth | null>(null);
   const [phase, setPhase] = useState<Phase>("opening");
 
   if (!authorisedBy)
@@ -167,7 +168,7 @@ export function Ledger() {
 // Phase 1 — the opening position
 // ---------------------------------------------------------------------------
 
-function OpeningPhase({ by }: { by: string }) {
+function OpeningPhase({ by }: { by: ManagerAuth }) {
   const app = useApp();
   const existing = app.ledgerOpening;
   const [draft, setDraft] = useState<OpeningPositionDraft>(
@@ -396,7 +397,7 @@ function OpeningPhase({ by }: { by: string }) {
 
 const blankLine = (): TypedPostingLine => ({ accountId: "", location: "0", amount: 0, memo: "" });
 
-function PostPhase({ by }: { by: string }) {
+function PostPhase({ by }: { by: ManagerAuth }) {
   const app = useApp();
   const [date, setDate] = useState(today());
   const [lines, setLines] = useState<TypedPostingLine[]>([blankLine(), blankLine()]);
@@ -693,7 +694,7 @@ function PostPhase({ by }: { by: string }) {
 // Phase 3 — sealing
 // ---------------------------------------------------------------------------
 
-function SealPhase({ by }: { by: string }) {
+function SealPhase({ by }: { by: ManagerAuth }) {
   const app = useApp();
   const [reason, setReason] = useState("");
 
@@ -852,7 +853,7 @@ function SealPhase({ by }: { by: string }) {
 // Phase 4 — reading the books
 // ---------------------------------------------------------------------------
 
-function ReadPhase({ by }: { by: string }) {
+function ReadPhase({ by }: { by: ManagerAuth }) {
   const app = useApp();
   const [accountId, setAccountId] = useState(app.glAccounts[0]?.id ?? "");
   const [period, setPeriod] = useState(periodOf(today()));
@@ -1230,7 +1231,7 @@ function ReadPhase({ by }: { by: string }) {
 // Phase 4 — reconciliation
 // ---------------------------------------------------------------------------
 
-function ReconcilePhase({ by }: { by: string }) {
+function ReconcilePhase({ by }: { by: ManagerAuth }) {
   const app = useApp();
   const banky = app.glAccounts.filter(
     (a) => a.role === "bank" || a.role === "undeposited" || accountType(a) === "asset",

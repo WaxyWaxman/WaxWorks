@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import type { ManagerAuth } from "../lib/managerAuth";
 import { PayableSlab, type PayableChip, type PayableSort } from "../components/PayableSlab";
 import { SettleTrack } from "../components/SettleTrack";
 import type { PayableEntryType, PaymentMethod } from "../data/types";
@@ -62,7 +63,7 @@ export function AccountsPayable() {
   // the authoriser here are the SAME person: there is no Employee acting
   // underneath, so this replaces the Tier 2 prompt rather than adding to it.
   const nav = useNavigate();
-  const [authorisedBy, setAuthorisedBy] = useState<string | null>(null);
+  const [authorisedBy, setAuthorisedBy] = useState<ManagerAuth | null>(null);
   const [slabOpen, setSlabOpen] = useState(() => readStored(SLAB_KEY, true));
   const [scope, setScope] = useState<string>("");
   const [query, setQuery] = useState("");
@@ -184,6 +185,9 @@ export function AccountsPayable() {
 
   // Tier 2 (d5). Manager-only under A-28a, which records BOTH names — this is the acting half.
   const doSettle = () => {
+    // Manager-only (A-28a) — accounts payable is named in its gated list.
+    // Refuse rather than coerce; this read `authorisedBy ?? ""`.
+    if (!authorisedBy) return;
     if (!supplier) return;
     const auto = autoPlacement(plan);
     app.settlePayables(
@@ -209,7 +213,7 @@ export function AccountsPayable() {
         credits: plan.credits.map((c) => ({ id: c.creditId!, amount: -c.balance, label: c.reference })),
         placeholderIds: plan.holds.map((h) => h.id),
       },
-      authorisedBy ?? "",
+      authorisedBy,
     );
     const closed = plan.debits.filter((d) => d.balance <= round2(creditOn(form, d.key, auto) + moneyOn(form, d.key, d.balance, auto)) + 0.005).length;
     setMsg(
@@ -223,9 +227,13 @@ export function AccountsPayable() {
   };
 
   const doClear = () => {
+    // Manager-only (A-28a). Refuse rather than coerce: this read
+    // `authorisedBy ?? ""`, which handed a gated write an empty
+    // authorizer whenever none was present.
+    if (!authorisedBy) return;
     const before = supplier ? balanceOf(supplier.id) : 0;
     const ids = selectedRows.filter((r) => r.kind === "entry").map((r) => r.id);
-    const result = app.clearPayableEntries(ids, authorisedBy ?? "");
+    const result = app.clearPayableEntries(ids, authorisedBy);
     // The return value used to be dropped, so a refused clearing still reported
     // "2 retired against each other" and the Manager was told an act happened
     // that had not. d15 makes a clearing the Manager's manual call over a set
@@ -248,10 +256,14 @@ export function AccountsPayable() {
   };
 
   const doVoid = (batchId: string) => {
+    // Manager-only (A-28a). Refuse rather than coerce: this read
+    // `authorisedBy ?? ""`, which handed a gated write an empty
+    // authorizer whenever none was present.
+    if (!authorisedBy) return;
     if (!supplier) return;
     const before = balanceOf(supplier.id);
     const batch = app.paymentBatches.find((b) => b.id === batchId);
-    app.voidPaymentBatch(batchId, authorisedBy ?? "");
+    app.voidPaymentBatch(batchId, authorisedBy);
     setOpenBatch(null);
 
     // d40 — pre-fill the replacement from what was just voided. d18's objection
@@ -477,7 +489,7 @@ export function AccountsPayable() {
         // Manager confirms against is not the figure that will post.
         rateFor={(targetId) => app.invoices.find((iv) => iv.id === targetId)?.exchangeRate ?? 1}
         onUnclear={(id) => {
-          const r = app.unclearPayableEntries(id, authorisedBy ?? "");
+          const r = app.unclearPayableEntries(id, authorisedBy);
           setMsg(
             r.uncleared
               ? "Clearing reversed and removed — its members are back on the outstanding list, and each one's log names what it was cleared against (d47, d48, A-70)."

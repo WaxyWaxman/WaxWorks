@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import type { ManagerAuth } from "../lib/managerAuth";
 import { useNavigate, useParams } from "react-router-dom";
 import { SpecNote } from "../components/SpecNote";
 import type { User, UserRole } from "../data/types";
@@ -61,7 +62,7 @@ export function Users() {
   // Gated as a WHOLE rather than per action, following M-05's "manager-only
   // in its entirety": administering users is a sitting-down job, and a prompt
   // per row is d12's trains-you-not-to-read problem again.
-  const [authorisedBy, setAuthorisedBy] = useState<string | null>(null);
+  const [authorisedBy, setAuthorisedBy] = useState<ManagerAuth | null>(null);
 
   const setSlab = (v: boolean) => {
     setSlabOpen(v);
@@ -115,7 +116,11 @@ export function Users() {
 
   const addDraft = () => {
     if (!draft) return;
-    const r = app.addUser(draft, authorisedBy ?? "");
+    // Manager-only (A-28a). Refuse rather than coerce: this read
+    // `authorisedBy ?? ""`, which handed a gated write an empty
+    // authorizer whenever none was present.
+    if (!authorisedBy) return;
+    const r = app.addUser(draft, authorisedBy);
     if (run(r) && r.ok) {
       setDraft(null);
       setQuery("");
@@ -252,7 +257,7 @@ function NewUserCard({
   draft: { name: string; initials: string; role: UserRole };
   managers: number;
   refusal: string | null;
-  by: string;
+  by: ManagerAuth;
   onChange: (p: Partial<{ name: string; initials: string; role: UserRole }>) => void;
   onCancel: () => void;
   onAdd: () => void;
@@ -337,7 +342,7 @@ function UserCard({
   onRun: (r: UserWriteResult) => boolean;
   // The Manager who authorised this screen (M-04 d11, A-28a). Every log row
   // written here carries their name rather than a constant.
-  by: string;
+  by: ManagerAuth;
 }) {
   const app = useApp();
   // d22 — corrections. Live fields like the Supplier and Customer cards, but
@@ -495,7 +500,7 @@ function PasswordField({
 }: {
   user: User;
   onRun: (r: UserWriteResult) => boolean;
-  by: string;
+  by: ManagerAuth;
 }) {
   const app = useApp();
   const [value, setValue] = useState("");

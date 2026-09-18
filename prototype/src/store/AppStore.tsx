@@ -31,6 +31,7 @@ import {
 } from "../lib/totals";
 import { clearedAgainst, entryIsCleared, unclearRefusal } from "../lib/payables";
 import { regradeCostRefusal, regradeShortfall, routeStockRefusal, statusAfterRoute } from "../lib/returnRouting";
+import type { ManagerAuth } from "../lib/managerAuth";
 import { buildChart } from "../lib/chart";
 import { buildCloseJournal } from "../lib/closeJournal";
 import { buildAdjustmentJournal, buildInvoiceJournal, buildPaymentJournal } from "../lib/artifactJournals";
@@ -814,41 +815,43 @@ interface AppContextValue extends AppState {
   defaultTaxGroup: string;
   taxCtxFor: (sale?: Sale | null) => TaxContext;
   productTaxCodeForRecord: (recordId?: string) => string;
-  upsertTaxType: (row: TaxType, by: string) => SettingsWriteResult;
-  setTaxCell: (groupId: string, productTaxCode: string, spec: string, by: string) => SettingsWriteResult;
-  upsertTaxGroup: (row: TaxGroup, by: string) => SettingsWriteResult;
-  setDefaultTaxGroup: (groupId: string, by: string) => void;
-  setStoreSetting: <K extends keyof StoreSettings>(key: K, value: StoreSettings[K], by: string) => void;
-  setStoreDetail: (key: keyof Omit<StoreDetails, "storeId" | "position">, value: string | boolean | PostalAddress, by: string) => void;
-  upsertSection: (row: SectionRow, by: string) => SettingsWriteResult;
-  upsertGenre: (row: Genre, by: string) => SettingsWriteResult;
+  upsertTaxType: (row: TaxType, by: ManagerAuth) => SettingsWriteResult;
+  setTaxCell: (groupId: string, productTaxCode: string, spec: string, by: ManagerAuth) => SettingsWriteResult;
+  upsertTaxGroup: (row: TaxGroup, by: ManagerAuth) => SettingsWriteResult;
+  setDefaultTaxGroup: (groupId: string, by: ManagerAuth) => void;
+  setStoreSetting: <K extends keyof StoreSettings>(key: K, value: StoreSettings[K], by: ManagerAuth) => void;
+  setStoreDetail: (key: keyof Omit<StoreDetails, "storeId" | "position">, value: string | boolean | PostalAddress, by: ManagerAuth) => void;
+  upsertSection: (row: SectionRow, by: ManagerAuth) => SettingsWriteResult;
+  upsertGenre: (row: Genre, by: ManagerAuth) => SettingsWriteResult;
   adoptRelease: (releaseId: string, genreId: string, price?: number) => RecordEntry | null;
   resolveAdoptionGenre: (releaseId: string) => {
     release: ReleaseCacheEntry | undefined;
     match: GenreMatch | undefined;
     unmapped: ProviderTag[];
   };
+  // A-59 — NOT manager-only: adding a row for a tag that has none cannot
+  // change where anything already goes. Update and remove below stay M.
   addMapRow: (tag: string, genreId: string, by: string) => SettingsWriteResult;
-  updateMapRow: (tag: string, patch: Partial<GenreMapRow>, by: string) => SettingsWriteResult;
-  removeMapRow: (tag: string, by: string) => SettingsWriteResult;
-  mergeGenres: (fromId: string, toId: string, by: string) => SettingsWriteResult;
-  deleteGenre: (genreId: string, by: string) => SettingsWriteResult;
+  updateMapRow: (tag: string, patch: Partial<GenreMapRow>, by: ManagerAuth) => SettingsWriteResult;
+  removeMapRow: (tag: string, by: ManagerAuth) => SettingsWriteResult;
+  mergeGenres: (fromId: string, toId: string, by: ManagerAuth) => SettingsWriteResult;
+  deleteGenre: (genreId: string, by: ManagerAuth) => SettingsWriteResult;
   genreUseCount: (genreId: string) => number;
-  upsertTender: (row: TenderRow, by: string) => SettingsWriteResult;
-  upsertCurrency: (row: CurrencyRow, by: string) => SettingsWriteResult;
-  setHomeCurrency: (code: string, by: string) => void;
+  upsertTender: (row: TenderRow, by: ManagerAuth) => SettingsWriteResult;
+  upsertCurrency: (row: CurrencyRow, by: ManagerAuth) => SettingsWriteResult;
+  setHomeCurrency: (code: string, by: ManagerAuth) => void;
   userFor: (id?: string) => User | undefined;
   activeManagerCount: () => number;
   // Every one of these is manager-only (A-55) and every one returns a reason
   // rather than throwing, because M-04 d13 and A-54 both require the refusal
   // to say WHICH thing blocked it - a refusal that does not name its cause
   // reads as the system simply saying no.
-  addUser: (input: { name: string; initials: string; role: UserRole }, by: string) => UserWriteResult;
-  changeUserRole: (userId: string, role: UserRole, by: string) => UserWriteResult;
-  deactivateUser: (userId: string, by: string) => UserWriteResult;
-  reactivateUser: (userId: string, initials: string, by: string) => UserWriteResult;
-  correctUser: (userId: string, patch: { name?: string; initials?: string }, by: string) => UserWriteResult;
-  setUserPassword: (userId: string, password: string, by: string) => UserWriteResult;
+  addUser: (input: { name: string; initials: string; role: UserRole }, by: ManagerAuth) => UserWriteResult;
+  changeUserRole: (userId: string, role: UserRole, by: ManagerAuth) => UserWriteResult;
+  deactivateUser: (userId: string, by: ManagerAuth) => UserWriteResult;
+  reactivateUser: (userId: string, initials: string, by: ManagerAuth) => UserWriteResult;
+  correctUser: (userId: string, patch: { name?: string; initials?: string }, by: ManagerAuth) => UserWriteResult;
+  setUserPassword: (userId: string, password: string, by: ManagerAuth) => UserWriteResult;
   // E-01 d21 — a password holder's session is capped at the 5-minute default
   // however long the shop set the lapse to.
   effectiveLapseSeconds: number;
@@ -869,6 +872,8 @@ interface AppContextValue extends AppState {
    * Returned alongside the breakdown so the close screen can tell the Manager
    * what was written, and tell them loudly when it did not balance (d10).
    */
+  // A-28a gates **Undo End of Day**, not the close itself, and M-04 d2 makes
+  // anything unlisted an Employee action. This takes the acting actor.
   totalTodaysSales: (by: string) => {
     batchId: string;
     breakdown: DayBreakdown;
@@ -876,7 +881,7 @@ interface AppContextValue extends AppState {
     unresolved: string[];
     ambiguousTenders: string[];
   };
-  undoEndOfDay: (batchId: string, by: string) => void;
+  undoEndOfDay: (batchId: string, by: ManagerAuth) => void;
   attachCustomer: (saleId: string, customerId: string | null) => void;
   addCustomer: (input: Omit<Customer, "id" | "primaryId" | "balance">) => string;
   updateCustomer: (customerId: string, patch: Partial<Omit<Customer, "id" | "primaryId">>) => void;
@@ -906,25 +911,25 @@ interface AppContextValue extends AppState {
   cancelHold: (saleId: string) => void;
   releaseHoldLine: (itemId: string) => { holdRef: string; holdClosed: boolean } | null;
   forceUnlockSale: (saleId: string) => void;
-  acknowledgeReviewFlag: (id: string, by: string) => void;
+  acknowledgeReviewFlag: (id: string, by: ManagerAuth) => void;
 
   // ---- M-08, the books ----------------------------------------------------
   // Every one is MANAGER-ONLY (A-74), so every one takes the authorising
   // Manager's initials. None of them decides anything: the refusal functions in
   // lib/ledger*.ts are the rules, and these store whatever those permit.
   ledgerSaveOpening: (draft: OpeningPositionDraft) => void;
-  ledgerSealOpening: (by: string) => void;
-  ledgerPost: (posting: Omit<LedgerPosting, "writtenAt">, by: string) => void;
-  ledgerSeal: (period: string, suspenseGross: number, by: string) => void;
-  ledgerUnseal: (period: string, reason: string, by: string) => void;
-  ledgerMarkYearFiled: (fiscalYearEnd: string, by: string) => void;
+  ledgerSealOpening: (by: ManagerAuth) => void;
+  ledgerPost: (posting: Omit<LedgerPosting, "writtenAt">, by: ManagerAuth) => void;
+  ledgerSeal: (period: string, suspenseGross: number, by: ManagerAuth) => void;
+  ledgerUnseal: (period: string, reason: string, by: ManagerAuth) => void;
+  ledgerMarkYearFiled: (fiscalYearEnd: string, by: ManagerAuth) => void;
   ledgerReconcile: (reconciliation: LedgerReconciliation) => void;
   ledgerIssue: (issuance: LedgerIssuance) => void;
   /** d40, M-07 d25 — a period's Suspense total, gross. What the seal refuses on. */
   ledgerSuspenseGross: (period: string) => number;
   /** M-08 d11 - why an Undo End of Day is refused, or undefined. */
   closeUndoRefusalFor: (batchId: string) => string | undefined;
-  reconcileOversold: (recordId: string, by: string) => number;
+  reconcileOversold: (recordId: string, by: ManagerAuth) => number;
   addLog: (saleId: string, text: string) => void;
 
   raiseClaim: (
@@ -978,7 +983,7 @@ interface AppContextValue extends AppState {
      * makes the absence of one a refusal rather than a convention, so a second
      * caller cannot route a write-off by forgetting to ask.
      */
-    by?: string,
+    by?: ManagerAuth,
     /**
      * The resolved Manager's id — what the write path actually gates on
      * (architecture §6: the id is trusted, the initials are displayed). `by`
@@ -1062,7 +1067,7 @@ interface AppContextValue extends AppState {
   finalizeInvoice: (
     invoiceId: string,
   ) => { itemCount: number; journal: JournalBatch; unresolved: string[] } | null;
-  markInvoicePaid: (invoiceId: string, by: string) => void;
+  markInvoicePaid: (invoiceId: string, by: ManagerAuth) => void;
 
   // M-05 — Accounts Payable. One PaymentBatch per Record-Payment action,
   // covering whatever mix of Invoices and PayableEntries it was paying,
@@ -1097,10 +1102,10 @@ interface AppContextValue extends AppState {
       credits: { id: string; amount: number; label: string }[];
       placeholderIds: string[];
     },
-    by: string,
+    by: ManagerAuth,
   ) => void;
   // M-05 d22/d30 — appended, never edited; never refuses.
-  voidPaymentBatch: (batchId: string, by: string) => void;
+  voidPaymentBatch: (batchId: string, by: ManagerAuth) => void;
 
   payableEntryFor: (id?: string) => PayableEntry | undefined;
   // M-05 "Create new" — a manual ledger line unlinked to any InventoryItem.
@@ -1121,10 +1126,10 @@ interface AppContextValue extends AppState {
   // already cleared) as cleared against each other — only if their signed
   // amounts sum to zero. Returns { cleared: false } and changes nothing
   // otherwise (mismatched sum, wrong supplier, already cleared, etc).
-  clearPayableEntries: (entryIds: string[], by: string) => { cleared: boolean };
+  clearPayableEntries: (entryIds: string[], by: ManagerAuth) => { cleared: boolean };
   // M-05 d39 — a clearing is a REVERSIBLE MARK, not a terminal state.
   // d46 — addressed by the CLEARING, the way a void addresses a batch.
-  unclearPayableEntries: (clearingId: string, by: string) => { uncleared: boolean; reason?: string };
+  unclearPayableEntries: (clearingId: string, by: ManagerAuth) => { uncleared: boolean; reason?: string };
   // M-07 — the chart. d3: the number and name are the store's; the ROLE is not
   // editable, because the software resolves by it.
   updateGLAccount: (id: string, patch: { number?: string; name?: string; active?: boolean }) => void;
@@ -1143,7 +1148,7 @@ interface AppContextValue extends AppState {
    */
   voidPurchaseOrder: (
     poNumber: string,
-    by?: string,
+    by?: ManagerAuth,
   ) => { returned: number; split: number; untouched: number };
   /** Set or clear one of the statuses a person sets (M-02 d12, d22). */
   setPendingOrderLineStatus: (

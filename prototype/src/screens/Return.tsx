@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import type { ManagerAuth } from "../lib/managerAuth";
 import { useNavigate, useParams } from "react-router-dom";
 import { Modal } from "../components/Modal";
 import { TillRail } from "../components/TillRail";
@@ -808,7 +809,7 @@ function RouteStock({
   // authorizing Manager (A-4, A-48); this is how one is asked for.
   const [authorizing, setAuthorizing] = useState(false);
 
-  const apply = (by?: string, byUserId?: string) => {
+  const apply = (by?: ManagerAuth, byUserId?: string) => {
     const res = app.routeReturnLine(
       saleId,
       lineId,

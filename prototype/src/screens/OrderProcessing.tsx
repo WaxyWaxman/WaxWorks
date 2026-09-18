@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import type { ManagerAuth } from "../lib/managerAuth";
 import { ManagerAuthorize } from "../components/ManagerAuthorize";
 import { Modal } from "../components/Modal";
 import { SeparatorSelect } from "../components/SeparatorSelect";
@@ -1142,7 +1143,7 @@ function VoidPoModal({
   };
   const attached = plan.filter((l) => l.customer && l.fate !== "untouched");
 
-  const doVoid = (by: string) => {
+  const doVoid = (by: ManagerAuth) => {
     const res = app.voidPurchaseOrder(poNumber, by);
     const parts = [
       res.returned ? `${res.returned} returned to pending` : "",
