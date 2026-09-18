@@ -322,9 +322,10 @@ accounts (`/chart`); no journal screen, on purpose. **Not placed in
 
 Steps in [M-08](../flows/M-08-general-ledger.md). **Walked against the prototype on 2026-09-17**, which now
 has `/ledger` — five phases on six `src/lib/ledger*.ts` modules ([prototype](../prototype.md)). The product has
-no code, so every row stays `Planned` there. **Not placed in [architecture](../architecture.md) §8** — see Open
-questions; M-08 arrived after the build order was written, and A-79 moved only [M-07](../flows/M-07-chart-of-accounts.md)'s
-tables forward, not this flow.
+no code, so every row stays `Planned` there. **Placed by A-80 on 2026-09-18 as milestone M8**, immediately after M7 — the
+last milestone with the v1 two-track shape. M-08 arrived after the build order was written and had been in
+no milestone since; A-79 had already moved [M-07](../flows/M-07-chart-of-accounts.md)'s *tables* forward,
+and A-80 places this flow.
 
 **Ten rows walked, two blocked, nine planned, one not modelled** — the counts moved twice after this walk: T8, T10, T12, T14 and T15 came off `Blocked` as their gaps were built or their decisions settled, T6 came off `Stale` when d42 replaced the decision it cited, and **six rows were added on 2026-09-18** (T17–T22) for decisions that had none. The two still blocked are T7 and T9, and neither is code: T7's act has no screen path by design, and T9 needs a sealed December. A row is `Walked` only where **every** assertion in it was
 exercised; one clause that could not be reached makes the row `Blocked`, because a column that reads `Walked` on a
@@ -508,9 +509,9 @@ milestones have both tracks landed.
 | M4 Till | E-05-T1–T3, T5–T16, E-06-T1–T5, E-07-T1–T7, E-04-T2, E-04-T4, M-06-T1, T2, T4, T11 |
 | M5 Close, receipts, review | M-03-T1–T5, M-04-T7 *(acknowledge)* |
 | M6 Hardening | Every row above, run as one seeded trading day |
-| M7 Payables (A-39) | M-05-T1–T7, E-02-T9, M-01-T4 |
-| **M-08 — unplaced** | M-08-T1–T22. **M-08 is in no milestone**: it reached `Specified` after [architecture](../architecture.md) §8's build order was written, and §8 has no **D** or **U** row for it. A-79 moved [M-07](../flows/M-07-chart-of-accounts.md)'s chart and journal **tables** into M2 and M3, where A-67 already required them, and **deliberately left this flow unplaced**. Placing it is an `/architecture` decision and it is the one thing standing between these sixteen rows and a work order. Note M-08-T16 spans M3 (receiving) and M7 (payables) and **asserts no M-08 decision at all** — M-06 d59, d60 and M-07 d8 — so it bounds when the row runs rather than what M-08 builds, and is a candidate to move to M7's row |
-| Post-v1, in §8's order | M-02-T1–T10 → M-04-T1–T6 *(Add and Deactivate first, M-04 decision 21)* → M-06-T3, T5–T7, T9, T10, T12 *(the settings screens)* → M-07-T1–T7 and M-03-T6 *(the chart and the journal — unplaced, see Open questions)* |
+| M7 Payables (A-39) | M-05-T1–T7, E-02-T9, M-01-T4, **M-08-T16** *(A-80 — it asserts no M-08 decision and runs here)* |
+| M8 The general ledger (A-80) | M-08-T1–T15, T17–T22. **Placed on 2026-09-18** by A-80, immediately after M7 and the last milestone with the v1 two-track shape — d7's payoff, *the Accounts payable balance **is** M-05's balance*, is not checkable until payables exists. **M-08-T16 belongs to M7 and not here**: it asserts M-06 d59, d60 and M-07 d8 and **no M-08 decision at all**, so it bounds when the row runs rather than what M8 builds |
+| Post-v1, in §8's order | M-02-T1–T10 → M-04-T1–T6 *(Add and Deactivate first, M-04 decision 21)* → M-06-T3, T5–T7, T9, T10, T12 *(the settings screens)* → M-07-T1–T7 and M-03-T6 *(the chart **screen** and the journal export — still unplaced. A-79 moved M-07's **tables** into M2 and M3 where A-67 required them, and deliberately left its functions and screens here)* |
 
 ---
 
