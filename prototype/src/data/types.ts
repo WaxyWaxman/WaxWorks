@@ -77,6 +77,19 @@ export interface InventoryItem {
   // birth, cost is unknown until reconciled. Clears when matching stock is
   // later received (oldest oversold item first, ahead of minting new sellable
   // copies) or a manager force-clears it as a hand adjustment.
+  // E-06 d18 — the barcode is minted when the copy is, but the STICKER is a
+  // separate act: E-02 puts the label printer at the receiving desk, not at
+  // the till. True means a physical copy is walking around without its label.
+  labelPending?: boolean;
+  // E-06 d17 — when this copy arrived. Set on a copy MINTED by a re-grade,
+  // which arrives at the moment of re-grade rather than inheriting the sold
+  // copy's arrival. Accepted consequence: E-03 d16's dead-stock clock restarts.
+  receivedAt?: string;
+  // E-06 d15 — the two halves of a re-grade, pointing at each other. The sold
+  // copy keeps its status, grade and cost as the record of what actually sold;
+  // the minted copy is what came back.
+  regradedFromItemId?: string;
+  regradedIntoItemId?: string;
   oversold?: boolean;
   oversoldAt?: string;
   oversoldReconciledAt?: string;

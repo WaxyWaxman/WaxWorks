@@ -22,7 +22,7 @@
    - **store credit** onto the Customer's accounts-receivable balance ([E-07](E-07-manage-customers.md)).
 6. Employee assesses the returned copy and routes the stock:
    - **Back to sellable** at its original grade, if it comes back as it left; or
-   - **Re-graded** — the copy is taken in as an InventoryItem carrying its own Goldmine grade and its own price, since a returned copy is frequently not in the condition it was sold in; or
+   - **Re-graded** — a **new InventoryItem is minted** carrying its own Goldmine grade and its own price, since a returned copy is frequently not in the condition it was sold in. The copy that was sold **stays sold, at the grade it sold at** (decision 15). Deliberately *not* [E-04](E-04-manage-inventory.md)'s **Edit copy**, which edits a grade in place on the copy itself; or
    - **Written off** via a reason-coded adjustment ([E-04](E-04-manage-inventory.md)) if it is not sellable at all. ***Manager-only*** ([architecture](../architecture.md) A-81, A-28a): this route adjusts on hand, and decision 3's *no manager approval* is about the **refund**, which decision 7 already holds apart from the disposition. Ungated, it is a copy taken in over the counter, cash refunded, and the copy removed from stock with no Manager in the act. The other two routes stay ungated.
 7. System prompts to print a receipt for the return.
 
@@ -85,10 +85,61 @@ This is a policy choice, not a technical limitation — the system records who p
 | 11 | **A finished Return appears in the till rail's Recent alongside Sales.** It carries a transaction number like any other tendered document, and the commonest reason to go hunting for one is the refund that just went out. Badged as a Return and shown at its negative amount, because the number alone gives no clue which way the money went |
 | 12 | **The returned copy is found by lookup, not chosen from a list of every copy in the building.** Scanning the copy's own sticker resolves it outright — the counter path. Otherwise the catalogue is searched and the matching copies shown with their grade, barcode, price and current state. Deliberately not the till's Lookup ([E-05](E-05-sell-a-record.md)), which filters to sellable copies: that is exactly backwards here, since a copy coming back is normally one the store already sold, so this searches every copy and shows its state rather than hiding it |
 | 13 | **A Return charges today's tax rate and never reaches back to the rate the original Sale collected.** A Return is a Sale with negative lines (step 1), so its tax resolves the way any line's does, at the rate in force when the money moves ([architecture](../architecture.md) A-57). **Charging the original rate was considered and rejected** — it is the more orthodox answer, but it needs a linked Sale to read the rate from, and decision 3 deliberately allows a Return with no receipt, no Customer and no link at all (step 3). That would mean a today's-rate fallback anyway, and a shop with two tax rules for the same counter action will apply the wrong one. Note this differs from the **refund amount**, which *does* default to the linked Sale's line price (decision 5): price is what was agreed with this customer, tax is what is owed to an authority today. *Accepted consequence, and it is real money:* a Return crossing a rate change refunds tax at a rate the store never collected on that item, so the customer is out or up by the delta and the store absorbs it. The books stay consistent — the negative line carries today's rate into today's period and [M-03](M-03-daily-summary.md) sums snapshotted per-line figures — so this is a small bounded difference rather than an integrity problem, bounded by how rarely rates change multiplied by how rarely a return crosses one |
+| 14 | **A sole matching prior Sale is selected, not merely offered.** Step 3's *the line is linked* is a **default the Employee can undo**, not a prompt they must answer: where exactly one prior Sale for the **attached Customer** sold this copy, the link is preselected and decision 5's refund default follows it to the linked line price. Several matches, or none, leave the line unlinked at the copy's current price — and a Return with no Customer has nothing to match against, so step 3's second bullet stands untouched. **The offered-only reading cost money and the walk priced it:** a copy sold at **$31.49** under a 10% discount defaulted to its **$34.99** current price, so an Employee accepting the default over-refunded by **$3.50** and lost the Customer-history link, with nothing on screen saying a match existed. Nothing is taken from the Employee, because changing the link still rewrites the refund |
+| 15 | **Re-grading mints a new InventoryItem; the copy that sold stays sold at the grade it sold at.** The returned disc enters as its own copy rather than the old one changing grade underneath a completed Sale, so *what did this copy sell as* stays answerable. **Deliberately distinct from [E-04](E-04-manage-inventory.md)'s *Edit copy***, which edits grade, note and price in place and remains the right tool for correcting a mistake on a copy still on the shelf; this is the case where one physical disc has been two different things to two different people. Supersedes nothing — step 6 never said which, and [register](../qa/e2e-register.md) row E-06-T4 had assumed this reading ahead of the decision |
+| 16 | ~~**The new copy's cost is the refund that was paid for it**, not the cost the sold copy carried.~~ — **superseded by decision 19** ([architecture](../architecture.md) A-82). It could not be posted: a refund normally exceeds the copy's cost, so this wrote Inventory **up**, and the excess had no credit but invented income |
+| 17 | **The new copy's arrival is dated at the moment of re-grade**, not inherited from the original's. As a distinct copy at a distinct grade it did not exist before, so it arrives now, and [architecture](../architecture.md) A-81's movement chain reads cleanly: the sold copy departs, this one arrives, and as-at counts stay right across the pair. *Accepted consequence:* [E-03](E-03-search-inventory.md) decision 16's **dead-stock clock restarts**, so a copy that sat unsold for a year reads as new stock once it has been sold and taken back. The store accepts that a returned copy is, for reorder purposes, a fresh proposition |
+| 18 | **The new copy's internal barcode is minted at routing; its label is printed after.** The barcode exists immediately, because [architecture](../architecture.md) A-81 writes the copy's arrival movement then and [architecture](../architecture.md) §6 resolves a scan to exactly one InventoryItem — a copy with no code is unscannable and therefore unsellable. The **sticker** is not assumed to be printable at the till: [E-02](E-02-receive-inventory.md) puts the label printer at the receiving desk, and committing one to every counter is a hardware decision this flow does not get to make. The copy is not on the shelf until routed anyway, so there is a natural moment to sticker it |
+| 19 | **The new copy's cost is assessed against its new grade, and capped at the cost the sold copy carried.** *Supersedes decision 16, per [architecture](../architecture.md) A-82.* A disc that comes back ruined may be booked below what the store paid — and the shortfall posts to its [E-04](E-04-manage-inventory.md) reason code, `Damaged`, which is where [M-07](M-07-chart-of-accounts.md) d6 already sends condition losses. It may **never** be booked above, because the only credit [M-07](M-07-chart-of-accounts.md) d2 supplies is the copy's own cost and anything beyond it is income the store did not earn. **The cap is enforced in the write path, not by the screen declining to offer a higher figure** ([architecture](../architecture.md) A-4, A-48). Where the Employee assesses at or above the original cost — the ordinary case, since a returned disc is usually fine — the copy simply carries the original cost and nothing is stranded |
+
+---
+
+## Cost of a re-graded copy
+
+Decision 19 lets the Employee assess the minted copy against its new grade, **bounded
+above by the cost the sold copy carried** ([architecture](../architecture.md) A-82).
+The bound is not fussiness: the only credit [M-07](M-07-chart-of-accounts.md) d2 offers
+is the copy's own cost, so anything booked above it has no honest home and becomes
+income the store did not earn. Decision 16 tried it and could not be posted.
+
+**The arithmetic now closes, and it closes either way it is assessed.** A copy received
+at **$8.00**, sold at **$34.99**, refunded at **$31.49**, re-graded, and sold again at
+**$15.00** — the store's real position across all four movements is
+`+34.99 − 31.49 + 15.00 − 8.00 = **+$10.50**`:
+
+| Assessed at | First sale | The return | Second sale | Books total |
+|---|---|---|---|---|
+| **$2.00**, badly marked | +$26.99 | −$31.49 + $8.00 − $6.00 `Damaged` = −$29.49 | +$13.00 | **+$10.50** |
+| **$8.00 or above**, plays fine | +$26.99 | −$31.49 + $8.00 = −$23.49 | +$7.00 | **+$10.50** |
+
+**Per-copy margin is readable again.** Each sale reports a true margin on the cost that
+copy actually carried, and the condition loss sits in the **period** as a `Damaged`
+expense rather than being pushed down onto a copy — the same shape
+[M-07](M-07-chart-of-accounts.md) d2 gives a second-hand crate and
+[E-02](E-02-receive-inventory.md) d16 gives freight. Under decision 16 neither line was
+safe to read: the second sale of this copy reported a **$16.49 loss** on a disc the
+store made $10.50 on.
+
+**One consequence is accepted and stays.** The cost basis is still a number an Employee
+types at the counter, which runs against the grain of
+[architecture](../architecture.md) A-43 — that governs *derived state* rather than cost,
+but the instinct is the same. The cap bounds the damage rather than removing it, and it
+bounds it with a figure the system wrote. The refund and the cost are also now two
+different numbers in the same act, and the counter must not read the second as a
+correction of the first.
 
 ---
 
 ## Open questions
+
+- **Who clears a copy that is waiting for its label?** Decision 18 mints the barcode at
+  routing and leaves the sticker for later. Nothing yet says how an Employee finds the
+  copies waiting to be stickered, whether an unstickered copy may go on the shelf, or
+  whether this is a state on the copy or a queue on a screen.
+- **Does the dead-stock clock restarting need saying out loud on screen?** Decision 17
+  accepts that a re-graded copy reads as new stock to [E-03](E-03-search-inventory.md)
+  decision 16. Whether the titlecard should say *"re-graded on return, arrived today"* so
+  a buyer is not misled by a fresh-looking date is unsettled.
 
 - **Does a returned New-stock copy become second-hand once opened?** E-02 fixes intake mode per Invoice, and a Mint/Sealed copy that comes back opened is no longer Mint/Sealed. Step 6 gives the mechanism — a re-graded InventoryItem — but not the policy on whether an opened copy may ever return to New stock at its sticky price.
 - **Exchanges.** Currently an exchange is a Return line plus a sale line on one Sale, netting to the difference. Whether that needs its own affordance at the till, or is left as two lines, is unsettled.

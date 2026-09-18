@@ -30,7 +30,7 @@ import {
   invoiceChargesTotal,
 } from "../lib/totals";
 import { clearedAgainst, entryIsCleared, unclearRefusal } from "../lib/payables";
-import { routeStockRefusal, statusAfterRoute } from "../lib/returnRouting";
+import { regradeCostRefusal, regradeShortfall, routeStockRefusal, statusAfterRoute } from "../lib/returnRouting";
 import { buildChart } from "../lib/chart";
 import { buildCloseJournal } from "../lib/closeJournal";
 import { buildAdjustmentJournal, buildInvoiceJournal, buildPaymentJournal } from "../lib/artifactJournals";
@@ -979,6 +979,15 @@ interface AppContextValue extends AppState {
      * caller cannot route a write-off by forgetting to ask.
      */
     by?: string,
+    /**
+     * The re-grade route only — what the copy is assessed at now that it has
+     * come back in a different condition. **Capped at the cost the sold copy
+     * carried** (A-82, E-06 d19); the write path refuses above it, because the
+     * excess would be income the store did not earn. Defaults to the sold
+     * copy's cost when the Employee does not move it, which is the ordinary
+     * case: most discs come back fine.
+     */
+    assessedCost?: number,
   ) => { routed: boolean; refusal?: string };
   toggleProvider: () => void;
 
@@ -3065,6 +3074,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
     price,
     reason,
     by,
+    assessedCost,
   ) => {
     // A-81, A-28a — the write-off route is manager-only, because routing a
     // returned copy to *written off* IS adjusting on hand. The rule and its
@@ -3072,6 +3082,16 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
     // screen (A-4, A-48); the store calls the refusal and stores the result.
     const refusal = routeStockRefusal(to, by);
     if (refusal) return { routed: false, refusal };
+
+    const soldCopy = s.inventory.find((i) => i.id === itemId);
+    // A-82 / E-06 d19 — the re-graded copy's cost is capped at the cost the
+    // sold copy carried. Refused HERE, not by the screen declining to offer a
+    // higher figure, which A-82 says in terms is not a cap.
+    const bookedCost = to === "regrade" ? (assessedCost ?? soldCopy?.cost ?? 0) : (soldCopy?.cost ?? 0);
+    if (to === "regrade") {
+      const costRefusal = regradeCostRefusal(bookedCost, soldCopy?.cost ?? 0);
+      if (costRefusal) return { routed: false, refusal: costRefusal };
+    }
 
     const note =
       to === "regrade"
@@ -3089,7 +3109,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
     // the copy came back over the counter (d2 run backwards). This is what
     // takes it out again, into the reason-coded account rather than leaving it
     // in cost of goods where nobody chose to put it.
-    const item = s.inventory.find((i) => i.id === itemId);
+    const item = soldCopy;
     const adjustment =
       to === "writeoff" && reason && item?.cost
         ? buildAdjustmentJournal({
@@ -3106,27 +3126,94 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
           })
         : null;
 
+    // E-06 d19 / A-82 — where the copy is assessed BELOW what the sold copy
+    // carried, the shortfall is a period cost and posts to its E-04 reason
+    // code. `Damaged` is where M-07 d6 already sends condition losses, and a
+    // re-grade is a condition loss by definition. Assessed at or above the
+    // cap, nothing is stranded and no journal is written.
+    const shortfall =
+      to === "regrade" ? regradeShortfall(bookedCost, soldCopy?.cost ?? 0) : 0;
+    const regradeAdjustment =
+      to === "regrade" && shortfall > 0
+        ? buildAdjustmentJournal({
+            id: uid("adj"),
+            reason: "Damaged",
+            cost: shortfall,
+            businessDate: now(),
+            writtenAt: now(),
+            memo: `Re-graded on return — booked at ${money(bookedCost)}, down from ${money(soldCopy?.cost ?? 0)}`,
+            accounts: s.glAccounts,
+            mappings: s.glMappings,
+            currency: s.homeCurrency,
+            location: s.storeDetails.storeId,
+          })
+        : null;
+
+    // E-06 d15 — the re-grade MINTS. The copy that sold stays sold, at the
+    // grade it sold at, so "what did this copy sell as" stays answerable; the
+    // disc that came back enters as its own copy. Deliberately not E-04's
+    // *Edit copy*, which edits a grade in place and is still right for a copy
+    // that never left the shelf.
+    const mintedId = to === "regrade" ? uid("item") : "";
+    const minted: InventoryItem | null =
+      to === "regrade" && soldCopy
+        ? {
+            id: mintedId,
+            recordId: soldCopy.recordId,
+            grade: grade ?? soldCopy.grade,
+            price: price ?? soldCopy.price,
+            cost: bookedCost,
+            // d18 — the barcode is minted NOW, because a copy with no code is
+            // unscannable and therefore unsellable, and architecture §6
+            // resolves a scan to exactly one InventoryItem. The STICKER is a
+            // separate act: E-02 puts the label printer at the receiving desk,
+            // and this flow does not get to commit one to every till.
+            internalBarcode: `29${String(s.nextInternalBarcode).padStart(10, "0")}`,
+            labelPending: true,
+            status: "sellable",
+            // d17 — it arrives now. As a distinct copy at a distinct grade it
+            // did not exist before, so A-81's chain reads cleanly: the sold
+            // copy departed, this one arrived. Accepted consequence: E-03 d16's
+            // dead-stock clock restarts.
+            receivedAt: now(),
+            regradedFromItemId: soldCopy.id,
+            conditionNote: note,
+          }
+        : null;
+
     setS((prev) => ({
       ...prev,
+      nextInternalBarcode: prev.nextInternalBarcode + (minted ? 1 : 0),
       ...(adjustment
         ? {
             journals: [adjustment.batch, ...prev.journals],
             reviewFlags: journalFlags(adjustment, `the write-off of a returned copy`, prev.reviewFlags),
           }
         : {}),
-      inventory: prev.inventory.map((i) =>
-        i.id === itemId
-          ? {
-              ...i,
-              // A-81 — a written-off copy gets its OWN status, `written_off`,
-              // rather than being stored as `sold`. See lib/returnRouting.ts.
-              status: statusAfterRoute(to),
-              grade: to === "regrade" && grade ? grade : i.grade,
-              price: to === "regrade" && price != null ? price : i.price,
-              conditionNote: note,
-            }
-          : i,
-      ),
+      ...(regradeAdjustment
+        ? {
+            journals: [regradeAdjustment.batch, ...prev.journals],
+            reviewFlags: journalFlags(regradeAdjustment, `the re-grade of a returned copy`, prev.reviewFlags),
+          }
+        : {}),
+      inventory: [
+        ...prev.inventory.map((i) =>
+          i.id === itemId
+            ? to === "regrade"
+              ? // d15 — untouched but for a pointer at what replaced it. Its
+                // status, grade and cost are the record of what actually sold.
+                { ...i, regradedIntoItemId: mintedId }
+              : {
+                  ...i,
+                  // A-81 — a written-off copy gets its OWN status,
+                  // `written_off`. See lib/returnRouting.ts.
+                  status: statusAfterRoute(to),
+                  conditionNote: note,
+                }
+            : i,
+        ),
+        ...(minted ? [minted] : []),
+      ],
       sales: prev.sales.map((sale) =>
         sale.id === saleId
           ? {

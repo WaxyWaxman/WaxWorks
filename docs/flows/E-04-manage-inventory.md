@@ -102,6 +102,17 @@ An optional cross-reference links the two, so a payout can be traced to the copi
 
 ## Inherited from other flows
 
+**From [E-06](E-06-process-a-return.md) decision 15:**
+
+- **E-06's re-grade is not this flow's *Edit copy*, and the two must not be merged.**
+  **Edit copy** (§"Functions") edits grade, note and price **in place** on one
+  InventoryItem, and stays the right tool for correcting a mistake on a copy still on the
+  shelf. **E-06's re-grade mints a new InventoryItem** and leaves the copy that sold
+  *sold, at the grade it sold at* — the case where one physical disc has been two
+  different things to two different people. This narrows, but does not close, the open
+  question below on *re-grading a copy after it is sellable*: E-06 answers it for a copy
+  coming back over the counter and says nothing about the rest.
+
 **From [M-06](M-06-settings.md):**
 
 - **Editing a Record's genre may offer to re-pull its tags from the catalog provider** ([M-06](M-06-settings.md) d54). The tags a Record was adopted under are a snapshot ([architecture](../architecture.md) A-61), so a correction made months later is otherwise read against what the provider said then. The re-pull is **offered, never automatic**, touches only this Record in this Store, and **does not re-run the map** — d53's resolve-once rule is unchanged, and the matched tag is never re-resolved. If the provider is unreachable the edit still saves and only the refresh fails, following [E-03](E-03-search-inventory.md) d8's rule for search.

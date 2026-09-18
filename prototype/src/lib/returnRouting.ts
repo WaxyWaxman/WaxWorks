@@ -48,3 +48,54 @@ export function routeStockRefusal(to: ReturnRoute, by: string | undefined): stri
 export function statusAfterRoute(to: ReturnRoute): ItemStatus {
   return to === "writeoff" ? "written_off" : "sellable";
 }
+
+/**
+ * Why a re-graded copy's assessed cost is refused, or `undefined`.
+ *
+ * A-82 / [E-06](docs/flows/E-06-process-a-return.md) d19 — the minted copy is
+ * assessed against its new grade and **capped at the cost the sold copy
+ * carried**. Below is sound and is the point: a disc that comes back ruined is
+ * worth less than the store paid, and the shortfall posts to its E-04 reason
+ * code, where M-07 d6 already sends condition losses.
+ *
+ * ABOVE IS BARRED, and the reason is arithmetic rather than taste. The only
+ * credit M-07 d2 supplies is the copy's own cost, so anything booked above it
+ * has no honest home — crediting it recognises income for taking a disc back.
+ * E-06 d16 tried exactly that, giving the copy the refund paid, and since a
+ * refund normally exceeds cost it wrote Inventory up on almost every return:
+ * on the flow's worked example, profit and Inventory were each overstated by
+ * $23.49.
+ *
+ * THE CAP LIVES HERE, not on the screen (A-4, A-48). A-82 says so in terms: a
+ * screen that merely declines to offer a higher figure is not a cap.
+ */
+export function regradeCostRefusal(assessedCost: number, soldCopyCost: number): string | undefined {
+  if (!Number.isFinite(assessedCost) || assessedCost < 0) {
+    return "A re-graded copy's cost cannot be negative.";
+  }
+  // Half a cent of slack, so a figure equal to the cap is never refused by
+  // floating-point noise — the ordinary case is assessing at or above it.
+  if (assessedCost > soldCopyCost + 0.005) {
+    return `A re-graded copy cannot be booked above the $${soldCopyCost.toFixed(2)} the sold copy carried — the excess would be income the store did not earn (A-82).`;
+  }
+  return undefined;
+}
+
+/**
+ * What a re-grade strands, and therefore what posts to `Damaged`.
+ *
+ * A-82 / [E-06](docs/flows/E-06-process-a-return.md) d19 — where the copy is
+ * assessed BELOW what the sold copy carried, the difference is a **period
+ * cost** and posts to its E-04 reason code, which is where M-07 d6 already
+ * sends condition losses. Assessed at or above the cap, nothing is stranded
+ * and no journal is written at all.
+ *
+ * Kept here rather than inline in the store so the figure that reaches the
+ * ledger is the one a test can read.
+ */
+export function regradeShortfall(assessedCost: number, soldCopyCost: number): number {
+  const gap = soldCopyCost - assessedCost;
+  // Sub-cent gaps are not journals. Above the cap is refused elsewhere, and
+  // returns 0 here rather than a negative "shortfall".
+  return gap > 0.005 ? Math.round(gap * 100) / 100 : 0;
+}

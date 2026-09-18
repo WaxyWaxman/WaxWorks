@@ -504,10 +504,35 @@ function AddReturnedItem({ saleId, onClose }: { saleId: string; onClose: () => v
     setScanNote(`No copy matches "${raw}".`);
   };
 
-  // candidate prior Sales to link against (E-06 step 3)
+  // Candidate prior Sales to link against (E-06 step 3). Offered BROADLY —
+  // any tendered Sale of this title — because the Employee may know something
+  // the data does not, and d2 keeps linking optional either way.
   const priorSales = app.sales.filter(
     (s) => s.saleNumber && s.lines.some((l) => l.recordId === item?.recordId && l.qty > 0),
   );
+
+  // E-06 d14 — but PRESELECTED narrowly. Step 3's "the line is linked" is a
+  // default the Employee can undo, not a prompt they must answer. The match
+  // has to be unambiguous to be assumed: this exact copy (not merely this
+  // title), sold to the Customer attached to the Return, on exactly one Sale.
+  //
+  // Offered-only cost money and the walk priced it: a copy sold at $31.49
+  // under a 10% discount defaulted to its $34.99 current price, because d5
+  // reads the refund default off the link. Accepting the default over-refunded
+  // by $3.50 and lost the Customer-history link, with nothing on screen saying
+  // a match existed. Several matches, or none, still leave it unlinked.
+  const returnDoc = app.sales.find((s) => s.id === saleId);
+  const autoLinkFor = (copyId: string): string => {
+    const forCopy = app.sales.filter(
+      (s) =>
+        s.saleNumber &&
+        s.customerId &&
+        s.customerId === returnDoc?.customerId &&
+        s.lines.some((l) => l.inventoryItemId === copyId && l.qty > 0),
+    );
+    return forCopy.length === 1 ? String(forCopy[0].saleNumber) : "";
+  };
+
   const [link, setLink] = useState<string>("");
   const linkedSale = priorSales.find((s) => String(s.saleNumber) === link);
   const linkedLine = linkedSale?.lines.find((l) => l.recordId === item?.recordId);
@@ -515,10 +540,16 @@ function AddReturnedItem({ saleId, onClose }: { saleId: string; onClose: () => v
 
   const pickCopy = (id: string) => {
     setItemId(id);
-    setLink("");
     setQ("");
     setScanNote(null);
-    setRefund((app.itemFor(id)?.price ?? 0).toFixed(2));
+    // d14 — take the sole unambiguous match, and let d5's refund default
+    // follow it to the linked line price rather than the copy's current one.
+    const auto = autoLinkFor(id);
+    setLink(auto);
+    const linked = auto
+      ? app.sales.find((s) => String(s.saleNumber) === auto)?.lines.find((l) => l.inventoryItemId === id)
+      : undefined;
+    setRefund((linked ? linked.price * (1 - linked.discountPct / 100) : (app.itemFor(id)?.price ?? 0)).toFixed(2));
   };
 
   // A-81's fourth status reads as itself. Shown as a departure rather than a
@@ -715,6 +746,11 @@ function RouteStock({
   const [reason, setReason] = useState<AdjustmentReason>("Damaged");
   const [grade, setGrade] = useState<Grade>(item.grade);
   const [price, setPrice] = useState(String(item.price));
+  // E-06 d19 / A-82 — what the copy is assessed at now. Defaults to the cost
+  // the sold copy carried, which is also the CAP: most discs come back fine
+  // and carry it unchanged. The store refuses anything above (A-4, A-48).
+  const [cost, setCost] = useState(item.cost.toFixed(2));
+  const [costRefusal, setCostRefusal] = useState<string | null>(null);
   // A-81, A-28a — the write-off route only. The store refuses without an
   // authorizing Manager (A-4, A-48); this is how one is asked for.
   const [authorizing, setAuthorizing] = useState(false);
@@ -729,10 +765,12 @@ function RouteStock({
       mode === "regrade" ? Number(price) || 0 : undefined,
       mode === "writeoff" ? reason : undefined,
       by,
+      mode === "regrade" ? Number(cost) || 0 : undefined,
     );
     // The store is the one that decides. If it refused, the modal stays open
     // saying why rather than closing on a write that never happened.
     if (res.routed) onClose();
+    else setCostRefusal(res.refusal ?? null);
     return res;
   };
 
@@ -798,7 +836,43 @@ function RouteStock({
                 </option>
               ))}
             </select>
-            <input className="inline-num" type="number" step="0.01" value={price} onChange={(e) => setPrice(e.target.value)} />
+            <input
+              className="inline-num"
+              type="number"
+              step="0.01"
+              aria-label="Shelf price"
+              value={price}
+              onChange={(e) => setPrice(e.target.value)}
+            />
+            <label className="small muted">
+              cost{" "}
+              <input
+                className="inline-num"
+                type="number"
+                step="0.01"
+                aria-label="Assessed cost"
+                value={cost}
+                onChange={(e) => {
+                  setCost(e.target.value);
+                  setCostRefusal(null);
+                }}
+              />
+            </label>
+          </div>
+        )}
+        {mode === "regrade" && (
+          <div className="row" style={{ paddingLeft: 24 }}>
+            <span className="small muted">
+              A <strong>new copy</strong> is minted and gets its own barcode; the copy that sold stays sold at{" "}
+              <strong>{item.grade}</strong> (E-06 d15). Its label is printed after (d18). Cost is capped at the{" "}
+              <strong>{money(item.cost)}</strong> the sold copy carried — below that, the difference posts to{" "}
+              <em>Damaged</em>; above it would be income the store did not earn (A-82).
+            </span>
+          </div>
+        )}
+        {costRefusal && (
+          <div className="row" style={{ paddingLeft: 24 }}>
+            <span className="small bad">{costRefusal}</span>
           </div>
         )}
         <label className="row">
