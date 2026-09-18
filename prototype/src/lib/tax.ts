@@ -148,3 +148,63 @@ export function storeTaxTypes(
   // Type order, not cell order, so the form reads the same way twice running.
   return taxTypes.filter((t) => codes.has(t.code) && (t.ratePpm > 0 || (t.pendingRatePpm ?? 0) > 0));
 }
+
+/**
+ * What a tax-type write lands as, once [M-06](docs/flows/M-06-settings.md) d52's
+ * promotion has been applied.
+ *
+ * d52: *"where the pending date has already passed, the pending rate is
+ * promoted into the current rate before the new one is accepted, so an elapsed
+ * change is never silently dropped."*
+ *
+ * THE DROP THIS EXISTS TO PREVENT. The promotion used to be computed and then
+ * immediately undone: `{ ...promoted, ...row }` let the incoming row's
+ * `ratePpm` — which the editor always sends, carrying the OLD current rate
+ * because the operator did not touch that field — overwrite the rate the
+ * promotion had just moved up. Queue 10% for today, let it take effect, then
+ * queue 12% for December, and the 10% disappeared: the current rate stayed 5%
+ * and no record of the elapsed change survived anywhere. That is precisely the
+ * silent drop d52 names.
+ *
+ * So the promoted rate wins **unless the caller actually edited the rate**,
+ * which is the one case their intent is explicit. Comparing against the old
+ * current rate is what tells the two apart, since the editor cannot say which
+ * field the operator touched.
+ */
+export function taxTypeWrite(existing: TaxType | undefined, row: TaxType, today: string): TaxType {
+  if (!existing) return { ...row };
+
+  const elapsed =
+    !!existing.pendingFrom &&
+    existing.pendingRatePpm !== undefined &&
+    today >= existing.pendingFrom;
+
+  const merged: TaxType = { ...existing, ...row };
+  if (!elapsed) return merged;
+
+  // The caller left the current rate alone, so the promotion stands.
+  const rateUntouched = row.ratePpm === existing.ratePpm;
+  return {
+    ...merged,
+    ratePpm: rateUntouched ? existing.pendingRatePpm! : row.ratePpm,
+    // The promoted pair is consumed either way; what the caller queued next
+    // (which may be nothing) is what `row` carries.
+    pendingRatePpm: row.pendingRatePpm,
+    pendingFrom: row.pendingFrom,
+  };
+}
+
+/**
+ * Has a queued change already taken effect? d52's promotion turns on this.
+ *
+ * Exported because the Settings editor needs the same answer: it writes the
+ * pending **rate** and the pending **date** as two separate saves, and between
+ * them the new rate would otherwise be paired with whatever date was there
+ * before. Where that old date has elapsed, the half-entered pair reads as *in
+ * force right now* and the next save promotes it — so queueing 12% for December
+ * on top of an elapsed 10% banked **12%** as the current rate instead of 10%.
+ * The operator never typed a current rate at all.
+ */
+export function pendingHasElapsed(t: Pick<TaxType, "pendingRatePpm" | "pendingFrom">, today: string): boolean {
+  return !!t.pendingFrom && t.pendingRatePpm !== undefined && today >= t.pendingFrom;
+}

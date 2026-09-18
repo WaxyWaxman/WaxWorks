@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { TAX_GROUP_CELLS, TAX_TYPES } from "../data/seed";
-import { parseCell, resolveLineTax, roundHalfAwayFromZero, taxTypeUseCount } from "./tax";
+import { parseCell, resolveLineTax, roundHalfAwayFromZero, taxTypeUseCount, taxTypeWrite } from "./tax";
+import type { TaxType } from "../data/types";
 
 const AT = "2026-09-15";
 const spec = (groupId: string, code: string) =>
@@ -91,5 +92,59 @@ describe("A-47 rounding", () => {
     expect(roundHalfAwayFromZero(2.505)).toBe(2.51);
     expect(roundHalfAwayFromZero(-2.505)).toBe(-2.51);
     expect(roundHalfAwayFromZero(2.675)).toBe(2.68);
+  });
+});
+
+describe("M-06 d52 — an elapsed pending change is promoted, never silently dropped", () => {
+  const gst = (over: Partial<TaxType> = {}): TaxType =>
+    ({ code: "a", name: "GST", ratePpm: 50_000, ...over }) as TaxType;
+
+  it("promotes the elapsed rate when a new change is queued on top of it", () => {
+    // The bug this was written for. 5% current, 10% queued for today and now in
+    // force; the Manager hears about 12% from December and queues it. The 10%
+    // must become the current rate — it is the rate the shop is actually
+    // charging — and it used to vanish, leaving 5% and no record of it at all.
+    const existing = gst({ pendingRatePpm: 100_000, pendingFrom: "2026-09-18" });
+    const row = gst({ ratePpm: 50_000, pendingRatePpm: 120_000, pendingFrom: "2026-12-01" });
+
+    const next = taxTypeWrite(existing, row, "2026-09-18");
+
+    expect(next.ratePpm).toBe(100_000);
+    expect(next.pendingRatePpm).toBe(120_000);
+    expect(next.pendingFrom).toBe("2026-12-01");
+  });
+
+  it("promotes even when the new write queues nothing", () => {
+    // Clearing the pending pair must still bank the elapsed rate.
+    const existing = gst({ pendingRatePpm: 100_000, pendingFrom: "2026-09-17" });
+    const row = gst({ ratePpm: 50_000 });
+
+    const next = taxTypeWrite(existing, row, "2026-09-18");
+
+    expect(next.ratePpm).toBe(100_000);
+    expect(next.pendingRatePpm).toBeUndefined();
+  });
+
+  it("lets an explicit rate edit win over the promotion", () => {
+    // The one case the caller's intent is unambiguous: they typed in the rate
+    // field, so that is the rate.
+    const existing = gst({ pendingRatePpm: 100_000, pendingFrom: "2026-09-18" });
+    const row = gst({ ratePpm: 70_000 });
+
+    expect(taxTypeWrite(existing, row, "2026-09-18").ratePpm).toBe(70_000);
+  });
+
+  it("leaves a pending change that has NOT elapsed alone", () => {
+    const existing = gst({ pendingRatePpm: 100_000, pendingFrom: "2026-12-01" });
+    const row = gst({ ratePpm: 50_000, pendingRatePpm: 120_000, pendingFrom: "2027-01-01" });
+
+    const next = taxTypeWrite(existing, row, "2026-09-18");
+
+    expect(next.ratePpm).toBe(50_000);
+    expect(next.pendingRatePpm).toBe(120_000);
+  });
+
+  it("a brand new type carries whatever it was given", () => {
+    expect(taxTypeWrite(undefined, gst({ ratePpm: 50_000 }), "2026-09-18").ratePpm).toBe(50_000);
   });
 });
