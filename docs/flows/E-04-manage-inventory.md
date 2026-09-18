@@ -102,6 +102,14 @@ An optional cross-reference links the two, so a payout can be traced to the copi
 
 ## Inherited from other flows
 
+**From [E-06](E-06-process-a-return.md) decision 21:**
+
+- **Decision 16's below-cost ReviewFlag now fires from E-06's re-grade as well as from an edit here.**
+  A copy minted by a re-grade is priced by the Employee at the counter, and is the only sellable copy an
+  Employee can create at a price of their choosing. It was escaping the guardrail: the flag fires when a
+  price is *edited* below cost, and a mint is not an edit. It flags rather than blocks, as decision 16
+  does, so the review queue gains rows from the Return counter that previously did not reach it.
+
 **From [E-06](E-06-process-a-return.md) decision 15:**
 
 - **E-06's re-grade is not this flow's *Edit copy*, and the two must not be merged.**
