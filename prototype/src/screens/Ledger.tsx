@@ -12,6 +12,7 @@ import {
   periodOf,
   sealRefusal,
   sealReport,
+  suspenseNotice,
   sealedPeriods,
   unsealRefusal,
 } from "../lib/ledgerPeriods";
@@ -48,7 +49,9 @@ import {
   type LedgerIssuance,
 } from "../lib/ledgerStatements";
 import {
+  clearedDifference,
   markedTotal,
+  outstandingAfter,
   reconcile,
   reconciliationRefusal,
   unreconciled,
@@ -731,6 +734,12 @@ function SealPhase({ by }: { by: string }) {
                   which period this is and says so before it happens, rather than asking (d5).
                 </p>
               )}
+              {/* d42 — reported, never blocking. d40 refused it and is superseded:
+                  the reference carries a clearing balance between months and
+                  reviews it, and stricter than the trade was not the thing to be. */}
+              {report && suspenseNotice(offered, report.suspenseGross) && (
+                <p className="wo-caveat warn">{suspenseNotice(offered, report.suspenseGross)}</p>
+              )}
               {sealWhy && <p className="wo-caveat warn">{sealWhy}</p>}
               <button
                 className="btn primary"
@@ -742,11 +751,11 @@ function SealPhase({ by }: { by: string }) {
               <p className="small muted">
                 The seal writes a <strong>closing transaction</strong> carrying balance-forwards — computed by the
                 same recomputation that validates it, so <em>stored</em> is by definition the last{" "}
-                <em>recomputed</em> (A-76). A <strong>non-zero Suspense balance refuses it</strong> (d40,
-                superseding d15): a period does not seal over a defect in this system, and d14&rsquo;s override is
-                the route past it. <strong>The day close is unaffected</strong> — M-07 d10 keeps the shop able to end
-                its day, and d4 made <em>seal</em> and <em>close</em> two words precisely so this rule about one is
-                never read as a rule about the other.
+                <em>recomputed</em> (A-76). A <strong>Suspense balance is reported and carried</strong> (d42,
+                superseding d40 and restoring d15&rsquo;s outcome): the reference model carries a clearing balance
+                between months and reviews it rather than clearing it, and it expects the remainder to be one
+                somebody can explain to the accountant. <strong>Nothing here enforces that</strong> — d14&rsquo;s
+                override is the route if you would rather clear it first.
               </p>
             </>
           )}
@@ -1216,6 +1225,10 @@ function ReconcilePhase({ by }: { by: string }) {
   const [accountId, setAccountId] = useState(banky[0]?.id ?? "");
   const [document, setDocument] = useState("");
   const [ticked, setTicked] = useState<Set<string>>(new Set());
+  // d43 — the two figures a Manager copies off the statement. Supplying them
+  // is what makes this a BANK reconciliation rather than a pairing exercise.
+  const [opening, setOpening] = useState("");
+  const [closing, setClosing] = useState("");
   // d37's accepted consequence, made structural: "a Manager has to know which
   // they are doing before they start, because ticking the same entries under
   // the other kind means something different — and the screen therefore cannot
@@ -1225,8 +1238,15 @@ function ReconcilePhase({ by }: { by: string }) {
   const open = unreconciled(app.journals, accountId, app.ledgerReconciliations);
   const key = (e: ReconcilableEntry) => `${e.batchId}#${e.lineIndex}`;
   const selected = open.filter((e) => ticked.has(key(e)));
-  const marked = markedTotal(selected);
-  const why = reconciliationRefusal(selected, document, app.ledgerReconciliations, kind);
+  const statement =
+    kind === "cleared" && opening !== "" && closing !== ""
+      ? { opening: Number(opening), closing: Number(closing) }
+      : undefined;
+  // d43 — a matched set drives its own members to zero; a cleared set drives
+  // the STATEMENT'S movement less the marked entries to zero. Both reach zero.
+  const marked = statement ? clearedDifference(selected, statement) : markedTotal(selected);
+  const why = reconciliationRefusal(selected, document, app.ledgerReconciliations, kind, statement);
+  const outstanding = outstandingAfter(open, selected);
 
   return (
     <div className="grid cols-2">
@@ -1262,13 +1282,37 @@ function ReconcilePhase({ by }: { by: string }) {
               </>
             ) : (
               <>
-                <strong>Cleared</strong> — the entries that appear on the statement. What is left over
-                is outstanding cheques and deposits in transit, and{" "}
-                <strong>that remainder is the point</strong>, not a failure (d37). Balance-neutral by{" "}
-                <em>convention</em>: nothing but your attention stands behind a cleared mark.
+                <strong>Cleared</strong> — the entries that appear on the statement. Enter the
+                statement&rsquo;s <strong>opening and closing balance</strong> and mark entries until the
+                difference between them reaches zero (d43). What is left over is{" "}
+                <strong>outstanding</strong> cheques and deposits in transit, and that remainder is the
+                point rather than a failure — it is only trustworthy because the marked set balanced.
               </>
             )}
           </p>
+
+          {kind === "cleared" && (
+            <div className="row wrap">
+              <label className="field">
+                <span>Statement opening balance</span>
+                <input
+                  type="number"
+                  step="0.01"
+                  value={opening}
+                  onChange={(e) => setOpening(e.target.value)}
+                />
+              </label>
+              <label className="field">
+                <span>Statement closing balance</span>
+                <input
+                  type="number"
+                  step="0.01"
+                  value={closing}
+                  onChange={(e) => setClosing(e.target.value)}
+                />
+              </label>
+            </div>
+          )}
 
           <div className="row wrap">
             <select
@@ -1357,10 +1401,13 @@ function ReconcilePhase({ by }: { by: string }) {
                       authorizedByInitials: by,
                     },
                     kind,
+                    statement,
                   ),
                 );
                 setTicked(new Set());
                 setDocument("");
+                setOpening("");
+                setClosing("");
               }}
             >
               Stamp the set as reconciled together
@@ -1384,6 +1431,33 @@ function ReconcilePhase({ by }: { by: string }) {
             </p>
           </div>
         </div>
+
+        {kind === "cleared" && selected.length > 0 && (
+          <div className="card">
+            <div className="card-head">Outstanding ({outstanding.length})</div>
+            <div className="card-body">
+              <p className="small muted">
+                d43 — what the statement does not show. <strong>This is the output</strong> of a bank
+                reconciliation, not its leftovers, and it is only trustworthy because the marked set
+                balanced. <em>&ldquo;Under no circumstances is there any reason for entries to remain
+                unmarked unless they are truly just waiting for bank clearance.&rdquo;</em>
+              </p>
+              {outstanding.length > 0 && (
+                <table className="data">
+                  <tbody>
+                    {outstanding.map((e) => (
+                      <tr key={`${e.batchId}#${e.lineIndex}`}>
+                        <td>{e.line.businessDate}</td>
+                        <td className="small">{e.line.memo || "—"}</td>
+                        <td className="num">{money(e.line.debit - e.line.credit)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+            </div>
+          </div>
+        )}
 
         <div className="card">
           <div className="card-head">Reconciled sets ({app.ledgerReconciliations.length})</div>
@@ -1412,14 +1486,14 @@ function ReconcilePhase({ by }: { by: string }) {
           <div className="card-head">Why there are two kinds</div>
           <div className="card-body">
             <p className="small muted">
-              d25 gave one rule — <em>entries within one account that net to zero</em> — and named two
-              cases under it. <strong>It served one.</strong> Building this refused a complete and
-              correct September bank reconciliation, <strong>out by 18,800</strong>, which is what
-              turned the question from arguable into visible. <strong>d37</strong> answers it: a{" "}
-              <strong>matched</strong> set nets to zero and is neutral by construction; a{" "}
-              <strong>cleared</strong> set marks what the document shows and carries the remainder as
-              its point. Both move no money and gate nothing — an unreconciled account seals exactly
-              as a reconciled one does.
+              d25 gave one rule — <em>entries within one account that net to zero</em> — and named two cases
+              under it. <strong>It served one.</strong> Building this refused a complete and correct
+              September bank reconciliation, <strong>out by 18,800</strong>, which turned the question from
+              arguable into visible. <strong>d37</strong> split it in two and <strong>d43</strong> corrected
+              the half that was still wrong: <strong>both kinds reach zero</strong>, a matched set against
+              its own members and a cleared set against the statement&rsquo;s own movement. The reference
+              model runs one routine and tells the two apart by whether you supply a closing date and the
+              statement&rsquo;s balances.
             </p>
           </div>
         </div>
