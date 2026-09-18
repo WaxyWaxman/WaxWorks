@@ -221,7 +221,13 @@ export function buildCloseJournal(input: CloseJournalInput): CloseJournalResult 
             ? need(roleAccount(accounts, "revenue"), "Sales (role)")
             : need(seamAccount(accounts, mappings, "section", section.code), `Section ${section.name}`);
           postings.push(
-            credit(target, bd, round(lineNet(line)), cur, `Revenue — ${section.name}`, section.code),
+            // d26 — an unmatched return posts NO revenue. `lineNet` is negative
+            // on a return, so crediting it here would reduce revenue, which is
+            // exactly what d26 says an unmatched one must not do: the money is
+            // a purchase. The Inventory debit it gets instead is below.
+            ...(line.unmatchedReturn
+              ? []
+              : [credit(target, bd, round(lineNet(line)), cur, `Revenue — ${section.name}`, section.code)]),
           );
         }
       }
@@ -239,6 +245,26 @@ export function buildCloseJournal(input: CloseJournalInput): CloseJournalResult 
             round(c.amount),
             cur,
             `${c.name} collected`,
+          ),
+        );
+      }
+
+      // --- E-06 d26 — an unmatched return BUYS the disc ---------------------
+      //
+      // The shop has no sold record for it, so there is nothing to reverse:
+      // no revenue to give back and no cost to move out of cost of goods. What
+      // happened is a purchase, and it balances as one — Inventory debited at
+      // the refund paid, against the Cash the tender postings below already
+      // credit. `lineNet` is negative on a return, so the debit takes its
+      // absolute value.
+      if (line.unmatchedReturn) {
+        postings.push(
+          debit(
+            need(inventoryAcct, "Inventory (role)"),
+            bd,
+            round(Math.abs(lineNet(line))),
+            cur,
+            "Inventory — bought in on an unmatched return",
           ),
         );
       }
@@ -336,6 +362,13 @@ function costPostings(
   need: (a: GLAccount | undefined, what: string) => string,
 ): Posting[] {
   if (line.kind !== "item" || !line.inventoryItemId) return [];
+  // E-06 d26 — an UNMATCHED return has no sale to reverse and no cost to move
+  // back, because nothing ever paid for the disc. Its Inventory debit comes
+  // from `unmatchedPostings` below, at the refund paid, and reversing a cost
+  // here as well would put the copy into Inventory twice. The line's
+  // `inventoryItemId` still points at the copy the Employee PICKED, which d24
+  // is explicit is a different physical object.
+  if (line.unmatchedReturn) return [];
   const item = inventory.find((i) => i.id === line.inventoryItemId);
   if (!item || !item.cost) return [];
   const cost = round(item.cost * Math.abs(line.qty));

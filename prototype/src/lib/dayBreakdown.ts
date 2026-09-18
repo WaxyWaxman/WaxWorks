@@ -37,6 +37,16 @@ export interface DayBreakdown {
   // column can be reconciled against net sales instead of silently
   // disagreeing with it (M-03 d14).
   giftCardsLoaded: number;
+  /**
+   * E-06 d26 — returns that took in a disc the shop has no sold record for.
+   * Money that left the till and is NOT a reduction of revenue: d26 books such
+   * a copy at the refund paid and treats that money as a **purchase**, since
+   * there is no sale to reverse. Reported on its own for the reason M-03 d14
+   * gives a gift-card load — kept out of gross and out of Section, and named,
+   * so the tender column can still be reconciled against net sales instead of
+   * silently exceeding it.
+   */
+  unmatchedReturns: number;
   voidCount: number;
   holdsCreatedCount: number;
   holdsCancelledCount: number;
@@ -73,6 +83,7 @@ export function computeDayBreakdown(
   let grossSales = 0;
   let returnsAmount = 0;
   let giftCardsLoaded = 0;
+  let unmatchedReturns = 0;
   const sectionAmounts = new Map<string, number>();
   const taxAmounts = new Map<string, number>();
 
@@ -88,6 +99,10 @@ export function computeDayBreakdown(
       if (l.kind !== "item" && l.kind !== "nontracked") continue;
       const net = round2(lineNet(l));
       if (l.qty >= 0) grossSales += net;
+      // d26 — an unmatched return is a purchase, not a reversal, so it reduces
+      // neither gross nor net. Same shape as the gift-card load above: out of
+      // gross, out of Section, and named rather than absorbed.
+      else if (l.unmatchedReturn) unmatchedReturns = round2(unmatchedReturns + net);
       else returnsAmount += net;
       // d17, d31 — every sellable thing carries a genre, so both kinds of
       // line resolve the same way and there is no generic bucket left: an
@@ -100,7 +115,13 @@ export function computeDayBreakdown(
       // d20 — whether a Section enters revenue reporting is a property of
       // the Section, not a special case hard-coded for gift cards. Off keeps
       // it out of *By Section* entirely.
-      if (section?.countsAsRevenue !== false) {
+      // d26 — out of Section as well as out of gross, for the reason M-03 d14
+      // keeps a gift-card load out of both: it is money that moved without
+      // being a sale, and filing it under a Section would overstate that
+      // Section's takings. The TAX below is deliberately still counted — the
+      // money really did leave the till — and whether an unmatched Return
+      // should carry tax at all is an open question d26 did not settle.
+      if (!l.unmatchedReturn && section?.countsAsRevenue !== false) {
         const label = section?.name ?? "—";
         sectionAmounts.set(label, round2((sectionAmounts.get(label) ?? 0) + net));
       }
@@ -171,6 +192,7 @@ export function computeDayBreakdown(
         : null,
     byTaxLine: [...taxAmounts.entries()].map(([name, amount]) => ({ name, amount })),
     giftCardsLoaded,
+    unmatchedReturns: round2(unmatchedReturns),
     voidCount,
     holdsCreatedCount,
     holdsCancelledCount,
