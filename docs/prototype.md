@@ -109,6 +109,55 @@ that is a separate question nobody has answered yet._
 ## Known simplifications
 
 - Mock data only; no persistence, no live catalog provider, no printing.
+- **The shop opens with a month of trading behind it**, generated at load by
+  [`prototype/src/data/history.ts`](../prototype/src/data/history.ts) — around
+  520 copies received across seven Invoices from five Suppliers, some 227 Sales
+  over thirty days, a close for each of those days, two settlements, a
+  hand-entered bill, ten more Customers and fourteen more titles. `seed.ts` is
+  untouched and holds the master data as before; everything generated is
+  **additive**, which is why the pure-function tests that import the seed see
+  exactly what they always saw.
+  **It is illustrative and it is not a fixture.** Volumes, titles, prices and
+  the shop's trading pattern are invented to make the screens legible; no
+  decision implies any of them, and no test asserts against the figures.
+  Two properties are load-bearing rather than decorative, and
+  [`history.test.ts`](../prototype/src/data/history.test.ts) holds both:
+  **every artifact's journal is built by the same `buildInvoiceJournal`,
+  `buildPaymentJournal` and `buildCloseJournal` the app calls** — so the books
+  cannot disagree with the artifacts, and no generated journal reaches Suspense
+  or leaves a seam unresolved ([M-07](flows/M-07-chart-of-accounts.md) d12,
+  [architecture](architecture.md) A-67) — and **no copy is ever sold before the
+  Invoice that minted it was finalized.**
+- **The dates are relative to the real calendar**, generated at load so the
+  window always ends yesterday and today is always an empty day waiting to be
+  traded and closed. *Accepted consequence:* the same click gives different
+  figures next week, which is affordable only because nothing asserts against
+  them. The alternative was a fixed anchor, and the seed already showed what
+  that costs — its newest hand-written Sale is dated 2026-09-08 and does not
+  move, so the shop reads as more abandoned every week that passes.
+- **The four hand-written Sales in `seed.ts` are deliberately left out of the
+  generated month.** Three carry state `Closed` while belonging to no
+  CloseBatch and having no journal, and the fourth is the Held sale
+  [E-05](flows/E-05-sell-a-record.md) wants. They exist to give
+  [E-06](flows/E-06-process-a-return.md)'s return-linking and Search's *had
+  before* state something specific to match, and two of them point at titles
+  the shop holds no copy of — so journalling them would have to invent a cost
+  or push the difference to Suspense, which is a worse lie than the gap.
+  A second consequence, smaller and also left alone: **their Sale numbers
+  invert against the generated month.** Numbering starts at 100242, just past
+  the highest number the seed had spent, while two of those Sales are dated
+  inside the generated window — so `100241` dated 21 August sits behind
+  `100242` dated 18 August. Renumbering them would mean editing `seed.ts`,
+  which is the one thing this change does not do.
+- **The artifacts `seed.ts` already held now carry journals too** — its three
+  Finalized Invoices and its one settlement, which were written before this
+  prototype wrote journals at all. Not tidiness:
+  [M-05](flows/M-05-accounts-payable.md) commits that the ledger's *Accounts
+  payable* account **is** that flow's balance *"exactly and permanently — a
+  divergence is a defect, never a leftover"*, and journalling the generated
+  month while leaving those four out would have put the shop's own seeded debt
+  outside the books and made that invariant false on the first screen anyone
+  opened.
 - **Tax now follows M-06 d11** — two tables, resolved through a Genre’s product tax code. The Settings screen carries the types, the product codes and the group × code grid, and recomputes M-06’s own worked example live. ~~**Still simplified:** the GL account on a tax type is reserved and unread (d23, d11).~~ **No longer a simplification, and no longer a field:** [M-06](flows/M-06-settings.md) d58 retires the GL fields on tax types, tenders and Sections, and [M-07](flows/M-07-chart-of-accounts.md) d4 holds the mapping instead — so the prototype showing no GL account is now correct rather than simplified. What it does not yet model is M-07 itself. **Closed since:** the search screen's catalog rows are now `release_cache` entries rather than `Record`s carrying a flag — `catalogOnly` is gone, and with it the one type that was standing in for two things. **Closed since:** non-tracked entries carry a genre (d17); a gift card load resolves through its own system-owned entry (d18); and **d6's genre map is modelled** — seeded, editable, and resolving at adoption. **Closed since:** non-tracked entries now carry a genre and resolve tax through it like everything else (d17), and a gift card load resolves through its own system-owned entry (d18) — it carried a hardcoded standard code and was being taxed at 14.975% in Quebec on money the shop had merely received.
 - **A Record no longer stores a Section** ([M-06](flows/M-06-settings.md) d31, d32). It is derived
   through the genre's required parent in `lib/taxonomy.ts`, so correcting a genre moves the
@@ -125,14 +174,19 @@ that is a separate question nobody has answered yet._
   the *By Section* bucket noted under Point of Sale below still exists.
 - **Manager-only authorisation resolves a real, active Manager** and asks for their password where they have one ([E-01](flows/E-01-authenticate.md) d21) — it is no longer *"initials-only with no real auth"*, which it was, and which meant the gate was satisfied by initials belonging to nobody. What it still is not, is authentication: a shop may set a one-letter password, and a Manager without one is through on their initials alone. The component is `ManagerAuthorize`, named after §6's `manager_authorize`; it was `ManagerOverride`, after a term the [lexicon](lexicon.md) retired.
 - Open questions in the flow docs are surfaced in the UI but not resolved.
-- **The Suppliers ledger's two figures do not visibly differ under seed data.** Received is cost
-  of goods and the A/P figure is Invoice totals (A-29, E-02 d34), but every seeded Invoice carries
-  zero tax, freight and misc, so the two coincide. Sold reads `$0.00` for every Supplier for the
-  same reason: the only completed Sale line referencing a tracked copy points at a used copy with
-  no Invoice behind it, which the track correctly excludes and counts. Both computations are
-  correct — the seed simply does not exercise them.
-- **The in-flight band's three-row cap is not reached by seed data** — no seeded Supplier carries
-  more than three. The design mock (`design/suppliers-ui-mock.html`) exercises it at six.
+- ~~**The Suppliers ledger's two figures do not visibly differ under seed data.**~~
+  **Closed by the generated month.** Received is cost of goods and the A/P figure is Invoice
+  totals (A-29, E-02 d34); they coincided because every hand-written Invoice carried zero tax,
+  freight and misc, and Sold read `$0.00` for every Supplier because the only completed Sale line
+  referencing a tracked copy pointed at a used copy with no Invoice behind it. The generated
+  Invoices carry freight and a **labelled GST and QST split** (E-02 d53), and the month's Sales
+  consume copies those Invoices minted, so all three figures now differ and can be read against
+  each other. *F.A.B. Distribution shows Received $2,208.64 against an outstanding A/P of
+  $1,745.40, and Sold $5,626.83 — 263 in, 179 sold.* The computations were always correct; the
+  seed simply did not exercise them.
+- **The in-flight band's three-row cap is still not reached** — the generated month receives
+  against its orders rather than leaving four or more outstanding with any one Supplier. The
+  design mock (`design/suppliers-ui-mock.html`) exercises it at six.
 - Suppliers (M-01) are built with the full field set. **Discount is gated** behind in-place
   Manager authorisation (decisions 11, 13) — initials only, like every other gate here, with no
   real auth behind it. Merge and Delete are labeled, not enforced. There is no separate Margin
