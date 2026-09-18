@@ -30,7 +30,13 @@ import {
   invoiceChargesTotal,
 } from "../lib/totals";
 import { clearedAgainst, entryIsCleared, unclearRefusal } from "../lib/payables";
-import { regradeCostRefusal, regradeShortfall, routeStockRefusal, statusAfterRoute } from "../lib/returnRouting";
+import {
+  regradeCostRefusal,
+  regradeShortfall,
+  routeDocumentRefusal,
+  routeStockRefusal,
+  statusAfterRoute,
+} from "../lib/returnRouting";
 import { requireManager, type ManagerAuth } from "../lib/managerAuth";
 import { buildChart } from "../lib/chart";
 import { buildCloseJournal } from "../lib/closeJournal";
@@ -3350,6 +3356,14 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
     const by = mgr?.ok ? mgr.name : undefined;
     const refusal = routeStockRefusal(to, mgr?.ok ? { role: "Manager", active: true, name: by! } : undefined);
     if (refusal) return { routed: false, refusal };
+
+    // d20, d22 — the DOCUMENT has to allow routing before anything else is
+    // asked. Refused here and not only by hiding the control (A-4, A-48): the
+    // walk that found this reached it on a voided Return through the screen,
+    // and a second caller would reach it whatever the screen renders.
+    const doc = s.sales.find((x) => x.id === saleId);
+    const docRefusal = doc ? routeDocumentRefusal(doc) : "That Return no longer exists.";
+    if (docRefusal) return { routed: false, refusal: docRefusal };
 
     const soldCopy = s.inventory.find((i) => i.id === itemId);
     // A-82 / E-06 d19 — the re-graded copy's cost is capped at the cost the

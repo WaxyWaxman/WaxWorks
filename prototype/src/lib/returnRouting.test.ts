@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { regradeCostRefusal, regradeShortfall, routeStockRefusal, statusAfterRoute } from "./returnRouting";
+import {
+  regradeCostRefusal,
+  regradeShortfall,
+  routeDocumentRefusal,
+  routeStockRefusal,
+  statusAfterRoute,
+} from "./returnRouting";
 import { isPresent } from "./totals";
 import type { InventoryItem } from "../data/types";
 
@@ -138,5 +144,36 @@ describe("A-82 — the shortfall a re-grade posts to Damaged", () => {
   it("uses E-06's worked example", () => {
     // Received $8.00, assessed at $2.00 after coming back badly marked.
     expect(regradeShortfall(2.0, 8.0)).toBe(6.0);
+  });
+});
+
+describe("E-06 decisions 20, 22, 23 — when a Return may route at all", () => {
+  it("refuses a draft, which has no Sale number yet", () => {
+    // d20. Routing an unfinished draft minted a sellable copy with no refund
+    // paid and no tendered document, and d10's void refusal then stranded it.
+    expect(routeDocumentRefusal({ state: "Open" })).toMatch(/decision 20/);
+  });
+
+  it("refuses a VOIDED Return, even though it kept its number", () => {
+    // d22, and the reason the hole existed: the finished test is the Sale
+    // number and a void RETAINS it (E-05 d31), so a voided Return went on
+    // reading as finished. The walk drove it and minted a sellable copy on a
+    // document whose money had already been collected back.
+    const why = routeDocumentRefusal({ saleNumber: 100391, state: "Void" });
+
+    expect(why).toBeDefined();
+    expect(why).toMatch(/voided/);
+    expect(why).toMatch(/decision 22/);
+  });
+
+  it("permits a finished Return", () => {
+    expect(routeDocumentRefusal({ saleNumber: 100390, state: "Current" })).toBeUndefined();
+  });
+
+  it("permits a CLOSED Return, so routing outlives the day close", () => {
+    // d23 — the case the fix could have broken by accident. Written as "only
+    // while Current" this would strand every copy that crossed a close, and a
+    // Return taken at five o'clock is looked at the next morning.
+    expect(routeDocumentRefusal({ saleNumber: 100390, state: "Closed" })).toBeUndefined();
   });
 });
