@@ -1,4 +1,4 @@
-import type { ItemStatus, UserRole } from "../data/types";
+import type { ItemStatus, SaleState, UserRole } from "../data/types";
 
 /**
  * E-06 step 6 — where a returned copy goes once the Employee has assessed it.
@@ -36,6 +36,33 @@ export interface AuthorizingManager {
   role: UserRole;
   active: boolean;
   name: string;
+}
+
+/**
+ * Whether the Return itself may be routed at all, before asking who is asking.
+ *
+ * d20: a copy is routed only **after the Return is finished**. d22 narrows it —
+ * **and never once the Return is voided**. The finished test is the Sale
+ * number, which a void RETAINS ([E-05](docs/flows/E-05-sell-a-record.md) d31),
+ * so a voided Return went on reading as finished and kept its Route control.
+ * A void says the return did not happen: the money went back and the customer
+ * took their disc away, so there is no copy in the shop to route.
+ *
+ * d23: `Closed` is fine. The rule is *finished and not voided*, never *only
+ * while `Current`* — a Return taken at five o'clock is looked at the next
+ * morning, and the second wording would strand every copy that crossed a close.
+ */
+export function routeDocumentRefusal(sale: {
+  saleNumber?: number;
+  state: SaleState;
+}): string | undefined {
+  if (!sale.saleNumber) {
+    return "A returned copy is routed after the Return is finished (E-06 decision 20).";
+  }
+  if (sale.state === "Void") {
+    return "This Return was voided — the money went back and the copy went with the customer, so there is nothing to route (E-06 decision 22).";
+  }
+  return undefined;
 }
 
 export function routeStockRefusal(

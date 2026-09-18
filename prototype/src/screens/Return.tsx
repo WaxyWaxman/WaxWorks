@@ -77,6 +77,10 @@ function ReturnEditor({ saleId }: { saleId: string }) {
   );
 
   const finished = !!sale.saleNumber;
+  // d22 — a void RETAINS the Sale number (E-05 d31), so `finished` alone kept
+  // the Route control alive on a voided Return. The store refuses either way;
+  // this stops offering something that would be refused.
+  const routable = finished && sale.state !== "Void";
   const latestLog = sale.log.length ? sale.log[sale.log.length - 1] : null;
 
   return (
@@ -181,7 +185,7 @@ function ReturnEditor({ saleId }: { saleId: string }) {
                       {l.inventoryItemId ? (
                         routed ? (
                           <span className="badge ok">{l.routedTo}</span>
-                        ) : finished ? (
+                        ) : routable ? (
                           <button
                             className="btn sm"
                             onClick={() => setRouteItem({ lineId: l.id, itemId: l.inventoryItemId! })}
