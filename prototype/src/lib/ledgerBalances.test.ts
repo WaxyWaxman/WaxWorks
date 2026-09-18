@@ -12,6 +12,7 @@ import {
   divergenceFlag,
   divergences,
   recomputeAsAt,
+  suspenseGrossFor,
   totalOf,
 } from "./ledgerBalances";
 
@@ -312,5 +313,40 @@ describe("M-08 — activity in a range stands alone", () => {
     expect(totalOf(activityBetween(BATCHES, "2026-09-01", "2026-09-30", { accountId: "1010" }))).toBe(
       -1200,
     );
+  });
+});
+
+describe("M-08 d40, M-07 d25 — the Suspense total is GROSS, and that is the point", () => {
+  const SUSPENSE = "9999";
+
+  it("reports SIX where a period is short three on one date and over three on another", () => {
+    // d15's surviving half, and the reason gross is not net: "two defects
+    // report as none" otherwise. The ACCOUNT balance here is zero.
+    const batches = [
+      batch("s1", [line(SUSPENSE, "2026-08-04", 3, 0)]),
+      batch("s2", [line(SUSPENSE, "2026-08-19", 0, 3)]),
+    ];
+    expect(totalOf(recomputeAsAt(batches, "2026-08-31", { accountId: SUSPENSE }))).toBe(0);
+    expect(suspenseGrossFor("2026-08", batches, SUSPENSE)).toBe(6);
+  });
+
+  it("nets WITHIN a date, so one defect is not reported twice", () => {
+    const batches = [
+      batch("s1", [line(SUSPENSE, "2026-08-04", 3, 0), line(SUSPENSE, "2026-08-04", 0, 1)]),
+    ];
+    expect(suspenseGrossFor("2026-08", batches, SUSPENSE)).toBe(2);
+  });
+
+  it("counts only the period asked for", () => {
+    const batches = [
+      batch("s1", [line(SUSPENSE, "2026-08-04", 3, 0)]),
+      batch("s2", [line(SUSPENSE, "2026-09-04", 5, 0)]),
+    ];
+    expect(suspenseGrossFor("2026-08", batches, SUSPENSE)).toBe(3);
+    expect(suspenseGrossFor("2026-09", batches, SUSPENSE)).toBe(5);
+  });
+
+  it("is zero for a clean period, which is what lets d40 seal it", () => {
+    expect(suspenseGrossFor("2026-08", BATCHES, SUSPENSE)).toBe(0);
   });
 });

@@ -119,6 +119,8 @@ export interface LedgerReconciliation {
    * says they checked against.
    */
   document: string;
+  /** d43 — the statement's own figures, on a cleared set. What it balanced to. */
+  statement?: StatementBalances;
   reconciledAt: string;
   actorInitials: string;
   authorizedByInitials: string;
@@ -138,6 +140,53 @@ export interface MarkedTotal {
   count: number;
   balanced: boolean;
 }
+
+/**
+ * d43 — the two figures a Manager copies off the bank statement.
+ *
+ * Supplying them is what makes a reconciliation a **bank** reconciliation:
+ * *"If you do not supply a date, then the opening and closing balance fields
+ * are not available. This indicates that you are reconciling entries within an
+ * account but not balancing to an external document."*
+ */
+export interface StatementBalances {
+  opening: number;
+  closing: number;
+}
+
+/**
+ * d43 — what a **cleared** set drives to zero: the statement's own movement,
+ * less what has been marked.
+ *
+ * *"Your goal is to Mark entries so that a zero Balance results… If you
+ * supplied opening and closing amounts then the Balance should be the
+ * difference between the two. As you mark entries the balance will change."*
+ */
+export function clearedDifference(
+  marked: ReconcilableEntry[],
+  statement: StatementBalances,
+): MarkedTotal {
+  const moved = cents(statement.closing) - cents(statement.opening);
+  const diff = moved - cents(markedTotal(marked).difference);
+  return { difference: dollars(diff), count: marked.length, balanced: diff === 0 };
+}
+
+/**
+ * d43 — what is left once the statement is accounted for.
+ *
+ * *"The remaining unmarked entries are considered to be outstanding… Under no
+ * circumstances is there any reason for entries to remain unmarked unless they
+ * are truly just waiting for bank clearance."* **This is the output of a bank
+ * reconciliation**, and it is only worth anything because the marked set
+ * balanced.
+ */
+export const outstandingAfter = (
+  all: ReconcilableEntry[],
+  marked: ReconcilableEntry[],
+): ReconcilableEntry[] => {
+  const taken = new Set(marked.map(entryKey));
+  return all.filter((e) => !taken.has(entryKey(e)));
+};
 
 /** What the screen shows continuously while entries are being ticked. */
 export function markedTotal(entries: ReconcilableEntry[]): MarkedTotal {
@@ -174,6 +223,7 @@ export function reconciliationRefusal(
   document: string,
   existing: LedgerReconciliation[],
   kind: ReconciliationKind = "matched",
+  statement?: StatementBalances,
 ): string | undefined {
   // INFERRED, by parallel with M-05 d15, which needs at least two members.
   // A single entry netting to zero would be a $0.00 line, and no journal in
@@ -203,17 +253,35 @@ export function reconciliationRefusal(
     return `${already.length} of these entries are already reconciled.`;
   }
 
-  // d25, d37 — a MATCHED set nets to zero, which is what makes it
-  // balance-neutral by CONSTRUCTION rather than by a rule enforced afterwards.
-  // A CLEARED set does not, and must not be asked to: its remainder is the
-  // outstanding list, which is the answer the exercise exists to produce.
+  // d25, d37, d43 — **both kinds reach zero**, against different quantities.
+  //
+  // A MATCHED set nets to nothing among its own members: offsetting entries,
+  // balance-neutral by construction.
+  //
+  // A CLEARED set nets against the STATEMENT'S OWN MOVEMENT — closing balance
+  // less opening balance. d37 had it netting to nothing at all and accepted
+  // that the mark was neutral only "by convention"; d43 restores the guarantee
+  // by modelling the two figures a Manager copies off the paper.
   if (kind === "matched") {
     const { difference } = markedTotal(selected);
     if (cents(difference) !== 0) {
       return `This set is out by ${Math.abs(difference).toFixed(2)}. A matched set nets to zero — mark it as cleared against a statement instead (d37).`;
     }
+    return undefined;
   }
 
+  if (!statement) {
+    return "A cleared set needs the statement's opening and closing balance (d43).";
+  }
+  const { difference } = clearedDifference(selected, statement);
+  if (cents(difference) !== 0) {
+    return (
+      `Out by ${Math.abs(difference).toFixed(2)}. The statement moved ` +
+      `${(statement.closing - statement.opening).toFixed(2)}; the marked entries come to ` +
+      `${markedTotal(selected).difference.toFixed(2)}. Mark what is on the statement and leave the rest ` +
+      `outstanding (d43).`
+    );
+  }
   return undefined;
 }
 
@@ -235,10 +303,12 @@ export function reconcile(
   document: string,
   by: { reconciledAt: string; actorInitials: string; authorizedByInitials: string },
   kind: ReconciliationKind = "matched",
+  statement?: StatementBalances,
 ): LedgerReconciliation {
   return {
     id,
     kind,
+    ...(statement ? { statement } : {}),
     accountId: selected[0].line.accountId,
     members: selected.map(({ batchId, lineIndex }) => ({ batchId, lineIndex })),
     document,

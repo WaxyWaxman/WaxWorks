@@ -5,6 +5,7 @@ import {
   entriesInAccount,
   entryKey,
   markedTotal,
+  outstandingAfter,
   reconcile,
   reconciliationJournalLines,
   reconciliationRefusal,
@@ -191,7 +192,7 @@ describe("M-08 — what is left to check", () => {
   });
 });
 
-describe("M-08 d37 — a bank statement is a second KIND, not a case of the first", () => {
+describe("M-08 d37, d43 — a bank statement is a second KIND, and it balances too", () => {
   // This describe block used to assert the opposite: that a complete and
   // correct bank reconciliation was REFUSED, out by 18,800. It was right, and
   // it is what turned the open question from arguable into visible. d37 answers
@@ -205,11 +206,64 @@ describe("M-08 d37 — a bank statement is a second KIND, not a case of the firs
     );
   });
 
-  it("PERMITS the same entries as a CLEARED set, whose remainder is the point", () => {
-    // "A bank reconciliation ticks what appears on the statement, and what is
-    // left over is outstanding cheques and deposits in transit."
+  it("M-08 d43 — a CLEARED set balances against the statement's own two figures", () => {
+    // d37 had this netting to nothing at all, and accepted that the mark was
+    // neutral only "by convention". The reference balances it against the
+    // statement: "the Balance should be the difference between the two. As you
+    // mark entries the balance will change" — so d43 restores the guarantee.
+    //
+    // The bank account moved 800 in September. A statement showing the same
+    // movement reconciles; one showing anything else does not.
     const bank = entriesInAccount(BATCHES, "1010");
-    expect(reconciliationRefusal(bank, "Bank statement, September", [], "cleared")).toBeUndefined();
+    expect(markedTotal(bank).difference).toBe(800);
+
+    expect(
+      reconciliationRefusal(bank, "Bank statement, September", [], "cleared", {
+        opening: 1_000,
+        closing: 1_800,
+      }),
+    ).toBeUndefined();
+  });
+
+  it("M-08 d43 — refuses when the marked entries do not account for the movement", () => {
+    const bank = entriesInAccount(BATCHES, "1010");
+    const why = reconciliationRefusal(bank, "Bank statement", [], "cleared", {
+      opening: 1_000,
+      closing: 1_950,
+    });
+    expect(why).toContain("Out by 150.00");
+    expect(why).toContain("statement moved 950.00");
+    expect(why).toContain("leave the rest outstanding");
+  });
+
+  it("M-08 d43 — refuses a cleared set with no statement figures at all", () => {
+    // Supplying them is what makes it a BANK reconciliation rather than a
+    // pairing exercise. Without them there is nothing to balance against.
+    const bank = entriesInAccount(BATCHES, "1010");
+    expect(reconciliationRefusal(bank, "Bank statement", [], "cleared")).toContain(
+      "needs the statement's opening and closing balance",
+    );
+  });
+
+  it("M-08 d43 — the unmarked remainder is the OUTSTANDING list, and is the output", () => {
+    // "The remaining unmarked entries are considered to be outstanding… Under
+    // no circumstances is there any reason for entries to remain unmarked
+    // unless they are truly just waiting for bank clearance."
+    const bank = entriesInAccount(BATCHES, "1010");
+    const marked = [bank[0]];
+    const outstanding = outstandingAfter(bank, marked);
+    expect(outstanding).toHaveLength(bank.length - 1);
+    expect(outstanding.map((e) => e.line.businessDate)).not.toContain(bank[0].line.businessDate);
+  });
+
+  it("M-08 d43 — records the statement it balanced to, on the stamped set", () => {
+    const bank = entriesInAccount(BATCHES, "1010");
+    const r = reconcile("rec-b9", bank, "Bank statement, September", BY, "cleared", {
+      opening: 1_000,
+      closing: 1_800,
+    });
+    expect(r.kind).toBe("cleared");
+    expect(r.statement).toEqual({ opening: 1_000, closing: 1_800 });
   });
 
   it("keeps every other rule for a cleared set — one account, a document, no double-marking", () => {
