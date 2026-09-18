@@ -42,7 +42,17 @@ export interface RecordEntry {
   preferredSupplierId?: string;
 }
 
-export type ItemStatus = "sellable" | "held" | "sold";
+// A-81 adds `written_off` as a FOURTH status. It is a departure from on hand
+// exactly as `sold` is, and it is **not a sale** — architecture §5.1. Without
+// it a copy written off after a Return was stored as `sold` and became
+// indistinguishable from one somebody bought, so the shrinkage figure and the
+// margin figure were wrong by the same amount and neither said so.
+//
+// §5.1's warning is the one that bites when reading this line: the on-hand
+// derivations enumerate statuses POSITIVELY and are unchanged, but a query
+// that remembers three from memory counts a written-off copy as present.
+// Ask `isPresent` (lib/totals.ts) rather than testing for `!== "sold"`.
+export type ItemStatus = "sellable" | "held" | "sold" | "written_off";
 
 export interface InventoryItem {
   id: string;

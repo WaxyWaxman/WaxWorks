@@ -151,8 +151,22 @@ export function customerBalanceDelta(tender: Pick<Tender, "type" | "amount" | "a
  * already sold and not received" is `onHand` below. A Record can hold a copy
  * and still be net negative.
  */
+/**
+ * Is this copy still here? §5.1's first term, as a predicate.
+ *
+ * POSITIVELY ENUMERATED, and that is the whole point. A-81 adds a fourth
+ * status, `written_off`, a departure from on hand exactly as `sold` is — and
+ * §5.1 warns that "a query that enumerates statuses from memory rather than
+ * reading this block will count a written-off copy as present". Three screens
+ * asked `status !== "sold"` and would each have done exactly that. Asking a
+ * positive question means a status added later is absent until somebody
+ * deliberately adds it, rather than present by default.
+ */
+export const isPresent = (i: Pick<InventoryItem, "status">): boolean =>
+  i.status === "sellable" || i.status === "held";
+
 export const copiesPresent = (recordId: string, inv: InventoryItem[]): number =>
-  inv.filter((i) => i.recordId === recordId && (i.status === "sellable" || i.status === "held")).length;
+  inv.filter((i) => i.recordId === recordId && isPresent(i)).length;
 
 /**
  * Oversold copies still owed — minted straight from a Sale before any Invoice

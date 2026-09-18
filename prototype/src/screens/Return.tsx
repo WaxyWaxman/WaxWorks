@@ -11,6 +11,7 @@ import { balanceDue, saleTotals } from "../lib/totals";
 import { defaultTenderRow } from "../lib/tenders";
 import { useApp } from "../store/AppStore";
 import { useActor } from "../components/Identify";
+import { ManagerAuthorize } from "../components/ManagerAuthorize";
 
 // Entered exclusively from the till rail's + New return (mirrors how
 // /sell/:saleId is never itself a nav item). A Return is a Sale with isReturn
@@ -520,9 +521,14 @@ function AddReturnedItem({ saleId, onClose }: { saleId: string; onClose: () => v
     setRefund((app.itemFor(id)?.price ?? 0).toFixed(2));
   };
 
+  // A-81's fourth status reads as itself. Shown as a departure rather than a
+  // sale, because "sold" against a copy nobody bought is the confusion the
+  // status exists to end.
   const statusBadge = (status: string) =>
     status === "sold" ? (
       <span className="badge ok">sold</span>
+    ) : status === "written_off" ? (
+      <span className="badge warn">written off</span>
     ) : status === "held" ? (
       <span className="badge warn">held</span>
     ) : (
@@ -709,6 +715,40 @@ function RouteStock({
   const [reason, setReason] = useState<AdjustmentReason>("Damaged");
   const [grade, setGrade] = useState<Grade>(item.grade);
   const [price, setPrice] = useState(String(item.price));
+  // A-81, A-28a — the write-off route only. The store refuses without an
+  // authorizing Manager (A-4, A-48); this is how one is asked for.
+  const [authorizing, setAuthorizing] = useState(false);
+
+  const apply = (by?: string) => {
+    const res = app.routeReturnLine(
+      saleId,
+      lineId,
+      itemId,
+      mode,
+      mode === "regrade" ? grade : undefined,
+      mode === "regrade" ? Number(price) || 0 : undefined,
+      mode === "writeoff" ? reason : undefined,
+      by,
+    );
+    // The store is the one that decides. If it refused, the modal stays open
+    // saying why rather than closing on a write that never happened.
+    if (res.routed) onClose();
+    return res;
+  };
+
+  if (authorizing) {
+    return (
+      <ManagerAuthorize
+        title="Manager only — write off"
+        reason={`Write off ${item.grade} copy of this returned record as ${reason}, removing it from stock. Adjusting on hand is manager-only (A-28a); E-06's ungated Return covers the refund, not the disposition.`}
+        onCancel={() => setAuthorizing(false)}
+        onConfirm={(by) => {
+          setAuthorizing(false);
+          apply(by);
+        }}
+      />
+    );
+  }
 
   return (
     <Modal
@@ -721,20 +761,15 @@ function RouteStock({
           </button>
           <button
             className="btn primary"
-            onClick={() =>
-              withActor("Route returned copy", () => {
-              app.routeReturnLine(
-                saleId,
-                lineId,
-                itemId,
-                mode,
-                mode === "regrade" ? grade : undefined,
-                mode === "regrade" ? Number(price) || 0 : undefined,
-                mode === "writeoff" ? reason : undefined,
-              );
-              onClose();
-            })
-            }
+            onClick={() => {
+              // Two doors, deliberately. Back to sellable and re-grade are
+              // assessments and stay on the ordinary initials prompt, which is
+              // E-06 d3's permissive Return working as designed. Write off
+              // removes a copy from stock, so it crosses the manager-only line
+              // (A-81) and always asks, session or not (E-01 d23).
+              if (mode === "writeoff") setAuthorizing(true);
+              else withActor("Route returned copy", () => apply());
+            }}
           >
             Apply
           </button>
@@ -769,7 +804,8 @@ function RouteStock({
         <label className="row">
           <input type="radio" checked={mode === "writeoff"} onChange={() => setMode("writeoff")} />
           <span>
-            <strong>Write off</strong> — not sellable at all; reason-coded adjustment (E-04).
+            <strong>Write off</strong> — not sellable at all; reason-coded adjustment (E-04).{" "}
+            <em className="small muted">Manager only — this adjusts on hand (A-28a).</em>
           </span>
         </label>
         {mode === "writeoff" && (
