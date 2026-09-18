@@ -3237,6 +3237,20 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
       ),
     }));
 
+    // E-06 d21 / E-04 d16 — the mint is the ONE place an Employee can create a
+    // sellable copy at a price of their own choosing, and it was escaping the
+    // guardrail on a technicality: d16's flag fires when a price is EDITED
+    // below cost, and a mint is not an edit. Raised after the write, because
+    // d16 flags rather than blocks — nothing slows at the counter, and what
+    // this restores is the compensating record a permissive design rests on.
+    if (minted && minted.price < minted.cost) {
+      const rec = s.records.find((r) => r.id === minted.recordId);
+      raiseReviewFlag(
+        "below-cost",
+        `Re-graded on return: shelf price ${money(minted.price)} below assessed cost ${money(minted.cost)} for ${rec ? `${rec.artist} — ${rec.title}` : minted.recordId} (${minted.internalBarcode}).`,
+      );
+    }
+
     return { routed: true };
   };
 
