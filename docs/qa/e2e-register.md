@@ -535,10 +535,11 @@ this heading used to carry was written about d32-d36 and never revisited when d3
     step 6 was amended under it, so the walk's *conforms* verdict predates the rule it is now judged against.
   - **Decisions 14-18 have no rows.** 14 (link preselected), 15 (mint), 16 (cost is the refund), 17 (arrival dated at
     re-grade, dead-stock clock restarts), 18 (barcode now, label later). *Route:* `/qa register E-06`.
-  - **One decision landed with a known hole, and it is money.** Decision 16 puts the **refund** on the new copy while
-    [M-07](../flows/M-07-chart-of-accounts.md) decision 2 posts the **original** cost back to Inventory — $8.00 against a
-    copy valued at $31.49 on E-06's own worked example. Open in both flows; no row can assert either figure until it is
-    settled. *Route:* `/architecture`.
+  - **The hole decision 16 left is closed.** It put the **refund** on the new copy while [M-07](../flows/M-07-chart-of-accounts.md)
+    decision 2 posts the **original** cost back to Inventory — $8.00 against a copy valued at $31.49. **[architecture](../architecture.md)
+    A-82 supersedes d16** with **E-06 decision 19**: the minted copy is assessed against its new grade and **capped at the sold copy's
+    cost**, with any shortfall posting to its [E-04](../flows/E-04-manage-inventory.md) reason code. Rows may now assert a figure.
+    **No row went `Stale` for d16** — it was appended and superseded the same day and nothing had cited it yet.
 
 - ~~**Two rows are wanted for A-81.**~~ — **Done 2026-09-18.** (1) became **E-06-T6**, the write-off route's manager-only gate, and (2) became **E-04-T7**, an adjustment naming the copies it moved. **E-04-T4 did not go `Stale`** and neither did E-06-T1 or T4: A-81 extends A-28a rather than retiring it — *"Manager-only is unchanged"* ([architecture](../architecture.md) §2 A-28a) — and it leaves step 6's other two dispositions ungated in terms. **A third row was added beyond the note: E-06-T7**, for A-81's fourth status. `written_off` is a separate commitment from the gate and fails separately — a copy can be correctly gated and still stored as `sold` — and [architecture](../architecture.md) §5.1 warns that a query enumerating statuses from memory counts a written-off copy as present. **The prototype conforms to none of the three today**, which is a finding against the target and not a status on the rows.
 - **A new row is wanted for d45** — the mirror of **d30**: a statement excludes lines dated **before the books open** and names how many it excluded and which was first, exactly as M-08-T13 asserts for lines dated after an as-at date. Nothing covers the backward edge today. *Route:* `/qa register M-08`.

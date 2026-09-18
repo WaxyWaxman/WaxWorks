@@ -148,16 +148,9 @@ against [E-05](E-05-sell-a-record.md), which owns it.
 
 ## Inherited from other flows
 
-**From [E-06](E-06-process-a-return.md) decision 16 — unresolved, and it is a real account:**
+**From [E-06](E-06-process-a-return.md) decision 19 and [architecture](../architecture.md) A-82:**
 
-- **A re-graded returned copy makes decision 2's reversal disagree with the stock records.**
-  Decision 2 moves a returned copy's cost back into Inventory *"at the figure that copy
-  carried, never a recomputed one"* — the **original** cost — while
-  [E-06](E-06-process-a-return.md) decision 16 mints the replacement copy carrying the
-  **refund**. On E-06's worked example that is **$8.00** posted to Inventory against a copy
-  the stock records value at **$31.49**, with nothing reconciling the **$23.49**. Either the
-  reversal posts the refund, or the difference posts to a named account. Recorded here
-  rather than only in E-06, because the posting is this flow's to decide.
+- **Decision 2 is confirmed, not amended, and A-82 is what keeps it true.** When [E-06](E-06-process-a-return.md) d15 made a re-grade mint a **new** InventoryItem, d16 briefly gave that copy the **refund paid** — which on its own worked example put **$8.00** into Inventory against a copy valued at **$31.49**, with **$23.49** uncredited. A-82 supersedes d16: the minted copy is assessed against its new grade and **capped at the cost the sold copy carried**, so this flow's reversal still posts *"the figure that copy carried, never a recomputed one"* and nothing is stranded. **The shortfall, where the copy is assessed lower, posts to its [E-04](E-04-manage-inventory.md) reason code** — `Damaged` — which is decision 6's per-reason account doing the job it was created for. A copy assessed at or above the original cost strands nothing and posts one line.
 
 _Commitments pushed here by another flow. These are decided, not open — each cites
 the decision it comes from._
