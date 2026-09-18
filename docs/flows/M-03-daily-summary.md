@@ -57,6 +57,15 @@ Pay-outs are the one cash movement that is captured, because money leaving the t
 
 ## Inherited from other flows
 
+**From [E-06](E-06-process-a-return.md) decision 26:**
+
+- **Two kinds of return line now report differently.** A **matched** Return reverses its own sale and reduces gross
+  sales as before. An **unmatched** one — [E-06](E-06-process-a-return.md) decisions 24 and 25, a disc the shop has no
+  sold record for — is booked as a purchase and **does not reduce gross sales**; it raises Inventory instead.
+  [E-06](E-06-process-a-return.md) decision 8 is untouched: both still show their money in the **tender column**
+  rather than netting into gross, so the column still reconciles.
+
+
 **From [E-06](E-06-process-a-return.md) decision 23:**
 
 - **An unrouted returned copy does not hold up the close.** [E-06](E-06-process-a-return.md) decision 20 creates a

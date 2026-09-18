@@ -148,6 +148,16 @@ against [E-05](E-05-sell-a-record.md), which owns it.
 
 ## Inherited from other flows
 
+**From [E-06](E-06-process-a-return.md) decision 26 — a second kind of return posting:**
+
+- **An unmatched Return posts as a purchase, not as a reversal.** Decision 2's reversal assumes a copy coming back
+  from a sale, at the figure that copy carried. [E-06](E-06-process-a-return.md) decision 24 mints a copy for a disc
+  with **no prior sale**, and decision 26 books it at the **refund paid** with the money treated as a purchase —
+  `Dr Inventory · Cr Cash`, revenue untouched — because there is no sale to reverse and no cost to inherit.
+  **Where that posts is this flow's to confirm**, including whether it wants an account of its own or shares the one
+  [E-05](E-05-sell-a-record.md) decision 14's counter buy uses, which it now matches in substance.
+
+
 **From [E-06](E-06-process-a-return.md) decision 19 and [architecture](../architecture.md) A-82:**
 
 - **Decision 2 is confirmed, not amended, and A-82 is what keeps it true.** When [E-06](E-06-process-a-return.md) d15 made a re-grade mint a **new** InventoryItem, d16 briefly gave that copy the **refund paid** — which on its own worked example put **$8.00** into Inventory against a copy valued at **$31.49**, with **$23.49** uncredited. A-82 supersedes d16: the minted copy is assessed against its new grade and **capped at the cost the sold copy carried**, so this flow's reversal still posts *"the figure that copy carried, never a recomputed one"* and nothing is stranded. **The shortfall, where the copy is assessed lower, posts to its [E-04](E-04-manage-inventory.md) reason code** — `Damaged` — which is decision 6's per-reason account doing the job it was created for. A copy assessed at or above the original cost strands nothing and posts one line.
