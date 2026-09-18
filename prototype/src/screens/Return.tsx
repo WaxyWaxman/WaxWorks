@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import type { ManagerAuth } from "../lib/managerAuth";
 import { useNavigate, useParams } from "react-router-dom";
 import { Modal } from "../components/Modal";
 import { TillRail } from "../components/TillRail";
@@ -180,13 +181,23 @@ function ReturnEditor({ saleId }: { saleId: string }) {
                       {l.inventoryItemId ? (
                         routed ? (
                           <span className="badge ok">{l.routedTo}</span>
-                        ) : (
+                        ) : finished ? (
                           <button
                             className="btn sm"
                             onClick={() => setRouteItem({ lineId: l.id, itemId: l.inventoryItemId! })}
                           >
                             Route stock →
                           </button>
+                        ) : (
+                          // E-06 d20 — step 6 follows step 5 in time, not just on
+                          // the page. Routing an unfinished draft minted a
+                          // sellable copy at a grade and price the Employee chose,
+                          // with no refund paid and no tendered document — and the
+                          // draft could not then be cleaned up, because d10's void
+                          // refusal fires on a routed copy and stranded it.
+                          <span className="muted xsmall" title="E-06 decision 20 — finish the Return first">
+                            after finishing
+                          </span>
                         )
                       ) : (
                         <span className="muted xsmall">n/a</span>
@@ -345,10 +356,16 @@ function ReturnEditor({ saleId }: { saleId: string }) {
               disposition are independent — full refund + write-off is a valid combination.
             </div>
           )}
-          {!finished && unroutedCopies > 0 && (
+          {/* d20 — this is the LIMBO state and it only exists once the Return
+              is finished: the customer has gone, the copy is off the shelf and
+              not yet anywhere else. It used to read on a draft, where routing
+              was possible and the copy was still in front of you; now it reads
+              where it is actually needed. Where an Employee finds these copies
+              across Returns is E-06's open question, not answered here. */}
+          {finished && unroutedCopies > 0 && (
             <div className="callout">
               {unroutedCopies} returned cop{unroutedCopies > 1 ? "ies" : "y"} still{" "}
-              {unroutedCopies > 1 ? "need" : "needs"} routing.
+              {unroutedCopies > 1 ? "need" : "needs"} routing — off the shelf until assessed (E-06 step 6).
             </div>
           )}
           {!finished && sale.lines.length > 0 && Math.abs(due) > 0.001 && (
@@ -366,7 +383,11 @@ function ReturnEditor({ saleId }: { saleId: string }) {
           <div className="till-money-foot">
             <button
               className="btn primary till-finish"
-              disabled={sale.lines.length === 0 || Math.abs(due) > 0.001 || unroutedCopies > 0}
+              // d20 — NOT gated on unrouted copies. Requiring routing before
+              // Finish is what made d10 a dead letter: it describes voiding a
+              // Return "while its stock is still unrouted", and a Return that
+              // could not be finished until routed had no such state.
+              disabled={sale.lines.length === 0 || Math.abs(due) > 0.001}
               onClick={() => {
                 app.completeSale(sale.id);
                 setReceipt(true);
@@ -392,12 +413,34 @@ function ReturnEditor({ saleId }: { saleId: string }) {
       )}
       {receipt && (
         <Modal
-          title="Return complete"
+          // E-06 step 7 — "System prompts to print a receipt for the return."
+          // It offered only Done, where a Sale offers Skip / Print / Email, so
+          // the one thing the step asks for was the one thing missing. Same
+          // three controls and the same email fallback as E-05 decision 24,
+          // because a Return is a Sale with negative lines (decision 1) and
+          // the customer wants the paperwork just as much.
+          title={customer?.email ? "Send return receipt?" : "Print return receipt?"}
           onClose={() => setReceipt(false)}
           foot={
-            <button className="btn primary" onClick={() => setReceipt(false)}>
-              Done
-            </button>
+            <>
+              <button className="btn ghost" onClick={() => setReceipt(false)}>
+                Skip
+              </button>
+              <button
+                className={"btn" + (customer?.email ? "" : " primary")}
+                onClick={() => setReceipt(false)}
+              >
+                Print
+              </button>
+              <button
+                className={"btn" + (customer?.email ? " primary" : "")}
+                disabled={!customer?.email}
+                title={customer?.email ? undefined : "No email on file for this customer"}
+                onClick={() => setReceipt(false)}
+              >
+                Email
+              </button>
+            </>
           }
         >
           <div className="callout ok">
@@ -479,12 +522,23 @@ function AddReturnedItem({ saleId, onClose }: { saleId: string; onClose: () => v
   const query = q.trim().toLowerCase();
   const results = useMemo(() => {
     if (!query) return [];
+    // E-06 d12 — THE SEARCH MATCHES A COPY'S OWN STICKER, not just catalogue
+    // text. `onSubmit` below resolves a whole internal barcode on Enter, which
+    // is what a scanner sends; this is the other half, for a barcode typed by
+    // hand, read aloud, or partially entered, and for a scanner with no Enter
+    // suffix. Without it the field answered "No match" for a copy that was
+    // sitting in the results the moment you searched its title instead —
+    // which is d12's counter path failing in the one case it exists for.
+    const matchesCopy = (r: RecordEntry) =>
+      app.inventory.some(
+        (i) => i.recordId === r.id && i.internalBarcode?.toLowerCase().includes(query),
+      );
     const match = (r: RecordEntry) =>
       [r.artist, r.title, r.label, r.catalogNo, genreNameFor(app.genres, r.genreId), r.manufacturerUpc]
         .filter(Boolean)
-        .some((f) => String(f).toLowerCase().includes(query));
+        .some((f) => String(f).toLowerCase().includes(query)) || matchesCopy(r);
     return app.records.filter(match).slice(0, 12);
-  }, [query, app.records]);
+  }, [query, app.records, app.inventory]);
 
   // Enter on an internal barcode goes straight to that copy — the counter
   // path, where the sticker is right there on the sleeve.
@@ -755,7 +809,7 @@ function RouteStock({
   // authorizing Manager (A-4, A-48); this is how one is asked for.
   const [authorizing, setAuthorizing] = useState(false);
 
-  const apply = (by?: string) => {
+  const apply = (by?: ManagerAuth) => {
     const res = app.routeReturnLine(
       saleId,
       lineId,

@@ -2765,7 +2765,9 @@ table.claims-ln td { padding: 5px 8px 5px 0; border-bottom: 1px solid var(--c-bo
   font-size: var(--fs-xs); color: var(--c-muted); border-top: 1px solid var(--c-border); padding-top: var(--sp-2);
 }
 .idy-esc { white-space: nowrap; }
-.idy-none { color: var(--c-muted); }
+/* The leading space used to come from a literal space in the JSX; it is
+   padding now that the button beside it is an icon. */
+.idy-none { color: var(--c-muted); padding-left: 8px; }
 .sess-name { font-weight: 700; }
 .sess-out { margin-left: var(--sp-2); }
 

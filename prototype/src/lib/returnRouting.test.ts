@@ -6,8 +6,12 @@ import type { InventoryItem } from "../data/types";
 const copy = (status: InventoryItem["status"]): InventoryItem =>
   ({ id: "i-1", recordId: "r-1", grade: "VG+", price: 20, cost: 8, status }) as InventoryItem;
 
+const manager = { role: "Manager" as const, active: true, name: "Y. Nakamura" };
+const employee = { role: "Employee" as const, active: true, name: "E. Okafor" };
+const departed = { role: "Manager" as const, active: false, name: "T. Oyelaran" };
+
 describe("A-81 / A-28a — the write-off route is manager-only", () => {
-  it("refuses a write-off with no authorizing Manager", () => {
+  it("refuses a write-off with no authorizer at all", () => {
     // The shrinkage path. Ungated it is a copy taken in over the counter, cash
     // refunded, and the copy removed from stock with no Manager in the act.
     const why = routeStockRefusal("writeoff", undefined);
@@ -16,25 +20,38 @@ describe("A-81 / A-28a — the write-off route is manager-only", () => {
     expect(why).toMatch(/Manager/);
   });
 
-  it("refuses a write-off authorized by nobody in particular", () => {
-    // Blank is not an authorizer. The prototype's old gate accepted any two
-    // characters typed into it, so manager-only was satisfied by initials
-    // belonging to nobody — the same failure ManagerAuthorize was renamed to fix.
-    expect(routeStockRefusal("writeoff", "")).toBeDefined();
-    expect(routeStockRefusal("writeoff", "   ")).toBeDefined();
+  it("refuses an EMPLOYEE, which is the whole point of the gate", () => {
+    // THIS IS THE TEST THAT WAS MISSING. The gate took any non-empty string,
+    // so `routeStockRefusal("writeoff", "Marty Ng (Employee)")` was permitted:
+    // what had moved into the lib was the PRESENCE of an authorizer, while
+    // Manager-ness stayed in ManagerAuthorize — the screen. A-4 and A-48 refuse
+    // exactly that shape, and A-81 says it of this gate by name.
+    const why = routeStockRefusal("writeoff", employee);
+
+    expect(why).toBeDefined();
+    expect(why).toMatch(/E\. Okafor/);
+    expect(why).toMatch(/Employee/);
   });
 
-  it("permits a write-off a Manager authorized", () => {
-    expect(routeStockRefusal("writeoff", "Dana Reyes (Manager)")).toBeUndefined();
+  it("refuses a Manager who is no longer active", () => {
+    // M-04 d5 deactivates rather than deletes, so a departed Manager's row
+    // outlives them. §6 has `manager_authorize` resolve an ACTIVE Manager at
+    // the moment of the call, "so a demotion bites server-side at once".
+    expect(routeStockRefusal("writeoff", departed)).toBeDefined();
   });
 
-  it("leaves the other two dispositions ungated, with or without a Manager", () => {
+  it("permits an active Manager", () => {
+    expect(routeStockRefusal("writeoff", manager)).toBeUndefined();
+  });
+
+  it("leaves the other two dispositions ungated, whoever is or is not there", () => {
     // E-06 decision 3's permissive Return is not being narrowed. A-81 reaches
     // the disposition that REMOVES a copy, not the assessment — and E-06
     // decision 7 is what holds refund and disposition apart so it can.
     expect(routeStockRefusal("sellable", undefined)).toBeUndefined();
     expect(routeStockRefusal("regrade", undefined)).toBeUndefined();
-    expect(routeStockRefusal("sellable", "Dana Reyes (Manager)")).toBeUndefined();
+    expect(routeStockRefusal("sellable", employee)).toBeUndefined();
+    expect(routeStockRefusal("regrade", employee)).toBeUndefined();
   });
 });
 

@@ -1,4 +1,5 @@
 import { useState } from "react";
+import type { ManagerAuth } from "../lib/managerAuth";
 import { useNavigate, useParams } from "react-router-dom";
 import { ManagerAuthorize } from "../components/ManagerAuthorize";
 import { SpecNote } from "../components/SpecNote";
@@ -57,7 +58,7 @@ const GROUPS: { key: GroupKey; tile: string; label: string; blurb: string }[] = 
 export function Settings() {
   const nav = useNavigate();
   const { group } = useParams();
-  const [authorisedBy, setAuthorisedBy] = useState<string | null>(null);
+  const [authorisedBy, setAuthorisedBy] = useState<ManagerAuth | null>(null);
   const [refusal, setRefusal] = useState<string | null>(null);
 
   const active = (GROUPS.find((g) => g.key === group)?.key ?? "sections") as GroupKey;
@@ -111,7 +112,7 @@ export function Settings() {
       <section className="cust-main">
         <div className="cust-head">
           <h2>{GROUPS.find((g) => g.key === active)?.label}</h2>
-          <span className="small muted">Authorised by {authorisedBy}</span>
+          <span className="small muted">Authorised by {authorisedBy.name}</span>
         </div>
         <div className="cust-scroll">
           <div className="stack">
@@ -135,7 +136,7 @@ export function Settings() {
 
 // ---------------------------------------------------------------------------
 
-function SectionsEditor({ by, onRun }: { by: string; onRun: (r: SettingsWriteResult) => boolean }) {
+function SectionsEditor({ by, onRun }: { by: ManagerAuth; onRun: (r: SettingsWriteResult) => boolean }) {
   const app = useApp();
   const [draft, setDraft] = useState<SectionRow | null>(null);
 
@@ -259,7 +260,7 @@ function Flag({ on, onChange }: { on: boolean; onChange: (v: boolean) => void })
 // M-06 d12, d19, d32 — the shop's own taxonomy. Finer than a Section, and the
 // thing a Record actually stores: its Section is derived from the parent here
 // (d31), and its product tax code is read from here at the scan (d12).
-function GenresEditor({ by, onRun }: { by: string; onRun: (r: SettingsWriteResult) => boolean }) {
+function GenresEditor({ by, onRun }: { by: ManagerAuth; onRun: (r: SettingsWriteResult) => boolean }) {
   const app = useApp();
   const [draft, setDraft] = useState<Genre | null>(null);
 
@@ -454,7 +455,7 @@ function GenresEditor({ by, onRun }: { by: string; onRun: (r: SettingsWriteResul
 // the Section follows from the genre's required parent and is never guessed,
 // which is what makes an import able to put a Record on the wrong shelf and
 // unable to put it in the wrong Section.
-function GenreMapEditor({ by, onRun }: { by: string; onRun: (r: SettingsWriteResult) => boolean }) {
+function GenreMapEditor({ by, onRun }: { by: ManagerAuth; onRun: (r: SettingsWriteResult) => boolean }) {
   const app = useApp();
   const mappable = app.genres.filter((g) => g.active && !g.internal);
   const unmapped = unmappedTagReport(app.records, app.genreMap);
@@ -567,7 +568,7 @@ function GenreMapEditor({ by, onRun }: { by: string; onRun: (r: SettingsWriteRes
                 <td>
                   <select
                     value=""
-                    onChange={(e) => e.target.value && onRun(app.addMapRow(u.tag, e.target.value, by))}
+                    onChange={(e) => e.target.value && onRun(app.addMapRow(u.tag, e.target.value, by.name))}
                   >
                     <option value="">Choose a genre…</option>
                     {mappable.map((g) => (
@@ -588,7 +589,7 @@ function GenreMapEditor({ by, onRun }: { by: string; onRun: (r: SettingsWriteRes
 
 // ---------------------------------------------------------------------------
 
-function TendersEditor({ by, onRun }: { by: string; onRun: (r: SettingsWriteResult) => boolean }) {
+function TendersEditor({ by, onRun }: { by: ManagerAuth; onRun: (r: SettingsWriteResult) => boolean }) {
   const app = useApp();
   const save = (row: TenderRow) => onRun(app.upsertTender(row, by));
 
@@ -640,7 +641,7 @@ function TendersEditor({ by, onRun }: { by: string; onRun: (r: SettingsWriteResu
 
 // ---------------------------------------------------------------------------
 
-function CurrenciesEditor({ by, onRun }: { by: string; onRun: (r: SettingsWriteResult) => boolean }) {
+function CurrenciesEditor({ by, onRun }: { by: ManagerAuth; onRun: (r: SettingsWriteResult) => boolean }) {
   const app = useApp();
   const save = (row: CurrencyRow) => onRun(app.upsertCurrency(row, by));
 
@@ -705,7 +706,7 @@ function CurrenciesEditor({ by, onRun }: { by: string; onRun: (r: SettingsWriteR
 
 // ---------------------------------------------------------------------------
 
-function StoreSettingsEditor({ by }: { by: string }) {
+function StoreSettingsEditor({ by }: { by: ManagerAuth }) {
   const app = useApp();
   const st = app.storeSettings;
   return (
@@ -816,7 +817,7 @@ function StoreSettingsEditor({ by }: { by: string }) {
 
 // ---------------------------------------------------------------------------
 
-function StoreDetailsEditor({ by }: { by: string }) {
+function StoreDetailsEditor({ by }: { by: ManagerAuth }) {
   const app = useApp();
   const d = app.storeDetails;
   const set = (k: Parameters<typeof app.setStoreDetail>[0], v: string | boolean) =>
@@ -897,7 +898,7 @@ function StoreDetailsEditor({ by }: { by: string }) {
 
 // ---------------------------------------------------------------------------
 
-function TaxEditor({ by, onRun }: { by: string; onRun: (r: SettingsWriteResult) => boolean }) {
+function TaxEditor({ by, onRun }: { by: ManagerAuth; onRun: (r: SettingsWriteResult) => boolean }) {
   const app = useApp();
 
   return (
@@ -1098,7 +1099,7 @@ function TaxEditor({ by, onRun }: { by: string; onRun: (r: SettingsWriteResult) 
 
 // Adding a tax type. Nothing is ever deleted (d9) — a type that stops
 // applying is deactivated, because cells and completed Sales reference it.
-function NewTaxType({ by, onRun }: { by: string; onRun: (r: SettingsWriteResult) => boolean }) {
+function NewTaxType({ by, onRun }: { by: ManagerAuth; onRun: (r: SettingsWriteResult) => boolean }) {
   const app = useApp();
   const [open, setOpen] = useState(false);
   const [code, setCode] = useState("");
@@ -1167,7 +1168,7 @@ function NewTaxType({ by, onRun }: { by: string; onRun: (r: SettingsWriteResult)
 // Adding a tax group. A new group starts with EVERY CELL BLANK, which is out
 // of scope rather than zero-rated (d15) — a jurisdiction charges nothing until
 // somebody says what it charges, and blank is the honest starting state.
-function NewTaxGroup({ by, onRun }: { by: string; onRun: (r: SettingsWriteResult) => boolean }) {
+function NewTaxGroup({ by, onRun }: { by: ManagerAuth; onRun: (r: SettingsWriteResult) => boolean }) {
   const app = useApp();
   const [open, setOpen] = useState(false);
   const [description, setDescription] = useState("");

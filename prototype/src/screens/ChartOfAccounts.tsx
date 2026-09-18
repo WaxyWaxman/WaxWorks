@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import type { ManagerAuth } from "../lib/managerAuth";
 import { useNavigate } from "react-router-dom";
 import { useApp } from "../store/AppStore";
 import { ManagerAuthorize } from "../components/ManagerAuthorize";
@@ -26,7 +27,7 @@ const TYPES: GLAccountType[] = ["asset", "liability", "equity", "income", "cogs"
 export function ChartOfAccounts() {
   const app = useApp();
   const nav = useNavigate();
-  const [authorisedBy, setAuthorisedBy] = useState<string | null>(null);
+  const [authorisedBy, setAuthorisedBy] = useState<ManagerAuth | null>(null);
   const [adding, setAdding] = useState(false);
   const [draft, setDraft] = useState<{ number: string; name: string; type: GLAccountType }>({
     number: "",
@@ -57,7 +58,7 @@ export function ChartOfAccounts() {
       <header className="screen-head">
         <h1>Chart of accounts</h1>
         <p className="small muted">
-          Authorised by {authorisedBy} · <strong>{app.glAccounts.length} accounts</strong>, every seam resolving
+          Authorised by {authorisedBy.name} · <strong>{app.glAccounts.length} accounts</strong>, every seam resolving
         </p>
         <p className="small muted">
           A chart and a journal export — <strong>this flow</strong> holds no balances (d1, still true of M-07). The

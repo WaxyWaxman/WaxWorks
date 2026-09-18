@@ -31,6 +31,7 @@ import {
 } from "../lib/totals";
 import { clearedAgainst, entryIsCleared, unclearRefusal } from "../lib/payables";
 import { regradeCostRefusal, regradeShortfall, routeStockRefusal, statusAfterRoute } from "../lib/returnRouting";
+import { requireManager, type ManagerAuth } from "../lib/managerAuth";
 import { buildChart } from "../lib/chart";
 import { buildCloseJournal } from "../lib/closeJournal";
 import { buildAdjustmentJournal, buildInvoiceJournal, buildPaymentJournal } from "../lib/artifactJournals";
@@ -814,41 +815,43 @@ interface AppContextValue extends AppState {
   defaultTaxGroup: string;
   taxCtxFor: (sale?: Sale | null) => TaxContext;
   productTaxCodeForRecord: (recordId?: string) => string;
-  upsertTaxType: (row: TaxType, by: string) => SettingsWriteResult;
-  setTaxCell: (groupId: string, productTaxCode: string, spec: string, by: string) => SettingsWriteResult;
-  upsertTaxGroup: (row: TaxGroup, by: string) => SettingsWriteResult;
-  setDefaultTaxGroup: (groupId: string, by: string) => void;
-  setStoreSetting: <K extends keyof StoreSettings>(key: K, value: StoreSettings[K], by: string) => void;
-  setStoreDetail: (key: keyof Omit<StoreDetails, "storeId" | "position">, value: string | boolean | PostalAddress, by: string) => void;
-  upsertSection: (row: SectionRow, by: string) => SettingsWriteResult;
-  upsertGenre: (row: Genre, by: string) => SettingsWriteResult;
+  upsertTaxType: (row: TaxType, by: ManagerAuth) => SettingsWriteResult;
+  setTaxCell: (groupId: string, productTaxCode: string, spec: string, by: ManagerAuth) => SettingsWriteResult;
+  upsertTaxGroup: (row: TaxGroup, by: ManagerAuth) => SettingsWriteResult;
+  setDefaultTaxGroup: (groupId: string, by: ManagerAuth) => void;
+  setStoreSetting: <K extends keyof StoreSettings>(key: K, value: StoreSettings[K], by: ManagerAuth) => void;
+  setStoreDetail: (key: keyof Omit<StoreDetails, "storeId" | "position">, value: string | boolean | PostalAddress, by: ManagerAuth) => void;
+  upsertSection: (row: SectionRow, by: ManagerAuth) => SettingsWriteResult;
+  upsertGenre: (row: Genre, by: ManagerAuth) => SettingsWriteResult;
   adoptRelease: (releaseId: string, genreId: string, price?: number) => RecordEntry | null;
   resolveAdoptionGenre: (releaseId: string) => {
     release: ReleaseCacheEntry | undefined;
     match: GenreMatch | undefined;
     unmapped: ProviderTag[];
   };
+  // A-59 — NOT manager-only: adding a row for a tag that has none cannot
+  // change where anything already goes. Update and remove below stay M.
   addMapRow: (tag: string, genreId: string, by: string) => SettingsWriteResult;
-  updateMapRow: (tag: string, patch: Partial<GenreMapRow>, by: string) => SettingsWriteResult;
-  removeMapRow: (tag: string, by: string) => SettingsWriteResult;
-  mergeGenres: (fromId: string, toId: string, by: string) => SettingsWriteResult;
-  deleteGenre: (genreId: string, by: string) => SettingsWriteResult;
+  updateMapRow: (tag: string, patch: Partial<GenreMapRow>, by: ManagerAuth) => SettingsWriteResult;
+  removeMapRow: (tag: string, by: ManagerAuth) => SettingsWriteResult;
+  mergeGenres: (fromId: string, toId: string, by: ManagerAuth) => SettingsWriteResult;
+  deleteGenre: (genreId: string, by: ManagerAuth) => SettingsWriteResult;
   genreUseCount: (genreId: string) => number;
-  upsertTender: (row: TenderRow, by: string) => SettingsWriteResult;
-  upsertCurrency: (row: CurrencyRow, by: string) => SettingsWriteResult;
-  setHomeCurrency: (code: string, by: string) => void;
+  upsertTender: (row: TenderRow, by: ManagerAuth) => SettingsWriteResult;
+  upsertCurrency: (row: CurrencyRow, by: ManagerAuth) => SettingsWriteResult;
+  setHomeCurrency: (code: string, by: ManagerAuth) => void;
   userFor: (id?: string) => User | undefined;
   activeManagerCount: () => number;
   // Every one of these is manager-only (A-55) and every one returns a reason
   // rather than throwing, because M-04 d13 and A-54 both require the refusal
   // to say WHICH thing blocked it - a refusal that does not name its cause
   // reads as the system simply saying no.
-  addUser: (input: { name: string; initials: string; role: UserRole }, by: string) => UserWriteResult;
-  changeUserRole: (userId: string, role: UserRole, by: string) => UserWriteResult;
-  deactivateUser: (userId: string, by: string) => UserWriteResult;
-  reactivateUser: (userId: string, initials: string, by: string) => UserWriteResult;
-  correctUser: (userId: string, patch: { name?: string; initials?: string }, by: string) => UserWriteResult;
-  setUserPassword: (userId: string, password: string, by: string) => UserWriteResult;
+  addUser: (input: { name: string; initials: string; role: UserRole }, by: ManagerAuth) => UserWriteResult;
+  changeUserRole: (userId: string, role: UserRole, by: ManagerAuth) => UserWriteResult;
+  deactivateUser: (userId: string, by: ManagerAuth) => UserWriteResult;
+  reactivateUser: (userId: string, initials: string, by: ManagerAuth) => UserWriteResult;
+  correctUser: (userId: string, patch: { name?: string; initials?: string }, by: ManagerAuth) => UserWriteResult;
+  setUserPassword: (userId: string, password: string, by: ManagerAuth) => UserWriteResult;
   // E-01 d21 — a password holder's session is capped at the 5-minute default
   // however long the shop set the lapse to.
   effectiveLapseSeconds: number;
@@ -869,6 +872,8 @@ interface AppContextValue extends AppState {
    * Returned alongside the breakdown so the close screen can tell the Manager
    * what was written, and tell them loudly when it did not balance (d10).
    */
+  // A-28a gates **Undo End of Day**, not the close itself, and M-04 d2 makes
+  // anything unlisted an Employee action. This takes the acting actor.
   totalTodaysSales: (by: string) => {
     batchId: string;
     breakdown: DayBreakdown;
@@ -876,7 +881,7 @@ interface AppContextValue extends AppState {
     unresolved: string[];
     ambiguousTenders: string[];
   };
-  undoEndOfDay: (batchId: string, by: string) => void;
+  undoEndOfDay: (batchId: string, by: ManagerAuth) => void;
   attachCustomer: (saleId: string, customerId: string | null) => void;
   addCustomer: (input: Omit<Customer, "id" | "primaryId" | "balance">) => string;
   updateCustomer: (customerId: string, patch: Partial<Omit<Customer, "id" | "primaryId">>) => void;
@@ -906,25 +911,25 @@ interface AppContextValue extends AppState {
   cancelHold: (saleId: string) => void;
   releaseHoldLine: (itemId: string) => { holdRef: string; holdClosed: boolean } | null;
   forceUnlockSale: (saleId: string) => void;
-  acknowledgeReviewFlag: (id: string, by: string) => void;
+  acknowledgeReviewFlag: (id: string, by: ManagerAuth) => void;
 
   // ---- M-08, the books ----------------------------------------------------
   // Every one is MANAGER-ONLY (A-74), so every one takes the authorising
   // Manager's initials. None of them decides anything: the refusal functions in
   // lib/ledger*.ts are the rules, and these store whatever those permit.
   ledgerSaveOpening: (draft: OpeningPositionDraft) => void;
-  ledgerSealOpening: (by: string) => void;
-  ledgerPost: (posting: Omit<LedgerPosting, "writtenAt">, by: string) => void;
-  ledgerSeal: (period: string, suspenseGross: number, by: string) => void;
-  ledgerUnseal: (period: string, reason: string, by: string) => void;
-  ledgerMarkYearFiled: (fiscalYearEnd: string, by: string) => void;
+  ledgerSealOpening: (by: ManagerAuth) => void;
+  ledgerPost: (posting: Omit<LedgerPosting, "writtenAt">, by: ManagerAuth) => void;
+  ledgerSeal: (period: string, suspenseGross: number, by: ManagerAuth) => void;
+  ledgerUnseal: (period: string, reason: string, by: ManagerAuth) => void;
+  ledgerMarkYearFiled: (fiscalYearEnd: string, by: ManagerAuth) => void;
   ledgerReconcile: (reconciliation: LedgerReconciliation) => void;
   ledgerIssue: (issuance: LedgerIssuance) => void;
   /** d40, M-07 d25 — a period's Suspense total, gross. What the seal refuses on. */
   ledgerSuspenseGross: (period: string) => number;
   /** M-08 d11 - why an Undo End of Day is refused, or undefined. */
   closeUndoRefusalFor: (batchId: string) => string | undefined;
-  reconcileOversold: (recordId: string, by: string) => number;
+  reconcileOversold: (recordId: string, by: ManagerAuth) => number;
   addLog: (saleId: string, text: string) => void;
 
   raiseClaim: (
@@ -978,7 +983,7 @@ interface AppContextValue extends AppState {
      * makes the absence of one a refusal rather than a convention, so a second
      * caller cannot route a write-off by forgetting to ask.
      */
-    by?: string,
+    by?: ManagerAuth,
     /**
      * The re-grade route only — what the copy is assessed at now that it has
      * come back in a different condition. **Capped at the cost the sold copy
@@ -1055,7 +1060,7 @@ interface AppContextValue extends AppState {
   finalizeInvoice: (
     invoiceId: string,
   ) => { itemCount: number; journal: JournalBatch; unresolved: string[] } | null;
-  markInvoicePaid: (invoiceId: string, by: string) => void;
+  markInvoicePaid: (invoiceId: string, by: ManagerAuth) => void;
 
   // M-05 — Accounts Payable. One PaymentBatch per Record-Payment action,
   // covering whatever mix of Invoices and PayableEntries it was paying,
@@ -1090,10 +1095,10 @@ interface AppContextValue extends AppState {
       credits: { id: string; amount: number; label: string }[];
       placeholderIds: string[];
     },
-    by: string,
+    by: ManagerAuth,
   ) => void;
   // M-05 d22/d30 — appended, never edited; never refuses.
-  voidPaymentBatch: (batchId: string, by: string) => void;
+  voidPaymentBatch: (batchId: string, by: ManagerAuth) => void;
 
   payableEntryFor: (id?: string) => PayableEntry | undefined;
   // M-05 "Create new" — a manual ledger line unlinked to any InventoryItem.
@@ -1114,10 +1119,10 @@ interface AppContextValue extends AppState {
   // already cleared) as cleared against each other — only if their signed
   // amounts sum to zero. Returns { cleared: false } and changes nothing
   // otherwise (mismatched sum, wrong supplier, already cleared, etc).
-  clearPayableEntries: (entryIds: string[], by: string) => { cleared: boolean };
+  clearPayableEntries: (entryIds: string[], by: ManagerAuth) => { cleared: boolean };
   // M-05 d39 — a clearing is a REVERSIBLE MARK, not a terminal state.
   // d46 — addressed by the CLEARING, the way a void addresses a batch.
-  unclearPayableEntries: (clearingId: string, by: string) => { uncleared: boolean; reason?: string };
+  unclearPayableEntries: (clearingId: string, by: ManagerAuth) => { uncleared: boolean; reason?: string };
   // M-07 — the chart. d3: the number and name are the store's; the ROLE is not
   // editable, because the software resolves by it.
   updateGLAccount: (id: string, patch: { number?: string; name?: string; active?: boolean }) => void;
@@ -1136,7 +1141,7 @@ interface AppContextValue extends AppState {
    */
   voidPurchaseOrder: (
     poNumber: string,
-    by?: string,
+    by?: ManagerAuth,
   ) => { returned: number; split: number; untouched: number };
   /** Set or clear one of the statuses a person sets (M-02 d12, d22). */
   setPendingOrderLineStatus: (
@@ -1347,13 +1352,24 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
     ];
   };
 
-  const acknowledgeReviewFlag: AppContextValue["acknowledgeReviewFlag"] = (id, by) =>
-    setS((prev) => ({
+  const acknowledgeReviewFlag: AppContextValue["acknowledgeReviewFlag"] = (id, byAuth) =>
+    {
+    // §6 — an M function resolves the Manager ITSELF, in the same
+    // transaction. The brand proves the check passed when the id was
+    // minted; this proves it still holds now, so a demotion between the
+    // prompt and the write bites (A-28a, A-4, A-48).
+    const mgr = requireManager(s.users, byAuth);
+    if (!mgr.ok) return;
+    const by = mgr.name;
+    return (
+      setS((prev) => ({
       ...prev,
       reviewFlags: prev.reviewFlags.map((f) =>
         f.id === id ? { ...f, acknowledged: true, acknowledgedBy: by, acknowledgedAt: now() } : f,
       ),
-    }));
+    }))
+    );
+  };
 
   // -------------------------------------------------------------------------
   // M-08 - the books
@@ -1371,8 +1387,16 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
   // A-78 - sealing MATERIALISES equity as a journal line. Until this runs the
   // opening position is a draft carrying assets and liabilities only, and
   // nothing may read it as though it were a journal.
-  const ledgerSealOpening: AppContextValue["ledgerSealOpening"] = () =>
-    setS((prev) => {
+  const ledgerSealOpening: AppContextValue["ledgerSealOpening"] = (byAuth) =>
+    {
+    // §6 — an M function resolves the Manager ITSELF, in the same
+    // transaction. The brand proves the check passed when the id was
+    // minted; this proves it still holds now, so a demotion between the
+    // prompt and the write bites (A-28a, A-4, A-48).
+    const mgr = requireManager(s.users, byAuth);
+    if (!mgr.ok) return;
+    return (
+      setS((prev) => {
       if (!prev.ledgerOpening || prev.ledgerOpeningSealed) return prev;
       const equity = prev.glAccounts.find((a) => a.role === "owners-equity");
       const suspense = prev.glAccounts.find((a) => a.role === "suspense");
@@ -1392,11 +1416,22 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
         // carried on the sealed artifact.
         ledgerOpening: { ...prev.ledgerOpening, accountantsEquity: undefined },
       };
-    });
+    })
+    );
+  };
 
   // Step 15 - the posting joins the journal beside everything artifacts wrote.
-  const ledgerPost: AppContextValue["ledgerPost"] = (posting, by) =>
-    setS((prev) => {
+  const ledgerPost: AppContextValue["ledgerPost"] = (posting, byAuth) =>
+    {
+    // §6 — an M function resolves the Manager ITSELF, in the same
+    // transaction. The brand proves the check passed when the id was
+    // minted; this proves it still holds now, so a demotion between the
+    // prompt and the write bites (A-28a, A-4, A-48).
+    const mgr = requireManager(s.users, byAuth);
+    if (!mgr.ok) return;
+    const by = mgr.name;
+    return (
+      setS((prev) => {
       const suspense = prev.glAccounts.find((a) => a.role === "suspense");
       if (!suspense) return prev;
       const full: LedgerPosting = { ...posting, writtenAt: now(), authorizedByInitials: by };
@@ -1409,14 +1444,25 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
         ledgerPostings: [full, ...prev.ledgerPostings],
         journals: [batch, ...prev.journals],
       };
-    });
+    })
+    );
+  };
 
   // A-75 - a seal APPENDS a row, and d20/A-76 write the closing transaction as
   // the result of the recomputation. The two happen together because A-76's
   // "stored is by definition the last recomputed" is only true if nothing can
   // seal without recomputing.
-  const ledgerSeal: AppContextValue["ledgerSeal"] = (period, suspenseGross, by) =>
-    setS((prev) => {
+  const ledgerSeal: AppContextValue["ledgerSeal"] = (period, suspenseGross, byAuth) =>
+    {
+    // §6 — an M function resolves the Manager ITSELF, in the same
+    // transaction. The brand proves the check passed when the id was
+    // minted; this proves it still holds now, so a demotion between the
+    // prompt and the write bites (A-28a, A-4, A-48).
+    const mgr = requireManager(s.users, byAuth);
+    if (!mgr.ok) return;
+    const by = mgr.name;
+    return (
+      setS((prev) => {
       const seal: LedgerPeriodSeal = {
         id: "seal-" + period + "-" + (prev.ledgerSeals.length + 1),
         period,
@@ -1457,13 +1503,24 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
           closingTransactionFor(period, seal.id, journals, suspenseGross, now()),
         ],
       };
-    });
+    })
+    );
+  };
 
   // d18 - an unseal is an artifact: who, when, a required reason, and which
   // period it reopened. A-76 has a divergence against what was stored raise a
   // system flag with a null actor.
-  const ledgerUnseal: AppContextValue["ledgerUnseal"] = (period, reason, by) =>
-    setS((prev) => {
+  const ledgerUnseal: AppContextValue["ledgerUnseal"] = (period, reason, byAuth) =>
+    {
+    // §6 — an M function resolves the Manager ITSELF, in the same
+    // transaction. The brand proves the check passed when the id was
+    // minted; this proves it still holds now, so a demotion between the
+    // prompt and the write bites (A-28a, A-4, A-48).
+    const mgr = requireManager(s.users, byAuth);
+    if (!mgr.ok) return;
+    const by = mgr.name;
+    return (
+      setS((prev) => {
       const live = prev.ledgerSeals
         .filter((x) => x.period === period)
         .find((x) => !prev.ledgerUnseals.some((u) => u.sealId === x.id));
@@ -1489,11 +1546,22 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
         ],
         ...(flag ? { reviewFlags: [flag, ...prev.reviewFlags] } : {}),
       };
-    });
+    })
+    );
+  };
 
   // d22 - the only permanently irreversible state in this system.
-  const ledgerMarkYearFiled: AppContextValue["ledgerMarkYearFiled"] = (fiscalYearEnd, by) =>
-    setS((prev) => ({
+  const ledgerMarkYearFiled: AppContextValue["ledgerMarkYearFiled"] = (fiscalYearEnd, byAuth) =>
+    {
+    // §6 — an M function resolves the Manager ITSELF, in the same
+    // transaction. The brand proves the check passed when the id was
+    // minted; this proves it still holds now, so a demotion between the
+    // prompt and the write bites (A-28a, A-4, A-48).
+    const mgr = requireManager(s.users, byAuth);
+    if (!mgr.ok) return;
+    const by = mgr.name;
+    return (
+      setS((prev) => ({
       ...prev,
       ledgerYearFilings: [
         ...prev.ledgerYearFilings,
@@ -1505,7 +1573,9 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
           authorizedByInitials: by,
         },
       ],
-    }));
+    }))
+    );
+  };
 
   // d25 - a mark that moves no money. No journal is written here, ever.
   const ledgerReconcile: AppContextValue["ledgerReconcile"] = (reconciliation) =>
@@ -1693,7 +1763,15 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
     at: new Date().toISOString().slice(0, 10),
   });
 
-  const upsertTaxType: AppContextValue["upsertTaxType"] = (row, by) => {
+  const upsertTaxType: AppContextValue["upsertTaxType"] = (row, byAuth) => {
+    // §6 — an M function resolves the Manager ITSELF, in the same
+    // transaction. The brand proves the check passed when the id was
+    // minted; this proves it still holds now, so a demotion between the
+    // prompt and the write bites (A-28a, A-4, A-48).
+    const mgr = requireManager(s.users, byAuth);
+    if (!mgr.ok) return { ok: false, reason: mgr.refusal };
+    const by = mgr.name;
+
     const code = row.code.trim().toLowerCase();
     if (code.length !== 1) return { ok: false, reason: "A tax type code is a single letter." };
     if (!row.name.trim()) return { ok: false, reason: "A name is required." };
@@ -1717,7 +1795,15 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
     return { ok: true };
   };
 
-  const setTaxCell: AppContextValue["setTaxCell"] = (groupId, productTaxCode, spec, by) => {
+  const setTaxCell: AppContextValue["setTaxCell"] = (groupId, productTaxCode, spec, byAuth) => {
+    // §6 — an M function resolves the Manager ITSELF, in the same
+    // transaction. The brand proves the check passed when the id was
+    // minted; this proves it still holds now, so a demotion between the
+    // prompt and the write bites (A-28a, A-4, A-48).
+    const mgr = requireManager(s.users, byAuth);
+    if (!mgr.ok) return { ok: false, reason: mgr.refusal };
+    const by = mgr.name;
+
     const clean = spec.trim().toLowerCase();
     const { codes } = parseCell(clean);
     // d16 — two maximum, and every letter has to name a type that exists.
@@ -1740,7 +1826,15 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
     return { ok: true };
   };
 
-  const upsertTaxGroup: AppContextValue["upsertTaxGroup"] = (row, by) => {
+  const upsertTaxGroup: AppContextValue["upsertTaxGroup"] = (row, byAuth) => {
+    // §6 — an M function resolves the Manager ITSELF, in the same
+    // transaction. The brand proves the check passed when the id was
+    // minted; this proves it still holds now, so a demotion between the
+    // prompt and the write bites (A-28a, A-4, A-48).
+    const mgr = requireManager(s.users, byAuth);
+    if (!mgr.ok) return { ok: false, reason: mgr.refusal };
+    const by = mgr.name;
+
     if (!row.description.trim()) return { ok: false, reason: "A description is required." };
     const shortName = row.shortName.trim().toUpperCase();
     if (!shortName || shortName.length > 4)
@@ -1755,7 +1849,15 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
     return { ok: true };
   };
 
-  const setDefaultTaxGroup: AppContextValue["setDefaultTaxGroup"] = (groupId, by) => {
+  const setDefaultTaxGroup: AppContextValue["setDefaultTaxGroup"] = (groupId, byAuth) => {
+    // §6 — an M function resolves the Manager ITSELF, in the same
+    // transaction. The brand proves the check passed when the id was
+    // minted; this proves it still holds now, so a demotion between the
+    // prompt and the write bites (A-28a, A-4, A-48).
+    const mgr = requireManager(s.users, byAuth);
+    if (!mgr.ok) return;
+    const by = mgr.name;
+
     if (groupId === s.defaultTaxGroup) return;
     const before = s.taxGroups.find((g) => g.id === s.defaultTaxGroup)?.shortName ?? s.defaultTaxGroup;
     const after = s.taxGroups.find((g) => g.id === groupId)?.shortName ?? groupId;
@@ -1792,14 +1894,30 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
       ],
     }));
 
-  const setStoreSetting: AppContextValue["setStoreSetting"] = (key, value, by) => {
+  const setStoreSetting: AppContextValue["setStoreSetting"] = (key, value, byAuth) => {
+    // §6 — an M function resolves the Manager ITSELF, in the same
+    // transaction. The brand proves the check passed when the id was
+    // minted; this proves it still holds now, so a demotion between the
+    // prompt and the write bites (A-28a, A-4, A-48).
+    const mgr = requireManager(s.users, byAuth);
+    if (!mgr.ok) return;
+    const by = mgr.name;
+
     const before = s.storeSettings[key];
     if (before === value) return;
     setS((prev) => ({ ...prev, storeSettings: { ...prev.storeSettings, [key]: value } }));
     logSetting("Store settings", String(key), before, value, by);
   };
 
-  const setStoreDetail: AppContextValue["setStoreDetail"] = (key, value, by) => {
+  const setStoreDetail: AppContextValue["setStoreDetail"] = (key, value, byAuth) => {
+    // §6 — an M function resolves the Manager ITSELF, in the same
+    // transaction. The brand proves the check passed when the id was
+    // minted; this proves it still holds now, so a demotion between the
+    // prompt and the write bites (A-28a, A-4, A-48).
+    const mgr = requireManager(s.users, byAuth);
+    if (!mgr.ok) return;
+    const by = mgr.name;
+
     const before = (s.storeDetails as unknown as Record<string, unknown>)[key];
     if (before === value) return;
     setS((prev) => ({ ...prev, storeDetails: { ...prev.storeDetails, [key]: value } }));
@@ -1845,7 +1963,15 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
     return { ok: true };
   };
 
-  const updateMapRow: AppContextValue["updateMapRow"] = (tag, patch, by) => {
+  const updateMapRow: AppContextValue["updateMapRow"] = (tag, patch, byAuth) => {
+    // §6 — an M function resolves the Manager ITSELF, in the same
+    // transaction. The brand proves the check passed when the id was
+    // minted; this proves it still holds now, so a demotion between the
+    // prompt and the write bites (A-28a, A-4, A-48).
+    const mgr = requireManager(s.users, byAuth);
+    if (!mgr.ok) return { ok: false, reason: mgr.refusal };
+    const by = mgr.name;
+
     const key = normaliseTag(tag);
     const existing = s.genreMap.find((r) => normaliseTag(r.tag) === key);
     if (!existing) return { ok: false, reason: `No map row for "${tag}".` };
@@ -1858,7 +1984,15 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
     return { ok: true };
   };
 
-  const removeMapRow: AppContextValue["removeMapRow"] = (tag, by) => {
+  const removeMapRow: AppContextValue["removeMapRow"] = (tag, byAuth) => {
+    // §6 — an M function resolves the Manager ITSELF, in the same
+    // transaction. The brand proves the check passed when the id was
+    // minted; this proves it still holds now, so a demotion between the
+    // prompt and the write bites (A-28a, A-4, A-48).
+    const mgr = requireManager(s.users, byAuth);
+    if (!mgr.ok) return { ok: false, reason: mgr.refusal };
+    const by = mgr.name;
+
     const key = normaliseTag(tag);
     const existing = s.genreMap.find((r) => normaliseTag(r.tag) === key);
     if (!existing) return { ok: false, reason: `No map row for "${tag}".` };
@@ -1876,7 +2010,15 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
   // THE MAP ROWS ARE THE HALF EASILY MISSED AND THE HALF THAT MATTERS: a merge
   // that leaves them behind has the next adoption recreate the genre under the
   // old tag, which is the problem returning by the door it came in.
-  const mergeGenres: AppContextValue["mergeGenres"] = (fromId, toId, by) => {
+  const mergeGenres: AppContextValue["mergeGenres"] = (fromId, toId, byAuth) => {
+    // §6 — an M function resolves the Manager ITSELF, in the same
+    // transaction. The brand proves the check passed when the id was
+    // minted; this proves it still holds now, so a demotion between the
+    // prompt and the write bites (A-28a, A-4, A-48).
+    const mgr = requireManager(s.users, byAuth);
+    if (!mgr.ok) return { ok: false, reason: mgr.refusal };
+    const by = mgr.name;
+
     const from = s.genres.find((g) => g.id === fromId);
     const to = s.genres.find((g) => g.id === toId);
     const check = checkGenreMerge(from, to);
@@ -1969,7 +2111,15 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
     };
   };
 
-  const upsertGenre: AppContextValue["upsertGenre"] = (row, by) => {
+  const upsertGenre: AppContextValue["upsertGenre"] = (row, byAuth) => {
+    // §6 — an M function resolves the Manager ITSELF, in the same
+    // transaction. The brand proves the check passed when the id was
+    // minted; this proves it still holds now, so a demotion between the
+    // prompt and the write bites (A-28a, A-4, A-48).
+    const mgr = requireManager(s.users, byAuth);
+    if (!mgr.ok) return { ok: false, reason: mgr.refusal };
+    const by = mgr.name;
+
     // The rules live in lib/taxonomy so they can be exercised without a screen.
     const check = checkGenreWrite(row, {
       genres: s.genres,
@@ -1994,7 +2144,15 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
   //
   // The refusal names its cause, because M-04 d13 and A-54 both require that -
   // a refusal that does not say what blocked it sends someone hunting.
-  const deleteGenre: AppContextValue["deleteGenre"] = (genreId, by) => {
+  const deleteGenre: AppContextValue["deleteGenre"] = (genreId, byAuth) => {
+    // §6 — an M function resolves the Manager ITSELF, in the same
+    // transaction. The brand proves the check passed when the id was
+    // minted; this proves it still holds now, so a demotion between the
+    // prompt and the write bites (A-28a, A-4, A-48).
+    const mgr = requireManager(s.users, byAuth);
+    if (!mgr.ok) return { ok: false, reason: mgr.refusal };
+    const by = mgr.name;
+
     const genre = s.genres.find((x) => x.id === genreId);
     const check = checkGenreDelete(genre, genreUseCount(genreId));
     if (!check.ok) return check;
@@ -2003,7 +2161,15 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
     return { ok: true };
   };
 
-  const upsertSection: AppContextValue["upsertSection"] = (row, by) => {
+  const upsertSection: AppContextValue["upsertSection"] = (row, byAuth) => {
+    // §6 — an M function resolves the Manager ITSELF, in the same
+    // transaction. The brand proves the check passed when the id was
+    // minted; this proves it still holds now, so a demotion between the
+    // prompt and the write bites (A-28a, A-4, A-48).
+    const mgr = requireManager(s.users, byAuth);
+    if (!mgr.ok) return { ok: false, reason: mgr.refusal };
+    const by = mgr.name;
+
     const code = row.code.trim().toUpperCase();
     if (code.length !== 2) return { ok: false, reason: "A Section code is two characters (d28)." };
     if (!row.name.trim()) return { ok: false, reason: "A name is required." };
@@ -2021,7 +2187,15 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
     return { ok: true };
   };
 
-  const upsertTender: AppContextValue["upsertTender"] = (row, by) => {
+  const upsertTender: AppContextValue["upsertTender"] = (row, byAuth) => {
+    // §6 — an M function resolves the Manager ITSELF, in the same
+    // transaction. The brand proves the check passed when the id was
+    // minted; this proves it still holds now, so a demotion between the
+    // prompt and the write bites (A-28a, A-4, A-48).
+    const mgr = requireManager(s.users, byAuth);
+    if (!mgr.ok) return { ok: false, reason: mgr.refusal };
+    const by = mgr.name;
+
     if (!row.name.trim()) return { ok: false, reason: "A name is required." };
     const existing = s.tenders.find((x) => x.id === row.id);
     if (existing?.systemOwned && (row.name !== existing.name || !row.active))
@@ -2038,7 +2212,15 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
     return { ok: true };
   };
 
-  const upsertCurrency: AppContextValue["upsertCurrency"] = (row, by) => {
+  const upsertCurrency: AppContextValue["upsertCurrency"] = (row, byAuth) => {
+    // §6 — an M function resolves the Manager ITSELF, in the same
+    // transaction. The brand proves the check passed when the id was
+    // minted; this proves it still holds now, so a demotion between the
+    // prompt and the write bites (A-28a, A-4, A-48).
+    const mgr = requireManager(s.users, byAuth);
+    if (!mgr.ok) return { ok: false, reason: mgr.refusal };
+    const by = mgr.name;
+
     const code = row.code.trim().toUpperCase();
     if (code.length !== 3) return { ok: false, reason: "A currency code is three letters." };
     if (!(row.rate > 0)) return { ok: false, reason: "A rate has to be greater than zero." };
@@ -2059,7 +2241,15 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
     return { ok: true };
   };
 
-  const setHomeCurrency: AppContextValue["setHomeCurrency"] = (code, by) => {
+  const setHomeCurrency: AppContextValue["setHomeCurrency"] = (code, byAuth) => {
+    // §6 — an M function resolves the Manager ITSELF, in the same
+    // transaction. The brand proves the check passed when the id was
+    // minted; this proves it still holds now, so a demotion between the
+    // prompt and the write bites (A-28a, A-4, A-48).
+    const mgr = requireManager(s.users, byAuth);
+    if (!mgr.ok) return;
+    const by = mgr.name;
+
     if (code === s.homeCurrency) return;
     const before = s.homeCurrency;
     setS((prev) => ({ ...prev, homeCurrency: code }));
@@ -2087,31 +2277,94 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
     return { ok: true, id: r.id };
   };
 
-  const addUser: AppContextValue["addUser"] = (input, by) =>
-    commit(usersLib.addUser(s.users, input, by, { id: uid("user") }));
+  const addUser: AppContextValue["addUser"] = (input, byAuth) =>
+    {
+    // §6 — an M function resolves the Manager ITSELF, in the same
+    // transaction. The brand proves the check passed when the id was
+    // minted; this proves it still holds now, so a demotion between the
+    // prompt and the write bites (A-28a, A-4, A-48).
+    const mgr = requireManager(s.users, byAuth);
+    if (!mgr.ok) return { ok: false, reason: mgr.refusal };
+    const by = mgr.name;
+    return (
+      commit(usersLib.addUser(s.users, input, by, { id: uid("user") }))
+    );
+  };
 
-  const changeUserRole: AppContextValue["changeUserRole"] = (userId, role, by) =>
-    commit(usersLib.changeUserRole(s.users, userId, role, by));
+  const changeUserRole: AppContextValue["changeUserRole"] = (userId, role, byAuth) =>
+    {
+    // §6 — an M function resolves the Manager ITSELF, in the same
+    // transaction. The brand proves the check passed when the id was
+    // minted; this proves it still holds now, so a demotion between the
+    // prompt and the write bites (A-28a, A-4, A-48).
+    const mgr = requireManager(s.users, byAuth);
+    if (!mgr.ok) return { ok: false, reason: mgr.refusal };
+    const by = mgr.name;
+    return (
+      commit(usersLib.changeUserRole(s.users, userId, role, by))
+    );
+  };
 
   // M-04 d15 as corrected by d18: a deactivation stops new work under those
   // initials AT ONCE. There is no server-side session to end, so what
   // "immediately" means here is that the actor no longer resolves — the same
   // shape as actor_resolve refusing (A-55). An Open Sale is untouched and
   // stays finishable; only the session goes.
-  const deactivateUser: AppContextValue["deactivateUser"] = (userId, by) => {
+  const deactivateUser: AppContextValue["deactivateUser"] = (userId, byAuth) => {
+    // §6 — an M function resolves the Manager ITSELF, in the same
+    // transaction. The brand proves the check passed when the id was
+    // minted; this proves it still holds now, so a demotion between the
+    // prompt and the write bites (A-28a, A-4, A-48).
+    const mgr = requireManager(s.users, byAuth);
+    if (!mgr.ok) return { ok: false, reason: mgr.refusal };
+    const by = mgr.name;
+
     const r = commit(usersLib.deactivateUser(s.users, userId, by));
     if (r.ok && s.sessionUserId === userId) endSession();
     return r;
   };
 
-  const reactivateUser: AppContextValue["reactivateUser"] = (userId, initials, by) =>
-    commit(usersLib.reactivateUser(s.users, userId, initials, by));
+  const reactivateUser: AppContextValue["reactivateUser"] = (userId, initials, byAuth) =>
+    {
+    // §6 — an M function resolves the Manager ITSELF, in the same
+    // transaction. The brand proves the check passed when the id was
+    // minted; this proves it still holds now, so a demotion between the
+    // prompt and the write bites (A-28a, A-4, A-48).
+    const mgr = requireManager(s.users, byAuth);
+    if (!mgr.ok) return { ok: false, reason: mgr.refusal };
+    const by = mgr.name;
+    return (
+      commit(usersLib.reactivateUser(s.users, userId, initials, by))
+    );
+  };
 
-  const correctUser: AppContextValue["correctUser"] = (userId, patch, by) =>
-    commit(usersLib.correctUser(s.users, userId, patch, by));
+  const correctUser: AppContextValue["correctUser"] = (userId, patch, byAuth) =>
+    {
+    // §6 — an M function resolves the Manager ITSELF, in the same
+    // transaction. The brand proves the check passed when the id was
+    // minted; this proves it still holds now, so a demotion between the
+    // prompt and the write bites (A-28a, A-4, A-48).
+    const mgr = requireManager(s.users, byAuth);
+    if (!mgr.ok) return { ok: false, reason: mgr.refusal };
+    const by = mgr.name;
+    return (
+      commit(usersLib.correctUser(s.users, userId, patch, by))
+    );
+  };
 
-  const setUserPassword: AppContextValue["setUserPassword"] = (userId, password, by) =>
-    commit(usersLib.setUserPassword(s.users, userId, password, by));
+  const setUserPassword: AppContextValue["setUserPassword"] = (userId, password, byAuth) =>
+    {
+    // §6 — an M function resolves the Manager ITSELF, in the same
+    // transaction. The brand proves the check passed when the id was
+    // minted; this proves it still holds now, so a demotion between the
+    // prompt and the write bites (A-28a, A-4, A-48).
+    const mgr = requireManager(s.users, byAuth);
+    if (!mgr.ok) return { ok: false, reason: mgr.refusal };
+    const by = mgr.name;
+    return (
+      commit(usersLib.setUserPassword(s.users, userId, password, by))
+    );
+  };
 
   const addCustomer: AppContextValue["addCustomer"] = (input) => {
     const id = uid("cust");
@@ -2694,7 +2947,15 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
     return closeUndoRefusal(batch.at.slice(0, 10), s.ledgerSeals, s.ledgerUnseals);
   };
 
-  const undoEndOfDay: AppContextValue["undoEndOfDay"] = (batchId, by) => {
+  const undoEndOfDay: AppContextValue["undoEndOfDay"] = (batchId, byAuth) => {
+    // §6 — an M function resolves the Manager ITSELF, in the same
+    // transaction. The brand proves the check passed when the id was
+    // minted; this proves it still holds now, so a demotion between the
+    // prompt and the write bites (A-28a, A-4, A-48).
+    const mgr = requireManager(s.users, byAuth);
+    if (!mgr.ok) return;
+    const by = mgr.name;
+
     const batch = s.closeBatches.find((b) => b.id === batchId);
     if (!batch || batch.undoneAt) return;
     // d11 - "nothing may write into a sealed period, BY ANY ROUTE, including
@@ -3073,14 +3334,19 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
     grade,
     price,
     reason,
-    by,
+    byAuth,
     assessedCost,
   ) => {
     // A-81, A-28a — the write-off route is manager-only, because routing a
     // returned copy to *written off* IS adjusting on hand. The rule and its
     // reasoning live in lib/returnRouting.ts, never here and never in the
     // screen (A-4, A-48); the store calls the refusal and stores the result.
-    const refusal = routeStockRefusal(to, by);
+    // Resolved here, at the moment of the write, through the same door every
+    // other gated function uses (§6). The write-off route is the only one that
+    // needs it; `routeStockRefusal` decides that, not this line.
+    const mgr = byAuth ? requireManager(s.users, byAuth) : undefined;
+    const by = mgr?.ok ? mgr.name : undefined;
+    const refusal = routeStockRefusal(to, mgr?.ok ? { role: "Manager", active: true, name: by! } : undefined);
     if (refusal) return { routed: false, refusal };
 
     const soldCopy = s.inventory.find((i) => i.id === itemId);
@@ -3236,6 +3502,20 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
           : sale,
       ),
     }));
+
+    // E-06 d21 / E-04 d16 — the mint is the ONE place an Employee can create a
+    // sellable copy at a price of their own choosing, and it was escaping the
+    // guardrail on a technicality: d16's flag fires when a price is EDITED
+    // below cost, and a mint is not an edit. Raised after the write, because
+    // d16 flags rather than blocks — nothing slows at the counter, and what
+    // this restores is the compensating record a permissive design rests on.
+    if (minted && minted.price < minted.cost) {
+      const rec = s.records.find((r) => r.id === minted.recordId);
+      raiseReviewFlag(
+        "below-cost",
+        `Re-graded on return: shelf price ${money(minted.price)} below assessed cost ${money(minted.cost)} for ${rec ? `${rec.artist} — ${rec.title}` : minted.recordId} (${minted.internalBarcode}).`,
+      );
+    }
 
     return { routed: true };
   };
@@ -3497,7 +3777,15 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
   // Manager-only "adjust on hand" (E-04) for when an outstanding oversold
   // copy can't be explained by an incoming shipment and needs to be forced
   // back to zero for the count's own sanity, rather than waiting on receiving.
-  const reconcileOversold: AppContextValue["reconcileOversold"] = (recordId, by) => {
+  const reconcileOversold: AppContextValue["reconcileOversold"] = (recordId, byAuth) => {
+    // §6 — an M function resolves the Manager ITSELF, in the same
+    // transaction. The brand proves the check passed when the id was
+    // minted; this proves it still holds now, so a demotion between the
+    // prompt and the write bites (A-28a, A-4, A-48).
+    const mgr = requireManager(s.users, byAuth);
+    if (!mgr.ok) return 0;
+    const by = mgr.name;
+
     const outstanding = s.inventory.filter((i) => i.recordId === recordId && i.oversold && !i.oversoldReconciledAt);
     if (outstanding.length === 0) return 0;
     const ids = outstanding.map((i) => i.id);
@@ -3801,8 +4089,17 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
   // Only this locks an Invoice (decision — finalize alone no longer does).
   // Manager-only, per M-05: Accounts Payable settling the balance is what
   // makes the paperwork official.
-  const markInvoicePaid: AppContextValue["markInvoicePaid"] = (invoiceId, by) =>
-    setS((prev) => ({
+  const markInvoicePaid: AppContextValue["markInvoicePaid"] = (invoiceId, byAuth) =>
+    {
+    // §6 — an M function resolves the Manager ITSELF, in the same
+    // transaction. The brand proves the check passed when the id was
+    // minted; this proves it still holds now, so a demotion between the
+    // prompt and the write bites (A-28a, A-4, A-48).
+    const mgr = requireManager(s.users, byAuth);
+    if (!mgr.ok) return;
+    const by = mgr.name;
+    return (
+      setS((prev) => ({
       ...prev,
       invoices: prev.invoices.map((iv) =>
         iv.id === invoiceId
@@ -3814,7 +4111,9 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
             }
           : iv,
       ),
-    }));
+    }))
+    );
+  };
 
   // M-05 d27 — THE settlement. One selection, one act, one PaymentBatch.
   //
@@ -3826,7 +4125,14 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
   // Attaching a credit does NOT move the Supplier's balance (d26) — the credit
   // already counted, and attaching only changes what it is attached to. The
   // balance moves by exactly the money that left.
-  const settlePayables: AppContextValue["settlePayables"] = (input, by) =>
+  const settlePayables: AppContextValue["settlePayables"] = (input, byAuth) => {
+    // §6 — an M function resolves the Manager ITSELF, in the same
+    // transaction, so a demotion between the prompt and the write bites
+    // (A-28a, A-4, A-48).
+    const mgr = requireManager(s.users, byAuth);
+    if (!mgr.ok) return;
+    const by = mgr.name;
+    return (
     setS((prev) => {
       const at = now();
       const targets: PaymentTarget[] = [];
@@ -4018,7 +4324,9 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
         journals: [journal.batch, ...prev.journals],
         reviewFlags: journalFlags(journal, `payment ${batch.reference || batch.id}`, prev.reviewFlags),
       };
-    });
+    })
+    );
+  };
 
   // M-05 d22 / d30 — void a PaymentBatch. Whole or not at all, appended never
   // edited, and it NEVER REFUSES: where the settlement emitted a remainder, the
@@ -4029,8 +4337,17 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
   // Nothing un-consumes a credit by writing to it — a credit is consumed by the
   // PRESENCE of a live target (A-37), so voiding the batch releases it with
   // nothing to flip. The same is true of the Invoice's immutability (A-33a).
-  const voidPaymentBatch: AppContextValue["voidPaymentBatch"] = (batchId, by) =>
-    setS((prev) => {
+  const voidPaymentBatch: AppContextValue["voidPaymentBatch"] = (batchId, byAuth) =>
+    {
+    // §6 — an M function resolves the Manager ITSELF, in the same
+    // transaction. The brand proves the check passed when the id was
+    // minted; this proves it still holds now, so a demotion between the
+    // prompt and the write bites (A-28a, A-4, A-48).
+    const mgr = requireManager(s.users, byAuth);
+    if (!mgr.ok) return;
+    const by = mgr.name;
+    return (
+      setS((prev) => {
       const batch = prev.paymentBatches.find((b) => b.id === batchId);
       if (!batch || prev.batchVoids.some((v) => v.batchId === batchId)) return prev;
 
@@ -4100,7 +4417,9 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
         journals: [journal.batch, ...prev.journals],
         reviewFlags: journalFlags(journal, `the void of ${batch.reference || batch.id}`, prev.reviewFlags),
       };
-    });
+    })
+    );
+  };
 
   const payableEntryFor: AppContextValue["payableEntryFor"] = (id) =>
     id ? s.payableEntries.find((e) => e.id === id) : undefined;
@@ -4133,7 +4452,15 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
   // against the Credit that eventually replaced it, say — and clears them
   // against each other. Nothing is deleted or edited beyond the clearing
   // fields; both stay in the ledger as the record of what happened.
-  const clearPayableEntries: AppContextValue["clearPayableEntries"] = (entryIds, by) => {
+  const clearPayableEntries: AppContextValue["clearPayableEntries"] = (entryIds, byAuth) => {
+    // §6 — an M function resolves the Manager ITSELF, in the same
+    // transaction. The brand proves the check passed when the id was
+    // minted; this proves it still holds now, so a demotion between the
+    // prompt and the write bites (A-28a, A-4, A-48).
+    const mgr = requireManager(s.users, byAuth);
+    if (!mgr.ok) return { cleared: false };
+    const by = mgr.name;
+
     const entries = entryIds.map((id) => s.payableEntries.find((e) => e.id === id)).filter((e): e is PayableEntry => !!e);
     if (entries.length < 2 || entries.length !== entryIds.length) return { cleared: false };
     // d46 — cleared is now DERIVED from a clearing naming the entry, so the
@@ -4189,7 +4516,15 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
    * batch's void (d22), and whether the void even does so is an open question
    * in M-05. Un-clearing it here would answer that question by accident.
    */
-  const unclearPayableEntries: AppContextValue["unclearPayableEntries"] = (clearingId, by) => {
+  const unclearPayableEntries: AppContextValue["unclearPayableEntries"] = (clearingId, byAuth) => {
+    // §6 — an M function resolves the Manager ITSELF, in the same
+    // transaction. The brand proves the check passed when the id was
+    // minted; this proves it still holds now, so a demotion between the
+    // prompt and the write bites (A-28a, A-4, A-48).
+    const mgr = requireManager(s.users, byAuth);
+    if (!mgr.ok) return { uncleared: false, reason: mgr.refusal };
+    const by = mgr.name;
+
     const clearing = s.clearings.find((c) => c.id === clearingId);
     const refusal = unclearRefusal(clearing);
     if (refusal || !clearing) return { uncleared: false, reason: refusal };
@@ -4296,7 +4631,12 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
   //                       Invoice is what E-02 d30 counts, and the remainder
   //                       is still wanted.
   //   fully received    → untouched. There is nothing to reverse.
-  const voidPurchaseOrder: AppContextValue["voidPurchaseOrder"] = (poNumber, by) => {
+  const voidPurchaseOrder: AppContextValue["voidPurchaseOrder"] = (poNumber, byAuth) => {
+    // A-54 gates voiding a PurchaseOrder, and §6 has the function resolve the
+    // Manager itself rather than trust the caller.
+    const mgr = requireManager(s.users, byAuth);
+    if (!mgr.ok) return { returned: 0, split: 0, untouched: 0 };
+    const by = mgr.name;
     const onPo = s.pendingOrders.filter((o) => o.poNumber === poNumber);
     if (onPo.length === 0) return { returned: 0, split: 0, untouched: 0 };
 
