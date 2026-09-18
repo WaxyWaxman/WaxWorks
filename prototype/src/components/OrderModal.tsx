@@ -1,7 +1,7 @@
 import { useState } from "react";
 import type { InventoryItem, RecordEntry } from "../data/types";
 import { money } from "../lib/money";
-import { separatorCounts } from "../lib/totals";
+import { isPresent, separatorCounts } from "../lib/totals";
 import { useApp } from "../store/AppStore";
 import { useActor } from "./Identify";
 import { Modal } from "./Modal";
@@ -13,7 +13,10 @@ import { SeparatorSelect } from "./SeparatorSelect";
 // for the same reason (M-02 step 2), and two copies of it would drift.
 export function defaultSellPrice(record: RecordEntry, inventory: InventoryItem[]): number {
   if (record.stickyPrice) return record.stickyPrice;
-  const copy = inventory.find((i) => i.recordId === record.id && i.status !== "sold");
+  // A price is taken from a copy still here (§5.1, A-81). Read as
+  // `!== "sold"` this would default a new order line to the price of a copy
+  // that was written off, which is the last figure that should set one.
+  const copy = inventory.find((i) => i.recordId === record.id && isPresent(i));
   return copy?.price ?? 0;
 }
 
