@@ -181,10 +181,11 @@ export const isFiled = (
  * someone remembered. It gives the same answer here and would not survive two
  * Managers pressing Seal at once, which is the case A-75's index exists for.
  *
- * `blockers` is what step 17 and d15 will pass once postings exist: an
- * unbalanced posting, an invalid account, section or location. They are listed
- * rather than counted because step 17 *reports every failure without sealing*.
- * A Suspense line is deliberately NOT one of them — see `sealReport`.
+ * `blockers` is what step 17 passes: an unbalanced posting, an invalid account,
+ * section or location — listed rather than counted, because step 17 *reports
+ * every failure without sealing*. **A non-zero Suspense balance is now among
+ * them** (d40, superseding d15), and `sealReport` is what adds it, so the
+ * refusal and the report can never disagree about what blocks.
  */
 export function sealRefusal(
   period: LedgerPeriod,
@@ -220,7 +221,10 @@ export function sealRefusal(
 export interface SealReport {
   /** Every failure, reported together — step 17 does not stop at the first. */
   blocking: string[];
-  /** Reported and carried, never blocking (d15, d18). */
+  /**
+   * d40 — **blocking**, where it is non-zero, and reported gross either way.
+   * ~~Reported and carried, never blocking (d15)~~ — d15 is superseded.
+   */
   suspenseGross: number;
   /** Whether this seal also seals a fiscal year, said BEFORE it happens (d17). */
   sealsFiscalYear: boolean;
@@ -232,8 +236,26 @@ export function sealReport(
   blockers: string[] = [],
   suspenseGross = 0,
 ): SealReport {
+  const blocking = [...blockers];
+
+  // d40 — a non-zero Suspense balance REFUSES the seal. This is the line d15
+  // drew the other way, and d14's ratification is what moved it: d15's argument
+  // was that "no Manager action can clear one", so a seal that refused could
+  // never be satisfied. A Manager can clear one now (d14, d39), so it can.
+  //
+  // The refusal names the GROSS figure, because that is the one that does not
+  // hide two defects as none (M-07 d25), and it names the route, because a
+  // refusal that blocks the books has to say how to get past it.
+  if (Math.round(suspenseGross * 100) !== 0) {
+    blocking.push(
+      `Suspense is ${Math.abs(suspenseGross).toFixed(2)} in ${period}, gross. A period does not seal over a ` +
+        `defect in this system (d40) — clear it with an override posting carrying a reason (d14, d39). ` +
+        `The day close is unaffected: M-07 d10 keeps the shop able to end its day.`,
+    );
+  }
+
   return {
-    blocking: blockers,
+    blocking,
     suspenseGross,
     sealsFiscalYear: isYearEnd(period, yearEndMonth),
   };

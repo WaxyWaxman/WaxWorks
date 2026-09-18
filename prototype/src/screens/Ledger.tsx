@@ -16,10 +16,13 @@ import {
   unsealRefusal,
 } from "../lib/ledgerPeriods";
 import {
+  exceptionReport,
   offerableAccounts,
+  OVERRIDABLE_ROLES,
   postingBalance,
   postingRefusals,
   type PostingContext,
+  type PostingOverride,
   type TypedPostingLine,
 } from "../lib/ledgerPostings";
 import {
@@ -388,6 +391,9 @@ function PostPhase({ by }: { by: string }) {
   const app = useApp();
   const [date, setDate] = useState(today());
   const [lines, setLines] = useState<TypedPostingLine[]>([blankLine(), blankLine()]);
+  // d39 — one override per locked account this posting reaches. No blanket
+  // unlock: the reason differs per account, so the override does too.
+  const [overrides, setOverrides] = useState<PostingOverride[]>([]);
 
   const ctx: PostingContext = useMemo(
     () => ({
@@ -401,7 +407,7 @@ function PostPhase({ by }: { by: string }) {
     [app.glAccounts, app.ledgerOpening, app.ledgerOpeningSealed, app.ledgerSeals, app.ledgerUnseals, app.sections],
   );
 
-  const draft = { businessDate: date, lines };
+  const draft = { businessDate: date, lines, overrides };
   const balance = postingBalance(lines);
   const refusals = postingRefusals(draft, ctx);
   const offered = offerableAccounts(app.glAccounts);
@@ -440,6 +446,20 @@ function PostPhase({ by }: { by: string }) {
                           {a.number} {a.name}
                         </option>
                       ))}
+                      {/* d39 — the locked accounts an override can open are
+                          shown, so a Manager can find the route rather than
+                          discovering the lock and stopping. Choosing one
+                          refuses until the override beside it carries a
+                          reason. */}
+                      <optgroup label="Needs an override (d39)">
+                        {app.glAccounts
+                          .filter((a) => a.active && a.role && OVERRIDABLE_ROLES.includes(a.role))
+                          .map((a) => (
+                            <option key={a.id} value={a.id}>
+                              {a.number} {a.name}
+                            </option>
+                          ))}
+                      </optgroup>
                     </select>
                   </td>
                   <td>
@@ -483,6 +503,51 @@ function PostPhase({ by }: { by: string }) {
               Add a line
             </button>
           </div>
+
+          {(() => {
+            // Every locked-and-openable account this posting actually touches.
+            const needing = app.glAccounts.filter(
+              (a) =>
+                a.role &&
+                OVERRIDABLE_ROLES.includes(a.role) &&
+                lines.some((l) => l.accountId === a.id),
+            );
+            if (needing.length === 0) return null;
+            return (
+              <div className="card">
+                <div className="card-head">Override — one account, one reason (d39)</div>
+                <div className="card-body stack">
+                  <p className="small muted">
+                    Standard practice gives an exception four controls around an{" "}
+                    <strong>ordinary</strong> entry: a restricted account, elevated permission, a{" "}
+                    <strong>required narration</strong>, and an <strong>exception report</strong>{" "}
+                    reviewed at close. This is the narration. There is{" "}
+                    <strong>no blanket unlock</strong> — each account needs its own, because{" "}
+                    <em>why</em> differs per account.
+                  </p>
+                  {needing.map((a) => {
+                    const existing = overrides.find((o) => o.accountId === a.id);
+                    return (
+                      <label className="field" key={a.id}>
+                        <span>
+                          {a.number} {a.name} — why
+                        </span>
+                        <input
+                          value={existing?.reason ?? ""}
+                          onChange={(e) =>
+                            setOverrides([
+                              ...overrides.filter((o) => o.accountId !== a.id),
+                              { accountId: a.id, reason: e.target.value },
+                            ])
+                          }
+                        />
+                      </label>
+                    );
+                  })}
+                </div>
+              </div>
+            );
+          })()}
 
           <p className="small muted">
             A <strong>location</strong> is required and defaults from the Store; a <strong>section</strong> is optional
@@ -539,12 +604,14 @@ function PostPhase({ by }: { by: string }) {
                     id: `post-${Date.now()}`,
                     businessDate: date,
                     lines,
+                    ...(overrides.length > 0 ? { overrides } : {}),
                     actorInitials: by,
                     authorizedByInitials: by,
                   },
                   by,
                 );
                 setLines([blankLine(), blankLine()]);
+                setOverrides([]);
               }}
             >
               Save the posting
@@ -557,6 +624,36 @@ function PostPhase({ by }: { by: string }) {
             </p>
           </div>
         </div>
+
+        {exceptionReport(app.ledgerPostings).length > 0 && (
+          <div className="card">
+            <div className="card-head">
+              Exception report ({exceptionReport(app.ledgerPostings).length})
+            </div>
+            <div className="card-body stack">
+              <p className="small muted">
+                d39 — every posting that used an override, with the reason it carried.{" "}
+                <strong>A read, not a queue</strong>: an override is a Manager acting deliberately
+                with both names recorded, so it wants reading at close rather than acknowledging
+                (A-71).
+              </p>
+              <table className="data">
+                <tbody>
+                  {exceptionReport(app.ledgerPostings).map((p) =>
+                    (p.overrides ?? []).map((o) => (
+                      <tr key={`${p.id}-${o.accountId}`}>
+                        <td>{p.businessDate}</td>
+                        <td>{app.glAccounts.find((a) => a.id === o.accountId)?.name ?? o.accountId}</td>
+                        <td className="small">{o.reason}</td>
+                        <td>{p.authorizedByInitials}</td>
+                      </tr>
+                    )),
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
 
         <div className="card">
           <div className="card-head">Typed so far ({app.ledgerPostings.length})</div>
@@ -599,7 +696,12 @@ function SealPhase({ by }: { by: string }) {
   // Step 17 — every failure, reported together. An unbalanced posting cannot
   // reach the journal (d10 refuses it at write time), so the blockers this
   // prototype can produce are invalid codes, and the list is where they land.
-  const report = offered ? sealReport(offered, yearEndMonth, [], 0) : undefined;
+  // d40 — the Suspense gross is computed from the journal and REFUSES the seal
+  // where it is non-zero. d15 let it through; d14's ratification removed d15's
+  // premise, because a Manager can clear one now.
+  const report = offered
+    ? sealReport(offered, yearEndMonth, [], app.ledgerSuspenseGross(offered))
+    : undefined;
   const sealWhy = offered ? sealRefusal(offered, app.ledgerSeals, app.ledgerUnseals, report?.blocking ?? []) : undefined;
   const unsealWhy = latest
     ? unsealRefusal(latest, app.ledgerSeals, app.ledgerUnseals, app.ledgerYearFilings, yearEndMonth, reason)
@@ -638,10 +740,13 @@ function SealPhase({ by }: { by: string }) {
                 Seal {offered}
               </button>
               <p className="small muted">
-                The seal writes a <strong>closing transaction</strong> carrying balance-forwards — computed by the same
-                recomputation that validates it, so <em>stored</em> is by definition the last <em>recomputed</em> (A-76).
-                A <strong>Suspense line does not block it</strong>: it is reported and carried gross, because no Manager
-                can clear one and a seal that refused would stop the books permanently (d15).
+                The seal writes a <strong>closing transaction</strong> carrying balance-forwards — computed by the
+                same recomputation that validates it, so <em>stored</em> is by definition the last{" "}
+                <em>recomputed</em> (A-76). A <strong>non-zero Suspense balance refuses it</strong> (d40,
+                superseding d15): a period does not seal over a defect in this system, and d14&rsquo;s override is
+                the route past it. <strong>The day close is unaffected</strong> — M-07 d10 keeps the shop able to end
+                its day, and d4 made <em>seal</em> and <em>close</em> two words precisely so this rule about one is
+                never read as a rule about the other.
               </p>
             </>
           )}

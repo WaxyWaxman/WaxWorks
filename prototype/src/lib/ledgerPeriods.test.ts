@@ -171,7 +171,7 @@ describe("M-08 A-75 — a second live seal is refused, and the balance-forwards 
   });
 });
 
-describe("M-08 d15, step 17 — what a seal reports, and what it refuses", () => {
+describe("M-08 d40, step 17 — what a seal reports, and what it refuses", () => {
   it("reports every failure together rather than stopping at the first", () => {
     const blockers = ["A posting on 2026-08-04 does not balance.", "Line 3 has no location."];
     expect(sealReport("2026-08", DEC, blockers).blocking).toEqual(blockers);
@@ -179,14 +179,37 @@ describe("M-08 d15, step 17 — what a seal reports, and what it refuses", () =>
     expect(sealRefusal("2026-08", [], [], blockers)).toContain("no location");
   });
 
-  it("does NOT block on a Suspense line — it reports it and carries it", () => {
-    // d15: refusing would deadlock the books. M-07 d10 records that no Manager
-    // action can create a Suspense balance and none can clear one, so a seal
-    // that refused on Suspense is a seal no Manager could ever satisfy.
+  it("M-08 d40 — REFUSES on a Suspense line, and d15 said the opposite", () => {
+    // This test asserted d15 until 2026-09-17: "does NOT block on a Suspense
+    // line — it reports it and carries it." d15's argument was M-07 d10's
+    // "none can clear one", so a seal that refused could never be satisfied.
+    // d14 — ratified — gives the route and d39 gives it a shape, so the
+    // premise is gone and d40 reverses the rule. The reasoning was sound; the
+    // premise was removed, which is this flow's own pattern a third time.
     const report = sealReport("2026-08", DEC, [], 6);
     expect(report.suspenseGross).toBe(6);
+    expect(report.blocking).toHaveLength(1);
+    expect(report.blocking[0]).toContain("Suspense is 6.00 in 2026-08, gross");
+    expect(sealRefusal("2026-08", [], [], report.blocking)).toContain("does not seal over a defect");
+  });
+
+  it("M-08 d40 — names the ROUTE, because a refusal that blocks the books must", () => {
+    const report = sealReport("2026-08", DEC, [], 6);
+    expect(report.blocking[0]).toContain("override posting carrying a reason");
+  });
+
+  it("M-08 d40, M-07 d10 — says the DAY CLOSE is unaffected, which is d4's whole point", () => {
+    // M-07 d10 protects "the shop ending its day"; d40 stops the month's seal.
+    // d4 made them two words precisely so a rule about one is never read as a
+    // rule about the other, and the refusal has to teach that on the spot.
+    const report = sealReport("2026-08", DEC, [], 6);
+    expect(report.blocking[0]).toContain("day close is unaffected");
+  });
+
+  it("seals normally once Suspense is zero", () => {
+    const report = sealReport("2026-08", DEC, [], 0);
     expect(report.blocking).toEqual([]);
-    expect(sealRefusal("2026-08", [], [], [])).toBeUndefined();
+    expect(sealRefusal("2026-08", [], [], report.blocking)).toBeUndefined();
   });
 
   it("says a year end is coming BEFORE it happens, rather than asking", () => {

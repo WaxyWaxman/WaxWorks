@@ -344,3 +344,38 @@ function liveSealIdFor(
 
 /** The period a date falls in — re-exported so callers need one import. */
 export { periodOf };
+
+// ---------------------------------------------------------------------------
+// d40, M-07 d25 — the Suspense total a seal reports, and refuses on
+// ---------------------------------------------------------------------------
+
+/**
+ * A period's Suspense total, **gross**.
+ *
+ * **Gross and not net, and the difference is the whole point** (M-07 d25, d15's
+ * surviving half): a period *"short three dollars on one date and over three on
+ * another must report six, or two defects report as none."* The account's
+ * balance would read zero in that case, which is exactly the answer that hides
+ * both.
+ *
+ * So each **business date** is one defect: net within the date, take the
+ * absolute value, and sum across dates. Netting across dates would reintroduce
+ * the cancellation; not netting within a date would report one defect twice.
+ *
+ * This is what d40 refuses a seal on, and what the refusal names.
+ */
+export function suspenseGrossFor(
+  period: string,
+  batches: JournalBatch[],
+  suspenseAccountId: string,
+): number {
+  const byDate = new Map<string, number>();
+  for (const l of linesIn(batches)) {
+    if (l.accountId !== suspenseAccountId) continue;
+    if (periodOf(l.businessDate) !== period) continue;
+    byDate.set(l.businessDate, (byDate.get(l.businessDate) ?? 0) + cents(l.debit) - cents(l.credit));
+  }
+  let gross = 0;
+  for (const c of byDate.values()) gross += Math.abs(c);
+  return dollars(gross);
+}

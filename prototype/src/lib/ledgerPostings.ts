@@ -1,4 +1,4 @@
-import type { GLAccount, JournalBatch, LedgerPeriodSeal, LedgerPeriodUnseal } from "../data/types";
+import type { GLAccount, GLRole, JournalBatch, LedgerPeriodSeal, LedgerPeriodUnseal } from "../data/types";
 import { assembleJournal, type Posting } from "./journal";
 import { isSealed, periodOf } from "./ledgerPeriods";
 
@@ -76,6 +76,11 @@ export interface TypedPostingLine {
 export interface PostingDraft {
   businessDate: string;
   lines: TypedPostingLine[];
+  /**
+   * d39 — the overrides this posting uses, one per locked account it reaches.
+   * Absent on an ordinary posting, which is nearly all of them.
+   */
+  overrides?: PostingOverride[];
 }
 
 /** A-74 — manager-only, so both names are on the artifact. */
@@ -286,6 +291,70 @@ export const TYPEABLE_BY_EXCEPTION: Readonly<Record<string, string>> = Object.fr
 });
 
 /**
+ * d39, d41 — the accounts an **override** can open, and the only ones.
+ *
+ * **d41 draws the line standard practice draws, and it is not the line d38
+ * assumed.** A **clearing** account is *this system's own*: it holds what has
+ * not landed yet, the truth about it lives nowhere else, and correcting it is
+ * the only way it can ever be right. A **control** account **mirrors a
+ * subsidiary ledger** — [M-05](M-05) holds what is owed, E-07 holds each
+ * Customer's balance, E-05 holds what is on live cards — and when a control
+ * account disagrees with its subledger the answer is **to find the error, not
+ * to plug the difference.** Plugging is worse than leaving it: it makes the two
+ * agree while the underlying posting is still wrong, and destroys the only
+ * signal that anything was.
+ *
+ * So this is a **yes-list and nothing else is openable**, which is the
+ * conservative reading of d41 — it names Suspense and undeposited on the yes
+ * side and three control accounts on the no side. `retained-earnings` appears
+ * on **neither**, and is therefore not openable here: d13 locks it because the
+ * year-end seal owns it (d17), and no decision has said an override may reach
+ * it. *Recorded as a silence rather than a rule.*
+ */
+export const OVERRIDABLE_ROLES: readonly GLRole[] = Object.freeze([
+  // d14 — a defect gets fixed and its three dollars must not sit on the
+  // balance sheet forever. The residue goes where the Manager says it belonged.
+  "suspense",
+  // d38, d41 — cash that never reached the bank. M-03 d8 declined over/short
+  // entirely, so this is the only route there is, and `cash-over-short` (M-07)
+  // is what it was always for.
+  "undeposited",
+]);
+
+/** d39 — one named account, one posting, one reason. */
+export interface PostingOverride {
+  accountId: string;
+  /** d14, d39 — required, and blank is refused rather than defaulted. */
+  reason: string;
+}
+
+/**
+ * Why this override may not be used, or undefined if it may.
+ *
+ * **No blanket unlock** (d39): an override names one account, so a posting
+ * touching two locked accounts needs two of these and two reasons — *why*
+ * differs per account, and one reason covering both says less than either.
+ */
+export function overrideRefusal(
+  override: PostingOverride,
+  accounts: GLAccount[],
+): string | undefined {
+  const account = accounts.find((a) => a.id === override.accountId);
+  if (!account) return `${override.accountId} is not an account.`;
+
+  if (untypeableReason(account) === undefined) {
+    // Overriding a lock that is not there would make the exception report
+    // meaningless — it would list ordinary postings.
+    return `${account.name} is not locked, so it needs no override.`;
+  }
+  if (!account.role || !OVERRIDABLE_ROLES.includes(account.role)) {
+    return `${account.name} mirrors a ledger outside this one. A difference there is an error to find, not one to post over (d41).`;
+  }
+  if (override.reason.trim() === "") return `An override of ${account.name} needs a reason.`;
+  return undefined;
+}
+
+/**
  * What the account picker offers.
  *
  * Two filters and they are not the same rule. `untypeableReason` is d13 and
@@ -391,8 +460,14 @@ export function postingRefusals(draft: PostingDraft, ctx: PostingContext): strin
       out.push(`Line ${n} has no account.`);
     } else {
       const why = untypeableReason(account);
-      if (why) out.push(`Line ${n}: ${why}`);
-      // M-06 d9, M-07 d18 — not offered for new work.
+      // d39 — a lock is relaxed only by an override naming THIS account. The
+      // invariant A-74 moved into the function is now conditional rather than
+      // absolute, and the condition is recorded on the posting, so *which rule
+      // was relaxed and why* is answerable from the row rather than the code.
+      const override = (draft.overrides ?? []).find((o) => o.accountId === account.id);
+      if (why && !override) out.push(`Line ${n}: ${why}`);
+      // M-06 d9, M-07 d18 — not offered for new work. An override does not
+      // reach this: deactivation is not a lock this exception was written for.
       else if (!account.active) out.push(`Line ${n}: ${account.name} has been deactivated.`);
     }
 
@@ -411,11 +486,34 @@ export function postingRefusals(draft: PostingDraft, ctx: PostingContext): strin
     }
   }
 
+  // d39 — every override is itself refusable, and an override for an account
+  // the posting never touches is a reason recorded against nothing.
+  for (const o of draft.overrides ?? []) {
+    const why = overrideRefusal(o, ctx.accounts);
+    if (why) out.push(why);
+    else if (!draft.lines.some((l) => l.accountId === o.accountId)) {
+      const name = ctx.accounts.find((a) => a.id === o.accountId)?.name ?? o.accountId;
+      out.push(`This posting overrides ${name} but has no line for it.`);
+    }
+  }
+
   const balanceWhy = balanceRefusal(draft.lines);
   if (balanceWhy) out.push(balanceWhy);
 
   return out;
 }
+
+/**
+ * d39 — the **exception report**: every posting that used an override.
+ *
+ * *"Visible as an exception rather than as a line in a posting nobody reads
+ * twice"* (d14). A **read**, not a queue — standard practice reviews an
+ * exception report at close, and A-71 warns against a flag that fires when
+ * nothing is wrong. An override is a Manager acting deliberately with both
+ * names recorded; it wants reading, not acknowledging.
+ */
+export const exceptionReport = (postings: LedgerPosting[]): LedgerPosting[] =>
+  postings.filter((p) => (p.overrides ?? []).length > 0);
 
 /** Undefined when the posting may be saved. */
 export const postingRefusal = (draft: PostingDraft, ctx: PostingContext): string | undefined => {
