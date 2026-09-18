@@ -139,10 +139,30 @@ function SessionChip() {
               onOk: (u) => app.identify(u.id),
             })
           }
+          title="Enter initials — open a session on this terminal"
+          aria-label="Enter initials"
         >
-          Enter initials
+          {/* An outline of a person rather than the words: the header strip is
+              the till's busiest real estate and this sat in it permanently.
+              The label survives as the accessible name and the tooltip, so
+              nothing is lost to a screen reader or to a hover. */}
+          <svg
+            width="16"
+            height="16"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            aria-hidden="true"
+            focusable="false"
+          >
+            <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
+            <circle cx="12" cy="7" r="4" />
+          </svg>
         </button>
-        <span className="idy-none"> no session · Till 1</span>
+        <span className="idy-none">no session · Till 1</span>
       </span>
     );
 

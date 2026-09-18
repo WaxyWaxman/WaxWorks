@@ -25,7 +25,13 @@ import type { User } from "../data/types";
  * still behaves as a string everywhere it is logged, which is how A-28a gets
  * both names into the record.
  */
-export type ManagerAuth = string & { readonly __managerAuthorized: unique symbol };
+export interface ManagerAuth {
+  /** The fact. §6: "the id is what the function trusts". */
+  readonly userId: string;
+  /** The label. §6: "the initials are what it displays". */
+  readonly name: string;
+  readonly __managerAuthorized: unique symbol;
+}
 
 /** Why an authorization was refused, or `undefined` when it holds. */
 export type ManagerAuthRefusal = string;
@@ -62,12 +68,38 @@ export function authorizeManager(
   if (who.role !== "Manager") {
     return { ok: false, refusal: `${who.name} is an ${who.role} — this needs a Manager (A-28a).` };
   }
-  return { ok: true, auth: `${who.name} (Manager)` as ManagerAuth };
+  return {
+    ok: true,
+    auth: { userId: who.id, name: `${who.name} (Manager)` } as unknown as ManagerAuth,
+  };
 }
 
 /**
- * For the one place a name is already known to be a Manager's and only needs
- * carrying — the seed, and tests. Never reachable from a screen, and named so
- * that a reader has to mean it.
+ * RE-RESOLVE AT THE MOMENT OF THE WRITE, which is what §6 actually asks for:
+ * an M function "resolves `p_manager_user_id` to an active Manager itself, in
+ * the same transaction", and `manager_authorize` resolves "at the moment of the
+ * call, so a demotion bites server-side at once".
+ *
+ * The brand alone proves the id passed the check when it was MINTED. That is
+ * not the same claim: a Manager demoted or deactivated between the prompt and
+ * the write would still get through. Every gated store function calls this
+ * first and refuses on anything but an active Manager.
  */
-export const unsafeManagerAuth = (displayName: string): ManagerAuth => displayName as ManagerAuth;
+export function requireManager(
+  users: User[],
+  auth: ManagerAuth | undefined,
+): { ok: true; name: string } | { ok: false; refusal: ManagerAuthRefusal } {
+  const res = authorizeManager(users, auth?.userId);
+  // Re-derive the display name from the row rather than trusting the one the
+  // caller carried — a rename between prompt and write should not record a
+  // stale label against the act.
+  return res.ok ? { ok: true, name: res.auth.name } : res;
+}
+
+/**
+ * For the one place a Manager is already known and only needs carrying — the
+ * seed, and tests. Never reachable from a screen, and named so a reader has to
+ * mean it.
+ */
+export const unsafeManagerAuth = (userId: string, displayName: string): ManagerAuth =>
+  ({ userId, name: displayName }) as unknown as ManagerAuth;

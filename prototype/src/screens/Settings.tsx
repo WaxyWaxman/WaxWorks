@@ -112,7 +112,7 @@ export function Settings() {
       <section className="cust-main">
         <div className="cust-head">
           <h2>{GROUPS.find((g) => g.key === active)?.label}</h2>
-          <span className="small muted">Authorised by {authorisedBy}</span>
+          <span className="small muted">Authorised by {authorisedBy.name}</span>
         </div>
         <div className="cust-scroll">
           <div className="stack">
@@ -568,7 +568,7 @@ function GenreMapEditor({ by, onRun }: { by: ManagerAuth; onRun: (r: SettingsWri
                 <td>
                   <select
                     value=""
-                    onChange={(e) => e.target.value && onRun(app.addMapRow(u.tag, e.target.value, by))}
+                    onChange={(e) => e.target.value && onRun(app.addMapRow(u.tag, e.target.value, by.name))}
                   >
                     <option value="">Choose a genre…</option>
                     {mappable.map((g) => (

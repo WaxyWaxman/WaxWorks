@@ -123,7 +123,7 @@ export function Ledger() {
       <header className="screen-head">
         <h1>Keep the general ledger</h1>
         <p className="small muted">
-          Authorised by {authorisedBy} ·{" "}
+          Authorised by {authorisedBy.name} ·{" "}
           {app.ledgerOpeningSealed ? (
             <>
               books open from <strong>{app.ledgerOpening?.firstDay}</strong>
@@ -615,8 +615,8 @@ function PostPhase({ by }: { by: ManagerAuth }) {
                     businessDate: date,
                     lines,
                     ...(overrides.length > 0 ? { overrides } : {}),
-                    actorInitials: by,
-                    authorizedByInitials: by,
+                    actorInitials: by.name,
+                    authorizedByInitials: by.name,
                   },
                   by,
                 );
@@ -895,7 +895,7 @@ function ReadPhase({ by }: { by: ManagerAuth }) {
     customerBalances,
   );
 
-  const issuedBy = { issuedAt: new Date().toISOString(), actorInitials: by, authorizedByInitials: by };
+  const issuedBy = { issuedAt: new Date().toISOString(), actorInitials: by.name, authorizedByInitials: by.name };
 
   return (
     <div className="stack">
@@ -1411,8 +1411,8 @@ function ReconcilePhase({ by }: { by: ManagerAuth }) {
                     document,
                     {
                       reconciledAt: new Date().toISOString(),
-                      actorInitials: by,
-                      authorizedByInitials: by,
+                      actorInitials: by.name,
+                      authorizedByInitials: by.name,
                     },
                     kind,
                     statement,

@@ -266,7 +266,7 @@ function NewUserCard({
     <section className="cust-main">
       <div className="cust-head">
         <h2>New user</h2>
-        <span className="small muted">Authorised by {by}</span>
+        <span className="small muted">Authorised by {by.name}</span>
       </div>
       <div className="cust-scroll">
         <div className="stack">

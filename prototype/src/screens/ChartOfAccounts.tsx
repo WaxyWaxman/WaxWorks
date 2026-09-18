@@ -58,7 +58,7 @@ export function ChartOfAccounts() {
       <header className="screen-head">
         <h1>Chart of accounts</h1>
         <p className="small muted">
-          Authorised by {authorisedBy} · <strong>{app.glAccounts.length} accounts</strong>, every seam resolving
+          Authorised by {authorisedBy.name} · <strong>{app.glAccounts.length} accounts</strong>, every seam resolving
         </p>
         <p className="small muted">
           A chart and a journal export — <strong>this flow</strong> holds no balances (d1, still true of M-07). The
