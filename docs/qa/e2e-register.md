@@ -1,6 +1,6 @@
 # Wax Works — end-to-end test register
 
-**Status:** Seeded 2026-09-11; re-baselined 2026-09-17 against `main` — ten rows superseded by the decisions landed that week, four flows registered. **2026-09-18:** M-08's eleven `Walked` rows re-walked against the prototype's seeded month of trading; one row goes `Stale`. Nothing is `Automated`, so nothing runs in CI yet
+**Status:** Seeded 2026-09-11; re-baselined 2026-09-17 against `main` — ten rows superseded by the decisions landed that week, four flows registered. **2026-09-18:** M-08's eleven `Walked` rows re-walked against the prototype's seeded month of trading — M-08-T15 goes `Stale` (d37 amends the d25 it asserts) and M-08-T12 is struck and split into T17 and T18. Nothing is `Automated`, so nothing runs in CI yet
 **Owners:** sr-talbot, WaxyWaxman
 **Maintained by:** `/qa` writes rows · `qa-reviewer` reports drift · `scripts/check_docs.py` checks the mechanics
 
@@ -348,11 +348,13 @@ not installed — so there is **no recording artifact**, which the `/qa walk` pr
 | M-08-T9 | **Unsealing reaches the most recent period only, repeats to walk back, and stops at a filed year.** Unseal the latest sealed month: authorized, with a reason required and recorded. Reach an older month: unseal each in turn. Mark a year **filed**, then try to unseal into it: refused, and the refusal names what is holding it. | 22–23 | M-08 decision 18, M-08 decision 22, M-08 decision 29 | Three sealed months and one sealed year | Blocked | Planned |  |
 | M-08-T10 | **Nothing writes into a sealed period, by any route.** With a day inside a sealed period, run M-03's **Undo End of Day** — the one reversal in this system that does not post forward: refused while the period is sealed, released when it is unsealed, and never released for a day inside a **filed** year. | 22–23 | M-08 decision 11, M-08 decision 22, M-08 decision 29, M-03 decision 4, A-66 | M-08-T9, a closed CloseBatch inside a sealed month | Walked | Planned |  |
 | M-08-T11 | **An account reads back as balance forward · activity · new balance forward, filtered by dimension.** Pick an account and a range: three figures and every line behind them. Narrow by **section**: the same query, fewer lines. The middle term is true with no opening position and no seal — the other two are not. | 24 | M-08 decision 2, M-08 decision 20, M-08 decision 24 | A sealed month and an open one | Walked | Planned |  |
-| M-08-T12 | **The books state a profit, and the balance sheet balances.** Draw a P&L for a sealed period: it has a bottom line and it is called a profit. Draw a balance sheet as at its end: equity carries **current earnings derived at the moment it is drawn**, named as its own line. Customer balances are **classified by sign and never netted across Customers** — store credit into liabilities, unpaid customer invoices into assets. | 25 | M-08 decision 23, M-08 decision 24, M-08 decision 25, E-07 decision 21, M-07 decision 27 | M-08-T6, one customer in credit and one owing | Walked | Planned |  |
+| M-08-T12 | ~~**The books state a profit, and the balance sheet balances.**~~ **Struck 2026-09-18.** One row carried three claims of different standing, and holding it at `Walked` hid that the middle one does not hold: the sheet is **out of balance by 95.50** against the seed, which the screen names rather than conceals. Replaced by **M-08-T17** — the profit and the derived earnings line, which do hold and were re-walked — and **M-08-T18**, the sheet balancing and the customer classification, which cannot be stated while [M-08](../flows/M-08-general-ledger.md)'s *two sources* question stands. | 25 | M-08 decision 23, M-08 decision 24, M-08 decision 25, E-07 decision 21, M-07 decision 27 | M-08-T6, one customer in credit and one owing | — | — |  |
 | M-08-T13 | **A statement excludes lines dated after its as-at date, and every statement answers the same way.** Post a future-dated entry. Draw a balance sheet as at today: absent. Draw the P&L for the period: absent. Draw both again once its date has arrived: present. | 24–25 | M-08 decision 30, A-73 | M-08-T5's future-dated posting | Walked | Planned |  |
 | M-08-T14 | **Issuing stores the figures, and re-opening shows what was issued.** Issue a balance sheet. Re-open the stored issuance: **the figures as issued**, never a recomputation. Export a journal range, then an overlapping one: warned, proceeds. The record of what left the building is what makes that warning possible. | 26 | M-08 decision 25, M-08 decision 31, M-07 decision 16, A-77 | M-08-T12 | Walked | Planned |  |
 | M-08-T15 | ~~**Reconciling marks a set that nets to zero, moves no money, and gates nothing.**~~ **`Stale` — [M-08](../flows/M-08-general-ledger.md) decision 37 amends decision 25 and retires the premise this row asserts.** d37: a bank reconciliation *"ticks what appears on the statement, and what is left over is outstanding cheques and deposits in transit, so the marked set **nets to whatever the balance moved by**"* — not to zero. Only the undeposited-funds case nets to zero. The screen already implements both shapes and says so; the row still describes the single one. Rewrite as two rows, one per kind, before walking again.** Mark entries in the bank account against a statement until the difference is zero; stamp the set. No balance moves. Seal the period with another account left unreconciled: it seals — the mark is evidence, never a gate. | 27 | M-08 decision 25, M-08 decision 37 | A bank account with entries, and a statement to reconcile against | Stale | Planned |  |
 | M-08-T16 | **A foreign payable nets Accounts payable to zero across finalize and payment.** Finalize a USD Invoice: it books in the **home** currency at the rate recorded on the Invoice. Settle it, confirming what actually left the bank. **A/P nets to zero across the two journals** and the movement lands in *Exchange gain or loss*. The defect this exists to catch balanced inside each journal separately, so only a scenario spanning both artifacts can see it. | 9–15 | M-06 decision 59, M-06 decision 60, M-07 decision 8 | A USD Supplier, a rate, and a finalized Invoice in that currency | — | Planned |  |
+| M-08-T17 | **The books state a profit, and current earnings is named rather than folded in.** Draw a P&L for a **sealed** period: it has a bottom line and it is called a profit. Draw a balance sheet as at its end: equity carries **current earnings derived at the moment it is drawn**, named as its own line rather than folded into a total. A statement over a sealed period carries **no provisional mark**; one drawn over an unsealed period does (d36). Replaces half of M-08-T12, and folds in the d36 coverage the *rows that need rewriting* list was holding against it. | 25 | M-08 decision 23, M-08 decision 24, M-08 decision 36, M-07 decision 27 | A sealed month with trading in it | Walked | Planned |  |
+| M-08-T18 | **The balance sheet balances, and the customer side is classified by sign and never netted.** Store credit totals into liabilities, unpaid customer invoices into assets, the two are never added together, and the sheet balances. Replaces the other half of M-08-T12. **`Blocked`, on two counts.** First the open question [M-08](../flows/M-08-general-ledger.md) owns — *"A Customer's balance has two sources and nothing ties them"*: [E-07](../flows/E-07-manage-customers.md) decision 5 derives a balance from movements while the `customer-credit` account is written by the artifacts those movements cause, and where they disagree **the sheet cannot balance**. Against the seed it is out by 95.50. Second, and separately, the classification is **not observable end to end**: `Ledger.tsx` renders `totalAssets` and `totalLiabilities` and maps only the equity lines, so the two customer lines the model does produce are never drawn. Both halves are held below end-to-end meanwhile — `prototype/src/lib/ledgerStatements.test.ts:230` for the classification, `:542` for the divergence. | 25 | M-08 decision 25, E-07 decision 21 | One Customer in credit and one owing **with a journal behind each** — **no such seed exists**, and that is the point: the seeded balances of 25.00 and -120.50 are asserted with no artifact that produced them, which is what makes the divergence visible | Blocked | Planned |  |
 
 #### What the walk of 2026-09-17 found
 
@@ -387,10 +389,13 @@ not installed — so there is **no recording artifact**, which the `/qa walk` pr
   2026-09 first."* Unsealing 2026-09 with d18's required reason **released it**: the caveat disappeared and the
   button went live. The third clause — never released inside a **filed** year — is not walked and needs no
   separate mechanism: d22 keeps a filed year sealed, so the same check refuses, and a unit test covers it.
-- ~~**M-08-T12 — one clause unexercised.**~~ — **Walked on 2026-09-17.** The screen now passes each
+- ~~**M-08-T12 — one clause unexercised.**~~ — ~~**Walked on 2026-09-17.** The screen now passes each
   Customer's signed balance, so [E-07](../flows/E-07-manage-customers.md) d21's *classified by sign, never
   netted* is exercised: the seed's customers read **120.50 into assets and 25.00 into liabilities**, never a
-  net. *What it surfaced is below.*
+  net.~~ **Overstated, corrected 2026-09-18.** The *model* classifies and is unit-tested; the **screen** does
+  not draw it. `Ledger.tsx` renders `totalAssets` and `totalLiabilities` and maps only the equity lines, so
+  those two figures are computed and never shown — they could not have been read off a walk. The row has since
+  been struck and split into **M-08-T17** and **M-08-T18**. *What it surfaced is below, and still stands.*
 - ~~**M-08-T14 — two thirds not built.**~~ — **Walked on 2026-09-17.** Re-opening a stored issuance shows the
   figures as issued and recomputes nothing (d31), and the journal export is on the screen with
   [M-07](../flows/M-07-chart-of-accounts.md) d16's overlap warning. Walked: exported 1–30 September, then a
@@ -426,10 +431,12 @@ materialisation of the other. The balance sheet now **names the difference** rat
 is merely out of balance, which is an inference and not a recorded decision. Owner: `/flow-clarify`, or
 `/architecture` if the answer is structural.
 
-#### Rows that need rewriting against decisions 32 to 36
+#### Rows that need rewriting against decisions 32 to 38
 
-Five decisions landed after these rows were written. **None is superseded, so no row goes `Stale`** — what
-follows is coverage the rows do not yet claim.
+Seven decisions landed after these rows were written. Most add coverage the rows do not yet claim.
+**One is not like the others:** d37 **amends d25**, and M-08-T15 asserts the premise it retired, so that
+row went `Stale` on 2026-09-18 rather than merely wanting more citations. The blanket *none is superseded*
+this heading used to carry was written about d32-d36 and never revisited when d37 landed.
 
 - **M-08-T1** — add that the **gift card liability** (d33) and **Suspense** are not offered either, beside the
   four accounts it names; and that the first day is **any day** (d35), which retires the guess the row was
@@ -437,7 +444,7 @@ follows is coverage the rows do not yet claim.
 - **M-08-T4** — add **d33**, and **d32**, the test behind the whole list. The row's *"cannot reach the
   accounts the system keeps"* is now a principle rather than an enumeration, so the row should assert the
   principle's other half too: **the tax accounts are offered** (d34).
-- **M-08-T12** — add **d36**: a statement over an unsealed period is marked **provisional**.
+- ~~**M-08-T12** — add **d36**: a statement over an unsealed period is marked **provisional**.~~ — **Done 2026-09-18**, in **M-08-T17**, which replaced the half of T12 that holds.
 - **M-08-T15** — rewritten for **d37**: it asks for entries *"until the difference is zero"*, which is the
   **matched** rule, against a **bank account**, which is the case that does not net. The row should assert
   both kinds and which one a bank statement is.
