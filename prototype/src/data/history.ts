@@ -487,7 +487,16 @@ export function buildHistory(input: HistoryInput): GeneratedHistory {
   const invoices: Invoice[] = [];
   const journals: JournalBatch[] = [];
   const paymentBatches: PaymentBatch[] = [];
-  let barcode = 20001;
+  // PRD §4.3 — an internal barcode is UPC-A under GS1 number system 2: TWELVE
+  // digits, `2` then eleven. `resolve_scan` keys on exactly that shape
+  // (architecture §6), so a bare counter mints a code that resolves nowhere —
+  // not at the till, not on a Return. This started at 20001 and minted
+  // "20276", which is why every copy the seeded month of trading created was
+  // unscannable while the hand-written seed's copies scanned fine.
+  //
+  // Offset well clear of seed.ts's block (2000000012xx-2000000xxxx) so the two
+  // cannot collide; §6 resolves an internal barcode to exactly ONE item.
+  let barcode = 900001;
 
   for (const [n, intake] of INTAKES.entries()) {
     const day = dayBefore(anchor, intake.back);
@@ -512,7 +521,7 @@ export function buildHistory(input: HistoryInput): GeneratedHistory {
           grade: "M",
           price: spec.price,
           cost,
-          internalBarcode: String(barcode++),
+          internalBarcode: `2${String(barcode++).padStart(11, "0")}`,
           status: "sellable",
           invoiceLineId: `invline-h-${n}-${i}`,
         });
