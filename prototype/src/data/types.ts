@@ -246,6 +246,21 @@ export interface SaleLine {
   tax?: TaxComponent[];
   note?: string;
   linkedSaleNumber?: number; // E-06 link to original Sale
+  /**
+   * E-06 d25, d26, d27 — this return line took in a disc the shop has **no
+   * sold record for**: a gift, or one bought elsewhere.
+   *
+   * SNAPSHOTTED WHEN THE LINE IS ADDED, not re-derived later, because routing
+   * changes the picked copy's status and a posting must not change with it.
+   * A-57's shape: the fact is recorded at the moment it is true.
+   *
+   * It decides the posting, not the counter act. d26 books such a copy at the
+   * refund paid and treats that money as a **purchase** rather than a
+   * reduction of revenue — there is no sale to reverse and no cost to inherit.
+   * A Return with no *receipt* against a copy the shop genuinely sold is NOT
+   * this: it is still a reversal, and the Employee simply did not pick the link.
+   */
+  unmatchedReturn?: boolean;
   stockRouted?: boolean; // E-06 step 6 — returned copy has been dispositioned
   routedTo?: "sellable" | "regrade" | "writeoff";
 }

@@ -2522,6 +2522,13 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
         qty: -1,
         price: refund,
         discountPct: 0,
+        // d25, d26, d27 — is this a disc the shop has no sold record for?
+        // Judged HERE, when the Employee picks the copy, because routing
+        // changes that copy's status and the posting must not change with it
+        // (A-57's shape). A copy that is `sellable`, `held` or `written_off` is
+        // demonstrably not the one the customer is holding — d24's point — and
+        // there is no sale of it to reverse.
+        unmatchedReturn: item.status !== "sold",
         linkedSaleNumber,
         note: linkedSaleNumber
           ? `Return — linked to Sale ${linkedSaleNumber}`
@@ -3350,11 +3357,27 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
     if (docRefusal) return { routed: false, refusal: docRefusal };
 
     const soldCopy = s.inventory.find((i) => i.id === itemId);
+    // d24, d27 — was this a disc the shop has no sold record for? The fact was
+    // stamped on the line when it was added and is read back here, never
+    // re-derived: the picked copy's status may since have moved.
+    const returnLine = doc?.lines.find((l) => l.id === lineId);
+    const unmatched = !!returnLine?.unmatchedReturn;
     // A-82 / E-06 d19 — the re-graded copy's cost is capped at the cost the
     // sold copy carried. Refused HERE, not by the screen declining to offer a
     // higher figure, which A-82 says in terms is not a cap.
-    const bookedCost = to === "regrade" ? (assessedCost ?? soldCopy?.cost ?? 0) : (soldCopy?.cost ?? 0);
-    if (to === "regrade") {
+    // d26 — an UNMATCHED copy is booked at the REFUND PAID. Nothing ever paid
+    // for it, so there is no cost to inherit, and A-82 does not reach it:
+    // A-82 caps against the cost the SOLD copy carried and here there is no
+    // sold copy. Which is also why the cap is not applied below — there is no
+    // prior figure to cap against, and that is the accepted consequence d26
+    // names as the widest such door in the system.
+    const refundOnLine = Math.abs(returnLine?.price ?? 0);
+    const bookedCost = unmatched
+      ? refundOnLine
+      : to === "regrade"
+        ? (assessedCost ?? soldCopy?.cost ?? 0)
+        : (soldCopy?.cost ?? 0);
+    if (to === "regrade" && !unmatched) {
       const costRefusal = regradeCostRefusal(bookedCost, soldCopy?.cost ?? 0);
       if (costRefusal) return { routed: false, refusal: costRefusal };
     }
@@ -3397,8 +3420,10 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
     // code. `Damaged` is where M-07 d6 already sends condition losses, and a
     // re-grade is a condition loss by definition. Assessed at or above the
     // cap, nothing is stranded and no journal is written.
+    // Nothing to strand on an unmatched line: the shortfall is the difference
+    // between a copy's old cost and its new one, and this copy had no old cost.
     const shortfall =
-      to === "regrade" ? regradeShortfall(bookedCost, soldCopy?.cost ?? 0) : 0;
+      to === "regrade" && !unmatched ? regradeShortfall(bookedCost, soldCopy?.cost ?? 0) : 0;
     const regradeAdjustment =
       to === "regrade" && shortfall > 0
         ? buildAdjustmentJournal({
@@ -3420,9 +3445,16 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
     // disc that came back enters as its own copy. Deliberately not E-04's
     // *Edit copy*, which edits a grade in place and is still right for a copy
     // that never left the shelf.
-    const mintedId = to === "regrade" ? uid("item") : "";
+    // d24 — an UNMATCHED return mints on every route, not just the re-grade.
+    // The copy the Employee picked is a different physical object from the one
+    // on the counter, so it is never mutated: the disc that came in gets its
+    // own InventoryItem, in whatever state step 6 routed it to. d27 puts the
+    // mint here rather than at line-add, so an unassessed copy simply does not
+    // exist yet and the Requirements stay literally true.
+    const mintsForReturn = to === "regrade" || unmatched;
+    const mintedId = mintsForReturn ? uid("item") : "";
     const minted: InventoryItem | null =
-      to === "regrade" && soldCopy
+      mintsForReturn && soldCopy
         ? {
             id: mintedId,
             recordId: soldCopy.recordId,
@@ -3436,7 +3468,10 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
             // and this flow does not get to commit one to every till.
             internalBarcode: `29${String(s.nextInternalBarcode).padStart(10, "0")}`,
             labelPending: true,
-            status: "sellable",
+            // Whatever step 6 decided. A re-grade puts it on the shelf; an
+            // unmatched copy written off arrives already off the books, which
+            // is the honest record that a disc came in and was discarded.
+            status: statusAfterRoute(to),
             // d17 — it arrives now. As a distinct copy at a distinct grade it
             // did not exist before, so A-81's chain reads cleanly: the sold
             // copy departed, this one arrived. Accepted consequence: E-03 d16's
@@ -3465,9 +3500,12 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
       inventory: [
         ...prev.inventory.map((i) =>
           i.id === itemId
-            ? to === "regrade"
-              ? // d15 — untouched but for a pointer at what replaced it. Its
-                // status, grade and cost are the record of what actually sold.
+            ? mintsForReturn
+              ? // d15, d24 — untouched but for a pointer at what replaced it.
+                // For a re-grade its status, grade and cost are the record of
+                // what actually sold; for an unmatched line it was never the
+                // customer's copy at all, so touching it would be the
+                // mis-identification d24 exists to end.
                 { ...i, regradedIntoItemId: mintedId }
               : {
                   ...i,
