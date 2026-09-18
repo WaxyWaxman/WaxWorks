@@ -23,7 +23,7 @@
 6. Employee assesses the returned copy and routes the stock:
    - **Back to sellable** at its original grade, if it comes back as it left; or
    - **Re-graded** — the copy is taken in as an InventoryItem carrying its own Goldmine grade and its own price, since a returned copy is frequently not in the condition it was sold in; or
-   - **Written off** via a reason-coded adjustment ([E-04](E-04-manage-inventory.md)) if it is not sellable at all.
+   - **Written off** via a reason-coded adjustment ([E-04](E-04-manage-inventory.md)) if it is not sellable at all. ***Manager-only*** ([architecture](../architecture.md) A-81, A-28a): this route adjusts on hand, and decision 3's *no manager approval* is about the **refund**, which decision 7 already holds apart from the disposition. Ungated, it is a copy taken in over the counter, cash refunded, and the copy removed from stock with no Manager in the act. The other two routes stay ungated.
 7. System prompts to print a receipt for the return.
 
 ---

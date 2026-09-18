@@ -484,6 +484,7 @@ this heading used to carry was written about d32-d36 and never revisited when d3
   **matched** rule, against a **bank account**, which is the case that does not net. The row should assert
   both kinds and which one a bank statement is.
 - **M-08-T4** — also **d38**: `customer-credit` and `undeposited` are no longer offered.
+- **Two rows are wanted for A-81.** (1) **The write-off route is manager-only** — [E-06](../flows/E-06-process-a-return.md) step 6's third disposition is gated by A-81 and A-28a, and **no E-06 row touches it today**: T1 covers back-to-sellable and T4 the re-grade. It is the shrinkage path, so it wants the gate asserted and the refusal read. (2) **An adjustment names its copies** — A-81 has `inventory_adjust` write one movement per copy, where E-04-T4 asserts only the gate and the reason code. E-04-T4 is **not** `Stale`: A-81 extends what it asserts rather than retiring it. *Route:* `/qa register E-06` and `/qa register E-04`.
 - **A new row is wanted for d45** — the mirror of **d30**: a statement excludes lines dated **before the books open** and names how many it excluded and which was first, exactly as M-08-T13 asserts for lines dated after an as-at date. Nothing covers the backward edge today. *Route:* `/qa register M-08`.
 - **M-08-T14** — add **d36**'s sharper half, that a **stored issuance keeps its provisional mark after its
   period seals** where the live statement drops it. That is the assertion distinguishing storing the mark from
