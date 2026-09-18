@@ -484,81 +484,20 @@ const seed: AppState = {
   taxLines: TAX_LINES,
   nonTracked: NON_TRACKED,
   sales: [
-    // a prior tendered Sale, so E-06 return-linking has something to match
-    {
-      id: "sale-hist-1",
-      state: "Closed",
-      saleNumber: 100238,
-      customerId: "c-ramona",
-      createdBy: CURRENT_USER,
-      createdAt: "2026-09-05 11:04:00",
-      tenders: [{ id: "t-hist-1", type: "Credit Card", amount: 25.11 }],
-      log: [{ at: "2026-09-05 11:04:00", text: "Tendered — Sale number 100238 assigned" }],
-      lines: [
-        {
-          id: "l-hist-1",
-          kind: "item",
-          recordId: "r-kind",
-          inventoryItemId: "i-kob-1",
-          title: "Miles Davis — Kind of Blue",
-          grade: "VG+",
-          qty: 1,
-          price: 24.0,
-          discountPct: 10,
-          productTaxCode: "1",
-        },
-      ],
-    },
-    // Two older Sales of titles we no longer hold a copy of. Without these,
-    // the "had before" stock state in Search has nothing to describe — every
-    // seeded Record is either on the floor, on order, or catalog-only. The
-    // dates are deliberately far apart so the recency stamp shows both a
-    // recent sell-out and a long-cold one.
-    {
-      id: "sale-hist-2",
-      state: "Closed",
-      saleNumber: 100241,
-      createdBy: CURRENT_USER,
-      createdAt: "2026-08-21 16:40:00",
-      tenders: [{ id: "t-hist-2", type: "Cash", amount: 69.28 }],
-      log: [{ at: "2026-08-21 16:40:00", text: "Tendered — Sale number 100241 assigned" }],
-      lines: [
-        {
-          id: "l-hist-2",
-          kind: "item",
-          recordId: "r-madvillainy",
-          title: "Madvillain — Madvillainy",
-          grade: "M",
-          qty: 2,
-          price: 32.99,
-          discountPct: 0,
-          productTaxCode: "1",
-        },
-      ],
-    },
-    {
-      id: "sale-hist-3",
-      state: "Closed",
-      saleNumber: 100177,
-      createdBy: CURRENT_USER,
-      createdAt: "2026-03-14 12:12:00",
-      tenders: [{ id: "t-hist-3", type: "Credit Card", amount: 28.87 }],
-      log: [{ at: "2026-03-14 12:12:00", text: "Tendered — Sale number 100177 assigned" }],
-      lines: [
-        {
-          id: "l-hist-3",
-          kind: "item",
-          recordId: "r-astral",
-          title: "Van Morrison — Astral Weeks",
-          grade: "VG+",
-          qty: 1,
-          price: 27.5,
-          discountPct: 0,
-          productTaxCode: "1",
-        },
-      ],
-    },
-    // one pre-existing Held sale so E-05's "select an existing Held sale" is real
+    // ONE hand-written Sale, and it is Held: a hold is a live document that
+    // belongs to no CloseBatch and writes no journal, so it is the one shape
+    // that can be authored here without lying about the books. E-05's
+    // "select an existing Held sale" needs it, and it carries no Sale number,
+    // so it cannot collide with the numbering the generated month issues.
+    //
+    // The three Closed Sales that used to sit above it are gone. Two of them
+    // carried no InventoryItem at all, so `costPostings` (lib/closeJournal.ts)
+    // returned nothing for their lines and a journal over them would have
+    // balanced while reporting revenue with NO cost of goods behind it. What
+    // they were fixtures for — E-03's *Had before* band, at both ends of the
+    // recency stamp, and a prior Sale for E-06 to link a Return against — the
+    // generated month now supplies with copies, an Invoice, a close and a
+    // journal behind each one (see SELL_OUTS in data/history.ts).
     {
       id: "sale-held-1",
       state: "Held",

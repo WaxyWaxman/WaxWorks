@@ -13,10 +13,13 @@ import { describe, expect, it } from "vitest";
 import { buildChart } from "../lib/chart";
 import { isImbalanced } from "../lib/journal";
 import { invoiceTotal, saleTotals, type TaxContext } from "../lib/totals";
+import { stockFacts } from "../lib/stockState";
 import { buildHistory, type GeneratedHistory } from "./history";
 import {
+  CUSTOMERS,
   DEFAULT_TAX_GROUP,
   HOME_CURRENCY,
+  RECORDS,
   SECTIONS,
   STORE_DETAILS,
   TAX_GROUP_CELLS,
@@ -143,6 +146,70 @@ describe("the generated month", () => {
     const dates = h.sales.map((s) => s.tenderedAt!.slice(0, 10)).sort();
     expect(dates[dates.length - 1]).toBe("2026-09-16");
     expect(dates.some((d) => d === "2026-09-17")).toBe(false);
+  });
+
+  // E-03's four stock states. `seed.ts` used to reach *Had before* with two
+  // hand-written Sales carrying no copy, which is what made them impossible to
+  // journal honestly. These assert the band is still reached — and reached the
+  // way a real shop reaches it, by selling the last copy.
+  describe("the sold-out titles", () => {
+    const facts = (recordId: string) =>
+      stockFacts(RECORDS.find((r) => r.id === recordId)!, {
+        inventory: h.inventory,
+        pendingOrders: [],
+        invoices: h.invoices,
+        sales: h.sales,
+      });
+
+    it("puts both in Had before, with nothing left on the floor", () => {
+      for (const id of ["r-madvillainy", "r-astral"]) {
+        const f = facts(id);
+        expect(f.state, id).toBe("before");
+        expect(f.onHand, id).toBe(0);
+        expect(f.everSold, id).toBeGreaterThan(0);
+      }
+    });
+
+    it("keeps the two recency stamps far apart", () => {
+      // The seed's own intent: one recent sell-out and one long-cold, so the
+      // stamp has both shapes to render.
+      const recent = facts("r-madvillainy").lastSoldAt!;
+      const cold = facts("r-astral").lastSoldAt!;
+      expect(recent > cold).toBe(true);
+      const days = (a: string) => (ANCHOR.getTime() - new Date(a.replace(" ", "T")).getTime()) / 86_400_000;
+      expect(days(recent)).toBeLessThan(31);
+      expect(days(cold)).toBeGreaterThan(120);
+    });
+
+    it("gives every sold-out copy an Invoice and a cost, so the close has a COGS to post", () => {
+      const copies = h.inventory.filter((i) => i.recordId === "r-madvillainy" || i.recordId === "r-astral");
+      expect(copies.length).toBeGreaterThan(0);
+      for (const c of copies) {
+        expect(c.status).toBe("sold");
+        expect(c.invoiceLineId, c.id).toBeDefined();
+        expect(c.cost, c.id).toBeGreaterThan(0);
+      }
+    });
+  });
+
+  it("gives E-06 a prior Sale to link a Return against", () => {
+    // Return.tsx builds its picker from Sales that carry a number and a
+    // positive line for the Record being returned.
+    const linkable = h.sales.filter((s) => s.saleNumber && s.lines.some((l) => l.recordId && l.qty > 0));
+    expect(linkable.length).toBeGreaterThan(50);
+  });
+
+  it("gives the Customers seed.ts already carries a history", () => {
+    // Including the wholesale account, whose group has every cell blank
+    // (M-06 d15) — so the month proves an out-of-scope Sale end to end.
+    for (const c of CUSTOMERS) {
+      expect(h.sales.some((s) => s.customerId === c.id), c.name).toBe(true);
+    }
+    const wholesale = h.sales.filter((s) => s.customerId === "c-lp");
+    expect(wholesale.length).toBeGreaterThan(0);
+    for (const s of wholesale) {
+      for (const l of s.lines) expect(l.tax ?? []).toEqual([]);
+    }
   });
 
   it("generates the same shop twice from the same day", () => {

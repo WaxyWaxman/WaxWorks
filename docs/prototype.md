@@ -111,9 +111,11 @@ that is a separate question nobody has answered yet._
 - Mock data only; no persistence, no live catalog provider, no printing.
 - **The shop opens with a month of trading behind it**, generated at load by
   [`prototype/src/data/history.ts`](../prototype/src/data/history.ts) — around
-  520 copies received across seven Invoices from five Suppliers, some 227 Sales
-  over thirty days, a close for each of those days, two settlements, a
-  hand-entered bill, ten more Customers and fourteen more titles. `seed.ts` is
+  530 copies received across eight Invoices from five Suppliers, some 230 Sales
+  over thirty days, a close for each of those days, three settlements, a
+  hand-entered bill, ten more Customers and fourteen more titles — plus one
+  older Invoice and its close, seven months back, carrying the copies behind
+  the long-cold sell-out described below. `seed.ts` is
   untouched and holds the master data as before; everything generated is
   **additive**, which is why the pure-function tests that import the seed see
   exactly what they always saw.
@@ -135,20 +137,35 @@ that is a separate question nobody has answered yet._
   them. The alternative was a fixed anchor, and the seed already showed what
   that costs — its newest hand-written Sale is dated 2026-09-08 and does not
   move, so the shop reads as more abandoned every week that passes.
-- **The four hand-written Sales in `seed.ts` are deliberately left out of the
-  generated month.** Three carry state `Closed` while belonging to no
-  CloseBatch and having no journal, and the fourth is the Held sale
-  [E-05](flows/E-05-sell-a-record.md) wants. They exist to give
-  [E-06](flows/E-06-process-a-return.md)'s return-linking and Search's *had
-  before* state something specific to match, and two of them point at titles
-  the shop holds no copy of — so journalling them would have to invent a cost
-  or push the difference to Suspense, which is a worse lie than the gap.
-  A second consequence, smaller and also left alone: **their Sale numbers
-  invert against the generated month.** Numbering starts at 100242, just past
-  the highest number the seed had spent, while two of those Sales are dated
-  inside the generated window — so `100241` dated 21 August sits behind
-  `100242` dated 18 August. Renumbering them would mean editing `seed.ts`,
-  which is the one thing this change does not do.
+- **`seed.ts` now hand-writes exactly one Sale, and it is Held.** A hold is a
+  live document: it belongs to no CloseBatch and writes no journal, so it is
+  the one shape that can be authored by hand without lying about the books. It
+  carries no Sale number either, so it cannot collide with the numbering the
+  generated month issues. [E-05](flows/E-05-sell-a-record.md)'s *select an
+  existing Held sale* is what wants it.
+  The three `Closed` Sales that used to sit beside it are **gone**, and what
+  they were fixtures for is now generated properly. They were unjournallable by
+  construction: two carried no InventoryItem at all, so `costPostings`
+  (`lib/closeJournal.ts`) returns nothing for their lines — a journal over them
+  would have **balanced while reporting revenue with no cost of goods behind
+  it**, which is worse than an empty ledger because it looks right.
+  What replaced each of them:
+  - *E-03's **Had before** band, at both ends of the recency stamp* —
+    `SELL_OUTS` in `history.ts` receives Madvillainy and Astral Weeks and then
+    sells every copy, the first inside the window and the second about six
+    months back on its own older Invoice. The band reads *sold 3w ago* and
+    *sold 6mo ago* as it did before, now with an Invoice, a cost, a close and a
+    journal behind each copy. The test asserts the band rather than the figures.
+  - *A prior Sale for [E-06](flows/E-06-process-a-return.md) to link a Return
+    against* — the month supplies 43 of them for a single title, where the seed
+    supplied one.
+  - *A purchase history on the Customers `seed.ts` already carries* — generated
+    Sales draw from both customer sets, the **wholesale account included**, so
+    the month also exercises a Sale whose tax group has every cell blank
+    (M-06 d15, out of scope rather than zero-rated) end to end.
+  **The Sale-number inversion is gone with them.** Every number in the
+  prototype is now issued by the generator, in chronological order, so there is
+  no longer a Sale dated after one that outranks it.
 - **The artifacts `seed.ts` already held now carry journals too** — its three
   Finalized Invoices and its one settlement, which were written before this
   prototype wrote journals at all. Not tidiness:

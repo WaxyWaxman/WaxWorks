@@ -165,8 +165,18 @@ interface TitleSpec {
   genreId: string;
   art: string;
   price: number;
-  /** Roughly how often this one sells, relative to the others. */
+  /**
+   * Roughly how often this one sells, relative to the others. **Zero means the
+   * random picker never reaches it** — it moves only through a scripted sale
+   * below, which is how a title is made to sell out on a chosen day.
+   */
   weight: number;
+  /**
+   * The Record already exists in `seed.ts`; this entry only makes it
+   * TRADEABLE. No RecordEntry is generated for it, or the catalog would carry
+   * the same title twice.
+   */
+  existing?: true;
 }
 
 const TITLES: TitleSpec[] = [
@@ -184,9 +194,44 @@ const TITLES: TitleSpec[] = [
   { id: "r-h-lowend", artist: "A Tribe Called Quest", title: "The Low End Theory", label: "Jive", catalogNo: "1418-1-J", year: 1991, genreId: "gn-hip-hop", art: "🟥", price: 35.99, weight: 5 },
   { id: "r-h-dummy", artist: "Portishead", title: "Dummy", label: "Go! Beat", catalogNo: "828 522-1", year: 1994, genreId: "gn-alt-rock", art: "🌫️", price: 33.99, weight: 4 },
   { id: "r-h-blonde", artist: "Frank Ocean", title: "Blonde", label: "Boys Don't Cry", catalogNo: "BDC 001", year: 2016, genreId: "gn-alt-rock", art: "🍋", price: 44.99, weight: 6 },
+
+  // Two titles `seed.ts` already carries, made tradeable so they can be
+  // received and then SOLD OUT — which is what gives E-03's *Had before* band
+  // something to describe. Both at weight 0: they move only through the
+  // scripted sales in SELL_OUTS, because a title that sells out on a day the
+  // random picker chose is not a fixture, it is a coincidence.
+  { id: "r-madvillainy", artist: "Madvillain", title: "Madvillainy", label: "Stones Throw", catalogNo: "STH2065", year: 2004, genreId: "gn-hip-hop", art: "🎭", price: 32.99, weight: 0, existing: true },
+  { id: "r-astral", artist: "Van Morrison", title: "Astral Weeks", label: "Warner Bros.", catalogNo: "WS 1768", year: 1968, genreId: "gn-folk-rock", art: "🌌", price: 27.5, weight: 0, existing: true },
 ];
 
-const HISTORY_RECORDS: RecordEntry[] = TITLES.map((t) => ({
+/**
+ * A title the shop received, sold every copy of, and now holds none of.
+ *
+ * E-03's four stock states put such a Record in *Had before* (`stockState.ts`),
+ * and `seed.ts` used to reach that band with two hand-written Sales carrying no
+ * copy at all — which meant revenue with no cost behind it the moment anything
+ * journalled them. Received and sold properly, the same two titles reach the
+ * same band with provenance, a cost of goods and a close behind each copy.
+ *
+ * The two dates are far apart on purpose, which was the seed's intent too: the
+ * recency stamp has both a recent sell-out and a long-cold one to render.
+ */
+interface SellOutSpec {
+  recordId: string;
+  /** Days before the anchor each copy left, one entry per copy. */
+  soldBacks: number[];
+  customerId?: string;
+}
+
+const SELL_OUTS: SellOutSpec[] = [
+  // Recent: received inside the window on invoice 55241, gone within the month.
+  { recordId: "r-madvillainy", soldBacks: [24, 22], customerId: "c-ramona" },
+  // Long cold: received and sold out roughly six months ago, well before the
+  // trading window opens, so the stamp reads as a month and a year.
+  { recordId: "r-astral", soldBacks: [187, 186] },
+];
+
+const HISTORY_RECORDS: RecordEntry[] = TITLES.filter((t) => !t.existing).map((t) => ({
   id: t.id,
   artist: t.artist,
   title: t.title,
@@ -298,6 +343,20 @@ interface IntakeSpec {
  * Crate Digger bill is outstanding while ageing nowhere at all (M-05 d35).
  */
 const INTAKES: IntakeSpec[] = [
+  // Deep history — roughly seven months back, long settled, and the only
+  // reason it exists is to put copies behind the long-cold sell-out below.
+  // Its journal lands in its own month, which is correct: nothing is sealed,
+  // and M-08 d11 only refuses a date inside a SEALED period.
+  {
+    back: 215,
+    supplierId: "sup-fab",
+    invoiceNumber: "54402",
+    discountPct: 60,
+    freight: 9.5,
+    taxed: true,
+    paidBack: 201,
+    lines: [{ titleId: "r-astral", qty: 2 }],
+  },
   {
     back: 52,
     supplierId: "sup-fab",
@@ -354,6 +413,8 @@ const INTAKES: IntakeSpec[] = [
       { titleId: "r-h-ahum", qty: 18 },
       { titleId: "r-h-graceland", qty: 22 },
       { titleId: "r-h-whatsgoing", qty: 18 },
+      // SELL_OUTS takes both copies back off the floor inside the window.
+      { titleId: "r-madvillainy", qty: 2 },
     ],
   },
   {
@@ -411,6 +472,7 @@ export function buildHistory(input: HistoryInput): GeneratedHistory {
   const titleById = new Map<string, TitleSpec>(TITLES.map((t) => [t.id, t]));
   const allRecords = [...RECORDS, ...HISTORY_RECORDS];
 
+  const allCustomers = [...CUSTOMERS, ...HISTORY_CUSTOMERS];
   const clerks = USERS.filter((u) => u.active && u.role === "Employee").map((u) => `${u.name} (${u.role})`);
   const managers = USERS.filter((u) => u.active && u.role === "Manager").map((u) => `${u.name} (${u.role})`);
   const anyClerk = () => clerks[Math.floor(rand() * clerks.length)] ?? managers[0] ?? "Unknown";
@@ -613,7 +675,11 @@ export function buildHistory(input: HistoryInput): GeneratedHistory {
 
   const sales: Sale[] = [];
   const closeBatches: CloseBatch[] = [];
-  let saleNumber = 100242;
+  // Nothing constrains where this starts any more: `seed.ts` no longer carries
+  // a numbered Sale, so every number in the prototype is issued here, in
+  // chronological order, and the inversion the hand-written Sales caused is
+  // gone rather than documented.
+  let saleNumber = 100150;
 
   const sellable = (recordId: string, onOrBefore: string) =>
     inventory.filter(
@@ -627,6 +693,154 @@ export function buildHistory(input: HistoryInput): GeneratedHistory {
 
   const weighted: string[] = TITLES.flatMap((t) => Array<string>(t.weight).fill(t.id));
 
+  /** M-06 d14's order, minus the Sale's own snapshot: the Customer's group, else the store's. */
+  const ctxFor = (customer: Customer | undefined, businessDate: string): TaxContext => ({
+    types: input.taxTypes,
+    cells: input.taxGroupCells,
+    groupId: customer?.taxGroupId ?? input.defaultTaxGroup,
+    at: businessDate,
+  });
+
+  const lineTitle = (recordId: string) => {
+    const r = allRecords.find((x) => x.id === recordId);
+    return r ? `${r.artist} — ${r.title}` : recordId;
+  };
+
+  /** Take a specific copy off the floor and put it on a line. */
+  const itemLine = (copy: InventoryItem, lineId: string, discountPct: number): SaleLine => {
+    copy.status = "sold";
+    const genreId = allRecords.find((r) => r.id === copy.recordId)?.genreId;
+    return {
+      id: lineId,
+      kind: "item",
+      recordId: copy.recordId,
+      inventoryItemId: copy.id,
+      title: lineTitle(copy.recordId),
+      grade: copy.grade,
+      qty: 1,
+      price: copy.price,
+      discountPct,
+      productTaxCode: genreById.get(genreId ?? "")?.productTaxCode ?? "1",
+    };
+  };
+
+  /**
+   * Finish a Sale the way the till does: snapshot the tax at tender (A-57),
+   * snapshot the group with it (M-06 d14), then tender it for exactly what it
+   * came to.
+   */
+  const tender = (
+    saleId: string,
+    day: Date,
+    hour: number,
+    minute: number,
+    lines: SaleLine[],
+    customer: Customer | undefined,
+  ): Sale => {
+    const businessDate = isoOf(day);
+    const tenderedAt = stampOf(day, hour, minute);
+    const ctx = ctxFor(customer, businessDate);
+    const sale: Sale = {
+      id: saleId,
+      state: "Closed",
+      saleNumber: saleNumber++,
+      customerId: customer?.id,
+      taxGroupId: ctx.groupId,
+      lines: lines.map((l) => ({ ...l, tax: lineTaxComponents(l, ctx) })),
+      tenders: [],
+      createdBy: anyClerk(),
+      createdAt: stampOf(day, hour, Math.max(0, minute - 3)),
+      tenderedAt,
+      log: [{ at: tenderedAt, text: `Tendered — Sale number ${saleNumber - 1} assigned` }],
+    };
+    // M-07 d21 — WHICH configured row, not merely which behaviour: Visa,
+    // Mastercard and Debit settle as separate deposits and want separate
+    // accounts, which is the whole reason the field exists.
+    const roll = rand();
+    const row = roll < 0.28 ? "tn-cash" : roll < 0.62 ? "tn-visa" : roll < 0.82 ? "tn-debit" : "tn-mc";
+    sale.tenders = [
+      {
+        id: `${saleId}-t`,
+        type: row === "tn-cash" ? "Cash" : "Credit Card",
+        tenderRowId: row,
+        amount: saleTotals(sale, ctx).grand,
+      },
+    ];
+    sales.push(sale);
+    return sale;
+  };
+
+  /**
+   * M-03 — the close is a state transition, and M-07 d7 has it write a journal
+   * batch beside the summary. Built by the same function the till calls, so a
+   * seeded day and a clicked one cannot disagree.
+   */
+  const closeTheDay = (day: Date, daySaleIds: string[]) => {
+    if (daySaleIds.length === 0) return;
+    const businessDate = isoOf(day);
+    const batchId = `batch-close-${businessDate}`;
+    const closedAt = stampOf(day, 19, 30);
+    closeBatches.push({ id: batchId, at: closedAt, by: aManager, saleIds: daySaleIds });
+    for (const id of daySaleIds) {
+      const sale = sales.find((x) => x.id === id)!;
+      sale.batchId = batchId;
+      sale.log.push({ at: closedAt, text: `Closed in batch ${batchId} by ${aManager}` });
+    }
+    const jr = buildCloseJournal({
+      location: input.storeId,
+      batchId,
+      writtenAt: closedAt,
+      sales: sales.filter((x) => daySaleIds.includes(x.id)),
+      records: allRecords,
+      inventory,
+      genres: GENRES,
+      sections: input.sections,
+      tenders: input.tenders,
+      // The close reads the store's own coordinate; each Sale's lines already
+      // carry the snapshot they were tendered under, and `lineTaxComponents`
+      // returns that snapshot ahead of anything computed here (A-57).
+      taxCtx: ctxFor(undefined, businessDate),
+      accounts: input.accounts,
+      mappings: input.mappings,
+      currency: input.homeCurrency,
+    });
+    journals.push(jr.batch);
+    unresolved.push(...jr.unresolved);
+  };
+
+  /** The scripted sell-outs, keyed by how many days back each copy left. */
+  const scripted = new Map<number, SellOutSpec[]>();
+  for (const spec of SELL_OUTS) {
+    for (const back of spec.soldBacks) {
+      scripted.set(back, [...(scripted.get(back) ?? []), spec]);
+    }
+  }
+
+  const sellOutSale = (back: number, spec: SellOutSpec, seq: number): string | undefined => {
+    const day = dayBefore(anchor, back);
+    const hour = between(12, 17);
+    const minute = between(0, 59);
+    const copy = sellable(spec.recordId, stampOf(day, hour, minute))[0];
+    // No copy means the intake meant to supply it did not, which is a defect
+    // in the specs above rather than something to paper over. The test asserts
+    // the band these produce, so it fails loudly rather than thinning out.
+    if (!copy) return undefined;
+    const customer = spec.customerId ? allCustomers.find((c) => c.id === spec.customerId) : undefined;
+    const saleId = `sale-h-out-${spec.recordId}-${back}-${seq}`;
+    const line = itemLine(copy, `${saleId}-l0`, customer?.globalDiscountPct ?? 0);
+    return tender(saleId, day, hour, minute, [line], customer).id;
+  };
+
+  // Anything scripted BEFORE the trading window gets its own day and its own
+  // close, and runs first so Sale numbers stay in chronological order.
+  const deepBacks = [...scripted.keys()].filter((b) => b > days).sort((a, b) => b - a);
+  for (const back of deepBacks) {
+    const ids = (scripted.get(back) ?? [])
+      .map((spec, i) => sellOutSale(back, spec, i))
+      .filter((id): id is string => !!id);
+    closeTheDay(dayBefore(anchor, back), ids);
+  }
+
   for (let back = days; back >= 1; back--) {
     const day = dayBefore(anchor, back);
     const businessDate = isoOf(day);
@@ -639,7 +853,11 @@ export function buildHistory(input: HistoryInput): GeneratedHistory {
       const minute = between(0, 59);
       const tenderedAt = stampOf(day, hour, minute);
       const saleId = `sale-h-${businessDate}-${s}`;
-      const customer = rand() < 0.4 ? pick(HISTORY_CUSTOMERS) : undefined;
+      // Both the shop's existing Customers and the generated ones, so the
+      // cards `seed.ts` already carries have a history to show — including the
+      // wholesale account, whose tax group has every cell blank (M-06 d15), so
+      // the month exercises an out-of-scope Sale end to end.
+      const customer = rand() < 0.4 ? pick(allCustomers) : undefined;
       const lines: SaleLine[] = [];
 
       const lineCount = rand() < 0.65 ? 1 : between(2, 3);
@@ -669,104 +887,21 @@ export function buildHistory(input: HistoryInput): GeneratedHistory {
           copy = sellable(pick(weighted), tenderedAt)[0];
         }
         if (!copy) continue;
-        copy.status = "sold";
-        lines.push({
-          id: `${saleId}-l${l}`,
-          kind: "item",
-          recordId: copy.recordId,
-          inventoryItemId: copy.id,
-          title: `${titleById.get(copy.recordId)?.artist} — ${titleById.get(copy.recordId)?.title}`,
-          grade: copy.grade,
-          qty: 1,
-          price: copy.price,
-          discountPct: customer?.globalDiscountPct ?? 0,
-          productTaxCode: genreById.get(titleById.get(copy.recordId)!.genreId)?.productTaxCode ?? "1",
-        });
+        lines.push(itemLine(copy, `${saleId}-l${l}`, customer?.globalDiscountPct ?? 0));
       }
 
       if (lines.length === 0) continue;
-
-      // A-57 — the tax snapshot is taken at tender, and the group is
-      // snapshotted with it (M-06 d14), so the Sale records the coordinate it
-      // actually resolved through rather than re-deriving it later.
-      const groupId = input.defaultTaxGroup;
-      const ctx: TaxContext = {
-        types: input.taxTypes,
-        cells: input.taxGroupCells,
-        groupId,
-        at: businessDate,
-      };
-      const snapped = lines.map((l) => ({ ...l, tax: lineTaxComponents(l, ctx) }));
-
-      const sale: Sale = {
-        id: saleId,
-        state: "Closed",
-        saleNumber: saleNumber++,
-        customerId: customer?.id,
-        taxGroupId: groupId,
-        lines: snapped,
-        tenders: [],
-        createdBy: anyClerk(),
-        createdAt: stampOf(day, hour, Math.max(0, minute - 3)),
-        tenderedAt,
-        log: [{ at: tenderedAt, text: `Tendered — Sale number ${saleNumber - 1} assigned` }],
-      };
-
-      const grand = saleTotals(sale, ctx).grand;
-      // M-07 d21 — WHICH configured row, not merely which behaviour: Visa,
-      // Mastercard and Debit settle as separate deposits and want separate
-      // accounts, which is the whole reason the field exists.
-      const roll = rand();
-      const row = roll < 0.28 ? "tn-cash" : roll < 0.62 ? "tn-visa" : roll < 0.82 ? "tn-debit" : "tn-mc";
-      sale.tenders = [
-        {
-          id: `${saleId}-t`,
-          type: row === "tn-cash" ? "Cash" : "Credit Card",
-          tenderRowId: row,
-          amount: grand,
-        },
-      ];
-
-      sales.push(sale);
-      daySaleIds.push(sale.id);
+      daySaleIds.push(tender(saleId, day, hour, minute, lines, customer).id);
     }
 
-    if (daySaleIds.length === 0) continue;
-
-    // M-03 — the close is a state transition, and M-07 d7 has it write a
-    // journal batch beside the summary. Built by the same function the till
-    // calls, so a seeded day and a clicked one cannot disagree.
-    const batchId = `batch-close-${businessDate}`;
-    const closedAt = stampOf(day, 19, 30);
-    closeBatches.push({ id: batchId, at: closedAt, by: aManager, saleIds: daySaleIds });
-    for (const id of daySaleIds) {
-      const sale = sales.find((x) => x.id === id)!;
-      sale.batchId = batchId;
-      sale.log.push({ at: closedAt, text: `Closed in batch ${batchId} by ${aManager}` });
+    // The scripted sell-outs for this day join the day's own trade and are
+    // closed with it — they are ordinary Sales, not a parallel mechanism.
+    for (const [i, spec] of (scripted.get(back) ?? []).entries()) {
+      const id = sellOutSale(back, spec, i);
+      if (id) daySaleIds.push(id);
     }
 
-    const jr = buildCloseJournal({
-      location: input.storeId,
-      batchId,
-      writtenAt: closedAt,
-      sales: sales.filter((x) => daySaleIds.includes(x.id)),
-      records: allRecords,
-      inventory,
-      genres: GENRES,
-      sections: input.sections,
-      tenders: input.tenders,
-      taxCtx: {
-        types: input.taxTypes,
-        cells: input.taxGroupCells,
-        groupId: input.defaultTaxGroup,
-        at: businessDate,
-      },
-      accounts: input.accounts,
-      mappings: input.mappings,
-      currency: input.homeCurrency,
-    });
-    journals.push(jr.batch);
-    unresolved.push(...jr.unresolved);
+    closeTheDay(day, daySaleIds);
   }
 
   return {
