@@ -153,15 +153,25 @@ the decision it comes from._
 
 - **Decision 10's *"no Manager action can create one and none can clear one"* now has an
   exception, and this flow owes it a row.** [M-08](M-08-general-ledger.md) d14 — **ratified
-  2026-09-17** — gives clearing a Suspense balance **its own manager-only act recording a
-  reason**, deliberately not an ordinary posting. d10's sentence was a *description* when
-  nothing but an artifact could write a journal; [M-08](M-08-general-ledger.md) Phase 2 made
-  it a **choice**, and d14 chose. **The half of d10 that matters is untouched:** a Suspense
-  balance is still *always a defect in this system, never a data-entry error*, which is
-  exactly why clearing it is an exception rather than a facility — and
-  [M-08](M-08-general-ledger.md) d10 and d13 between them keep every ordinary route to
-  Suspense shut. What changes is that *"none can clear one"* is now false, and this flow is
-  where it is written.
+  2026-09-17** — gives clearing a Suspense balance a route, and
+  [M-08](M-08-general-ledger.md) d39 gives that route its shape: **an override on an ordinary
+  posting**, unlocking one named account for one posting, carrying a required reason and
+  landing on an exception report. Not a separate artifact — the standard practice of the
+  trade has no such thing, and every control it does use already exists here. d10's sentence
+  was a *description* when nothing but an artifact could write a journal;
+  [M-08](M-08-general-ledger.md) Phase 2 made it a **choice**, and d14 chose.
+  **The half of d10 that matters is untouched:** a Suspense balance is still *always a defect
+  in this system, never a data-entry error*, which is exactly why clearing it is an exception
+  rather than a facility.
+
+- **Decision 10's *other* half now binds harder, and [M-08](M-08-general-ledger.md) d40 turns
+  on the distinction.** d10 says *"a bookkeeping defect must never be able to stop the shop
+  ending its day"*, and d40 makes a non-zero Suspense balance **refuse the period seal**.
+  Those do not collide, and [M-08](M-08-general-ledger.md) d4 is why: d10 protects the
+  **close**, M-03's daily act; d40 stops the **seal**, a month's. The till keeps trading and
+  the day keeps closing with Suspense outstanding. **d4 made them two words precisely so a
+  rule about one could never be read as a rule about the other**, and this is the first time
+  that has paid.
 
 - **[M-08](M-08-general-ledger.md) d38 adds two more accounts wanting that same act** —
   `customer-credit` and `undeposited`, both locked against typing and both correctable only

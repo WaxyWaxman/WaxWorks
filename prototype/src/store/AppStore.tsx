@@ -41,7 +41,7 @@ import {
   sealOpeningPosition,
   type OpeningPositionDraft,
 } from "../lib/ledgerOpeningPosition";
-import { closingTransactionFor, divergenceFlag } from "../lib/ledgerBalances";
+import { closingTransactionFor, divergenceFlag, suspenseGrossFor } from "../lib/ledgerBalances";
 import { closeUndoRefusal } from "../lib/ledgerPeriods";
 import { yearEndClosingBatch, type LedgerIssuance } from "../lib/ledgerStatements";
 import type { LedgerReconciliation } from "../lib/ledgerReconciliation";
@@ -918,6 +918,8 @@ interface AppContextValue extends AppState {
   ledgerMarkYearFiled: (fiscalYearEnd: string, by: string) => void;
   ledgerReconcile: (reconciliation: LedgerReconciliation) => void;
   ledgerIssue: (issuance: LedgerIssuance) => void;
+  /** d40, M-07 d25 — a period's Suspense total, gross. What the seal refuses on. */
+  ledgerSuspenseGross: (period: string) => number;
   /** M-08 d11 - why an Undo End of Day is refused, or undefined. */
   closeUndoRefusalFor: (batchId: string) => string | undefined;
   reconcileOversold: (recordId: string, by: string) => number;
@@ -1491,6 +1493,11 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
     }));
 
   // d31, A-77 - what left the building, with its figures frozen.
+  const ledgerSuspenseGross: AppContextValue["ledgerSuspenseGross"] = (period) => {
+    const suspense = s.glAccounts.find((a) => a.role === "suspense");
+    return suspense ? suspenseGrossFor(period, s.journals, suspense.id) : 0;
+  };
+
   const ledgerIssue: AppContextValue["ledgerIssue"] = (issuance) =>
     setS((prev) => ({ ...prev, ledgerIssuances: [issuance, ...prev.ledgerIssuances] }));
 
@@ -4477,6 +4484,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
       ledgerMarkYearFiled,
       ledgerReconcile,
       ledgerIssue,
+      ledgerSuspenseGross,
       closeUndoRefusalFor,
       reconcileOversold,
       addLog,

@@ -4,8 +4,10 @@ import {
   applyEdit,
   balanceRefusal,
   dateRefusal,
+  exceptionReport,
   editRefusal,
   offerableAccounts,
+  overrideRefusal,
   postingBalance,
   postingJournal,
   postingRefusal,
@@ -524,5 +526,110 @@ describe("M-08 d13, d33 — the locks hold against the chart the shop actually g
     expect(offered.some((a) => a.role === "inventory")).toBe(true);
     expect(offered.some((a) => a.role === "accounts-payable-opening")).toBe(true);
     expect(offered.some((a) => a.role === "tax-collected")).toBe(true);
+  });
+});
+
+describe("M-08 d39, d41 — the override, and the accounts it will not open", () => {
+  const REASON = "Journal bug fixed on 2026-09-16; the three dollars belonged in rent";
+
+  it("opens Suspense with a reason (d14, d39)", () => {
+    expect(overrideRefusal({ accountId: "1900", reason: REASON }, ACCOUNTS)).toBeUndefined();
+  });
+
+  it("opens undeposited funds, the only route M-03 d8 left", () => {
+    // M-03 d8 declined over/short entirely, so cash that never reached the
+    // bank has no other way to be recorded at all.
+    expect(overrideRefusal({ accountId: "1100", reason: "Deposit short at the bank" }, ACCOUNTS)).toBeUndefined();
+  });
+
+  it("REFUSES a control account — find the error, do not plug it (d41)", () => {
+    // A control account MIRRORS a subledger, and plugging makes the two agree
+    // while the underlying posting is still wrong, destroying the only signal
+    // that anything was. This reverses half of d38.
+    for (const id of ["2100", "2400", "2300"]) {
+      const why = overrideRefusal({ accountId: id, reason: REASON }, ACCOUNTS);
+      expect(why).toContain("mirrors a ledger outside this one");
+      expect(why).toContain("error to find");
+    }
+  });
+
+  it("REFUSES retained earnings, which d41 names on neither side", () => {
+    // Recorded as a silence rather than a rule: d41's yes-list is Suspense and
+    // undeposited, and retained earnings is on neither list, so the
+    // conservative reading keeps it shut. d17's year-end seal owns it.
+    expect(overrideRefusal({ accountId: "3200", reason: REASON }, ACCOUNTS)).toContain(
+      "mirrors a ledger outside this one",
+    );
+  });
+
+  it("refuses an override of an account that is not locked", () => {
+    // Overriding a lock that is not there would make the exception report
+    // meaningless — it would list ordinary postings.
+    expect(overrideRefusal({ accountId: "6400", reason: REASON }, ACCOUNTS)).toContain(
+      "is not locked",
+    );
+  });
+
+  it("refuses a blank reason — d14's requirement, not decoration", () => {
+    expect(overrideRefusal({ accountId: "1900", reason: "   " }, ACCOUNTS)).toContain("needs a reason");
+  });
+
+  it("lets a posting reach Suspense WITH the override and refuses it without", () => {
+    const lines = [line("1900", -300, { memo: "Clear the suspense" }), line("6400", 300)];
+    const without = { businessDate: "2026-09-01", lines };
+    expect(postingRefusal(without, ctx())).toContain("its own act");
+
+    const withOverride = { ...without, overrides: [{ accountId: "1900", reason: REASON }] };
+    expect(postingRefusal(withOverride, ctx())).toBeUndefined();
+  });
+
+  it("NO BLANKET UNLOCK — one override opens one account (d39)", () => {
+    // "A posting touching two locked accounts needs two overrides and two
+    // reasons, because why differs per account."
+    const lines = [line("1900", -300), line("1100", 300)];
+    const one = {
+      businessDate: "2026-09-01",
+      lines,
+      overrides: [{ accountId: "1900", reason: REASON }],
+    };
+    expect(postingRefusal(one, ctx())).toContain("filled by the close and emptied by a deposit");
+
+    const two = {
+      ...one,
+      overrides: [
+        { accountId: "1900", reason: REASON },
+        { accountId: "1100", reason: "Deposit short at the bank" },
+      ],
+    };
+    expect(postingRefusal(two, ctx())).toBeUndefined();
+  });
+
+  it("refuses an override for an account the posting never touches", () => {
+    // A reason recorded against nothing.
+    const draft = {
+      businessDate: "2026-09-01",
+      lines: [line("6400", 300), line("1010", -300)],
+      overrides: [{ accountId: "1900", reason: REASON }],
+    };
+    expect(postingRefusal(draft, ctx())).toContain("has no line for it");
+  });
+
+  it("still refuses everything else about the posting — the override relaxes ONE lock", () => {
+    const draft = {
+      businessDate: "2026-09-01",
+      lines: [line("1900", -300, { location: "" })],
+      overrides: [{ accountId: "1900", reason: REASON }],
+    };
+    const all = postingRefusals(draft, ctx());
+    expect(all.some((m) => m.includes("no location"))).toBe(true);
+    expect(all.some((m) => m.includes("out by"))).toBe(true);
+  });
+
+  it("M-08 d39 — the exception report is every posting that used one", () => {
+    // "Visible as an exception rather than as a line in a posting nobody reads
+    // twice" (d14). A read, not a queue.
+    const plain = posting({ id: "p-plain" });
+    const excepted = posting({ id: "p-exc", overrides: [{ accountId: "1900", reason: REASON }] });
+    expect(exceptionReport([plain, excepted]).map((p) => p.id)).toEqual(["p-exc"]);
   });
 });

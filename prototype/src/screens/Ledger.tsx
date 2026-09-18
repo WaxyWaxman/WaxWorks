@@ -12,14 +12,18 @@ import {
   periodOf,
   sealRefusal,
   sealReport,
+  suspenseNotice,
   sealedPeriods,
   unsealRefusal,
 } from "../lib/ledgerPeriods";
 import {
+  exceptionReport,
   offerableAccounts,
+  OVERRIDABLE_ROLES,
   postingBalance,
   postingRefusals,
   type PostingContext,
+  type PostingOverride,
   type TypedPostingLine,
 } from "../lib/ledgerPostings";
 import {
@@ -45,7 +49,9 @@ import {
   type LedgerIssuance,
 } from "../lib/ledgerStatements";
 import {
+  clearedDifference,
   markedTotal,
+  outstandingAfter,
   reconcile,
   reconciliationRefusal,
   unreconciled,
@@ -388,6 +394,9 @@ function PostPhase({ by }: { by: string }) {
   const app = useApp();
   const [date, setDate] = useState(today());
   const [lines, setLines] = useState<TypedPostingLine[]>([blankLine(), blankLine()]);
+  // d39 — one override per locked account this posting reaches. No blanket
+  // unlock: the reason differs per account, so the override does too.
+  const [overrides, setOverrides] = useState<PostingOverride[]>([]);
 
   const ctx: PostingContext = useMemo(
     () => ({
@@ -401,7 +410,7 @@ function PostPhase({ by }: { by: string }) {
     [app.glAccounts, app.ledgerOpening, app.ledgerOpeningSealed, app.ledgerSeals, app.ledgerUnseals, app.sections],
   );
 
-  const draft = { businessDate: date, lines };
+  const draft = { businessDate: date, lines, overrides };
   const balance = postingBalance(lines);
   const refusals = postingRefusals(draft, ctx);
   const offered = offerableAccounts(app.glAccounts);
@@ -440,6 +449,20 @@ function PostPhase({ by }: { by: string }) {
                           {a.number} {a.name}
                         </option>
                       ))}
+                      {/* d39 — the locked accounts an override can open are
+                          shown, so a Manager can find the route rather than
+                          discovering the lock and stopping. Choosing one
+                          refuses until the override beside it carries a
+                          reason. */}
+                      <optgroup label="Needs an override (d39)">
+                        {app.glAccounts
+                          .filter((a) => a.active && a.role && OVERRIDABLE_ROLES.includes(a.role))
+                          .map((a) => (
+                            <option key={a.id} value={a.id}>
+                              {a.number} {a.name}
+                            </option>
+                          ))}
+                      </optgroup>
                     </select>
                   </td>
                   <td>
@@ -483,6 +506,51 @@ function PostPhase({ by }: { by: string }) {
               Add a line
             </button>
           </div>
+
+          {(() => {
+            // Every locked-and-openable account this posting actually touches.
+            const needing = app.glAccounts.filter(
+              (a) =>
+                a.role &&
+                OVERRIDABLE_ROLES.includes(a.role) &&
+                lines.some((l) => l.accountId === a.id),
+            );
+            if (needing.length === 0) return null;
+            return (
+              <div className="card">
+                <div className="card-head">Override — one account, one reason (d39)</div>
+                <div className="card-body stack">
+                  <p className="small muted">
+                    Standard practice gives an exception four controls around an{" "}
+                    <strong>ordinary</strong> entry: a restricted account, elevated permission, a{" "}
+                    <strong>required narration</strong>, and an <strong>exception report</strong>{" "}
+                    reviewed at close. This is the narration. There is{" "}
+                    <strong>no blanket unlock</strong> — each account needs its own, because{" "}
+                    <em>why</em> differs per account.
+                  </p>
+                  {needing.map((a) => {
+                    const existing = overrides.find((o) => o.accountId === a.id);
+                    return (
+                      <label className="field" key={a.id}>
+                        <span>
+                          {a.number} {a.name} — why
+                        </span>
+                        <input
+                          value={existing?.reason ?? ""}
+                          onChange={(e) =>
+                            setOverrides([
+                              ...overrides.filter((o) => o.accountId !== a.id),
+                              { accountId: a.id, reason: e.target.value },
+                            ])
+                          }
+                        />
+                      </label>
+                    );
+                  })}
+                </div>
+              </div>
+            );
+          })()}
 
           <p className="small muted">
             A <strong>location</strong> is required and defaults from the Store; a <strong>section</strong> is optional
@@ -539,12 +607,14 @@ function PostPhase({ by }: { by: string }) {
                     id: `post-${Date.now()}`,
                     businessDate: date,
                     lines,
+                    ...(overrides.length > 0 ? { overrides } : {}),
                     actorInitials: by,
                     authorizedByInitials: by,
                   },
                   by,
                 );
                 setLines([blankLine(), blankLine()]);
+                setOverrides([]);
               }}
             >
               Save the posting
@@ -557,6 +627,36 @@ function PostPhase({ by }: { by: string }) {
             </p>
           </div>
         </div>
+
+        {exceptionReport(app.ledgerPostings).length > 0 && (
+          <div className="card">
+            <div className="card-head">
+              Exception report ({exceptionReport(app.ledgerPostings).length})
+            </div>
+            <div className="card-body stack">
+              <p className="small muted">
+                d39 — every posting that used an override, with the reason it carried.{" "}
+                <strong>A read, not a queue</strong>: an override is a Manager acting deliberately
+                with both names recorded, so it wants reading at close rather than acknowledging
+                (A-71).
+              </p>
+              <table className="data">
+                <tbody>
+                  {exceptionReport(app.ledgerPostings).map((p) =>
+                    (p.overrides ?? []).map((o) => (
+                      <tr key={`${p.id}-${o.accountId}`}>
+                        <td>{p.businessDate}</td>
+                        <td>{app.glAccounts.find((a) => a.id === o.accountId)?.name ?? o.accountId}</td>
+                        <td className="small">{o.reason}</td>
+                        <td>{p.authorizedByInitials}</td>
+                      </tr>
+                    )),
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
 
         <div className="card">
           <div className="card-head">Typed so far ({app.ledgerPostings.length})</div>
@@ -599,7 +699,12 @@ function SealPhase({ by }: { by: string }) {
   // Step 17 — every failure, reported together. An unbalanced posting cannot
   // reach the journal (d10 refuses it at write time), so the blockers this
   // prototype can produce are invalid codes, and the list is where they land.
-  const report = offered ? sealReport(offered, yearEndMonth, [], 0) : undefined;
+  // d40 — the Suspense gross is computed from the journal and REFUSES the seal
+  // where it is non-zero. d15 let it through; d14's ratification removed d15's
+  // premise, because a Manager can clear one now.
+  const report = offered
+    ? sealReport(offered, yearEndMonth, [], app.ledgerSuspenseGross(offered))
+    : undefined;
   const sealWhy = offered ? sealRefusal(offered, app.ledgerSeals, app.ledgerUnseals, report?.blocking ?? []) : undefined;
   const unsealWhy = latest
     ? unsealRefusal(latest, app.ledgerSeals, app.ledgerUnseals, app.ledgerYearFilings, yearEndMonth, reason)
@@ -629,6 +734,12 @@ function SealPhase({ by }: { by: string }) {
                   which period this is and says so before it happens, rather than asking (d5).
                 </p>
               )}
+              {/* d42 — reported, never blocking. d40 refused it and is superseded:
+                  the reference carries a clearing balance between months and
+                  reviews it, and stricter than the trade was not the thing to be. */}
+              {report && suspenseNotice(offered, report.suspenseGross) && (
+                <p className="wo-caveat warn">{suspenseNotice(offered, report.suspenseGross)}</p>
+              )}
               {sealWhy && <p className="wo-caveat warn">{sealWhy}</p>}
               <button
                 className="btn primary"
@@ -638,10 +749,13 @@ function SealPhase({ by }: { by: string }) {
                 Seal {offered}
               </button>
               <p className="small muted">
-                The seal writes a <strong>closing transaction</strong> carrying balance-forwards — computed by the same
-                recomputation that validates it, so <em>stored</em> is by definition the last <em>recomputed</em> (A-76).
-                A <strong>Suspense line does not block it</strong>: it is reported and carried gross, because no Manager
-                can clear one and a seal that refused would stop the books permanently (d15).
+                The seal writes a <strong>closing transaction</strong> carrying balance-forwards — computed by the
+                same recomputation that validates it, so <em>stored</em> is by definition the last{" "}
+                <em>recomputed</em> (A-76). A <strong>Suspense balance is reported and carried</strong> (d42,
+                superseding d40 and restoring d15&rsquo;s outcome): the reference model carries a clearing balance
+                between months and reviews it rather than clearing it, and it expects the remainder to be one
+                somebody can explain to the accountant. <strong>Nothing here enforces that</strong> — d14&rsquo;s
+                override is the route if you would rather clear it first.
               </p>
             </>
           )}
@@ -1111,6 +1225,10 @@ function ReconcilePhase({ by }: { by: string }) {
   const [accountId, setAccountId] = useState(banky[0]?.id ?? "");
   const [document, setDocument] = useState("");
   const [ticked, setTicked] = useState<Set<string>>(new Set());
+  // d43 — the two figures a Manager copies off the statement. Supplying them
+  // is what makes this a BANK reconciliation rather than a pairing exercise.
+  const [opening, setOpening] = useState("");
+  const [closing, setClosing] = useState("");
   // d37's accepted consequence, made structural: "a Manager has to know which
   // they are doing before they start, because ticking the same entries under
   // the other kind means something different — and the screen therefore cannot
@@ -1120,8 +1238,15 @@ function ReconcilePhase({ by }: { by: string }) {
   const open = unreconciled(app.journals, accountId, app.ledgerReconciliations);
   const key = (e: ReconcilableEntry) => `${e.batchId}#${e.lineIndex}`;
   const selected = open.filter((e) => ticked.has(key(e)));
-  const marked = markedTotal(selected);
-  const why = reconciliationRefusal(selected, document, app.ledgerReconciliations, kind);
+  const statement =
+    kind === "cleared" && opening !== "" && closing !== ""
+      ? { opening: Number(opening), closing: Number(closing) }
+      : undefined;
+  // d43 — a matched set drives its own members to zero; a cleared set drives
+  // the STATEMENT'S movement less the marked entries to zero. Both reach zero.
+  const marked = statement ? clearedDifference(selected, statement) : markedTotal(selected);
+  const why = reconciliationRefusal(selected, document, app.ledgerReconciliations, kind, statement);
+  const outstanding = outstandingAfter(open, selected);
 
   return (
     <div className="grid cols-2">
@@ -1157,13 +1282,37 @@ function ReconcilePhase({ by }: { by: string }) {
               </>
             ) : (
               <>
-                <strong>Cleared</strong> — the entries that appear on the statement. What is left over
-                is outstanding cheques and deposits in transit, and{" "}
-                <strong>that remainder is the point</strong>, not a failure (d37). Balance-neutral by{" "}
-                <em>convention</em>: nothing but your attention stands behind a cleared mark.
+                <strong>Cleared</strong> — the entries that appear on the statement. Enter the
+                statement&rsquo;s <strong>opening and closing balance</strong> and mark entries until the
+                difference between them reaches zero (d43). What is left over is{" "}
+                <strong>outstanding</strong> cheques and deposits in transit, and that remainder is the
+                point rather than a failure — it is only trustworthy because the marked set balanced.
               </>
             )}
           </p>
+
+          {kind === "cleared" && (
+            <div className="row wrap">
+              <label className="field">
+                <span>Statement opening balance</span>
+                <input
+                  type="number"
+                  step="0.01"
+                  value={opening}
+                  onChange={(e) => setOpening(e.target.value)}
+                />
+              </label>
+              <label className="field">
+                <span>Statement closing balance</span>
+                <input
+                  type="number"
+                  step="0.01"
+                  value={closing}
+                  onChange={(e) => setClosing(e.target.value)}
+                />
+              </label>
+            </div>
+          )}
 
           <div className="row wrap">
             <select
@@ -1252,10 +1401,13 @@ function ReconcilePhase({ by }: { by: string }) {
                       authorizedByInitials: by,
                     },
                     kind,
+                    statement,
                   ),
                 );
                 setTicked(new Set());
                 setDocument("");
+                setOpening("");
+                setClosing("");
               }}
             >
               Stamp the set as reconciled together
@@ -1279,6 +1431,33 @@ function ReconcilePhase({ by }: { by: string }) {
             </p>
           </div>
         </div>
+
+        {kind === "cleared" && selected.length > 0 && (
+          <div className="card">
+            <div className="card-head">Outstanding ({outstanding.length})</div>
+            <div className="card-body">
+              <p className="small muted">
+                d43 — what the statement does not show. <strong>This is the output</strong> of a bank
+                reconciliation, not its leftovers, and it is only trustworthy because the marked set
+                balanced. <em>&ldquo;Under no circumstances is there any reason for entries to remain
+                unmarked unless they are truly just waiting for bank clearance.&rdquo;</em>
+              </p>
+              {outstanding.length > 0 && (
+                <table className="data">
+                  <tbody>
+                    {outstanding.map((e) => (
+                      <tr key={`${e.batchId}#${e.lineIndex}`}>
+                        <td>{e.line.businessDate}</td>
+                        <td className="small">{e.line.memo || "—"}</td>
+                        <td className="num">{money(e.line.debit - e.line.credit)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+            </div>
+          </div>
+        )}
 
         <div className="card">
           <div className="card-head">Reconciled sets ({app.ledgerReconciliations.length})</div>
@@ -1307,14 +1486,14 @@ function ReconcilePhase({ by }: { by: string }) {
           <div className="card-head">Why there are two kinds</div>
           <div className="card-body">
             <p className="small muted">
-              d25 gave one rule — <em>entries within one account that net to zero</em> — and named two
-              cases under it. <strong>It served one.</strong> Building this refused a complete and
-              correct September bank reconciliation, <strong>out by 18,800</strong>, which is what
-              turned the question from arguable into visible. <strong>d37</strong> answers it: a{" "}
-              <strong>matched</strong> set nets to zero and is neutral by construction; a{" "}
-              <strong>cleared</strong> set marks what the document shows and carries the remainder as
-              its point. Both move no money and gate nothing — an unreconciled account seals exactly
-              as a reconciled one does.
+              d25 gave one rule — <em>entries within one account that net to zero</em> — and named two cases
+              under it. <strong>It served one.</strong> Building this refused a complete and correct
+              September bank reconciliation, <strong>out by 18,800</strong>, which turned the question from
+              arguable into visible. <strong>d37</strong> split it in two and <strong>d43</strong> corrected
+              the half that was still wrong: <strong>both kinds reach zero</strong>, a matched set against
+              its own members and a cleared set against the statement&rsquo;s own movement. The reference
+              model runs one routine and tells the two apart by whether you supply a closing date and the
+              statement&rsquo;s balances.
             </p>
           </div>
         </div>

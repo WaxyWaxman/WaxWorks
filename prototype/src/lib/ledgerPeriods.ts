@@ -181,10 +181,11 @@ export const isFiled = (
  * someone remembered. It gives the same answer here and would not survive two
  * Managers pressing Seal at once, which is the case A-75's index exists for.
  *
- * `blockers` is what step 17 and d15 will pass once postings exist: an
- * unbalanced posting, an invalid account, section or location. They are listed
- * rather than counted because step 17 *reports every failure without sealing*.
- * A Suspense line is deliberately NOT one of them — see `sealReport`.
+ * `blockers` is what step 17 passes: an unbalanced posting, an invalid account,
+ * section or location — listed rather than counted, because step 17 *reports
+ * every failure without sealing*. **A Suspense balance is not among them**
+ * (d42, superseding d40): it is reported by `suspenseNotice` and blocks
+ * nothing, which is the reference model's position and d15's outcome.
  */
 export function sealRefusal(
   period: LedgerPeriod,
@@ -220,7 +221,11 @@ export function sealRefusal(
 export interface SealReport {
   /** Every failure, reported together — step 17 does not stop at the first. */
   blocking: string[];
-  /** Reported and carried, never blocking (d15, d18). */
+  /**
+   * d42 — **reported and carried, never blocking**, and always gross.
+   * ~~d40 — blocking where it is non-zero~~ — d40 is superseded in turn, which
+   * restores what d15 said with a reason d15 did not have.
+   */
   suspenseGross: number;
   /** Whether this seal also seals a fiscal year, said BEFORE it happens (d17). */
   sealsFiscalYear: boolean;
@@ -232,11 +237,37 @@ export function sealReport(
   blockers: string[] = [],
   suspenseGross = 0,
 ): SealReport {
+  // d42 — a Suspense balance is REPORTED and does not block. d40 refused it and
+  // is superseded: the reference model's nearest account carries between months
+  // and is reviewed rather than cleared, and stricter than the trade was not the
+  // thing to be. d15's outcome, restored on grounds d15 never gave.
+  //
+  // The figure is GROSS because that is the one that does not hide two defects
+  // as none (M-07 d25), and it is the one surviving half of both d15 and d40.
   return {
-    blocking: blockers,
+    blocking: [...blockers],
     suspenseGross,
     sealsFiscalYear: isYearEnd(period, yearEndMonth),
   };
+}
+
+/**
+ * d42 — what the seal SAYS about a carried Suspense balance, or undefined
+ * where there is none. Never a refusal.
+ *
+ * *"The remaining entries should only be those that you will be able to deal
+ * with at a later date"* is the reference's rule, and it is **guidance rather
+ * than software** — it expects the carried balance to be one somebody can
+ * explain to the accountant, and enforces nothing. This says the figure and
+ * names the route; whether a Manager takes it is theirs.
+ */
+export function suspenseNotice(period: LedgerPeriod, suspenseGross: number): string | undefined {
+  if (Math.round(suspenseGross * 100) === 0) return undefined;
+  return (
+    `Suspense carries ${Math.abs(suspenseGross).toFixed(2)} into the seal of ${period}, gross. ` +
+    `A defect in this system, never a data-entry error (M-07 d10) — clear it first with an override ` +
+    `posting carrying a reason (d14, d39), or seal over it and be able to say what it relates to.`
+  );
 }
 
 /**
