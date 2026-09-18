@@ -14,7 +14,7 @@ import type {
 import { genreNameFor, sectionLabelFor } from "../lib/taxonomy";
 import { unmappedTagReport } from "../lib/genreMap";
 import { useApp, type SettingsWriteResult } from "../store/AppStore";
-import { taxTypeUseCount, resolveLineTax } from "../lib/tax";
+import { taxTypeUseCount, resolveLineTax, pendingHasElapsed } from "../lib/tax";
 import { money } from "../lib/money";
 
 // M-06 Settings, on the till's three tracks: the group you are in, the editor,
@@ -959,7 +959,17 @@ function TaxEditor({ by, onRun }: { by: ManagerAuth; onRun: (r: SettingsWriteRes
                         {
                           ...t,
                           pendingRatePpm: e.target.value ? Math.round(Number(e.target.value) * 10000) : undefined,
-                          pendingFrom: e.target.value ? t.pendingFrom ?? "" : undefined,
+                          // d52 — carry the existing date forward ONLY if it
+                          // has not already elapsed. Pairing a newly typed rate
+                          // with a date that has passed makes it read as in
+                          // force this instant, and the next save promotes it
+                          // into the current rate: queueing 12% for December on
+                          // top of an elapsed 10% banked 12% rather than 10%.
+                          pendingFrom: e.target.value
+                            ? pendingHasElapsed(t, new Date().toISOString().slice(0, 10))
+                              ? ""
+                              : t.pendingFrom ?? ""
+                            : undefined,
                         },
                         by,
                       ),

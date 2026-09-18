@@ -16,7 +16,7 @@ import {
 } from "../lib/genreMap";
 import { invoiceForItem, supplierIdForItem } from "../lib/provenance";
 import { money } from "../lib/money";
-import { parseCell } from "../lib/tax";
+import { parseCell, taxTypeWrite } from "../lib/tax";
 import { lineTaxComponents, type TaxContext } from "../lib/totals";
 import * as usersLib from "../lib/users";
 import {
@@ -1779,14 +1779,16 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
     if ((row.pendingRatePpm === undefined) !== (row.pendingFrom === undefined))
       return { ok: false, reason: "A pending change needs both a rate and the date it starts (d52)." };
     const existing = s.taxTypes.find((x) => x.code === code);
-    // d52 — a pending change that has already taken effect is PROMOTED before
-    // a new one is accepted, so an elapsed change is never silently dropped.
+    // d52 — an elapsed pending change is PROMOTED before a new one is
+    // accepted. The rule lives in lib/tax.ts because the promotion used to be
+    // computed here and then undone by the spread that followed it, which is
+    // exactly the silent drop d52 forbids.
     const today = new Date().toISOString().slice(0, 10);
-    const promoted =
-      existing?.pendingFrom && existing.pendingRatePpm !== undefined && today >= existing.pendingFrom
-        ? { ...existing, ratePpm: existing.pendingRatePpm, pendingRatePpm: undefined, pendingFrom: undefined }
-        : existing;
-    const next: TaxType = { ...promoted, ...row, code, name: row.name.trim() };
+    const next: TaxType = {
+      ...taxTypeWrite(existing, row, today),
+      code,
+      name: row.name.trim(),
+    };
     setS((prev) => ({
       ...prev,
       taxTypes: existing ? prev.taxTypes.map((x) => (x.code === code ? next : x)) : [...prev.taxTypes, next],
