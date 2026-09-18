@@ -4,6 +4,7 @@ import { PriceEditModal, PrintLabelModal } from "./CopyModals";
 import { ReserveModal } from "./ReserveModal";
 import type { InventoryItem, RecordEntry } from "../data/types";
 import { money } from "../lib/money";
+import { isPresent } from "../lib/totals";
 import type { StockFacts } from "../lib/stockState";
 import { STOCK_LABEL } from "../lib/stockState";
 import { genreNameFor, sectionLabelFor } from "../lib/taxonomy";
@@ -38,7 +39,11 @@ export function FindSelection({
   const [labelFor, setLabelFor] = useState<InventoryItem | null>(null);
   const [claiming, setClaiming] = useState(false);
 
-  const copies = app.inventory.filter((i) => i.recordId === record.id && i.status !== "sold");
+  // Copies still here. Asked positively (§5.1, A-81) — this read
+  // `status !== "sold"`, which listed a WRITTEN-OFF copy on the titlecard as
+  // though it were on the floor, and offered its Reserve and Print label
+  // buttons for a copy that is gone.
+  const copies = app.inventory.filter((i) => i.recordId === record.id && isPresent(i));
 
   const doRemoveHold = (c: InventoryItem) => {
     const res = app.releaseHoldLine(c.id);

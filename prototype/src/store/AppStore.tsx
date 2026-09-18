@@ -22,6 +22,7 @@ import * as usersLib from "../lib/users";
 import {
   customerBalanceDelta,
   invoiceIsFrozen,
+  isPresent,
   payableEntrySignedAmount,
   payableEntryTotal,
   round2,
@@ -29,6 +30,7 @@ import {
   invoiceChargesTotal,
 } from "../lib/totals";
 import { clearedAgainst, entryIsCleared, unclearRefusal } from "../lib/payables";
+import { routeStockRefusal, statusAfterRoute } from "../lib/returnRouting";
 import { buildChart } from "../lib/chart";
 import { buildCloseJournal } from "../lib/closeJournal";
 import { buildAdjustmentJournal, buildInvoiceJournal, buildPaymentJournal } from "../lib/artifactJournals";
@@ -966,7 +968,18 @@ interface AppContextValue extends AppState {
      * that choice was for."*
      */
     reason?: AdjustmentReason,
-  ) => void;
+    /**
+     * The authorizing Manager, for the `writeoff` route only — architecture
+     * §6 gates `return_route_stock` **M** where the route is *written off*.
+     *
+     * REQUIRED BY THE WRITE PATH, not by the screen. A-4 and A-48: a bound
+     * enforced in the client is not a bound. The screen presenting
+     * `ManagerAuthorize` is how a Manager is asked; this parameter is what
+     * makes the absence of one a refusal rather than a convention, so a second
+     * caller cannot route a write-off by forgetting to ask.
+     */
+    by?: string,
+  ) => { routed: boolean; refusal?: string };
   toggleProvider: () => void;
 
   invoiceFor: (id?: string) => Invoice | undefined;
@@ -3051,7 +3064,15 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
     grade,
     price,
     reason,
+    by,
   ) => {
+    // A-81, A-28a — the write-off route is manager-only, because routing a
+    // returned copy to *written off* IS adjusting on hand. The rule and its
+    // reasoning live in lib/returnRouting.ts, never here and never in the
+    // screen (A-4, A-48); the store calls the refusal and stores the result.
+    const refusal = routeStockRefusal(to, by);
+    if (refusal) return { routed: false, refusal };
+
     const note =
       to === "regrade"
         ? "Re-graded on return — own grade and price (E-06 step 6)"
@@ -3097,7 +3118,9 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
         i.id === itemId
           ? {
               ...i,
-              status: to === "writeoff" ? "sold" : "sellable",
+              // A-81 — a written-off copy gets its OWN status, `written_off`,
+              // rather than being stored as `sold`. See lib/returnRouting.ts.
+              status: statusAfterRoute(to),
               grade: to === "regrade" && grade ? grade : i.grade,
               price: to === "regrade" && price != null ? price : i.price,
               conditionNote: note,
@@ -3111,11 +3134,23 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
               lines: sale.lines.map((l) =>
                 l.id === lineId ? { ...l, stockRouted: true, routedTo: to } : l,
               ),
-              log: [...sale.log, { at: now(), text: `Returned copy routed → ${to}` }],
+              log: [
+                ...sale.log,
+                {
+                  at: now(),
+                  // Both names, per A-28a: the Employee holds the Sale, the
+                  // Manager authorized the disposition.
+                  text: by
+                    ? `Returned copy routed → ${to} (${reason}) — authorized by ${by}`
+                    : `Returned copy routed → ${to}`,
+                },
+              ],
             }
           : sale,
       ),
     }));
+
+    return { routed: true };
   };
 
   const toggleProvider = () => setS((prev) => ({ ...prev, providerUp: !prev.providerUp }));
@@ -3501,8 +3536,17 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
     const line = invoice?.lines.find((l) => l.id === lineId);
     if (!invoice || invoiceIsFrozen(invoice, s.paymentBatches, s.batchVoids) || !line) return { blocked: true };
     const itemIds = line.itemIds ?? [];
-    const anySold = itemIds.some((id) => s.inventory.find((i) => i.id === id)?.status === "sold");
-    if (anySold) return { blocked: true };
+    // A line cannot be removed once any copy it minted has LEFT — removing it
+    // deletes those copies, and a departed copy has already been accounted
+    // for somewhere. Asked positively (§5.1, A-81): written off is a
+    // departure exactly as sold is, so a test for `=== "sold"` alone would
+    // have let the line be removed out from under a written-off copy and
+    // deleted the only record of the shrinkage.
+    const anyGone = itemIds.some((id) => {
+      const copy = s.inventory.find((i) => i.id === id);
+      return !!copy && !isPresent(copy);
+    });
+    if (anyGone) return { blocked: true };
 
     setS((prev) => ({
       ...prev,

@@ -186,6 +186,10 @@ function OpeningPhase({ by }: { by: string }) {
   // populated, which is why the system knows it at all.
   // "sellable" and "held" are both on the shelf; "sold" has moved to cost of
   // goods already (M-07 d2's perpetual inventory), so only those two are stock.
+  // A-81's "written_off" is the same: a departure from on hand, already taken
+  // out into its reason-coded account (M-07 d6) rather than left in cost of
+  // goods. The enumeration here is positive, so it needed no change — which is
+  // why §5.1 asks for positive ones.
   const onHandCost = app.inventory
     .filter((i) => i.status === "sellable" || i.status === "held")
     .reduce((sum, i) => sum + (i.cost ?? 0), 0);
