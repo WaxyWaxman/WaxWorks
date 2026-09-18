@@ -2869,7 +2869,24 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
   // editable, batched under one identifier so it can be undone as a unit.
   const totalTodaysSales: AppContextValue["totalTodaysSales"] = (by) => {
     const breakdown = computeDayBreakdown(s.sales, s.records, taxCtxFor(null), s.inventory, s.genres, s.sections);
-    const saleIds = s.sales.filter((sale) => sale.state === "Current" && !sale.isReturn).map((sale) => sale.id);
+    // EVERY Current Sale, Returns included. This read `&& !sale.isReturn`,
+    // which contradicted three things at once: M-03 d1 and this function's own
+    // comment above ("every Current Sale becomes Closed"), E-06 d8's returns
+    // flowing into the close, and M-07 d7 as E-06 inherits it — "a Return
+    // produces journal lines like any Sale, through the close it lands in".
+    //
+    // The consequences were not cosmetic. A Return produced NO journal at all,
+    // so M-07 d2's perpetual inventory never ran backwards for a returned copy
+    // and A-82's arithmetic could not close: the write-off route posted
+    // `Dr Damaged / Cr Inventory` against a cost that had never come back out
+    // of cost of goods. And a Return never reached `Closed`, so it stayed
+    // `Current` for ever and E-06 d23's after-the-close routing was
+    // unobservable.
+    //
+    // `buildCloseJournal` was always ready for this — `costPostings` says "a
+    // RETURN always reverses it, whatever E-06 step 6 then does with the copy"
+    // — it was simply never handed one.
+    const saleIds = s.sales.filter((sale) => sale.state === "Current").map((sale) => sale.id);
     const batchId = uid("batch");
     const batch: CloseBatch = { id: batchId, at: now(), by, saleIds };
 
