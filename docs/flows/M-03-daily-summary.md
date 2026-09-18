@@ -57,6 +57,14 @@ Pay-outs are the one cash movement that is captured, because money leaving the t
 
 ## Inherited from other flows
 
+**From [E-06](E-06-process-a-return.md) decision 23:**
+
+- **An unrouted returned copy does not hold up the close.** [E-06](E-06-process-a-return.md) decision 20 creates a
+  Return that is finished with its copy not yet assessed, and decision 23 lets that copy be routed after the day has
+  closed — a Return taken at five o'clock is usually looked at the next morning. The close neither waits for it nor
+  refuses on it: the copy is off the shelf either way, so there is nothing for the close to reconcile.
+
+
 **From [M-08](M-08-general-ledger.md):**
 
 - **Undo End of Day must refuse while the day it would reopen sits in a sealed period** ([M-08](M-08-general-ledger.md) d11, d22, d29, [architecture](../architecture.md) A-75). Decision 4's undo is the one reversal in this system that does **not** post forward — it un-closes, returning Sales to Current and restating the day itself — so unlike an Invoice correction ([E-02](E-02-receive-inventory.md) d40) or a PaymentBatch void ([M-05](M-05-accounts-payable.md) d22), it cannot be absorbed by [M-07](M-07-chart-of-accounts.md) d8's post-forward rule. **This is [architecture](../architecture.md) A-66's shape with a second trigger** — A-66 already refuses `close_undo` while a non-voided BankDeposit references the batch, and a sealed period is the same kind of outside dependency, one step further out. **A sealed month releases**: unseal it and the undo becomes available again — though only the **most recently sealed** period may be unsealed ([M-08](M-08-general-ledger.md) d29), so reaching an older day means walking backwards a period at a time. **A year marked *filed* never releases** (d22, superseding d21) — so a day inside a filed year can never be reopened by anyone, which is the only permanently unreachable state in this flow and worth the refusal saying so in those words rather than offering a route that does not exist.
