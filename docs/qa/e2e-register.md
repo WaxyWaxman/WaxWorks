@@ -316,6 +316,9 @@ below, screen rows to the settings-screens milestone.
 | M-06-T10 | **Store details.** Legal and trading names separate; footer toggled off leaves the receipt without it; the logo is uploaded, not a URL; width defaults 80mm; Store ID and position are not editable. | §"Store details" | M-06 decision 46, M-06 decision 47, M-06 decision 50, M-06 decision 51, A-56 | A Manager; an image file | Planned | — | |
 | M-06-T11 | **Settings are never retroactive.** Tender a Sale, then change the tax rate and the price ending; the Sale's snapshot is unchanged; the next Sale uses the new values. | §"Store details" | M-06 decision 8, A-57 | As T1 | Planned | — | |
 | M-06-T12 | **Thresholds drive the other flows.** Dead-stock 180 days (E-03's *never sold*), stream aging 14 days, Supplier lead time filling the follow-up flag at placement. Change each and observe the dependent screen. | §"Store details" | M-06 decision 40, M-06 decision 41, M-06 decision 42 | Aged fixtures — needs E-03-T7 | Planned | — | |
+| M-06-T13 | **The row shows the rate in force, not the figure stored beside it.** Queue a change effective **today**; the type's row reads the **new** rate immediately and the worked example agrees with it. This is the discrepancy decision 66 closes: [architecture](../architecture.md) A-58 makes the rate a function of time, so it takes effect with **no write**, and the stored figure lags until something next edits that type — a row reading 5% while every Sale charged 10%. | §"Tax types" | M-06 decision 66, A-58 | As M-06-T1 | Planned | — | |
+| M-06-T14 | **A queued change is badged on its own row, and entered through the dialog.** *Schedule tax change* → pick the type, enter the rate and the date → the row carries `12% from 2026-12-01` while the rate in force is unchanged. **Pending % and From are not columns.** | §"Tax types" | M-06 decision 66, M-06 decision 52 | As M-06-T1 | Planned | — | |
+| M-06-T15 | **A queued change can be cleared.** Queue one, then clear it: the badge goes, the rate in force does not move, and the settings log carries the actor with the values before and after. Clearing a change that has **already elapsed** does not unwind it — decision 52 promotes it first. | §"Tax types" | M-06 decision 67, M-06 decision 52, A-52 | As M-06-T1 | Planned | — | |
 
 ### M-07 — Chart of accounts
 
@@ -594,7 +597,7 @@ milestones have both tracks landed.
 | M6 Hardening | Every row above, run as one seeded trading day |
 | M7 Payables (A-39) | M-05-T1–T9, E-02-T9, M-01-T4, **M-08-T16** *(A-80 — it asserts no M-08 decision and runs here)* |
 | M8 The general ledger (A-80) | M-08-T1–T15, T17–T22. **Placed on 2026-09-18** by A-80, immediately after M7 and the last milestone with the v1 two-track shape — d7's payoff, *the Accounts payable balance **is** M-05's balance*, is not checkable until payables exists. **M-08-T16 belongs to M7 and not here**: it asserts M-06 d59, d60 and M-07 d8 and **no M-08 decision at all**, so it bounds when the row runs rather than what M8 builds |
-| Post-v1, in §8's order | M-02-T1–T10 → M-04-T1–T6 *(Add and Deactivate first, M-04 decision 21)* → M-06-T3, T5–T7, T9, T10, T12 *(the settings screens)* → M-07-T1–T7 and M-03-T6 *(the chart **screen** and the journal export — still unplaced. A-79 moved M-07's **tables** into M2 and M3 where A-67 required them, and deliberately left its functions and screens here)* |
+| Post-v1, in §8's order | M-02-T1–T10 → M-04-T1–T6 *(Add and Deactivate first, M-04 decision 21)* → M-06-T3, T5–T7, T9, T10, T12–T15 *(the settings screens)* → M-07-T1–T7 and M-03-T6 *(the chart **screen** and the journal export — still unplaced. A-79 moved M-07's **tables** into M2 and M3 where A-67 required them, and deliberately left its functions and screens here)* |
 
 ---
 
