@@ -148,6 +148,17 @@ against [E-05](E-05-sell-a-record.md), which owns it.
 
 ## Inherited from other flows
 
+**From [E-06](E-06-process-a-return.md) decision 16 — unresolved, and it is a real account:**
+
+- **A re-graded returned copy makes decision 2's reversal disagree with the stock records.**
+  Decision 2 moves a returned copy's cost back into Inventory *"at the figure that copy
+  carried, never a recomputed one"* — the **original** cost — while
+  [E-06](E-06-process-a-return.md) decision 16 mints the replacement copy carrying the
+  **refund**. On E-06's worked example that is **$8.00** posted to Inventory against a copy
+  the stock records value at **$31.49**, with nothing reconciling the **$23.49**. Either the
+  reversal posts the refund, or the difference posts to a named account. Recorded here
+  rather than only in E-06, because the posting is this flow's to decide.
+
 _Commitments pushed here by another flow. These are decided, not open — each cites
 the decision it comes from._
 
