@@ -1358,8 +1358,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
     ];
   };
 
-  const acknowledgeReviewFlag: AppContextValue["acknowledgeReviewFlag"] = (id, byAuth) =>
-    {
+  const acknowledgeReviewFlag: AppContextValue["acknowledgeReviewFlag"] = (id, byAuth) => {
     // §6 — an M function resolves the Manager ITSELF, in the same
     // transaction. The brand proves the check passed when the id was
     // minted; this proves it still holds now, so a demotion between the
@@ -1367,14 +1366,12 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
     const mgr = requireManager(s.users, byAuth);
     if (!mgr.ok) return;
     const by = mgr.name;
-    return (
-      setS((prev) => ({
+    setS((prev) => ({
       ...prev,
       reviewFlags: prev.reviewFlags.map((f) =>
         f.id === id ? { ...f, acknowledged: true, acknowledgedBy: by, acknowledgedAt: now() } : f,
       ),
-    }))
-    );
+    }));
   };
 
   // -------------------------------------------------------------------------
@@ -1393,16 +1390,14 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
   // A-78 - sealing MATERIALISES equity as a journal line. Until this runs the
   // opening position is a draft carrying assets and liabilities only, and
   // nothing may read it as though it were a journal.
-  const ledgerSealOpening: AppContextValue["ledgerSealOpening"] = (byAuth) =>
-    {
+  const ledgerSealOpening: AppContextValue["ledgerSealOpening"] = (byAuth) => {
     // §6 — an M function resolves the Manager ITSELF, in the same
     // transaction. The brand proves the check passed when the id was
     // minted; this proves it still holds now, so a demotion between the
     // prompt and the write bites (A-28a, A-4, A-48).
     const mgr = requireManager(s.users, byAuth);
     if (!mgr.ok) return;
-    return (
-      setS((prev) => {
+    setS((prev) => {
       if (!prev.ledgerOpening || prev.ledgerOpeningSealed) return prev;
       const equity = prev.glAccounts.find((a) => a.role === "owners-equity");
       const suspense = prev.glAccounts.find((a) => a.role === "suspense");
@@ -1422,13 +1417,11 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
         // carried on the sealed artifact.
         ledgerOpening: { ...prev.ledgerOpening, accountantsEquity: undefined },
       };
-    })
-    );
+    });
   };
 
   // Step 15 - the posting joins the journal beside everything artifacts wrote.
-  const ledgerPost: AppContextValue["ledgerPost"] = (posting, byAuth) =>
-    {
+  const ledgerPost: AppContextValue["ledgerPost"] = (posting, byAuth) => {
     // §6 — an M function resolves the Manager ITSELF, in the same
     // transaction. The brand proves the check passed when the id was
     // minted; this proves it still holds now, so a demotion between the
@@ -1436,8 +1429,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
     const mgr = requireManager(s.users, byAuth);
     if (!mgr.ok) return;
     const by = mgr.name;
-    return (
-      setS((prev) => {
+    setS((prev) => {
       const suspense = prev.glAccounts.find((a) => a.role === "suspense");
       if (!suspense) return prev;
       const full: LedgerPosting = { ...posting, writtenAt: now(), authorizedByInitials: by };
@@ -1450,16 +1442,14 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
         ledgerPostings: [full, ...prev.ledgerPostings],
         journals: [batch, ...prev.journals],
       };
-    })
-    );
+    });
   };
 
   // A-75 - a seal APPENDS a row, and d20/A-76 write the closing transaction as
   // the result of the recomputation. The two happen together because A-76's
   // "stored is by definition the last recomputed" is only true if nothing can
   // seal without recomputing.
-  const ledgerSeal: AppContextValue["ledgerSeal"] = (period, suspenseGross, byAuth) =>
-    {
+  const ledgerSeal: AppContextValue["ledgerSeal"] = (period, suspenseGross, byAuth) => {
     // §6 — an M function resolves the Manager ITSELF, in the same
     // transaction. The brand proves the check passed when the id was
     // minted; this proves it still holds now, so a demotion between the
@@ -1467,8 +1457,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
     const mgr = requireManager(s.users, byAuth);
     if (!mgr.ok) return;
     const by = mgr.name;
-    return (
-      setS((prev) => {
+    setS((prev) => {
       const seal: LedgerPeriodSeal = {
         id: "seal-" + period + "-" + (prev.ledgerSeals.length + 1),
         period,
@@ -1509,15 +1498,13 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
           closingTransactionFor(period, seal.id, journals, suspenseGross, now()),
         ],
       };
-    })
-    );
+    });
   };
 
   // d18 - an unseal is an artifact: who, when, a required reason, and which
   // period it reopened. A-76 has a divergence against what was stored raise a
   // system flag with a null actor.
-  const ledgerUnseal: AppContextValue["ledgerUnseal"] = (period, reason, byAuth) =>
-    {
+  const ledgerUnseal: AppContextValue["ledgerUnseal"] = (period, reason, byAuth) => {
     // §6 — an M function resolves the Manager ITSELF, in the same
     // transaction. The brand proves the check passed when the id was
     // minted; this proves it still holds now, so a demotion between the
@@ -1525,8 +1512,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
     const mgr = requireManager(s.users, byAuth);
     if (!mgr.ok) return;
     const by = mgr.name;
-    return (
-      setS((prev) => {
+    setS((prev) => {
       const live = prev.ledgerSeals
         .filter((x) => x.period === period)
         .find((x) => !prev.ledgerUnseals.some((u) => u.sealId === x.id));
@@ -1552,13 +1538,11 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
         ],
         ...(flag ? { reviewFlags: [flag, ...prev.reviewFlags] } : {}),
       };
-    })
-    );
+    });
   };
 
   // d22 - the only permanently irreversible state in this system.
-  const ledgerMarkYearFiled: AppContextValue["ledgerMarkYearFiled"] = (fiscalYearEnd, byAuth) =>
-    {
+  const ledgerMarkYearFiled: AppContextValue["ledgerMarkYearFiled"] = (fiscalYearEnd, byAuth) => {
     // §6 — an M function resolves the Manager ITSELF, in the same
     // transaction. The brand proves the check passed when the id was
     // minted; this proves it still holds now, so a demotion between the
@@ -1566,8 +1550,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
     const mgr = requireManager(s.users, byAuth);
     if (!mgr.ok) return;
     const by = mgr.name;
-    return (
-      setS((prev) => ({
+    setS((prev) => ({
       ...prev,
       ledgerYearFilings: [
         ...prev.ledgerYearFilings,
@@ -1579,8 +1562,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
           authorizedByInitials: by,
         },
       ],
-    }))
-    );
+    }));
   };
 
   // d25 - a mark that moves no money. No journal is written here, ever.
@@ -2285,8 +2267,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
     return { ok: true, id: r.id };
   };
 
-  const addUser: AppContextValue["addUser"] = (input, byAuth) =>
-    {
+  const addUser: AppContextValue["addUser"] = (input, byAuth) => {
     // §6 — an M function resolves the Manager ITSELF, in the same
     // transaction. The brand proves the check passed when the id was
     // minted; this proves it still holds now, so a demotion between the
@@ -2294,13 +2275,10 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
     const mgr = requireManager(s.users, byAuth);
     if (!mgr.ok) return { ok: false, reason: mgr.refusal };
     const by = mgr.name;
-    return (
-      commit(usersLib.addUser(s.users, input, by, { id: uid("user") }))
-    );
+    return commit(usersLib.addUser(s.users, input, by, { id: uid("user") }));
   };
 
-  const changeUserRole: AppContextValue["changeUserRole"] = (userId, role, byAuth) =>
-    {
+  const changeUserRole: AppContextValue["changeUserRole"] = (userId, role, byAuth) => {
     // §6 — an M function resolves the Manager ITSELF, in the same
     // transaction. The brand proves the check passed when the id was
     // minted; this proves it still holds now, so a demotion between the
@@ -2308,9 +2286,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
     const mgr = requireManager(s.users, byAuth);
     if (!mgr.ok) return { ok: false, reason: mgr.refusal };
     const by = mgr.name;
-    return (
-      commit(usersLib.changeUserRole(s.users, userId, role, by))
-    );
+    return commit(usersLib.changeUserRole(s.users, userId, role, by));
   };
 
   // M-04 d15 as corrected by d18: a deactivation stops new work under those
@@ -2332,8 +2308,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
     return r;
   };
 
-  const reactivateUser: AppContextValue["reactivateUser"] = (userId, initials, byAuth) =>
-    {
+  const reactivateUser: AppContextValue["reactivateUser"] = (userId, initials, byAuth) => {
     // §6 — an M function resolves the Manager ITSELF, in the same
     // transaction. The brand proves the check passed when the id was
     // minted; this proves it still holds now, so a demotion between the
@@ -2341,13 +2316,10 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
     const mgr = requireManager(s.users, byAuth);
     if (!mgr.ok) return { ok: false, reason: mgr.refusal };
     const by = mgr.name;
-    return (
-      commit(usersLib.reactivateUser(s.users, userId, initials, by))
-    );
+    return commit(usersLib.reactivateUser(s.users, userId, initials, by));
   };
 
-  const correctUser: AppContextValue["correctUser"] = (userId, patch, byAuth) =>
-    {
+  const correctUser: AppContextValue["correctUser"] = (userId, patch, byAuth) => {
     // §6 — an M function resolves the Manager ITSELF, in the same
     // transaction. The brand proves the check passed when the id was
     // minted; this proves it still holds now, so a demotion between the
@@ -2355,13 +2327,10 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
     const mgr = requireManager(s.users, byAuth);
     if (!mgr.ok) return { ok: false, reason: mgr.refusal };
     const by = mgr.name;
-    return (
-      commit(usersLib.correctUser(s.users, userId, patch, by))
-    );
+    return commit(usersLib.correctUser(s.users, userId, patch, by));
   };
 
-  const setUserPassword: AppContextValue["setUserPassword"] = (userId, password, byAuth) =>
-    {
+  const setUserPassword: AppContextValue["setUserPassword"] = (userId, password, byAuth) => {
     // §6 — an M function resolves the Manager ITSELF, in the same
     // transaction. The brand proves the check passed when the id was
     // minted; this proves it still holds now, so a demotion between the
@@ -2369,9 +2338,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
     const mgr = requireManager(s.users, byAuth);
     if (!mgr.ok) return { ok: false, reason: mgr.refusal };
     const by = mgr.name;
-    return (
-      commit(usersLib.setUserPassword(s.users, userId, password, by))
-    );
+    return commit(usersLib.setUserPassword(s.users, userId, password, by));
   };
 
   const addCustomer: AppContextValue["addCustomer"] = (input) => {
@@ -4122,8 +4089,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
   // Only this locks an Invoice (decision — finalize alone no longer does).
   // Manager-only, per M-05: Accounts Payable settling the balance is what
   // makes the paperwork official.
-  const markInvoicePaid: AppContextValue["markInvoicePaid"] = (invoiceId, byAuth) =>
-    {
+  const markInvoicePaid: AppContextValue["markInvoicePaid"] = (invoiceId, byAuth) => {
     // §6 — an M function resolves the Manager ITSELF, in the same
     // transaction. The brand proves the check passed when the id was
     // minted; this proves it still holds now, so a demotion between the
@@ -4131,8 +4097,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
     const mgr = requireManager(s.users, byAuth);
     if (!mgr.ok) return;
     const by = mgr.name;
-    return (
-      setS((prev) => ({
+    setS((prev) => ({
       ...prev,
       invoices: prev.invoices.map((iv) =>
         iv.id === invoiceId
@@ -4144,8 +4109,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
             }
           : iv,
       ),
-    }))
-    );
+    }));
   };
 
   // M-05 d27 — THE settlement. One selection, one act, one PaymentBatch.
@@ -4165,7 +4129,6 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
     const mgr = requireManager(s.users, byAuth);
     if (!mgr.ok) return;
     const by = mgr.name;
-    return (
     setS((prev) => {
       const at = now();
       const targets: PaymentTarget[] = [];
@@ -4357,8 +4320,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
         journals: [journal.batch, ...prev.journals],
         reviewFlags: journalFlags(journal, `payment ${batch.reference || batch.id}`, prev.reviewFlags),
       };
-    })
-    );
+    });
   };
 
   // M-05 d22 / d30 — void a PaymentBatch. Whole or not at all, appended never
@@ -4370,8 +4332,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
   // Nothing un-consumes a credit by writing to it — a credit is consumed by the
   // PRESENCE of a live target (A-37), so voiding the batch releases it with
   // nothing to flip. The same is true of the Invoice's immutability (A-33a).
-  const voidPaymentBatch: AppContextValue["voidPaymentBatch"] = (batchId, byAuth) =>
-    {
+  const voidPaymentBatch: AppContextValue["voidPaymentBatch"] = (batchId, byAuth) => {
     // §6 — an M function resolves the Manager ITSELF, in the same
     // transaction. The brand proves the check passed when the id was
     // minted; this proves it still holds now, so a demotion between the
@@ -4379,8 +4340,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
     const mgr = requireManager(s.users, byAuth);
     if (!mgr.ok) return;
     const by = mgr.name;
-    return (
-      setS((prev) => {
+    setS((prev) => {
       const batch = prev.paymentBatches.find((b) => b.id === batchId);
       if (!batch || prev.batchVoids.some((v) => v.batchId === batchId)) return prev;
 
@@ -4450,8 +4410,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
         journals: [journal.batch, ...prev.journals],
         reviewFlags: journalFlags(journal, `the void of ${batch.reference || batch.id}`, prev.reviewFlags),
       };
-    })
-    );
+    });
   };
 
   const payableEntryFor: AppContextValue["payableEntryFor"] = (id) =>
