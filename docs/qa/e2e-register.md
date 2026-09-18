@@ -369,12 +369,23 @@ not installed — so there is **no recording artifact**, which the `/qa walk` pr
   `{ kind: "range", from, toExclusive: `${period}-01` }`, and `from` is `${period}-01` too
   (`Ledger.tsx:870`) — so a statement covering the whole of September is stored as
   **2026-09-01 → 2026-09-01**, which covers no days at all, and the issuance list renders it that way.
-  The figures are right; only the stored scope is wrong. Two consequences, and the second is the
-  expensive one: the statement misstates **the period it covers**, which step 25 requires it to state
-  because decision 9 makes the first year a short one; and `exportOverlaps` (`Ledger.tsx:1112`) compares
-  these ranges to raise the overlap warning **M-08-T14 asserts**, so an empty range can never overlap
-  anything and that warning can never fire for an issued P&L. *Route:* a prototype fix citing d31 and
-  M-07 d16. A balance-sheet issuance is unaffected — its scope is `as-at`, a single date.
+  The figures are right; only the stored scope is wrong, so the statement misstates **the period it
+  covers** — which step 25 requires it to state, because decision 9 makes the first year a short one.
+  A balance-sheet issuance is unaffected: its scope is `as-at`, a single date.
+  **Fixed the same day** — `periodRange` in `prototype/src/lib/ledgerPeriods.ts`, with tests, and
+  `Ledger.tsx` now calls it. ~~*Route:* a prototype fix citing d31 and M-07 d16.~~
+  **One half of this finding was wrong when first filed, and is corrected here.** It claimed the empty
+  range also defeated the overlap warning **M-08-T14** asserts. It did not: `exportOverlaps`
+  (`ledgerStatements.ts:560`) filters `kind === "journal-export"`, so a P&L issuance was never one of
+  the things it compares. **The reader that *was* defeated is `issuancesTouching`**
+  (`ledgerStatements.ts:578`) — A-77's other reader, which warns an unseal about **any** issuance
+  touching the period, whatever its kind, *"because an unseal changes figures the accountant may
+  already hold (d29, d18)"*. Its range test is `i.scope.from <= to && from < i.scope.toExclusive`, and
+  an empty range fails the second half, so an issued P&L did not count as touching its own month. The
+  fix restores that. **It is not visible yet either way:** `issuancesTouching` is referenced by nothing
+  but its own tests — not by `Ledger.tsx`, not by `AppStore.tsx` — so the unseal warns about nothing at
+  all. That is the third instance of one pattern, beside M-08-T17's edit and M-08-T24's classification:
+  **the rule is built in `lib` and no surface reads it.**
 - **The Postings panel's helper text describes the pre-d39 shape.** It still reads *"Not offered:
   retained earnings and Accounts payable (d13), the gift card liability (d33) and Suspense (d14, not
   ratified)"* while **Suspense is offered**, carries its own WHY field, and saves with a reason. d39

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { LedgerPeriodSeal, LedgerPeriodUnseal, LedgerYearFiling } from "../data/types";
 import {
+  periodRange,
   closeUndoRefusal,
   fiscalYearEndFor,
   isFiled,
@@ -389,5 +390,33 @@ describe("M-08 d11 — nothing writes into a sealed period, by any route", () =>
     expect(unsealRefusal("2026-12", decSeals, [], filings, DEC, "try")).toContain("marked filed");
     // The unseal is refused, so the period stays sealed, so the Undo stays refused.
     expect(closeUndoRefusal("2026-12-31", decSeals, [])).toContain("is sealed");
+  });
+});
+
+describe("M-08 d31 — the half-open range an issuance stores", () => {
+  it("ends on the first day of the NEXT period, not this one's first or last", () => {
+    // The shape ledgerStatements.test.ts already assumes for a September P&L.
+    expect(periodRange("2026-09")).toEqual({ from: "2026-09-01", toExclusive: "2026-10-01" });
+  });
+
+  it("never produces an empty range", () => {
+    // The defect this exists to stop: Ledger.tsx set both ends to `${period}-01`,
+    // so a statement over a whole month claimed no days at all — it matched
+    // nothing, and step 26's overlap check could never fire against it.
+    for (const p of ["2026-01", "2026-02", "2026-09", "2026-12"]) {
+      const r = periodRange(p);
+      expect(r.toExclusive > r.from, p).toBe(true);
+    }
+  });
+
+  it("rolls the year at December", () => {
+    expect(periodRange("2026-12")).toEqual({ from: "2026-12-01", toExclusive: "2027-01-01" });
+  });
+
+  it("is not thrown by February, leap or otherwise", () => {
+    // periodEnd needs a calendar for the last day; the half-open range does not,
+    // which is the reason to prefer it where a range is what is wanted.
+    expect(periodRange("2024-02").toExclusive).toBe("2024-03-01");
+    expect(periodRange("2026-02").toExclusive).toBe("2026-03-01");
   });
 });
