@@ -148,6 +148,15 @@ against [E-05](E-05-sell-a-record.md), which owns it.
 
 ## Inherited from other flows
 
+**From [M-03](M-03-daily-summary.md) decision 21:**
+
+- **The close's tender block now prints the account each tender posts to**, read from decision 21's
+  behaviour-implied mapping and decision 26's correction for `used_credit`. The block groups cash and card
+  under an **Undeposited funds total** rather than a bank total, because d21 lands them in undeposited funds
+  and money reaches a bank account only through a BankDeposit ([architecture](../architecture.md) A-66).
+  *What this flow now owes a reader it did not before:* **renaming or renumbering an account here changes a
+  report on the till**, with nothing in this flow's editor saying so.
+
 **From [E-06](E-06-process-a-return.md) decision 26 — a second kind of return posting:**
 
 - **An unmatched Return posts as a purchase, not as a reversal.** Decision 2's reversal assumes a copy coming back

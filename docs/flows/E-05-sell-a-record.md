@@ -161,6 +161,18 @@ Held copies count against **available** stock but remain on hand.
 
 ## Inherited from other flows
 
+**From [M-03](M-03-daily-summary.md) decisions 27 and 28:**
+
+- **The close's modal grows into an eight-section report that scrolls, and it stays a modal.** Decision 28
+  places it here deliberately rather than promoting it to a screen: d28 of this flow put the close behind
+  **Till functions** because it is touched when nobody is waiting, and d29's three-track till is the thing the
+  report must not destroy — dismissing it puts the Employee back at the counter with the Sale underneath
+  unchanged. Sections 5–8 arrive **collapsed** and the state is not remembered between openings.
+- **Other functions gains a second entry point: the same report over a date range** — this month, last month,
+  year to date ([M-03](M-03-daily-summary.md) d27). It is a **read**, closes nothing, and sits beside *View
+  Subtotal* rather than replacing it: the range report sums closed batches, so the batch currently in flight
+  is invisible to it and *View Subtotal* stays the only way to see the day being stood in.
+
 **From [E-06](E-06-process-a-return.md) decision 30:**
 
 - **Decision 31's Void — and therefore its Edit — gains a second refusal on a Return, and it is not about the

@@ -2,7 +2,7 @@
 
 **Actor:** Employee (nothing here is gated)
 **Status:** Specified
-**Related:** [E-05 Point of Sale](E-05-sell-a-record.md) · [E-06 Process a return](E-06-process-a-return.md) · [M-02 Re-order inventory](M-02-reorder-inventory.md) · [M-08 Keep the general ledger](M-08-general-ledger.md)
+**Related:** [E-05 Point of Sale](E-05-sell-a-record.md) · [E-06 Process a return](E-06-process-a-return.md) · [M-02 Re-order inventory](M-02-reorder-inventory.md) · [M-03 Daily summary](M-03-daily-summary.md) · [M-08 Keep the general ledger](M-08-general-ledger.md)
 
 **Job:** As an employee, I need to look someone up so I can attach them to a sale, hold something for them, give them their discount, or settle what's owed between us.
 
@@ -76,6 +76,16 @@ This is distinct from a supplier **Invoice** ([E-02](E-02-receive-inventory.md))
 ---
 
 ## Inherited from other flows
+
+**From [M-03](M-03-daily-summary.md) decision 22:**
+
+- **Account type becomes a reporting dimension.** [M-03](M-03-daily-summary.md)'s report splits sales by
+  *Regular*, *Staff* and *Business* — this flow's own field, read rather than copied — with **Walk-in** as a
+  fourth bucket for a Sale carrying no Customer. Two consequences land here rather than there. **Changing a
+  Customer's Account type moves their whole history** in that report at once, the same shape as
+  [M-06](M-06-settings.md) d31's genre remap moving Records between Sections, and the editor says nothing about
+  it today. And **a fourth type added here appears in that report with no change to M-03**, which is why the
+  split is on the field and not on a rule — so adding one is a reporting decision as well as a customer one.
 
 **From [M-08](M-08-general-ledger.md):**
 
