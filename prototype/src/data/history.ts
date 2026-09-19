@@ -41,6 +41,7 @@ import {
   buildPaymentJournal,
 } from "../lib/artifactJournals";
 import { buildCloseJournal } from "../lib/closeJournal";
+import { computeDayBreakdown, SUMMARY_SCHEMA_VERSION } from "../lib/dayBreakdown";
 import { lineTaxComponents, round2, saleTotals, type TaxContext } from "../lib/totals";
 import { CUSTOMERS, GENRES, NON_TRACKED, RECORDS, SUPPLIERS, USERS } from "./seed";
 import type {
@@ -789,7 +790,34 @@ export function buildHistory(input: HistoryInput): GeneratedHistory {
     const businessDate = isoOf(day);
     const batchId = `batch-close-${businessDate}`;
     const closedAt = stampOf(day, 19, 30);
-    closeBatches.push({ id: batchId, at: closedAt, by: aManager, saleIds: daySaleIds });
+    // M-03 d13 / A-83 — the summary is stored ON the batch, and it is what a
+    // date-range report (d27) sums. Computed by the same function the till
+    // calls, so a seeded day and a clicked one cannot disagree — and stored
+    // here rather than left off, because a seeded month whose batches carry no
+    // summary would make the range report demonstrate nothing but A-83's
+    // short-batch count.
+    //
+    // The day's sales are built already `Closed` (they are history), so the
+    // breakdown is taken over a view of them as they stood AT the close, which
+    // is the only moment a close ever computes.
+    const daySales = sales
+      .filter((x) => daySaleIds.includes(x.id))
+      .map((x) => ({ ...x, state: "Current" as const }));
+    const summary = computeDayBreakdown(daySales, allRecords, ctxFor(undefined, businessDate), inventory, GENRES, input.sections, {
+      customers: allCustomers,
+      tenderRows: input.tenders,
+      accounts: input.accounts,
+      mappings: input.mappings,
+      createdAt: closedAt,
+    });
+    closeBatches.push({
+      id: batchId,
+      at: closedAt,
+      by: aManager,
+      saleIds: daySaleIds,
+      summary: summary as unknown as CloseBatch["summary"],
+      summaryVersion: SUMMARY_SCHEMA_VERSION,
+    });
     for (const id of daySaleIds) {
       const sale = sales.find((x) => x.id === id)!;
       sale.batchId = batchId;

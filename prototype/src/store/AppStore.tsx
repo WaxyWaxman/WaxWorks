@@ -5,7 +5,12 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import { computeDayBreakdown, type DayBreakdown } from "../lib/dayBreakdown";
+import {
+  computeDayBreakdown,
+  SUMMARY_SCHEMA_VERSION,
+  type BreakdownExtras,
+  type DayBreakdown,
+} from "../lib/dayBreakdown";
 import { checkGenreDelete, checkGenreMerge, checkGenreWrite } from "../lib/taxonomy";
 import {
   checkMapRowAdd,
@@ -3117,14 +3122,30 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
 
   // M-03 — View Subtotal computes the same breakdown as a close without
   // touching anything; it's a pure read.
+  // d21, d22, d25 — the eight sections need the customer list (Account type),
+  // the configured tenders and the chart, so the report can name the GL account
+  // each tender posts to. Gathered once rather than at two call sites, because
+  // View Subtotal and the close must never compute different reports.
+  const breakdownExtras = (): BreakdownExtras => ({
+    customers: s.customers,
+    tenderRows: s.tenders,
+    accounts: s.glAccounts,
+    mappings: s.glMappings,
+    createdAt: now(),
+    // The void count's period. See `BreakdownExtras.sinceClosedAt` — this is
+    // an approximation the decision table has not ratified, not an answer.
+    // A-84: only a LIVE batch counts, a retired one being history.
+    sinceClosedAt: s.closeBatches.filter((b) => !b.undoneAt).map((b) => b.at).sort().slice(-1)[0],
+  });
+
   const viewSubtotal: AppContextValue["viewSubtotal"] = () =>
-    computeDayBreakdown(s.sales, s.records, taxCtxFor(null), s.inventory, s.genres, s.sections);
+    computeDayBreakdown(s.sales, s.records, taxCtxFor(null), s.inventory, s.genres, s.sections, breakdownExtras());
 
   // Total Today's Sales — the close is a real state transition (M-03
   // decision 1): every Current Sale becomes Closed and stops being
   // editable, batched under one identifier so it can be undone as a unit.
   const totalTodaysSales: AppContextValue["totalTodaysSales"] = (by) => {
-    const breakdown = computeDayBreakdown(s.sales, s.records, taxCtxFor(null), s.inventory, s.genres, s.sections);
+    const breakdown = computeDayBreakdown(s.sales, s.records, taxCtxFor(null), s.inventory, s.genres, s.sections, breakdownExtras());
     // EVERY Current Sale, Returns included. This read `&& !sale.isReturn`,
     // which contradicted three things at once: M-03 d1 and this function's own
     // comment above ("every Current Sale becomes Closed"), E-06 d8's returns
@@ -3144,7 +3165,23 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
     // — it was simply never handed one.
     const saleIds = s.sales.filter((sale) => sale.state === "Current").map((sale) => sale.id);
     const batchId = uid("batch");
-    const batch: CloseBatch = { id: batchId, at: now(), by, saleIds };
+    // M-03 d13 / A-30 — the summary is STORED on the batch, not recomputed
+    // when someone asks for it again. A-83 stamps the schema version beside
+    // it, so a date-range report summing these knows which sections this batch
+    // can answer for and prints the count of those it cannot rather than
+    // zero-filling them.
+    //
+    // A-84 — a new batch id every close, so this summary is written once and
+    // never rewritten. An undo retires the batch below and keeps its summary
+    // exactly as computed here.
+    const batch: CloseBatch = {
+      id: batchId,
+      at: now(),
+      by,
+      saleIds,
+      summary: breakdown as unknown as CloseBatch["summary"],
+      summaryVersion: SUMMARY_SCHEMA_VERSION,
+    };
 
     // M-07 d7 — the journal is a SECOND thing the close produces, written onto
     // the CloseBatch beside the summary M-03 d13 already stores there. A-67
@@ -3245,6 +3282,10 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
     if (closeUndoRefusal(batch.at.slice(0, 10), s.ledgerSeals, s.ledgerUnseals)) return;
     setS((prev) => ({
       ...prev,
+      // A-84 — RETIRED, not deleted and not recomputed. The batch keeps its
+      // id, timestamp, closing User and the summary it computed, and gains the
+      // undo's actor; re-closing writes a new batch rather than rewriting this
+      // one, so a past day's figures can never move.
       closeBatches: prev.closeBatches.map((b) => (b.id === batchId ? { ...b, undoneAt: now(), undoneBy: by } : b)),
       sales: prev.sales.map((sale) =>
         batch.saleIds.includes(sale.id)

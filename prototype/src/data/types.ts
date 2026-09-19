@@ -363,9 +363,36 @@ export interface CloseBatch {
   at: string;
   by: string;
   saleIds: string[];
+  /**
+   * A-84 — an Undo End of Day RETIRES this batch; it is never deleted and its
+   * `summary` below is never rewritten. Re-closing writes a NEW CloseBatch
+   * with its own id and its own summary, so one calendar day may carry
+   * several and only the one without `undoneAt` is live. Every reader of
+   * `closeBatches` filters on that — a retired batch is history, and nothing
+   * sums it.
+   */
   undoneAt?: string;
   undoneBy?: string;
+  /**
+   * M-03 d13 — the breakdown as computed at close time, stored rather than
+   * recomputed so an undo-and-re-close cycle can never quietly restate a past
+   * day (A-30).
+   *
+   * A-83 — and it is the SCHEMA of every report a date range can show: d27
+   * sums these rather than querying Sales, so a figure the close did not store
+   * is one no range can ever display. `summaryVersion` is what a later reader
+   * keys on, rather than probing for a key it hopes is present (A-43).
+   */
+  summary?: DayBreakdownSnapshot;
+  summaryVersion?: number;
 }
+
+/**
+ * The stored shape of a close's breakdown. Structurally `DayBreakdown` from
+ * `lib/dayBreakdown`, declared here as an opaque record so the data layer does
+ * not depend on the reporting layer; the reporting layer casts it back.
+ */
+export type DayBreakdownSnapshot = Record<string, unknown>;
 
 // ---- Supplier Claims (E-04 §"Supplier claims") ----
 // Distinct from a customer Return (E-06) — this is claiming credit from a
@@ -1117,6 +1144,18 @@ export interface TaxComponent {
   name: string;
   ratePpm: number;
   amount: number;
+  /**
+   * M-03 d20 — the value this tax was actually charged on, which under M-06
+   * d16's `ab+` is NOT the same for both taxes in a cell: `b` is charged on
+   * the subtotal plus `a`, so its base exceeds `a`'s by exactly `a`. The two
+   * are remitted to different authorities, so one shared base would misstate
+   * one of them on the report a shop hands its accountant.
+   *
+   * Optional only because a snapshot taken before this field existed has
+   * none; `resolveLineTax` writes it on everything new, and `dayBreakdown`
+   * recovers it from `amount` and the rate where it is missing.
+   */
+  base?: number;
 }
 
 export interface TaxType {

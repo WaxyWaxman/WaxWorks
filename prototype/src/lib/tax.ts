@@ -102,7 +102,10 @@ export function resolveLineTax(
     const base = i === 1 && compound ? net + first : net;
     const amount = roundHalfAwayFromZero(base * rate);
     if (i === 0) first = amount;
-    out.push({ code: t.code, name: t.name, ratePpm: Math.round(rate * PPM), amount });
+    // `base` rides along for M-03 d20's tax block, which reports the value each
+    // tax was charged on beside the tax taken. Computed here rather than
+    // re-derived by the reader, because THIS is where the compounding is known.
+    out.push({ code: t.code, name: t.name, ratePpm: Math.round(rate * PPM), amount, base });
   });
   return out;
 }

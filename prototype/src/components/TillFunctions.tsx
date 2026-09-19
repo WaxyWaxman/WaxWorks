@@ -5,6 +5,8 @@ import { Modal } from "./Modal";
 import type { JournalBatch, Sale } from "../data/types";
 import type { DayBreakdown } from "../lib/dayBreakdown";
 import { money } from "../lib/money";
+import { DayReport, RangeReportView } from "./DayReport";
+import { computeRangeReport, presetRange, type RangeReport } from "../lib/rangeReport";
 import { resolveScan } from "../lib/resolve";
 import { saleTotals } from "../lib/totals";
 import { datesIn, isImbalanced } from "../lib/journal";
@@ -314,7 +316,21 @@ export function OtherFunctionsModal({ onClose }: { onClose: () => void }) {
       ambiguousTenders: string[];
     };
   } | null>(null);
+  // d27 — the range report is its own view over the same eight sections minus
+  // the listing. Separate state from `breakdown` because it is a different
+  // scope, not a different rendering of the batch in flight.
+  const [range, setRange] = useState<RangeReport | null>(null);
+  // A-84 — a retired batch is history: it keeps its summary and nothing sums
+  // it, and it is not offered for undo a second time.
   const openBatches = app.closeBatches.filter((b) => !b.undoneAt);
+
+  if (range) {
+    return (
+      <Modal title={`Sales — ${range.from} to ${range.to}`} onClose={() => setRange(null)}>
+        <RangeReportView data={range} />
+      </Modal>
+    );
+  }
 
   if (breakdown) {
     if (undoing)
@@ -332,7 +348,7 @@ export function OtherFunctionsModal({ onClose }: { onClose: () => void }) {
 
   return (
       <Modal title={breakdown.closing ? "Today's Sales — Totalled" : "Subtotal"} onClose={onClose}>
-        <BreakdownView data={breakdown.data} />
+        <DayReport data={breakdown.data} />
         {breakdown.closing && (
           <div className="callout ok" style={{ marginTop: "var(--sp-3)" }}>
             Current Sales moved to Closed. Undo from Other Functions if needed.
@@ -364,6 +380,24 @@ export function OtherFunctionsModal({ onClose }: { onClose: () => void }) {
             >
               Total Today's Sales
             </button>
+          </div>
+          {/* d27 — the SECOND entry point. A read: it closes nothing, and it
+              sums closed batches, so the batch in flight is invisible to it.
+              That is why View Subtotal stays beside it rather than being
+              replaced by it. */}
+          <div className="card-body btn-row" style={{ paddingTop: 0 }}>
+            {(["this-month", "last-month", "ytd"] as const).map((preset) => (
+              <button
+                key={preset}
+                className="btn"
+                onClick={() => {
+                  const { from, to } = presetRange(preset, new Date());
+                  setRange(computeRangeReport(app.closeBatches, from, to, new Date().toISOString()));
+                }}
+              >
+                {preset === "this-month" ? "This month" : preset === "last-month" ? "Last month" : "Year to date"}
+              </button>
+            ))}
           </div>
           <div className="card-body xsmall muted" style={{ paddingTop: 0 }}>
             Total Today's Sales moves every Current Sale to Closed — no longer editable except via
@@ -490,167 +524,6 @@ function JournalNotice({
           deposits</em>, and that reconciliation is not reachable until the till offers the configured tenders. Raised
           against E-05.
         </p>
-      )}
-    </div>
-  );
-}
-
-function BreakdownView({ data }: { data: DayBreakdown }) {
-  return (
-    <div className="stack">
-      <table className="data">
-        <tbody>
-          <tr>
-            <td className="muted">Transactions</td>
-            <td className="num">{data.transactionCount}</td>
-          </tr>
-          <tr>
-            <td className="muted">Gross sales</td>
-            <td className="num">{money(data.grossSales)}</td>
-          </tr>
-          <tr>
-            <td className="muted">Returns</td>
-            <td className="num">{money(data.returnsAmount)}</td>
-          </tr>
-          <tr>
-            <td className="muted">Net sales</td>
-            <td className="num">
-              <strong>{money(data.netSales)}</strong>
-            </td>
-          </tr>
-        </tbody>
-      </table>
-
-      <div className="card">
-        <div className="card-head">By Section</div>
-        <div className="card-body" style={{ padding: 0 }}>
-          <table className="data">
-            <tbody>
-              {data.bySection.map((s) => (
-                <tr key={s.label}>
-                  <td>{s.label}</td>
-                  <td className="num">{money(s.amount)}</td>
-                </tr>
-              ))}
-              {data.bySection.length === 0 && (
-                <tr>
-                  <td className="small muted">Nothing sold.</td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
-      </div>
-
-      <div className="card">
-        <div className="card-head">By Tender</div>
-        <div className="card-body" style={{ padding: 0 }}>
-          <table className="data">
-            <tbody>
-              {data.byTender.map((t) => (
-                <tr key={t.label}>
-                  <td>{t.label}</td>
-                  <td className="num">{money(t.amount)}</td>
-                </tr>
-              ))}
-              {/* Money through the tenders that was not a sale, so this
-                  column can be reconciled against net sales rather than
-                  quietly disagreeing with it (M-03 d14). */}
-              {data.giftCardsLoaded !== 0 && (
-                <tr>
-                  <td className="muted">
-                    of which gift cards loaded
-                    <div className="xsmall muted">money in, not a sale — a balance the store now owes</div>
-                  </td>
-                  <td className="num muted">{money(data.giftCardsLoaded)}</td>
-                </tr>
-              )}
-              {/* M-03 d16 — the day's cash movement, net of what left the
-                  drawer. A subtotal beneath the movements rather than one of
-                  them, because d14 keeps every movement in the column above
-                  and this is the figure you count against.
-
-                  NOT a drawer figure, and the wording has to keep saying so:
-                  this flow holds no opening float and runs no
-                  counted-versus-expected comparison, so what it can report is
-                  how much cash MOVED, never how much is in the till. */}
-              {data.cashNet !== null && (
-                <tr>
-                  <td>
-                    <strong>Cash, net</strong>
-                    <div className="xsmall muted">
-                      what the drawer took less what left it — no float, so this is the day's movement rather than
-                      what is in the till
-                    </div>
-                  </td>
-                  <td className="num">
-                    <strong>{money(data.cashNet)}</strong>
-                  </td>
-                </tr>
-              )}
-              {data.byTender.length === 0 && (
-                <tr>
-                  <td className="small muted">Nothing tendered.</td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
-      </div>
-
-      <div className="card">
-        <div className="card-head">Tax</div>
-        <div className="card-body" style={{ padding: 0 }}>
-          <table className="data">
-            <tbody>
-              {data.byTaxLine.map((t) => (
-                <tr key={t.name}>
-                  <td>{t.name}</td>
-                  <td className="num">{money(t.amount)}</td>
-                </tr>
-              ))}
-              {data.byTaxLine.length === 0 && (
-                <tr>
-                  <td className="small muted">No tax collected.</td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
-      </div>
-
-      <div className="card">
-        <div className="card-head">Movements</div>
-        <div className="card-body small stack">
-          <div>Voids: {data.voidCount}</div>
-          <div>Holds created: {data.holdsCreatedCount}</div>
-          <div>Holds cancelled: {data.holdsCancelledCount}</div>
-          {data.payouts.map((p, i) => (
-            <div key={i} className="xsmall muted">
-              Pay-out {p.saleLabel} — {money(p.amount)} — {p.note}
-            </div>
-          ))}
-        </div>
-      </div>
-
-      {data.belowMin.length > 0 && (
-        <div className="card">
-          <div className="card-head">Stock position — below minimum</div>
-          <div className="card-body" style={{ padding: 0 }}>
-            <table className="data">
-              <tbody>
-                {data.belowMin.map((r) => (
-                  <tr key={r.recordId}>
-                    <td className="small">{r.label}</td>
-                    <td className="num small">
-                      {r.onHand} / {r.minOnHand}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
       )}
     </div>
   );
