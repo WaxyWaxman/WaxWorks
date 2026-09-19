@@ -303,7 +303,12 @@ export function SearchModal({ onClose }: { onClose: () => void }) {
 
 export function OtherFunctionsModal({ onClose }: { onClose: () => void }) {
   const app = useApp();
-  const [undoing, setUndoing] = useState<string | null>(null);
+  // The batch awaiting a Manager, and whoever holds the session — `undefined`
+  // when nobody does, which is not a gap: the store then records the
+  // authorizing Manager as the actor too, because with no session open they
+  // are the person standing at the terminal. M-04 d4 gets both names either
+  // way, and the till asks once rather than twice.
+  const [undoing, setUndoing] = useState<{ batchId: string; actor?: string } | null>(null);
   const withActor = useActor();
   const [breakdown, setBreakdown] = useState<{
     closing: boolean;
@@ -324,6 +329,31 @@ export function OtherFunctionsModal({ onClose }: { onClose: () => void }) {
   // it, and it is not offered for undo a second time.
   const openBatches = app.closeBatches.filter((b) => !b.undoneAt);
 
+  // FIRST, above every other view. Undo is reached from the Other Functions
+  // list, where neither `range` nor `breakdown` is set — so a branch nested
+  // under one of those never renders, the button does nothing, and the
+  // pending batch then surfaces this dialog on whatever view opens next.
+  // Cancelling or confirming clears `undoing` and drops back to the list
+  // underneath.
+  if (undoing) {
+    return (
+      <ManagerAuthorize
+        title="Undo End of Day — manager only"
+        reason={
+          "Reopens settled takings: the batch's Sales return to Current (M-03 d4). Manager-only under architecture A-28a." +
+          (undoing.actor
+            ? ` Recorded against ${undoing.actor}, whose session this does not replace (M-04 d3, d4).`
+            : " Nobody is signed in, so this is recorded against you alone (M-04 d4).")
+        }
+        onConfirm={(by) => {
+          app.undoEndOfDay(undoing.batchId, by, undoing.actor);
+          setUndoing(null);
+        }}
+        onCancel={() => setUndoing(null)}
+      />
+    );
+  }
+
   if (range) {
     return (
       <Modal title={`Sales — ${range.from} to ${range.to}`} onClose={() => setRange(null)}>
@@ -333,20 +363,7 @@ export function OtherFunctionsModal({ onClose }: { onClose: () => void }) {
   }
 
   if (breakdown) {
-    if (undoing)
     return (
-      <ManagerAuthorize
-        title="Undo End of Day — manager only"
-        reason="Reopens settled takings: the batch's Sales return to Current (M-03 d4). Manager-only under architecture A-28a."
-        onConfirm={(by) => {
-          app.undoEndOfDay(undoing, by);
-          setUndoing(null);
-        }}
-        onCancel={() => setUndoing(null)}
-      />
-    );
-
-  return (
       <Modal title={breakdown.closing ? "Today's Sales — Totalled" : "Subtotal"} onClose={onClose}>
         <DayReport data={breakdown.data} />
         {breakdown.closing && (
@@ -431,8 +448,18 @@ export function OtherFunctionsModal({ onClose }: { onClose: () => void }) {
                     <button
                       className="btn sm danger"
                       // Manager-only (A-28a, M-03 d4) — it reopens settled takings.
+                      // Reads the session directly rather than going through
+                      // `withActor`: that helper prompts when nobody is signed
+                      // in, which would ask for initials twice for one act. The
+                      // Manager about to authorize IS the actor in that case,
+                      // so there is nothing a first prompt could learn.
                       disabled={sealedWhy !== undefined}
-                      onClick={() => setUndoing(b.id)}
+                      onClick={() =>
+                        setUndoing({
+                          batchId: b.id,
+                          actor: app.sessionUser ? `${app.sessionUser.name} (${app.sessionUser.role})` : undefined,
+                        })
+                      }
                     >
                       Undo
                     </button>

@@ -47,6 +47,7 @@ import {
 import { authorizeManager, requireManager, type ManagerAuth } from "../lib/managerAuth";
 import { buildChart } from "../lib/chart";
 import { buildCloseJournal } from "../lib/closeJournal";
+import { retireCloseBatch, undoLogText, type UndoRecord } from "../lib/closeBatch";
 import { buildAdjustmentJournal, buildInvoiceJournal, buildPaymentJournal } from "../lib/artifactJournals";
 import { isImbalanced } from "../lib/journal";
 // M-08 — the books. Every rule these enforce lives in the lib, never in a
@@ -894,7 +895,12 @@ interface AppContextValue extends AppState {
     unresolved: string[];
     ambiguousTenders: string[];
   };
-  undoEndOfDay: (batchId: string, by: ManagerAuth) => void;
+  /**
+   * M-04 d4 — records both names. `actor` is whoever holds the session; omit
+   * it when nobody does and the authorizing Manager stands in, since they are
+   * then the person at the terminal. The till therefore asks **once**.
+   */
+  undoEndOfDay: (batchId: string, by: ManagerAuth, actor?: string) => void;
   attachCustomer: (saleId: string, customerId: string | null) => void;
   addCustomer: (input: Omit<Customer, "id" | "primaryId" | "balance">) => string;
   updateCustomer: (customerId: string, patch: Partial<Omit<Customer, "id" | "primaryId">>) => void;
@@ -3265,7 +3271,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
     return closeUndoRefusal(batch.at.slice(0, 10), s.ledgerSeals, s.ledgerUnseals);
   };
 
-  const undoEndOfDay: AppContextValue["undoEndOfDay"] = (batchId, byAuth) => {
+  const undoEndOfDay: AppContextValue["undoEndOfDay"] = (batchId, byAuth, actor) => {
     // §6 — an M function resolves the Manager ITSELF, in the same
     // transaction. The brand proves the check passed when the id was
     // minted; this proves it still holds now, so a demotion between the
@@ -3280,16 +3286,28 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
     // M-03's Undo End of Day, which is the one reversal in this system that
     // does not post forward."
     if (closeUndoRefusal(batch.at.slice(0, 10), s.ledgerSeals, s.ledgerUnseals)) return;
+    // M-04 d4 — BOTH names. `by` is the Manager who authorized; the actor is
+    // whoever was at the terminal. This recorded only `by`, so the one surface
+    // that could say who reopened the day named the person who merely allowed
+    // it — while the dialog's own copy promised both were being kept.
+    //
+    // **The Manager stands in as actor when nobody is signed in**, rather than
+    // the till asking twice. §6 puts `p_actor_user_id` on every function and
+    // `p_manager_user_id` only on the manager-only ones, so the actor is the
+    // baseline and the Manager doing this alone is genuinely both. Defaulted
+    // HERE rather than on the screen: `by` is the name re-resolved at the
+    // write, so the stand-in can never be a label the prompt merely displayed.
+    const rec: UndoRecord = { manager: by, actor: actor ?? by, at: now() };
     setS((prev) => ({
       ...prev,
       // A-84 — RETIRED, not deleted and not recomputed. The batch keeps its
       // id, timestamp, closing User and the summary it computed, and gains the
       // undo's actor; re-closing writes a new batch rather than rewriting this
       // one, so a past day's figures can never move.
-      closeBatches: prev.closeBatches.map((b) => (b.id === batchId ? { ...b, undoneAt: now(), undoneBy: by } : b)),
+      closeBatches: prev.closeBatches.map((b) => (b.id === batchId ? retireCloseBatch(b, rec) : b)),
       sales: prev.sales.map((sale) =>
         batch.saleIds.includes(sale.id)
-          ? { ...sale, state: "Current", batchId: undefined, log: [...sale.log, { at: now(), text: `Batch ${batchId} undone by ${by} — back to Current` }] }
+          ? { ...sale, state: "Current", batchId: undefined, log: [...sale.log, { at: rec.at, text: undoLogText(batchId, rec) }] }
           : sale,
       ),
     }));

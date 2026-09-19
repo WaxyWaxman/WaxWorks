@@ -372,7 +372,20 @@ export interface CloseBatch {
    * sums it.
    */
   undoneAt?: string;
+  /** The **Manager** who authorized the undo (M-03 d4, A-28a). */
   undoneBy?: string;
+  /**
+   * The **Employee** it was performed for — M-04 d4, *"both the acting
+   * Employee and the authorising Manager are recorded"*, which d3's
+   * in-place override makes two different people by design.
+   *
+   * Beside `undoneBy` rather than folded into it: the Manager's own undo is
+   * the case that makes the distinction visible, since the two names are then
+   * the same and the record says so rather than leaving a reader to guess
+   * whether anyone else was there. Written only with `undoneAt`, and set by
+   * `retireCloseBatch` in `lib/closeBatch`.
+   */
+  undoneActor?: string;
   /**
    * M-03 d13 — the breakdown as computed at close time, stored rather than
    * recomputed so an undo-and-re-close cycle can never quietly restate a past
