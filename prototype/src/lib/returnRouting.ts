@@ -39,30 +39,133 @@ export interface AuthorizingManager {
 }
 
 /**
- * Whether the Return itself may be routed at all, before asking who is asking.
+ * Whether the Return itself may have its stock disposition chosen, before
+ * asking who is asking.
  *
- * d20: a copy is routed only **after the Return is finished**. d22 narrows it —
- * **and never once the Return is voided**. The finished test is the Sale
- * number, which a void RETAINS ([E-05](docs/flows/E-05-sell-a-record.md) d31),
- * so a voided Return went on reading as finished and kept its Route control.
- * A void says the return did not happen: the money went back and the customer
- * took their disc away, so there is no copy in the shop to route.
+ * d29 REVERSES d20's direction, and the reversal is the whole of this change.
+ * The disposition is chosen **while the Return is still a draft**, and
+ * finishing refuses while any returned line is undecided (see
+ * `finishReturnRefusal`). So the refusal here is no longer *not yet finished*
+ * but *already finished*: at finish the choice was carried out, and a finished
+ * artifact is immutable like every other one here (M-07 d8 — a correction
+ * posts forward, never back onto the original).
  *
- * d23: `Closed` is fine. The rule is *finished and not voided*, never *only
- * while `Current`* — a Return taken at five o'clock is looked at the next
- * morning, and the second wording would strand every copy that crossed a close.
+ * WHAT d20 WAS PROTECTING IS KEPT, and it is not this function that keeps it.
+ * d20 forbade routing on a draft because routing one MINTED a sellable copy at
+ * a grade and price the Employee chose, with no refund paid and no tendered
+ * document. d29 keeps that closed by separating the CHOICE from the EFFECTS:
+ * choosing records `routedTo` on the line and mints nothing, and the mint, the
+ * shelf move and the write-off adjustment all run inside the finish act. An
+ * abandoned draft therefore leaves no copy behind, which is the invariant
+ * E-06-T23 exists to hold.
+ *
+ * d22 survives untouched and is checked FIRST, because it is the more specific
+ * refusal and the more useful sentence: a void says the return did not happen.
+ * Under d30 a void also UN-ROUTES, so there is genuinely nothing left to
+ * re-route, and the finished test is still the Sale number, which a void
+ * RETAINS ([E-05](docs/flows/E-05-sell-a-record.md) d31).
+ *
+ * d23 is retired as moot by d29: routing can no longer outlive the close
+ * because it can no longer outlive the document.
  */
 export function routeDocumentRefusal(sale: {
   saleNumber?: number;
   state: SaleState;
 }): string | undefined {
-  if (!sale.saleNumber) {
-    return "A returned copy is routed after the Return is finished (E-06 decision 20).";
-  }
   if (sale.state === "Void") {
     return "This Return was voided — the money went back and the copy went with the customer, so there is nothing to route (E-06 decision 22).";
   }
+  if (sale.saleNumber) {
+    return "This Return is finished — its stock disposition was chosen and carried out when it was finished, and a finished Return is not re-routed (E-06 decision 29).";
+  }
   return undefined;
+}
+
+/**
+ * A returned line as the finish gate sees it.
+ */
+export interface ReturnLineDisposition {
+  qty: number;
+  inventoryItemId?: string;
+  routedTo?: ReturnRoute;
+  /** What to call this line in a refusal — the Record, as the counter reads it. */
+  describe: string;
+}
+
+/**
+ * Why finishing a Return is refused, or `undefined`.
+ *
+ * d29 — a Return cannot be finished until every returned line carries a stock
+ * disposition. This is the gate the decision adds, and the reason it is worth
+ * adding: before it, a finished Return could leave the counter with its copy
+ * in limbo — off the shelf per the Requirements and not yet anywhere else,
+ * with the customer gone and nothing in the flow saying where an Employee
+ * would ever see it again.
+ *
+ * IT NAMES THE LINE rather than reporting that something is incomplete. A
+ * Return with four lines and one undecided is the case that matters, and
+ * "something is missing" sends the Employee hunting.
+ *
+ * IN THE LIB AND NOT THE SCREEN (A-4, A-48). A disabled Finish button is not a
+ * gate — E-06-T22 asserts the refusal on the write path for the same reason
+ * A-82 says a screen that declines to offer a higher figure is not a cap.
+ *
+ * Only lines that took stock in are gated: a negative-quantity line carrying an
+ * `inventoryItemId`. A refund-only line has no copy to dispose of.
+ */
+export function finishReturnRefusal(
+  lines: ReadonlyArray<ReturnLineDisposition>,
+): string | undefined {
+  const undecided = lines.filter((l) => l.qty < 0 && l.inventoryItemId && !l.routedTo);
+  if (undecided.length === 0) return undefined;
+  const first = undecided[0].describe;
+  if (undecided.length === 1) {
+    return `${first} has no stock disposition — route it before finishing this Return (E-06 decision 29).`;
+  }
+  return `${undecided.length} returned lines have no stock disposition, starting with ${first} — route them before finishing this Return (E-06 decision 29).`;
+}
+
+/**
+ * Why voiding a Return is refused on account of its stock, or `undefined`.
+ *
+ * d30 SUPERSEDES d10's blanket refusal. d10 refused a void while any returned
+ * copy was routed, which was nearly harmless while routing was optional and
+ * total once d29 makes every finished Return a routed one: it would have
+ * forbidden every void, and with it every EDIT, which
+ * [E-05](docs/flows/E-05-sell-a-record.md) d31 defines as a Void plus a
+ * re-ring. Losing the ability to CANCEL a Return was arguable; losing the
+ * ability to CORRECT one was not, and nothing had noticed the two travel
+ * together.
+ *
+ * THE CONDITION IS STATED AS WHAT MUST BE TRUE, not as what is forbidden: the
+ * copy must still be as the routing left it. d10's reasoning — "putting it
+ * back is a different operation from voiding the paperwork" — is true exactly
+ * when somebody else has acted on the copy since, and d10 read that as always.
+ *
+ * The refusal NAMES THE COPY AND WHAT HAPPENED TO IT. "A copy is routed" tells
+ * a counter nothing it can act on; "copy 200000090001 has been sold since" does.
+ *
+ * `copy` is whichever copy the routing PRODUCED — the copy itself where it went
+ * back to the shelf or was written off, and the MINTED one where the route was
+ * a re-grade or d24's unmatched arrival.
+ */
+export function unrouteRefusal(
+  route: ReturnRoute,
+  copy: { internalBarcode: string; status: ItemStatus } | undefined,
+): string | undefined {
+  if (!copy) {
+    return "The copy this Return routed cannot be found, so its routing cannot be undone (E-06 decision 30).";
+  }
+  if (copy.status === statusAfterRoute(route)) return undefined;
+  const became =
+    copy.status === "sold"
+      ? "has been sold since"
+      : copy.status === "held"
+        ? "is reserved on another Sale"
+        : copy.status === "written_off"
+          ? "has been written off since"
+          : "is back on the shelf";
+  return `Copy ${copy.internalBarcode} ${became} — it is no longer as the routing left it, so this Return cannot be voided (E-06 decision 30).`;
 }
 
 export function routeStockRefusal(

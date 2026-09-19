@@ -31,13 +31,15 @@ import {
 } from "../lib/totals";
 import { clearedAgainst, entryIsCleared, unclearRefusal } from "../lib/payables";
 import {
+  finishReturnRefusal,
+  unrouteRefusal,
   regradeCostRefusal,
   regradeShortfall,
   routeDocumentRefusal,
   routeStockRefusal,
   statusAfterRoute,
 } from "../lib/returnRouting";
-import { requireManager, type ManagerAuth } from "../lib/managerAuth";
+import { authorizeManager, requireManager, type ManagerAuth } from "../lib/managerAuth";
 import { buildChart } from "../lib/chart";
 import { buildCloseJournal } from "../lib/closeJournal";
 import { buildAdjustmentJournal, buildInvoiceJournal, buildPaymentJournal } from "../lib/artifactJournals";
@@ -908,12 +910,45 @@ interface AppContextValue extends AppState {
   addTender: (saleId: string, t: Omit<Tender, "id">) => void;
   removeTender: (saleId: string, tenderId: string) => void;
   completeSale: (saleId: string) => number;
+  /**
+   * E-06 d29 — record the stock disposition on a returned line, on the draft.
+   * Validates the write-off gate (A-28a) and the re-grade cap (A-82) here, at
+   * the moment of choosing, and mints nothing.
+   */
+  chooseReturnRoute: (
+    saleId: string,
+    lineId: string,
+    to: "sellable" | "regrade" | "writeoff",
+    opts?: {
+      grade?: Grade;
+      price?: number;
+      reason?: AdjustmentReason;
+      assessedCost?: number;
+      byAuth?: ManagerAuth;  // the live authorization, checked now
+    },
+  ) => { chosen: boolean; refusal?: string };
+  /**
+   * E-06 d29 — finish a Return: refuse while any returned line is undecided,
+   * otherwise carry out every chosen disposition and tender the document as
+   * one act. Returns the Sale number, or the refusal.
+   */
+  finishReturn: (saleId: string) => { saleNumber?: number; refusal?: string };
+  /** E-06 d29 — why this Return cannot be finished yet, for the screen to show. */
+  finishReturnBlocked: (saleId: string) => string | undefined;
+  /** E-06 d30 — why the stock refuses a void, naming the copy. A pure read. */
+  voidStockRefusal: (saleId: string) => string | undefined;
   holdSale: (saleId: string) => string;
   // E-05 d31 — refuses unless the tenders net zero, returning how much is
   // still on the Sale so the caller can offer to refund it, move it onto the
   // Customer's account, or remove the line. E-06 d10 — also refuses while a
   // Return has routed stock, since putting that back is its own job.
-  voidSale: (saleId: string) => { voided: boolean; outstanding: number; routedCopies: number };
+  voidSale: (saleId: string) => {
+    voided: boolean;
+    outstanding: number;
+    routedCopies: number;
+    /** E-06 d30 — why the stock refuses the void, naming the copy. */
+    refusal?: string;
+  };
   cancelHold: (saleId: string) => void;
   releaseHoldLine: (itemId: string) => { holdRef: string; holdClosed: boolean } | null;
   forceUnlockSale: (saleId: string) => void;
@@ -2621,9 +2656,171 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
       };
     });
 
+  /**
+   * E-06 d29 — how a returned line is described in a refusal. The Record as
+   * the counter reads it, because "line 3" means nothing across the counter.
+   */
+  const describeReturnLine = (l: { inventoryItemId?: string }) => {
+    const item = s.inventory.find((i) => i.id === l.inventoryItemId);
+    const rec = item && s.records.find((r) => r.id === item.recordId);
+    return rec ? `${rec.artist} — ${rec.title}` : "A returned copy";
+  };
+
+  /** E-06 d29 — the finish gate, as the lib states it. */
+  const returnFinishRefusal = (sale: Sale | undefined) =>
+    sale
+      ? finishReturnRefusal(
+          sale.lines.map((l) => ({
+            qty: l.qty,
+            inventoryItemId: l.inventoryItemId,
+            routedTo: l.routedTo,
+            describe: describeReturnLine(l),
+          })),
+        )
+      : undefined;
+
+  const finishReturnBlocked: AppContextValue["finishReturnBlocked"] = (saleId) =>
+    returnFinishRefusal(s.sales.find((x) => x.id === saleId));
+
+  // E-06 d30 — the same test `voidSale` applies, asked without writing. One
+  // definition, two callers: the modal shows it and the write path enforces it.
+  const voidStockRefusal: AppContextValue["voidStockRefusal"] = (saleId) =>
+    (s.sales.find((x) => x.id === saleId)?.lines ?? [])
+      .filter((l) => l.stockRouted && l.routedTo)
+      .map((l) =>
+        unrouteRefusal(
+          l.routedTo!,
+          s.inventory.find((i) => i.id === (l.routedItemId ?? l.inventoryItemId)),
+        ),
+      )
+      .find(Boolean);
+
+  const chooseReturnRoute: AppContextValue["chooseReturnRoute"] = (saleId, lineId, to, opts) => {
+    const doc = s.sales.find((x) => x.id === saleId);
+    // d29, d22 — the DOCUMENT first. Refused here and not merely by hiding the
+    // control (A-4, A-48): a second caller reaches this whatever the screen
+    // renders, which is how the voided-Return hole was found the first time.
+    const docRefusal = doc
+      ? routeDocumentRefusal(doc)
+      : "That Return no longer exists.";
+    if (docRefusal) return { chosen: false, refusal: docRefusal };
+
+    // A-81, A-28a — the write-off route is manager-only, and it is gated at
+    // the moment of CHOOSING because that is now the moment the Employee
+    // performs it. Re-checked again at finish, when the effect actually runs.
+    const mgr = opts?.byAuth ? requireManager(s.users, opts.byAuth) : undefined;
+    const by = mgr?.ok ? mgr.name : undefined;
+    const stockRefusal = routeStockRefusal(
+      to,
+      mgr?.ok ? { role: "Manager", active: true, name: by! } : undefined,
+    );
+    if (stockRefusal) return { chosen: false, refusal: stockRefusal };
+
+    const line = doc!.lines.find((l) => l.id === lineId);
+    const soldCopy = s.inventory.find((i) => i.id === line?.inventoryItemId);
+    // A-82 / d19 — the cap is applied when the figure is entered, which under
+    // d29 is on the draft. d26 — an UNMATCHED copy has no prior cost to cap
+    // against and is booked at the refund paid, so the cap does not reach it.
+    if (to === "regrade" && !line?.unmatchedReturn) {
+      const costRefusal = regradeCostRefusal(
+        opts?.assessedCost ?? soldCopy?.cost ?? 0,
+        soldCopy?.cost ?? 0,
+      );
+      if (costRefusal) return { chosen: false, refusal: costRefusal };
+    }
+
+    setS((prev) => ({
+      ...prev,
+      sales: prev.sales.map((x) =>
+        x.id === saleId
+          ? {
+              ...x,
+              lines: x.lines.map((l) =>
+                l.id === lineId
+                  ? {
+                      ...l,
+                      // THE CHOICE ONLY. No mint, no status change, no journal
+                      // — those are the finish act's (d29). An abandoned draft
+                      // therefore leaves no copy behind, which is the loss
+                      // retired d20 existed to close.
+                      routedTo: to,
+                      routeChoice: {
+                        grade: opts?.grade,
+                        price: opts?.price,
+                        reason: opts?.reason,
+                        assessedCost: opts?.assessedCost,
+                        authorizedByUserId: mgr?.ok ? opts?.byAuth?.userId : undefined,
+                      },
+                    }
+                  : l,
+              ),
+              log: [
+                ...x.log,
+                {
+                  at: now(),
+                  text: by
+                    ? `Stock disposition chosen → ${to} (${opts?.reason ?? ""}) — authorized by ${by}`
+                    : `Stock disposition chosen → ${to}`,
+                },
+              ],
+            }
+          : x,
+      ),
+    }));
+    return { chosen: true };
+  };
+
+  /** A-28a — turn a stored User id back into a live authorization, or nothing. */
+  const reauthorize = (userId?: string) => {
+    if (!userId) return undefined;
+    const res = authorizeManager(s.users, userId);
+    return res.ok ? res.auth : undefined;
+  };
+
+  const finishReturn: AppContextValue["finishReturn"] = (saleId) => {
+    const sale = s.sales.find((x) => x.id === saleId);
+    // d29 — THE GATE. On the write path, not on a disabled button: E-06-T22
+    // asserts exactly this, for the reason A-82 gives about the re-grade cap.
+    const refusal = returnFinishRefusal(sale);
+    if (refusal) return { refusal };
+
+    // d29 — the effects run inside the finish act. They are applied here,
+    // immediately before the document takes its number, rather than strictly
+    // after the tenders settle: from the counter it is one press, and the
+    // guarantee that matters holds either way — nothing exists on a draft, and
+    // everything exists once the Return is finished. Applying them while the
+    // document is still a draft is also what `routeDocumentRefusal` now
+    // permits, so the write path stays honest about what it is doing.
+    for (const l of sale?.lines ?? []) {
+      if (l.qty < 0 && l.inventoryItemId && l.routedTo && !l.stockRouted) {
+        routeReturnLine(
+          saleId,
+          l.id,
+          l.inventoryItemId,
+          l.routedTo,
+          l.routeChoice?.grade,
+          l.routeChoice?.price,
+          l.routeChoice?.reason,
+          // A-28a — RE-AUTHORIZE from the id rather than replaying a brand the
+          // draft carried. A Manager deactivated between choosing and
+          // finishing is refused here, which is the check §6 puts at the
+          // moment of the write.
+          reauthorize(l.routeChoice?.authorizedByUserId),
+          l.routeChoice?.assessedCost,
+        );
+      }
+    }
+    return { saleNumber: completeSale(saleId) };
+  };
+
   const completeSale: AppContextValue["completeSale"] = (saleId) => {
     const num = s.nextSaleNumber;
     const sale = s.sales.find((x) => x.id === saleId);
+    // E-06 d29 — a Return cannot be finished with a returned line undecided.
+    // Guarded HERE as well as in `finishReturn`, because this is the function
+    // the till calls and a gate only one caller respects is not a gate
+    // (A-4, A-48). Returns 0, which is not a Sale number.
+    if (sale?.isReturn && returnFinishRefusal(sale)) return 0;
     setS((prev) => {
       let giftCards = prev.giftCards;
       let customers = prev.customers;
@@ -2753,14 +2950,72 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
       return { voided: false, outstanding: 0, routedCopies: 0 };
     }
     const outstanding = tenderedTotal(sale);
-    // E-06 d10 — a routed copy is already back on the shelf (or re-graded, or
-    // written off), and putting it back where it came from is a different
-    // operation from voiding the paperwork. Void refuses while any line on a
-    // Return is routed rather than quietly leaving stock in the wrong place.
-    const routedCopies = sale.lines.filter((l) => l.stockRouted).length;
-    if (routedCopies > 0) return { voided: false, outstanding, routedCopies };
+    // E-06 d30 SUPERSEDES d10's blanket refusal. d10 refused while any copy
+    // was routed, which was nearly harmless while routing was optional and
+    // TOTAL once d29 makes every finished Return a routed one — it would have
+    // forbidden every void, and with it every Edit (E-05 d31). So a void now
+    // UN-ROUTES, and refuses only while the copy the routing produced is no
+    // longer as the routing left it. The test and the sentence live in
+    // lib/returnRouting.ts (A-4, A-48).
+    const routedLines = sale.lines.filter((l) => l.stockRouted && l.routedTo);
+    const stockRefusal = routedLines
+      .map((l) =>
+        unrouteRefusal(
+          l.routedTo!,
+          s.inventory.find((i) => i.id === (l.routedItemId ?? l.inventoryItemId)),
+        ),
+      )
+      .find(Boolean);
+    if (stockRefusal) {
+      return { voided: false, outstanding, routedCopies: routedLines.length, refusal: stockRefusal };
+    }
     if (Math.abs(outstanding) > 0.005) return { voided: false, outstanding, routedCopies: 0 };
     setS((prev) => {
+      // E-06 d30 — undo each routing as the mirror of how it was done. A
+      // MINTED copy (a re-grade, or d24's unmatched arrival) is removed and
+      // the pointer on the copy it came from cleared; a copy that went back to
+      // the shelf or was written off returns to `sold`, which is where the
+      // Return found it.
+      const mintedToDrop = new Set(
+        routedLines
+          .filter((l) => l.routedItemId && l.routedItemId !== l.inventoryItemId)
+          .map((l) => l.routedItemId!),
+      );
+      const restoreToSold = new Set(
+        routedLines
+          .filter((l) => !l.routedItemId || l.routedItemId === l.inventoryItemId)
+          .map((l) => l.inventoryItemId!)
+          .filter(Boolean),
+      );
+      // M-07 d8 — a write-off's reason-coded adjustment is reversed by POSTING
+      // FORWARD, dated the void, never by editing the original journal.
+      const writeOffReversals = routedLines
+        .filter((l) => l.routedTo === "writeoff" && l.routeChoice?.reason)
+        .map((l) => {
+          const copy = prev.inventory.find((i) => i.id === l.inventoryItemId);
+          if (!copy?.cost) return null;
+          const built = buildAdjustmentJournal({
+            id: uid("adj"),
+            reason: l.routeChoice!.reason!,
+            cost: copy.cost,
+            businessDate: now(),
+            writtenAt: now(),
+            memo: `Void of return — write-off reversed (${l.routeChoice!.reason})`,
+            accounts: prev.glAccounts,
+            mappings: prev.glMappings,
+            currency: prev.homeCurrency,
+            location: prev.storeDetails.storeId,
+          });
+          // The reversal is the same journal with its sides swapped. Built
+          // fresh rather than looked up, so it cannot be thrown by an original
+          // that was written under a mapping since repointed (M-07 step 5).
+          return {
+            ...built.batch,
+            lines: built.batch.lines.map((jl) => ({ ...jl, debit: jl.credit, credit: jl.debit })),
+          };
+        })
+        .filter(Boolean);
+
       // Only copies this Sale consumed come back. A Return's lines are
       // negative quantities against copies that are already sold — there is
       // nothing to give back, and marking them sellable would put stock on
@@ -2775,7 +3030,19 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
       );
       return {
         ...prev,
+        journals: [...(writeOffReversals as JournalBatch[]), ...prev.journals],
         inventory: prev.inventory
+          // E-06 d30 — a copy minted by the routing is removed outright. It
+          // exists only because the Return happened, and the void says it did
+          // not.
+          .filter((i) => !mintedToDrop.has(i.id))
+          .map((i) =>
+            restoreToSold.has(i.id)
+              ? { ...i, status: "sold" as const, heldByCustomerId: undefined }
+              : mintedToDrop.has(i.regradedIntoItemId ?? "")
+                ? { ...i, regradedIntoItemId: undefined }
+                : i,
+          )
           // An unreconciled oversold copy never became real stock — voiding
           // the Sale that invented it un-invents it, rather than leaving a
           // phantom debt a later receipt would wrongly pay down.
@@ -2809,8 +3076,23 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
           const text =
             "Voided at zero" +
             (returned ? ` — ${returned} cop${returned === 1 ? "y" : "ies"} returned to stock` : "") +
+            (routedLines.length
+              ? ` — ${routedLines.length} returned cop${routedLines.length === 1 ? "y" : "ies"} un-routed`
+              : "") +
             (x.saleNumber ? `${returned ? "," : " —"} Sale number ${x.saleNumber} retained` : "");
-          return { ...x, state: "Void", log: [...x.log, { at: now(), text }] };
+          return {
+            ...x,
+            state: "Void",
+            // E-06 d30 — the routing is undone, so the lines stop claiming it.
+            // E-06 d22 then refuses any attempt to route again, which is what
+            // E-06-T26 holds.
+            lines: x.lines.map((l) =>
+              l.stockRouted
+                ? { ...l, stockRouted: false, routedItemId: undefined }
+                : l,
+            ),
+            log: [...x.log, { at: now(), text }],
+          };
         }),
       };
     });
@@ -3523,7 +3805,18 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
           ? {
               ...sale,
               lines: sale.lines.map((l) =>
-                l.id === lineId ? { ...l, stockRouted: true, routedTo: to } : l,
+                l.id === lineId
+                  ? {
+                      ...l,
+                      stockRouted: true,
+                      routedTo: to,
+                      // E-06 d30 — the copy this routing PRODUCED, so a void
+                      // can ask whether it is still as the routing left it.
+                      // For a re-grade or d24's unmatched arrival that is the
+                      // MINTED copy; otherwise the copy on the line.
+                      routedItemId: mintsForReturn ? mintedId : itemId,
+                    }
+                  : l,
               ),
               log: [
                 ...sale.log,
@@ -4997,6 +5290,10 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
       reserve,
       setCopyPrice,
       routeReturnLine,
+      chooseReturnRoute,
+      finishReturn,
+      finishReturnBlocked,
+      voidStockRefusal,
       toggleProvider,
       invoiceFor,
       startInvoice,

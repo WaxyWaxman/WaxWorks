@@ -80,7 +80,13 @@ function ReturnEditor({ saleId }: { saleId: string }) {
   // d22 — a void RETAINS the Sale number (E-05 d31), so `finished` alone kept
   // the Route control alive on a voided Return. The store refuses either way;
   // this stops offering something that would be refused.
-  const routable = finished && sale.state !== "Void";
+  // E-06 d29 — the disposition is chosen WHILE THE RETURN IS A DRAFT, which
+  // is the reversal of d20. `finished` was the test; now it is the bar.
+  const routable = !finished;
+  // d29 — why Finish is refused, straight from the store's own gate. Shown
+  // here so the counter can act on it; ENFORCED there, because a disabled
+  // button is not a gate (A-4, A-48).
+  const finishBlocked = app.finishReturnBlocked(sale.id);
   const latestLog = sale.log.length ? sale.log[sale.log.length - 1] : null;
 
   return (
@@ -187,10 +193,13 @@ function ReturnEditor({ saleId }: { saleId: string }) {
                           <span className="badge ok">{l.routedTo}</span>
                         ) : routable ? (
                           <button
-                            className="btn sm"
+                            className={l.routedTo ? "btn sm" : "btn sm primary"}
                             onClick={() => setRouteItem({ lineId: l.id, itemId: l.inventoryItemId! })}
                           >
-                            Route stock →
+                            {/* d29 — chosen, but not yet carried out. The copy
+                                does not exist and nothing has moved: the
+                                effects run inside the finish act. */}
+                            {l.routedTo ? `${l.routedTo} — change` : "Route stock →"}
                           </button>
                         ) : (
                           // E-06 d20 — step 6 follows step 5 in time, not just on
@@ -199,8 +208,26 @@ function ReturnEditor({ saleId }: { saleId: string }) {
                           // with no refund paid and no tendered document — and the
                           // draft could not then be cleaned up, because d10's void
                           // refusal fires on a routed copy and stranded it.
-                          <span className="muted xsmall" title="E-06 decision 20 — finish the Return first">
-                            after finishing
+                          //
+                          // d29 REVERSES THE MOMENT and keeps the protection:
+                          // the choice is made on the draft, the effects run at
+                          // finish, so an abandoned draft still mints nothing.
+                          // Once finished there is nothing left to choose.
+                          // d30 — a void UN-ROUTES, so the column stops
+                          // claiming the disposition happened. The choice is
+                          // still shown, because what was decided is part of
+                          // the record; what changed is that it was undone.
+                          <span
+                            className={sale.state === "Void" ? "badge" : "badge ok"}
+                            title={
+                              sale.state === "Void"
+                                ? "E-06 decision 30 — the void un-routed this copy"
+                                : "E-06 decision 29 — carried out when the Return was finished"
+                            }
+                          >
+                            {sale.state === "Void"
+                              ? `${l.routedTo ?? "—"} — un-routed`
+                              : (l.routedTo ?? "—")}
                           </span>
                         )
                       ) : (
@@ -356,7 +383,7 @@ function ReturnEditor({ saleId }: { saleId: string }) {
 
           {!finished && (
             <div className="xsmall muted">
-              Returned stock isn't back on the shelf until routed (E-06 step 6). Refund amount and
+              Returned stock isn't back on the shelf until the Return is finished (E-06 step 6, decision 29). Refund amount and
               disposition are independent — full refund + write-off is a valid combination.
             </div>
           )}
@@ -385,16 +412,25 @@ function ReturnEditor({ saleId }: { saleId: string }) {
 
         {!finished && (
           <div className="till-money-foot">
+            {/* d29 — the gate, said out loud and naming the line. The store
+                refuses regardless of what this renders (A-4, A-48); showing it
+                is so the Employee knows which disc to look at rather than
+                finding a dead button. */}
+            {finishBlocked && (
+              <div className="xsmall muted till-finish-why">{finishBlocked}</div>
+            )}
             <button
               className="btn primary till-finish"
-              // d20 — NOT gated on unrouted copies. Requiring routing before
-              // Finish is what made d10 a dead letter: it describes voiding a
-              // Return "while its stock is still unrouted", and a Return that
-              // could not be finished until routed had no such state.
-              disabled={sale.lines.length === 0 || Math.abs(due) > 0.001}
+              // d29 — Finish IS now gated on the stock disposition, reversing
+              // d20. d10's dead-letter problem is answered by d30 instead: a
+              // void un-routes rather than refusing, so voiding a Return stays
+              // reachable and E-05 d31's Edit with it.
+              disabled={sale.lines.length === 0 || Math.abs(due) > 0.001 || !!finishBlocked}
               onClick={() => {
-                app.completeSale(sale.id);
-                setReceipt(true);
+                const res = app.finishReturn(sale.id);
+                // The store decides. A refusal leaves the Return open saying
+                // why, rather than a receipt for something that did not happen.
+                if (res.saleNumber) setReceipt(true);
               }}
             >
               FINISH RETURN
@@ -769,8 +805,10 @@ function AddReturnedItem({ saleId, onClose }: { saleId: string; onClose: () => v
             </label>
 
             <div className="callout">
-              After tendering the refund you'll route this copy: back to sellable, re-graded as its
-              own InventoryItem, or written off.
+              {/* d29 — this used to read "after tendering the refund you'll
+                  route this copy", which was d20's order and is now backwards. */}
+              You'll route this copy before finishing: back to sellable, re-graded as its own
+              InventoryItem, or written off. The Return won't finish until you have.
             </div>
           </>
         )}
@@ -814,20 +852,19 @@ function RouteStock({
   const [authorizing, setAuthorizing] = useState(false);
 
   const apply = (by?: ManagerAuth) => {
-    const res = app.routeReturnLine(
-      saleId,
-      lineId,
-      itemId,
-      mode,
-      mode === "regrade" ? grade : undefined,
-      mode === "regrade" ? Number(price) || 0 : undefined,
-      mode === "writeoff" ? reason : undefined,
-      by,
-      mode === "regrade" ? Number(cost) || 0 : undefined,
-    );
+    // d29 — RECORD THE CHOICE. Nothing is minted, no status moves and no
+    // journal is written: all of that runs inside the finish act. What the
+    // Employee does here is decide, and what the store stores is the decision.
+    const res = app.chooseReturnRoute(saleId, lineId, mode, {
+      grade: mode === "regrade" ? grade : undefined,
+      price: mode === "regrade" ? Number(price) || 0 : undefined,
+      reason: mode === "writeoff" ? reason : undefined,
+      assessedCost: mode === "regrade" ? Number(cost) || 0 : undefined,
+      byAuth: by,
+    });
     // The store is the one that decides. If it refused, the modal stays open
     // saying why rather than closing on a write that never happened.
-    if (res.routed) onClose();
+    if (res.chosen) onClose();
     else setCostRefusal(res.refusal ?? null);
     return res;
   };

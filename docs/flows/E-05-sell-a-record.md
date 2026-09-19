@@ -161,6 +161,19 @@ Held copies count against **available** stock but remain on hand.
 
 ## Inherited from other flows
 
+**From [E-06](E-06-process-a-return.md) decision 30:**
+
+- **Decision 31's Void — and therefore its Edit — gains a second refusal on a Return, and it is not about the
+  money.** d31's zero-tender gate is untouched and **still fires first**: a Return whose refund has not been
+  collected back cannot be voided, which is why a void has never been a route to chasing money that has already
+  left the till. What [E-06](E-06-process-a-return.md) decision 30 adds is a **stock** condition on top of it —
+  a void undoes the Return's routing, and refuses while the copy that routing produced is **no longer as the
+  routing left it** (sold again, reserved, or adjusted since), naming that copy. **The reason it matters here
+  rather than only there:** d31 defines *Edit* as a Void plus a re-ring, so this refusal governs correcting a
+  mis-rung Return as well as cancelling one, and a reader of d31 would not otherwise learn that the two travel
+  together. The undo is **manager-only where the routing was** — a written-off copy
+  ([architecture](../architecture.md) A-81, A-28a).
+
 **From [M-08](M-08-general-ledger.md):**
 
 - **A gift card expiry may not be added without reopening [M-08](M-08-general-ledger.md) d33 in the
