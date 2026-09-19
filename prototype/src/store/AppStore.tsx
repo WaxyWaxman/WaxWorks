@@ -896,11 +896,11 @@ interface AppContextValue extends AppState {
     ambiguousTenders: string[];
   };
   /**
-   * M-04 d4 — takes the **acting Employee** as well as the authorizing
-   * Manager, because d3's override happens in place without displacing their
-   * session, so both belong on the record.
+   * M-04 d4 — records both names. `actor` is whoever holds the session; omit
+   * it when nobody does and the authorizing Manager stands in, since they are
+   * then the person at the terminal. The till therefore asks **once**.
    */
-  undoEndOfDay: (batchId: string, by: ManagerAuth, actor: string) => void;
+  undoEndOfDay: (batchId: string, by: ManagerAuth, actor?: string) => void;
   attachCustomer: (saleId: string, customerId: string | null) => void;
   addCustomer: (input: Omit<Customer, "id" | "primaryId" | "balance">) => string;
   updateCustomer: (customerId: string, patch: Partial<Omit<Customer, "id" | "primaryId">>) => void;
@@ -3286,12 +3286,18 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
     // M-03's Undo End of Day, which is the one reversal in this system that
     // does not post forward."
     if (closeUndoRefusal(batch.at.slice(0, 10), s.ledgerSeals, s.ledgerUnseals)) return;
-    // M-04 d4 — BOTH names. `by` is the Manager who authorized; `actor` is the
-    // Employee it was performed for, whose session d3 leaves in place. This
-    // recorded only `by`, so the one surface that could say who reopened the
-    // day named the person who merely allowed it — while the dialog's own copy
-    // promised both were being kept.
-    const rec: UndoRecord = { manager: by, actor, at: now() };
+    // M-04 d4 — BOTH names. `by` is the Manager who authorized; the actor is
+    // whoever was at the terminal. This recorded only `by`, so the one surface
+    // that could say who reopened the day named the person who merely allowed
+    // it — while the dialog's own copy promised both were being kept.
+    //
+    // **The Manager stands in as actor when nobody is signed in**, rather than
+    // the till asking twice. §6 puts `p_actor_user_id` on every function and
+    // `p_manager_user_id` only on the manager-only ones, so the actor is the
+    // baseline and the Manager doing this alone is genuinely both. Defaulted
+    // HERE rather than on the screen: `by` is the name re-resolved at the
+    // write, so the stand-in can never be a label the prompt merely displayed.
+    const rec: UndoRecord = { manager: by, actor: actor ?? by, at: now() };
     setS((prev) => ({
       ...prev,
       // A-84 — RETIRED, not deleted and not recomputed. The batch keeps its

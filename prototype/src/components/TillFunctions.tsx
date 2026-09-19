@@ -303,11 +303,12 @@ export function SearchModal({ onClose }: { onClose: () => void }) {
 
 export function OtherFunctionsModal({ onClose }: { onClose: () => void }) {
   const app = useApp();
-  // The batch awaiting a Manager, and the Employee who asked for it. M-04 d4
-  // wants both names on the record, and d3's override does not displace the
-  // Employee's session — so the actor is resolved when the button is pressed,
-  // before the Manager is ever asked.
-  const [undoing, setUndoing] = useState<{ batchId: string; actor: string } | null>(null);
+  // The batch awaiting a Manager, and whoever holds the session — `undefined`
+  // when nobody does, which is not a gap: the store then records the
+  // authorizing Manager as the actor too, because with no session open they
+  // are the person standing at the terminal. M-04 d4 gets both names either
+  // way, and the till asks once rather than twice.
+  const [undoing, setUndoing] = useState<{ batchId: string; actor?: string } | null>(null);
   const withActor = useActor();
   const [breakdown, setBreakdown] = useState<{
     closing: boolean;
@@ -338,7 +339,12 @@ export function OtherFunctionsModal({ onClose }: { onClose: () => void }) {
     return (
       <ManagerAuthorize
         title="Undo End of Day — manager only"
-        reason={`Reopens settled takings: the batch's Sales return to Current (M-03 d4). Manager-only under architecture A-28a. Recorded against ${undoing.actor}, whose session this does not replace (M-04 d3, d4).`}
+        reason={
+          "Reopens settled takings: the batch's Sales return to Current (M-03 d4). Manager-only under architecture A-28a." +
+          (undoing.actor
+            ? ` Recorded against ${undoing.actor}, whose session this does not replace (M-04 d3, d4).`
+            : " Nobody is signed in, so this is recorded against you alone (M-04 d4).")
+        }
         onConfirm={(by) => {
           app.undoEndOfDay(undoing.batchId, by, undoing.actor);
           setUndoing(null);
@@ -442,14 +448,17 @@ export function OtherFunctionsModal({ onClose }: { onClose: () => void }) {
                     <button
                       className="btn sm danger"
                       // Manager-only (A-28a, M-03 d4) — it reopens settled takings.
-                      // The Employee is resolved FIRST (E-01 d5: silent under a
-                      // session, an inline prompt without one), so the Manager's
-                      // authorization lands on a record that already knows who
-                      // it is for — M-04 d4's "both names", the same path
-                      // `Total Today's Sales` takes to fill `CloseBatch.by`.
+                      // Reads the session directly rather than going through
+                      // `withActor`: that helper prompts when nobody is signed
+                      // in, which would ask for initials twice for one act. The
+                      // Manager about to authorize IS the actor in that case,
+                      // so there is nothing a first prompt could learn.
                       disabled={sealedWhy !== undefined}
                       onClick={() =>
-                        withActor("Undo End of Day", (actor) => setUndoing({ batchId: b.id, actor }))
+                        setUndoing({
+                          batchId: b.id,
+                          actor: app.sessionUser ? `${app.sessionUser.name} (${app.sessionUser.role})` : undefined,
+                        })
                       }
                     >
                       Undo

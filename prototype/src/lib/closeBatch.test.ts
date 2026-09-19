@@ -34,13 +34,30 @@ describe("M-04 d4 / M-03 d4 — an undo records both names", () => {
     expect(text).toMatch(/batch-close-2026-09-17/);
   });
 
-  it("does not let the Manager's name stand in for the Employee's", () => {
+  it("says the name once when the actor and the Manager are one person", () => {
+    const text = undoLogText("batch-close-2026-09-17", { ...rec, actor: rec.manager });
+
+    expect(text).toBe("Batch batch-close-2026-09-17 undone by Y. Nakamura (Manager) — back to Current");
+  });
+
+  it("keeps the two apart when they are two people", () => {
     // The bug this test exists for: `undoneBy: by` alone, where `by` was the
-    // Manager, left nothing on the record saying who the override was performed
+    // Manager, left nothing on the record saying who the act was performed
     // FOR — while the dialog told the user both names were being kept.
     const retired = retireCloseBatch(batch(), rec);
 
     expect(retired.undoneActor).not.toBe(retired.undoneBy);
+  });
+
+  it("records the Manager as both when nobody else is there", () => {
+    // Architecture §6 puts `p_actor_user_id` on every function and
+    // `p_manager_user_id` only on the manager-only ones, so a Manager working
+    // alone genuinely IS the actor. Both names are recorded and both are
+    // theirs — which is what lets the till ask once instead of twice.
+    const alone = retireCloseBatch(batch(), { ...rec, actor: rec.manager });
+
+    expect(alone.undoneActor).toBe("Y. Nakamura (Manager)");
+    expect(alone.undoneBy).toBe("Y. Nakamura (Manager)");
   });
 });
 

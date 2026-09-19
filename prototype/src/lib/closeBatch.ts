@@ -18,13 +18,17 @@ export interface UndoRecord {
    */
   manager: string;
   /**
-   * M-04 d4 — the Employee who was standing at the till. **Required**, not
-   * optional: the override does not replace their session (d3), so there is
-   * always somebody it was performed *for*, and a record naming only the
-   * Manager reads as though the Manager wandered over and did it alone. Where
-   * no session is open, E-01 d5's inline prompt supplies it before the
-   * authorization is even offered — the same path `Total Today's Sales`
-   * already takes to fill `CloseBatch.by`.
+   * M-04 d4 — who the act was performed for. **Required**, because
+   * [architecture](docs/architecture.md) §6 puts `p_actor_user_id` on *every*
+   * function and `p_manager_user_id` only on the manager-only ones: the actor
+   * is the baseline on any write, and the Manager's names are the addition.
+   *
+   * **It is not necessarily an Employee.** Where nobody is signed in, the
+   * Manager who authorizes is also the person standing there, and both names
+   * on the record are theirs — which is the honest reading, and the reason the
+   * till asks **once**. An Employee's name lands here only when an Employee
+   * genuinely had a session and called a Manager over, which is the case
+   * M-04 d3 was written for.
    */
   actor: string;
   at: string;
@@ -43,11 +47,17 @@ export function retireCloseBatch(batch: CloseBatch, rec: UndoRecord): CloseBatch
 /**
  * The line appended to every Sale the undo returns to Current.
  *
- * Names both, in the order the act happened — the Employee did it, the Manager
+ * Names both, in the order the act happened — one person did it, a Manager
  * allowed it — because the Sale's own log is the surface somebody actually
  * reads when they ask why yesterday reopened, and `undoneActor` on the batch is
  * not on any screen.
+ *
+ * **One name when they are one person.** The record still carries both fields
+ * and both hold that name, which is what M-04 d9 asks for; repeating it in
+ * prose — *"undone by X, authorized by X"* — reads as though something happened
+ * twice. A single name is itself the signal that nobody else was there.
  */
 export function undoLogText(batchId: string, rec: UndoRecord): string {
-  return `Batch ${batchId} undone by ${rec.actor}, authorized by ${rec.manager} — back to Current`;
+  const who = rec.actor === rec.manager ? rec.actor : `${rec.actor}, authorized by ${rec.manager}`;
+  return `Batch ${batchId} undone by ${who} — back to Current`;
 }
