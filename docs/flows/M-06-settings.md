@@ -222,6 +222,15 @@ QST are separate registrations (decision 48).
 
 ## Inherited from other flows
 
+**From [M-03](M-03-daily-summary.md) decision 19:**
+
+- **A Section's two-character code (decision 28) becomes reader-facing.** It was specified as an identifier
+  beside the name, following [M-01](M-01-supplier-margin.md) d13's Supplier short code; [M-03](M-03-daily-summary.md)'s
+  report now prints it as the key of its *Sales* block, because a code is what a column can be narrow enough
+  to print. **A code edited here changes what a stored report already printed** — decision 13 of that flow
+  stores the summary on the batch — so the code is now a thing with history behind it, which decision 28 did
+  not have to consider when nothing read it.
+
 **From [M-07](M-07-chart-of-accounts.md):**
 
 - **Decision 20's *counts as revenue* flag now decides how a Section resolves to an account, not merely how it reports** ([M-07](M-07-chart-of-accounts.md) d28, d29). A Section carrying the flag resolves to the reserved **Sales** role and carries its Section as a **dimension** on the line ([M-08](M-08-general-ledger.md) d2); a Section without it keeps a mapping to the account it always had, because a dimension says where a figure came from and **cannot say what kind of thing it is** — d20's own example, a gift card load being *"money received against a future obligation"*, is exactly the case. **So toggling this flag on an existing Section changes where its future postings land**, which d20 did not have to consider when the flag only affected a breakdown. What this flow owes: whether toggling it is allowed once a Section has been posted to, and what the editor says when it is.
