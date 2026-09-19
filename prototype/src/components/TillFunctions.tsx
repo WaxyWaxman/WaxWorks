@@ -324,16 +324,13 @@ export function OtherFunctionsModal({ onClose }: { onClose: () => void }) {
   // it, and it is not offered for undo a second time.
   const openBatches = app.closeBatches.filter((b) => !b.undoneAt);
 
-  if (range) {
-    return (
-      <Modal title={`Sales — ${range.from} to ${range.to}`} onClose={() => setRange(null)}>
-        <RangeReportView data={range} />
-      </Modal>
-    );
-  }
-
-  if (breakdown) {
-    if (undoing)
+  // FIRST, above every other view. Undo is reached from the Other Functions
+  // list, where neither `range` nor `breakdown` is set — so a branch nested
+  // under one of those never renders, the button does nothing, and the
+  // pending batch then surfaces this dialog on whatever view opens next.
+  // Cancelling or confirming clears `undoing` and drops back to the list
+  // underneath.
+  if (undoing) {
     return (
       <ManagerAuthorize
         title="Undo End of Day — manager only"
@@ -345,8 +342,18 @@ export function OtherFunctionsModal({ onClose }: { onClose: () => void }) {
         onCancel={() => setUndoing(null)}
       />
     );
+  }
 
-  return (
+  if (range) {
+    return (
+      <Modal title={`Sales — ${range.from} to ${range.to}`} onClose={() => setRange(null)}>
+        <RangeReportView data={range} />
+      </Modal>
+    );
+  }
+
+  if (breakdown) {
+    return (
       <Modal title={breakdown.closing ? "Today's Sales — Totalled" : "Subtotal"} onClose={onClose}>
         <DayReport data={breakdown.data} />
         {breakdown.closing && (
