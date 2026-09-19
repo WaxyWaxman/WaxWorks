@@ -102,6 +102,18 @@ An optional cross-reference links the two, so a payout can be traced to the copi
 
 ## Inherited from other flows
 
+**From [E-06](E-06-process-a-return.md) decision 30:**
+
+- **A reason-coded adjustment written by a Return's write-off can be reversed when that Return is voided, and
+  the reversal posts forward.** [E-06](E-06-process-a-return.md) decision 29 makes the write-off route part of
+  finishing a Return, and decision 30 lets a void undo it — the copy returns to `sold` and the adjustment this
+  flow's reason codes carried is reversed by a **new** adjustment dated when the void happened, never by editing
+  the original ([M-07](M-07-chart-of-accounts.md) d8). **Manager-only, because the write-off was**
+  ([architecture](../architecture.md) A-81, A-28a): it moves stock back on hand. **It refuses where the copy is
+  no longer as the routing left it** — sold again, reserved, or adjusted since — and names that copy. *This is
+  the one route by which an adjustment recorded here is undone by an act performed somewhere else*, so a reader
+  of the reason-code history needs to know a reversing pair may originate on a Return rather than on this screen.
+
 **From [E-06](E-06-process-a-return.md) decision 21:**
 
 - **Decision 16's below-cost ReviewFlag now fires from E-06's re-grade as well as from an edit here.**

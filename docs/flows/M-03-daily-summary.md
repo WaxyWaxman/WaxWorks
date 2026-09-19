@@ -66,12 +66,20 @@ Pay-outs are the one cash movement that is captured, because money leaving the t
   rather than netting into gross, so the column still reconciles.
 
 
-**From [E-06](E-06-process-a-return.md) decision 23:**
+**From [E-06](E-06-process-a-return.md) decision 29 — the state this note governed no longer exists:**
 
-- **An unrouted returned copy does not hold up the close.** [E-06](E-06-process-a-return.md) decision 20 creates a
-  Return that is finished with its copy not yet assessed, and decision 23 lets that copy be routed after the day has
-  closed — a Return taken at five o'clock is usually looked at the next morning. The close neither waits for it nor
-  refuses on it: the copy is off the shelf either way, so there is nothing for the close to reconcile.
+- ~~**An unrouted returned copy does not hold up the close.**~~ — **Moot under
+  [E-06](E-06-process-a-return.md) decision 29.** A Return can no longer be finished with a returned line
+  undecided, so a **finished** Return with unrouted stock cannot reach a close at all and the close has nothing
+  to decline to wait for. *The commitment is retired rather than reversed:* the close still never refuses on
+  stock, because there is no longer any stock in that state to refuse on. **What replaces it is stronger and
+  belongs here:** every copy a Return took in has reached its destination **before** the close runs, so the
+  Inventory figure the close journals and the copies on hand agree on the day rather than the morning after —
+  which is what closed [M-07](M-07-chart-of-accounts.md)'s open question about the overnight gap.
+  *The retired note follows.* [E-06](E-06-process-a-return.md) decision 20 created a Return that is finished
+  with its copy not yet assessed, and decision 23 let that copy be routed after the day had closed — a Return
+  taken at five o'clock is usually looked at the next morning. The close neither waited for it nor refused on
+  it: the copy was off the shelf either way, so there was nothing for the close to reconcile.
 
 
 **From [M-08](M-08-general-ledger.md):**
