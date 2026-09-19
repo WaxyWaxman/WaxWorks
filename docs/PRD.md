@@ -250,6 +250,7 @@ _Status: **ratified**._
 - **Batch stock-take** — reason-coded single adjustments are in scope ([E-04](flows/E-04-manage-inventory.md)); counting a Section against the shelf in one reconciling pass is not.
 - **Reorder suggestion** — v1 ordering is manual ([M-02](flows/M-02-reorder-inventory.md) decision 7); minimum on hand is informational only.
 - **Trend and margin reporting** beyond the daily close — PRD goal G-2 wants it, and it is a reporting surface of its own rather than part of [M-03](flows/M-03-daily-summary.md).
+- **The general ledger** — [M-08](flows/M-08-general-ledger.md) is specified but **deferred to the second iteration** ([M-08](flows/M-08-general-ledger.md) d32, decided 2026-09-19). The chart of accounts and the journals the artifacts write ([M-07](flows/M-07-chart-of-accounts.md)) stay in scope; the opening position, typed postings, sealing and the statements do not.
 
 ---
 

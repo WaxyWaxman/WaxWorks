@@ -17,9 +17,10 @@
 3. If the item can be matched to a prior Sale for that Customer, the line is **linked to that original Sale**, and the return shows in the Customer's history against it.
    - If it cannot be matched — no Customer, no receipt, a gift — the Employee proceeds anyway. A link is recorded when it is available, not required before the return can happen.
 4. Employee sets the refund amount. It defaults to the linked Sale's line price where a link exists, and to the item's current price where it does not; either can be overridden.
-5. Employee tenders the negative total, settling it either as:
+5. Employee tenders the negative total, settling it as one of:
    - **cash** paid out of the till, or
-   - **store credit** onto the Customer's accounts-receivable balance ([E-07](E-07-manage-customers.md)).
+   - **store credit** onto the Customer's accounts-receivable balance ([E-07](E-07-manage-customers.md)) — a Customer is required, or
+   - **a gift card**, where there is no Customer and the customer declines a record: a gift card load line on the same Sale nets the refund to the card (decision 16).
 6. Employee assesses the returned copy and routes the stock:
    - **Back to sellable** at its original grade, if it comes back as it left; or
    - **Re-graded** — the copy is taken in as an InventoryItem carrying its own Goldmine grade and its own price, since a returned copy is frequently not in the condition it was sold in; or
@@ -56,6 +57,7 @@ This is a policy choice, not a technical limitation — the system records who p
 **From [M-06](M-06-settings.md) and [architecture](../architecture.md) A-57:**
 
 - **A Return's tax is resolved at today's rate**, not the linked Sale's (decision 13). The refund *amount* still defaults to the original line price (decision 5) — the two behave differently on purpose.
+- **No per-line tax choice on a Return** ([M-06](M-06-settings.md) d66, closing #14). Tax resolves through the Customer's tax group, else the store's default, and the Genre's product tax code — exactly as on a Sale. A customer who needs another group gets a Customer record.
 
 **From [M-06](M-06-settings.md):**
 
@@ -75,7 +77,7 @@ This is a policy choice, not a technical limitation — the system records who p
 | 1 | A Return is a **negative-quantity line** on a Sale, not a separate document type |
 | 2 | Linking to the original Sale is done **when possible, never required** — no receipt, no lookup, no blocker |
 | 3 | No time window, no receipt requirement, and no manager approval for a Return |
-| 4 | Refunds settle as cash out of the till or as store credit on the Customer's accounts-receivable balance |
+| 4 | Refunds settle as cash out of the till or as store credit on the Customer's accounts-receivable balance. *Amended by decision 16* — or, with no Customer, onto a gift card |
 | 5 | Refund amount defaults to the linked Sale's line price, or the current price when unlinked; both overridable |
 | 6 | A returned copy is explicitly routed — back to sellable, re-graded as its own InventoryItem, or written off — before it is sellable again |
 | 7 | Refund and stock disposition are independent decisions |
@@ -85,12 +87,15 @@ This is a policy choice, not a technical limitation — the system records who p
 | 11 | **A finished Return appears in the till rail's Recent alongside Sales.** It carries a transaction number like any other tendered document, and the commonest reason to go hunting for one is the refund that just went out. Badged as a Return and shown at its negative amount, because the number alone gives no clue which way the money went |
 | 12 | **The returned copy is found by lookup, not chosen from a list of every copy in the building.** Scanning the copy's own sticker resolves it outright — the counter path. Otherwise the catalogue is searched and the matching copies shown with their grade, barcode, price and current state. Deliberately not the till's Lookup ([E-05](E-05-sell-a-record.md)), which filters to sellable copies: that is exactly backwards here, since a copy coming back is normally one the store already sold, so this searches every copy and shows its state rather than hiding it |
 | 13 | **A Return charges today's tax rate and never reaches back to the rate the original Sale collected.** A Return is a Sale with negative lines (step 1), so its tax resolves the way any line's does, at the rate in force when the money moves ([architecture](../architecture.md) A-57). **Charging the original rate was considered and rejected** — it is the more orthodox answer, but it needs a linked Sale to read the rate from, and decision 3 deliberately allows a Return with no receipt, no Customer and no link at all (step 3). That would mean a today's-rate fallback anyway, and a shop with two tax rules for the same counter action will apply the wrong one. Note this differs from the **refund amount**, which *does* default to the linked Sale's line price (decision 5): price is what was agreed with this customer, tax is what is owed to an authority today. *Accepted consequence, and it is real money:* a Return crossing a rate change refunds tax at a rate the store never collected on that item, so the customer is out or up by the delta and the store absorbs it. The books stay consistent — the negative line carries today's rate into today's period and [M-03](M-03-daily-summary.md) sums snapshotted per-line figures — so this is a small bounded difference rather than an integrity problem, bounded by how rarely rates change multiplied by how rarely a return crosses one |
+| 14 | **No policy governs whether an opened New-stock copy returns to New; step 6 is the whole rule. Decided 2026-09-19 (#82).** The Employee assessing the copy routes it — back to sellable as it left, re-graded with its own grade and price, or written off — and the grade and price they set stand. Nothing forces an opened copy off the sticky price and nothing forbids it; the judgement is the Employee's, on the same footing as decision 3. Resolves the *opened New-stock copy* open question |
+| 15 | **An exchange is a Return line and a sale line on one Sale, netting to the difference — no affordance of its own. Decided 2026-09-19 (#83).** The returned copy comes in as a negative line (decision 1) and is routed (decision 6); the replacement goes out as an ordinary line; the customer tenders, or is refunded, the net. The exchange is traceable because both halves sit on one Sale under one number. Resolves the *Exchanges* open question |
+| 16 | **Store credit requires a Customer. A walk-in who declines a Customer record is refunded onto a gift card, not in cash. Decided 2026-09-19 (#85).** Step 5's two settlements become three: cash out of the till; store credit on the Customer's balance; or, with no Customer, a **gift card load** as a line on the same Sale ([E-05](E-05-sell-a-record.md) d10) — the load nets the Return to zero so no cash moves, and the card then carries the value like any other ([architecture](../architecture.md) A-51). Decision 4 is amended to name the third settlement. Resolves the *Store credit without a Customer* open question |
 
 ---
 
 ## Open questions
 
-- **Does a returned New-stock copy become second-hand once opened?** E-02 fixes intake mode per Invoice, and a Mint/Sealed copy that comes back opened is no longer Mint/Sealed. Step 6 gives the mechanism — a re-graded InventoryItem — but not the policy on whether an opened copy may ever return to New stock at its sticky price.
-- **Exchanges.** Currently an exchange is a Return line plus a sale line on one Sale, netting to the difference. Whether that needs its own affordance at the till, or is left as two lines, is unsettled.
+- ~~**Does a returned New-stock copy become second-hand once opened?**~~ — **Resolved** by decision 14: no policy; step 6's routing is the whole rule. *Original:* E-02 fixes intake mode per Invoice, and a Mint/Sealed copy that comes back opened is no longer Mint/Sealed. Step 6 gives the mechanism — a re-graded InventoryItem — but not the policy on whether an opened copy may ever return to New stock at its sticky price.
+- ~~**Exchanges.**~~ — **Resolved** by decision 15: a Return line plus a sale line on one Sale, netting to the difference; no affordance of its own. *Original:* Whether that needs its own affordance at the till, or is left as two lines, was unsettled.
 - **Return of a non-tracked item.** Freight and services have no stock to route back; presumably refund-only, but unstated.
-- **Store credit issued without a Customer.** Step 5 requires a Customer for store credit. Whether a walk-in return with no Customer record should be able to issue a gift card instead of cash is undecided.
+- ~~**Store credit issued without a Customer.**~~ — **Resolved** by decision 16: a Customer is required for store credit, and a walk-in who declines a record is refunded onto a gift card. *Original:* Whether a walk-in return with no Customer record should be able to issue a gift card instead of cash was undecided.
