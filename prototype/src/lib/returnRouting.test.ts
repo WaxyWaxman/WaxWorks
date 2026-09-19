@@ -1,10 +1,12 @@
 import { describe, expect, it } from "vitest";
 import {
+  finishReturnRefusal,
   regradeCostRefusal,
   regradeShortfall,
   routeDocumentRefusal,
   routeStockRefusal,
   statusAfterRoute,
+  unrouteRefusal,
 } from "./returnRouting";
 import { isPresent } from "./totals";
 import type { InventoryItem } from "../data/types";
@@ -147,33 +149,126 @@ describe("A-82 — the shortfall a re-grade posts to Damaged", () => {
   });
 });
 
-describe("E-06 decisions 20, 22, 23 — when a Return may route at all", () => {
-  it("refuses a draft, which has no Sale number yet", () => {
-    // d20. Routing an unfinished draft minted a sellable copy with no refund
-    // paid and no tendered document, and d10's void refusal then stranded it.
-    expect(routeDocumentRefusal({ state: "Open" })).toMatch(/decision 20/);
+describe("E-06 decisions 29, 22 — when a Return's disposition may be chosen", () => {
+  it("permits a draft, which is the whole of d29's reversal", () => {
+    // d29 supersedes d20 and turns its direction around: the disposition is
+    // chosen WHILE the Return is a draft. d20 refused exactly this, and the
+    // loss it was protecting against is kept elsewhere — choosing mints
+    // nothing, and the effects run inside the finish act.
+    expect(routeDocumentRefusal({ state: "Open" })).toBeUndefined();
   });
 
-  it("refuses a VOIDED Return, even though it kept its number", () => {
-    // d22, and the reason the hole existed: the finished test is the Sale
-    // number and a void RETAINS it (E-05 d31), so a voided Return went on
-    // reading as finished. The walk drove it and minted a sellable copy on a
-    // document whose money had already been collected back.
-    const why = routeDocumentRefusal({ saleNumber: 100391, state: "Void" });
+  it("refuses a FINISHED Return, which d20 used to be the only state that permitted", () => {
+    // The reversal, from the other end. At finish the choice was carried out,
+    // and a finished artifact is immutable (M-07 d8 — corrections post
+    // forward). Retired E-06-T15 asserted the opposite of this.
+    const why = routeDocumentRefusal({ saleNumber: 100390, state: "Current" });
+
+    expect(why).toBeDefined();
+    expect(why).toMatch(/finished/);
+    expect(why).toMatch(/decision 29/);
+  });
+
+  it("refuses a CLOSED Return for the same reason, not a different one", () => {
+    // d23 is retired as moot by d29 — routing cannot outlive the close because
+    // it cannot outlive the document. Closed is refused because it is
+    // finished, which is the point: there is no longer a close-specific rule.
+    expect(routeDocumentRefusal({ saleNumber: 100390, state: "Closed" })).toMatch(/decision 29/);
+  });
+
+  it("refuses a VOIDED Return by d22, and says so rather than citing d29", () => {
+    // d22 is live and survives d29 untouched. It is checked FIRST because it
+    // is the more specific refusal and the more useful sentence: a void says
+    // the return did not happen. E-06-T26 holds this.
+    const why = unrouteRefusalVoidDoc();
 
     expect(why).toBeDefined();
     expect(why).toMatch(/voided/);
     expect(why).toMatch(/decision 22/);
   });
+});
 
-  it("permits a finished Return", () => {
-    expect(routeDocumentRefusal({ saleNumber: 100390, state: "Current" })).toBeUndefined();
+function unrouteRefusalVoidDoc() {
+  return routeDocumentRefusal({ saleNumber: 100391, state: "Void" });
+}
+
+describe("E-06 decision 29 — a Return cannot be finished with a line undecided", () => {
+  const line = (over: Partial<Parameters<typeof finishReturnRefusal>[0][number]> = {}) => ({
+    qty: -1,
+    inventoryItemId: "i-1",
+    describe: "Bill Evans — Sunday at the Village Vanguard",
+    ...over,
   });
 
-  it("permits a CLOSED Return, so routing outlives the day close", () => {
-    // d23 — the case the fix could have broken by accident. Written as "only
-    // while Current" this would strand every copy that crossed a close, and a
-    // Return taken at five o'clock is looked at the next morning.
-    expect(routeDocumentRefusal({ saleNumber: 100390, state: "Closed" })).toBeUndefined();
+  it("refuses, and NAMES the line rather than reporting that something is missing", () => {
+    // E-06-T22. A Return with four lines and one undecided is the case that
+    // matters; "something is incomplete" sends the Employee hunting.
+    const why = finishReturnRefusal([line()]);
+
+    expect(why).toBeDefined();
+    expect(why).toMatch(/Bill Evans/);
+    expect(why).toMatch(/decision 29/);
+  });
+
+  it("permits finishing once every returned line carries a disposition", () => {
+    expect(finishReturnRefusal([line({ routedTo: "sellable" })])).toBeUndefined();
+  });
+
+  it("counts the undecided lines and names the first of them", () => {
+    const why = finishReturnRefusal([
+      line({ routedTo: "regrade" }),
+      line({ describe: "Alice Coltrane — Journey in Satchidananda" }),
+      line({ describe: "Pharoah Sanders — Karma" }),
+    ]);
+
+    expect(why).toMatch(/^2 returned lines/);
+    expect(why).toMatch(/Alice Coltrane/);
+  });
+
+  it("does not gate a sale line, or a refund-only line with no copy", () => {
+    // Only a line that took stock IN has a disposition to make. A positive
+    // quantity is something being sold on the same document, and a negative
+    // line with no inventoryItemId refunded money without taking a disc back.
+    expect(finishReturnRefusal([line({ qty: 1 })])).toBeUndefined();
+    expect(finishReturnRefusal([line({ inventoryItemId: undefined })])).toBeUndefined();
+  });
+});
+
+describe("E-06 decision 30 — a void un-routes, and refuses only when overtaken", () => {
+  const routed = (status: InventoryItem["status"]) =>
+    ({ internalBarcode: "200000090001", status }) as InventoryItem;
+
+  it("permits the void while the copy is still as the routing left it", () => {
+    // Back to sellable, still sellable. This is the ordinary case and the one
+    // d10's blanket refusal forbade — and with it every Edit, which E-05 d31
+    // defines as a Void plus a re-ring.
+    expect(unrouteRefusal("sellable", routed("sellable"))).toBeUndefined();
+  });
+
+  it("permits the void on a written-off copy that is still written off", () => {
+    // The expected status is the route's own, not `sellable` for everything.
+    expect(unrouteRefusal("writeoff", routed("written_off"))).toBeUndefined();
+  });
+
+  it("refuses when the copy has been sold since, and names the copy", () => {
+    // E-06-T25. "A copy is routed" tells a counter nothing it can act on.
+    const why = unrouteRefusal("sellable", routed("sold"));
+
+    expect(why).toBeDefined();
+    expect(why).toMatch(/200000090001/);
+    expect(why).toMatch(/sold since/);
+    expect(why).toMatch(/decision 30/);
+  });
+
+  it("refuses when the copy is reserved on another Sale", () => {
+    expect(unrouteRefusal("sellable", routed("held"))).toMatch(/reserved/);
+  });
+
+  it("refuses when the copy has been adjusted away since", () => {
+    expect(unrouteRefusal("regrade", routed("written_off"))).toMatch(/written off since/);
+  });
+
+  it("refuses when the copy the routing produced cannot be found", () => {
+    expect(unrouteRefusal("regrade", undefined)).toMatch(/decision 30/);
   });
 });

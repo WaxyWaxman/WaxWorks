@@ -261,8 +261,40 @@ export interface SaleLine {
    * this: it is still a reversal, and the Employee simply did not pick the link.
    */
   unmatchedReturn?: boolean;
-  stockRouted?: boolean; // E-06 step 6 — returned copy has been dispositioned
+  // E-06 d29 — THE CHOICE, made while the Return is still a draft. Set by
+  // `chooseReturnRoute` and mints nothing: the effects run inside the finish
+  // act. `finishReturnRefusal` gates finishing on this being present for every
+  // returned line, which is the whole of d29.
   routedTo?: "sellable" | "regrade" | "writeoff";
+  // E-06 d29 — THE EFFECTS, applied at finish. `routedTo` without this is a
+  // decided line on a draft; both together is a line whose copy has moved.
+  // The pair is what lets an abandoned draft leave no copy behind, which is
+  // the loss retired d20 existed to close and E-06-T23 exists to hold.
+  stockRouted?: boolean;
+  // E-06 d29 — what the Employee entered with the choice, replayed at finish.
+  // Held on the line rather than in the screen so the finish act is a write
+  // path that can stand on its own (A-4, A-48).
+  routeChoice?: {
+    grade?: Grade;
+    price?: number;
+    reason?: AdjustmentReason;
+    assessedCost?: number;
+    /**
+     * The Manager who authorized a write-off, as a User id (A-28a).
+     *
+     * THE ID AND NOT THE BRANDED `ManagerAuth`. The brand exists so a gated
+     * function cannot be called with a name that did not pass the check, and
+     * it is obtainable only from `authorizeManager` — storing one would let a
+     * saved draft carry a bound past the moment it was checked. The id is the
+     * FACT (architecture §6), and the finish act re-authorizes from it, so a
+     * Manager deactivated between choosing and finishing is caught.
+     */
+    authorizedByUserId?: string;
+  };
+  // E-06 d30 — the copy the routing PRODUCED, so a void can ask whether it is
+  // still as the routing left it. For a re-grade or d24's unmatched arrival
+  // that is the minted copy, not the one on the line.
+  routedItemId?: string;
 }
 
 export interface Tender {
