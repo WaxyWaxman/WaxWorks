@@ -408,8 +408,8 @@ function UserCard({
             />
           </label>
 
-          {user.active && (
-            <PasswordField key={user.id} user={user} onRun={onRun} by={by} />
+          {user.active && user.role !== "Employee" && (
+            <PinField key={user.id} user={user} onRun={onRun} by={by} />
           )}
 
           {user.active ? (
@@ -490,10 +490,11 @@ function UserCard({
 
 // ---------------------------------------------------------------------------
 
-// E-01 d21 — optional, for anyone, up to 8 characters. Deliberately plain
-// about what it is: the screen says "barrier", not "security", because a shop
-// setting it to one letter should not think it has done more than it has.
-function PasswordField({
+// M-04 d28 — a Manager's or Owner's four-digit PIN, set by an Owner or a
+// Manager, never by its holder at the counter. The log records that it changed
+// and never what it was; a clash is refused as "in use at this Store" with no
+// name (d32). Employees have none.
+function PinField({
   user,
   onRun,
   by,
@@ -509,21 +510,18 @@ function PasswordField({
   if (!open)
     return (
       <div className="field">
-        <span>Password</span>
+        <span>PIN</span>
         <div className="btn-row">
           <span className="small muted" style={{ flex: 1 }}>
-            {user.password
-              ? "Set — asked when this person opens a session or authorises a manager-only action."
-              : "None. Optional for anyone, Manager or Employee."}
+            {user.pin
+              ? "Set — typed alone at the manager-only line on a store session (E-01 d26)."
+              : "None. Without one this person can do no manager-only work on a store session."}
           </span>
           <button className="btn ghost sm" onClick={() => setOpen(true)}>
-            {user.password ? "Change" : "Set"}
+            {user.pin ? "Change" : "Set"}
           </button>
-          {user.password && (
-            <button
-              className="btn ghost sm"
-              onClick={() => onRun(app.setUserPassword(user.id, "", by))}
-            >
+          {user.pin && (
+            <button className="btn ghost sm" onClick={() => onRun(app.setUserPin(user.id, "", by))}>
               Clear
             </button>
           )}
@@ -534,29 +532,29 @@ function PasswordField({
   return (
     <div className="field">
       <span>
-        Password{" "}
-        <SpecNote cite="E-01 d21">
-          A <strong>barrier, not authentication</strong>. Up to 8 characters, optional for anyone,
-          and a single letter is a legitimate choice — it exists so that typing a Manager's
-          initials at an unattended till is not by itself enough to reach the manager-only space.
-          The log records that it changed and <strong>never what it was</strong>. A password
-          holder's session is capped at the 5-minute default however long the shop set its lapse
-          to.
+        PIN{" "}
+        <SpecNote cite="M-04 d28, d32">
+          Exactly <strong>four digits</strong>, unique among the Managers and Owners assigned to
+          each of this person's Stores. Set by an Owner or a Manager rather than chosen at the
+          counter, where there is no private moment. The log records that it changed and{" "}
+          <strong>never what it was</strong>; a clash is refused as <em>in use at this Store</em>{" "}
+          with no name, and every refusal is logged (d32).
         </SpecNote>
       </span>
       <div className="btn-row">
         <input
           type="password"
+          inputMode="numeric"
           autoFocus
           value={value}
-          maxLength={8}
+          maxLength={4}
           autoComplete="off"
-          onChange={(e) => setValue(e.target.value)}
+          onChange={(e) => setValue(e.target.value.replace(/\D/g, ""))}
         />
         <button
           className="btn primary sm"
           onClick={() => {
-            if (onRun(app.setUserPassword(user.id, value, by))) {
+            if (onRun(app.setUserPin(user.id, value, by))) {
               setValue("");
               setOpen(false);
             }

@@ -1,4 +1,5 @@
 import {
+  useEffect,
   createContext,
   useContext,
   useMemo,
@@ -45,12 +46,19 @@ import {
   routeStockRefusal,
   statusAfterRoute,
 } from "../lib/returnRouting";
-import { authorizeManager, requireManager, type ManagerAuth } from "../lib/managerAuth";
+import {
+  authorizeByPin as authorizeByPinLib,
+  authorizeManager,
+  requireManager,
+  type ManagerAuth,
+} from "../lib/managerAuth";
+import { otpAccepted, selectableStores as selectableStoresLib, signInPersonal as signInPersonalLib, signInStoreAccount as signInStoreAccountLib, signInSysadmin as signInSysadminLib } from "../lib/signIn";
 import { buildChart } from "../lib/chart";
 import { buildCloseJournal } from "../lib/closeJournal";
 import { retireCloseBatch, undoLogText, type UndoRecord } from "../lib/closeBatch";
 import { buildAdjustmentJournal, buildInvoiceJournal, buildPaymentJournal } from "../lib/artifactJournals";
 import { isImbalanced } from "../lib/journal";
+import { readStored, writeStored } from "../lib/tillMemory";
 // M-08 — the books. Every rule these enforce lives in the lib, never in a
 // screen and never here (A-74, A-4, A-48: a bound enforced in the client is
 // not a bound). The store calls the refusal and stores the result.
@@ -87,6 +95,11 @@ import {
   STORE_DETAILS,
   HOME_ORG_ID,
   HOME_STORE_ID,
+  PLATEAU_STORE_ID,
+  ORGANIZATIONS,
+  STORES,
+  TERMINALS,
+  SYSADMINS,
   TAX_TYPES,
   PRODUCT_TAX_CODES,
   TAX_GROUPS,
@@ -130,6 +143,11 @@ import type {
   Supplier,
   User,
   UserRole,
+  Organization,
+  Store,
+  Terminal,
+  Sysadmin,
+  Principal,
   SectionRow,
   TenderRow,
   CurrencyRow,
@@ -233,13 +251,30 @@ interface AppState {
   genreMap: GenreMapRow[];
   releaseCache: ReleaseCacheEntry[];
   defaultTaxGroup: string;
-  // E-01. The session is CLIENT state and can be nothing else (A-3, A-50):
-  // what the database trusts is the terminal's enrollment, initials are
-  // attribution on top. Modelled here for the same reason.
+  // E-01. The STAFF session is CLIENT state and can be nothing else (A-3 as
+  // superseded by A-87, A-50 as revisited by A-88): what the database trusts
+  // is the store session's own token, initials are attribution on top.
+  // Modelled here for the same reason. The lapse it obeys is the Store's
+  // setting (`storeSettings.sessionLapseSeconds`, M-06 d45) and nothing else.
   sessionUserId: string | null;
   sessionLastActivity: number;
-  // Store setting, default 300s (M-06 d45, A-50), and NO maximum (E-01 d13).
-  sessionLapseSeconds: number;
+  // WHO SIGNED IN (A-87): a store account, a person, or a System
+  // Administrator. Null before any door is opened. See `Principal`.
+  principal: Principal | null;
+  // The Organization and its Stores (A-86). Identity only — what a Store HOLDS
+  // is the per-Store slice, below.
+  organizations: Organization[];
+  stores: Store[];
+  terminals: Terminal[];
+  sysadmins: Sysadmin[];
+  // THE PARTITION (A-86), as this in-memory prototype carries it. The Store
+  // whose slice is currently loaded flat into this state is `activeStoreId`;
+  // every other Store's slice is parked here, keyed by Store ID, and swapped
+  // in when the principal's Store changes (`loadStore`). Every per-Store read
+  // and write in this file therefore stays exactly as it was — E-01 d27's
+  // "one Store at a time" is the shape of the state, not a filter on it.
+  activeStoreId: string;
+  parkedStores: Record<string, StoreSlice>;
   suppliers: Supplier[];
   giftCards: GiftCard[];
   taxLines: TaxLine[];
@@ -305,6 +340,121 @@ interface AppState {
   /** E-03 decision 8 — toggle to demo graceful degradation when the catalog provider (MusicBrainz) is down */
   providerUp: boolean;
 }
+
+// ---------------------------------------------------------------------------
+// The per-Store slice (A-86)
+//
+// What carries a Store: the physical and operational tables, every M-06
+// setting table, and — for now — the catalog (A-86 keeps records, genres and
+// the genre map per Store until a genre's Section and tax code can live at
+// the Organization; §11). What does NOT carry a Store and stays flat for
+// every Store of the Organization: users, customers, suppliers, gift cards,
+// payables, the chart and the ledger.
+// ---------------------------------------------------------------------------
+
+const SLICE_KEYS = [
+  "records",
+  "inventory",
+  "sections",
+  "tenders",
+  "currencies",
+  "homeCurrency",
+  "storeSettings",
+  "storeDetails",
+  "settingsLog",
+  "taxTypes",
+  "productTaxCodes",
+  "taxGroups",
+  "taxGroupCells",
+  "genres",
+  "genreMap",
+  "defaultTaxGroup",
+  "taxLines",
+  "nonTracked",
+  "sales",
+  "closeBatches",
+  "claims",
+  "claimVoids",
+  "invoices",
+  "pendingOrders",
+  "reviewFlags",
+  "activeSaleId",
+  "nextSaleNumber",
+  "nextHold",
+  "nextClaimNumber",
+  "nextPoNumber",
+  "nextInternalBarcode",
+  "nextInvoiceRef",
+] as const;
+
+type SliceKey = (typeof SLICE_KEYS)[number];
+export type StoreSlice = Pick<AppState, SliceKey>;
+
+const sliceOf = (state: AppState): StoreSlice =>
+  Object.fromEntries(SLICE_KEYS.map((k) => [k, state[k]])) as unknown as StoreSlice;
+
+// Swap the flat slice for another Store's. The staff session goes with it —
+// initials resolve among a Store's assigned people (E-01 d25), so a session
+// opened at one counter means nothing at another.
+function loadStore(prev: AppState, storeId: string): AppState {
+  if (prev.activeStoreId === storeId) return prev;
+  const incoming = prev.parkedStores[storeId];
+  if (!incoming) return prev; // no slice for this Store — the caller should have made one
+  const parked = { ...prev.parkedStores, [prev.activeStoreId]: sliceOf(prev) };
+  delete parked[storeId];
+  return { ...prev, ...incoming, activeStoreId: storeId, parkedStores: parked, sessionUserId: null };
+}
+
+// A Store opened in-product starts from M-06's defaults with nothing sold,
+// held or owed (O-01 d2). The catalog is seeded from the same base as the home
+// Store so the second Store is walkable in review; a real second Store
+// adopts its own (A-6, A-86).
+function freshStoreSlice(details: StoreDetails): StoreSlice {
+  return {
+    records: RECORDS,
+    inventory: [],
+    sections: SECTIONS,
+    tenders: TENDERS,
+    currencies: CURRENCIES,
+    homeCurrency: HOME_CURRENCY,
+    storeSettings: STORE_SETTINGS,
+    storeDetails: details,
+    settingsLog: [],
+    taxTypes: TAX_TYPES,
+    productTaxCodes: PRODUCT_TAX_CODES,
+    taxGroups: TAX_GROUPS,
+    taxGroupCells: TAX_GROUP_CELLS,
+    genres: GENRES,
+    genreMap: GENRE_MAP,
+    defaultTaxGroup: DEFAULT_TAX_GROUP,
+    taxLines: [],
+    nonTracked: NON_TRACKED,
+    sales: [],
+    closeBatches: [],
+    claims: [],
+    claimVoids: [],
+    invoices: [],
+    pendingOrders: [],
+    reviewFlags: [],
+    activeSaleId: null,
+    nextSaleNumber: 1,
+    nextHold: 1,
+    nextClaimNumber: 1,
+    nextPoNumber: 0,
+    nextInternalBarcode: 1,
+    nextInvoiceRef: 1,
+  };
+}
+
+const PLATEAU_DETAILS: StoreDetails = {
+  ...STORE_DETAILS,
+  tradingName: "Wax Works — Plateau",
+  address: { line1: "5122 Boulevard Saint-Laurent", city: "Montreal", provinceState: "QC", country: "Canada" },
+  phone: "514-555-0200",
+  email: "plateau@waxworks.example",
+  storeId: PLATEAU_STORE_ID,
+  position: 2,
+};
 
 // M-06 d64 - the fiscal year end defaults to 31 December, and M-08 d5 has this
 // flow READ it and never ask. One constant until M-06's settings screens land.
@@ -500,7 +650,13 @@ const seed: AppState = {
   defaultTaxGroup: DEFAULT_TAX_GROUP,
   sessionUserId: null,
   sessionLastActivity: Date.now(),
-  sessionLapseSeconds: 300,
+  principal: null,
+  organizations: ORGANIZATIONS,
+  stores: STORES,
+  terminals: TERMINALS,
+  sysadmins: SYSADMINS,
+  activeStoreId: HOME_STORE_ID,
+  parkedStores: { [PLATEAU_STORE_ID]: freshStoreSlice(PLATEAU_DETAILS) },
   suppliers: [...SUPPLIERS, ...HISTORY.suppliers],
   giftCards: GIFT_CARDS,
   taxLines: TAX_LINES,
@@ -811,12 +967,36 @@ interface AppContextValue extends AppState {
   activeSale: Sale | null;
   sessionUser: User | null;
   actorName: string;
-  sessionLapseSeconds: number;
-  setSessionLapseSeconds: (n: number) => void;
   identify: (userId: string) => void;
   endSession: () => void;
   touchSession: () => void;
   sessionLastActivity: number;
+  // ---- The principals (A-87) ----
+  // The Store whose slice is loaded — the store session's Store, or the Store
+  // a personal session picked. Null only for a System Administrator or before
+  // sign-in, neither of which reaches a Store screen.
+  currentStoreId: string | null;
+  currentStore: Store | null;
+  // A Store's details whether or not its slice is the one loaded — the picker
+  // and the Organization screen name Stores that are not in session.
+  storeDetailsFor: (storeId: string) => StoreDetails;
+  terminalName: string;
+  isPersonalSession: boolean;
+  // E-01 d24 — a terminal signs in with the Store's store account.
+  signInStoreAccount: (email: string, password: string, terminalId: string) => { ok: true } | { ok: false; refusal: string };
+  // E-01 d27, d28 — a Manager or Owner signs in as themselves; the store
+  // checks the password AND the second factor, never the screen alone.
+  signInPersonal: (email: string, password: string, otp: string) => { ok: true } | { ok: false; refusal: string };
+  // S-01 d4 — passkey only; the prototype's passkey is a button.
+  signInSysadmin: (email: string) => { ok: true } | { ok: false; refusal: string };
+  signOut: () => void;
+  // E-01 d27 — the Store pick on a personal session, refused where not
+  // assigned unless Owner (A-87: the pick is a write).
+  selectStore: (storeId: string) => { ok: true } | { ok: false; refusal: string };
+  selectableStores: () => Store[];
+  // E-01 d26 / A-89 — the store-session door to the manager-only line. A miss
+  // names nobody.
+  authorizeByPin: (pin: string) => ReturnType<typeof authorizeByPinLib>;
   // M-06 settings. Every one of these is manager-only (A-28a) and every one
   // appends a settingsLog row carrying the actor and the values BEFORE and
   // AFTER (A-52) — the value is what makes the log worth keeping, since d8's
@@ -874,11 +1054,17 @@ interface AppContextValue extends AppState {
   changeUserRole: (userId: string, role: UserRole, by: ManagerAuth) => UserWriteResult;
   deactivateUser: (userId: string, by: ManagerAuth) => UserWriteResult;
   reactivateUser: (userId: string, initials: string, by: ManagerAuth) => UserWriteResult;
-  correctUser: (userId: string, patch: { name?: string; initials?: string }, by: ManagerAuth) => UserWriteResult;
-  setUserPassword: (userId: string, password: string, by: ManagerAuth) => UserWriteResult;
-  // E-01 d21 — a password holder's session is capped at the 5-minute default
-  // however long the shop set the lapse to.
-  effectiveLapseSeconds: number;
+  correctUser: (userId: string, patch: { name?: string; initials?: string; email?: string }, by: ManagerAuth) => UserWriteResult;
+  // M-04 d28, d32 — a PIN is set by an Owner or Manager; a clash names nobody
+  // and is logged.
+  setUserPin: (userId: string, pin: string, by: ManagerAuth) => UserWriteResult;
+  // M-04 d27 — assignment is where initials and PINs collide.
+  assignToStore: (userId: string, storeId: string, by: ManagerAuth) => UserWriteResult;
+  unassignFromStore: (userId: string, storeId: string, by: ManagerAuth) => UserWriteResult;
+  // M-04 d29 — an emailed link; the log records that it was sent.
+  requestPasswordReset: (userId: string, by: ManagerAuth) => UserWriteResult;
+  // M-04 d29 — the landing of that link. No `by`: the person set it themselves.
+  setOwnPassword: (userId: string, password: string) => UserWriteResult;
 
   recordFor: (id?: string) => RecordEntry | undefined;
   customerFor: (id?: string) => Customer | undefined;
@@ -1308,7 +1494,19 @@ function describe(v: unknown): string {
 const Ctx = createContext<AppContextValue | null>(null);
 
 export function AppStoreProvider({ children }: { children: ReactNode }) {
-  const [s, setS] = useState<AppState>(seed);
+  const [s, setS] = useState<AppState>(() => {
+    // A-87 — the store session is the terminal's and does not lapse; in the
+    // product its token outlives a reload. This is what the terminal remembers
+    // between page loads. The STAFF session (initials) is deliberately not
+    // remembered: it is a timer in the browser and starts over (A-88).
+    const remembered = readStored<Principal | null>("ww.principal", null);
+    if (!remembered) return seed;
+    const storeId =
+      remembered.kind === "store" ? remembered.storeId : remembered.kind === "personal" ? remembered.selectedStoreId : null;
+    const base = storeId && (storeId === seed.activeStoreId || seed.parkedStores[storeId]) ? loadStore(seed, storeId) : seed;
+    return { ...base, principal: remembered };
+  });
+  useEffect(() => writeStored("ww.principal", s.principal), [s.principal]);
 
   // -------------------------------------------------------------------------
   // The staff session (E-01)
@@ -1319,15 +1517,41 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
   // thing will live, rather than pretending there is a session row.
   // -------------------------------------------------------------------------
 
-  const sessionUser = s.users.find((u) => u.id === s.sessionUserId && u.active) ?? null;
+  const principal = s.principal;
+  const currentStoreId: string | null =
+    principal?.kind === "store" ? principal.storeId : principal?.kind === "personal" ? principal.selectedStoreId : null;
+  const currentStore = s.stores.find((x) => x.id === currentStoreId) ?? null;
+  const terminalName =
+    (principal?.kind === "store" ? s.terminals.find((t) => t.id === principal.terminalId)?.name : undefined) ?? "—";
+  const isPersonalSession = principal?.kind === "personal";
+  const storeDetailsFor: AppContextValue["storeDetailsFor"] = (storeId) =>
+    storeId === s.activeStoreId ? s.storeDetails : (s.parkedStores[storeId]?.storeDetails ?? s.storeDetails);
 
-  // What every attributed write stamps. With no session open the actions that
-  // reach the store have all prompted for initials first (d5, d12, d15), so
-  // this is the fallback for the ones that have not been wired through the
-  // prompt yet rather than a state anyone should reach.
-  const effectiveLapseSeconds = usersLib.effectiveLapseSeconds(sessionUser, s.sessionLapseSeconds);
+  // Who is acting. On a store session it is the staff session — initials,
+  // resolved among the people ASSIGNED to this Store (E-01 d25). On a
+  // personal session it is the person: the session IS the actor and cannot
+  // change (E-01 d27), which is why nothing prompts and nothing lapses.
+  const sessionUser: User | null = (() => {
+    if (principal?.kind === "personal") return s.users.find((u) => u.id === principal.userId && u.active) ?? null;
+    if (principal?.kind === "store")
+      return (
+        s.users.find((u) => u.id === s.sessionUserId && u.active && u.assignments.includes(principal.storeId)) ?? null
+      );
+    return null;
+  })();
 
-  const actorName: string = sessionUser ? `${sessionUser.name} (${sessionUser.role})` : CURRENT_USER;
+  // What every attributed write stamps. With no staff session open the actions
+  // that reach the store have all prompted for initials first (d5, d12, d15),
+  // so the fallback names the PRINCIPAL rather than a constant — it is honest
+  // (that is who is signed in) and it makes any write that skipped the prompt
+  // visible in a log.
+  const actorName: string = sessionUser
+    ? `${sessionUser.name} (${sessionUser.role})`
+    : principal?.kind === "store"
+      ? `Store account · ${currentStore?.id === s.activeStoreId ? s.storeDetails.tradingName : currentStore?.id}`
+      : principal?.kind === "sysadmin"
+        ? `${s.sysadmins.find((x) => x.id === principal.sysadminId)?.name ?? "System Administrator"} (System Administrator)`
+        : CURRENT_USER;
 
   const identify: AppContextValue["identify"] = (userId) =>
     setS((prev) => ({ ...prev, sessionUserId: userId, sessionLastActivity: Date.now() }));
@@ -1338,8 +1562,63 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
   const touchSession: AppContextValue["touchSession"] = () =>
     setS((prev) => (prev.sessionUserId ? { ...prev, sessionLastActivity: Date.now() } : prev));
 
-  const setSessionLapseSeconds: AppContextValue["setSessionLapseSeconds"] = (n) =>
-    setS((prev) => ({ ...prev, sessionLapseSeconds: Math.max(30, n) }));
+  // -------------------------------------------------------------------------
+  // The principals (A-87) — the three doors of E-01 and S-01
+  // -------------------------------------------------------------------------
+
+  const signInStoreAccount: AppContextValue["signInStoreAccount"] = (email, password, terminalId) => {
+    const r = signInStoreAccountLib(s.stores, email, password);
+    if (!r.ok) return r;
+    const storeId = r.value.storeId;
+    const terminal = s.terminals.find((t) => t.id === terminalId && t.storeId === storeId) ?? s.terminals.find((t) => t.storeId === storeId);
+    setS((prev) => ({
+      ...loadStore(prev, storeId),
+      principal: { kind: "store", storeId, terminalId: terminal?.id ?? terminalId },
+      sessionUserId: null,
+    }));
+    return { ok: true };
+  };
+
+  const signInPersonal: AppContextValue["signInPersonal"] = (email, password, otp) => {
+    const r = signInPersonalLib(s.users, email, password);
+    if (!r.ok) return r;
+    // E-01 d28 — not open until the second factor is entered. Checked here,
+    // where the session is minted, and not only on the screen.
+    if (!otpAccepted(otp)) return { ok: false, refusal: "That code was not accepted." };
+    setS((prev) => ({ ...prev, principal: { kind: "personal", userId: r.value.userId, selectedStoreId: null }, sessionUserId: null }));
+    return { ok: true };
+  };
+
+  const signInSysadmin: AppContextValue["signInSysadmin"] = (email) => {
+    const r = signInSysadminLib(s.sysadmins, email);
+    if (!r.ok) return r;
+    setS((prev) => ({ ...prev, principal: { kind: "sysadmin", sysadminId: r.value.sysadminId }, sessionUserId: null }));
+    return { ok: true };
+  };
+
+  const signOut: AppContextValue["signOut"] = () => setS((prev) => ({ ...prev, principal: null, sessionUserId: null }));
+
+  const selectableStores: AppContextValue["selectableStores"] = () => {
+    if (!sessionUser || principal?.kind !== "personal") return [];
+    return selectableStoresLib(s.stores, sessionUser);
+  };
+
+  const selectStore: AppContextValue["selectStore"] = (storeId) => {
+    if (principal?.kind !== "personal" || !sessionUser) return { ok: false, refusal: "Only a personal session picks a Store (E-01 d27)." };
+    if (!selectableStoresLib(s.stores, sessionUser).some((x) => x.id === storeId))
+      return { ok: false, refusal: `${sessionUser.name} is not assigned to that Store (E-01 d27).` };
+    setS((prev) => {
+      const next = loadStore(prev, storeId);
+      return { ...next, principal: { kind: "personal", userId: sessionUser.id, selectedStoreId: storeId } };
+    });
+    return { ok: true };
+  };
+
+  const authorizeByPin: AppContextValue["authorizeByPin"] = (pin) => {
+    if (principal?.kind !== "store")
+      return { ok: false, refusal: "A PIN is asked only on a store session (E-01 d26)." };
+    return authorizeByPinLib(s.users, principal.storeId, pin);
+  };
 
 
   const patchSale = (saleId: string, fn: (sale: Sale) => Sale) =>
@@ -2368,6 +2647,9 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
 
     const r = commit(usersLib.deactivateUser(s.users, userId, by));
     if (r.ok && s.sessionUserId === userId) endSession();
+    // E-01 d30 (5): a personal session IS a login to revoke, and deactivation
+    // revokes it.
+    if (r.ok && s.principal?.kind === "personal" && s.principal.userId === userId) signOut();
     return r;
   };
 
@@ -2393,16 +2675,40 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
     return commit(usersLib.correctUser(s.users, userId, patch, by));
   };
 
-  const setUserPassword: AppContextValue["setUserPassword"] = (userId, password, byAuth) => {
-    // §6 — an M function resolves the Manager ITSELF, in the same
-    // transaction. The brand proves the check passed when the id was
-    // minted; this proves it still holds now, so a demotion between the
-    // prompt and the write bites (A-28a, A-4, A-48).
+  const setUserPin: AppContextValue["setUserPin"] = (userId, pin, byAuth) => {
     const mgr = requireManager(s.users, byAuth);
     if (!mgr.ok) return { ok: false, reason: mgr.refusal };
-    const by = mgr.name;
-    return commit(usersLib.setUserPassword(s.users, userId, password, by));
+    const r = usersLib.setUserPin(s.users, userId, pin, mgr.name);
+    // M-04 d32 — a refused clash leaves a trace against the person it was
+    // tried for, so a run of them is visible to an Owner.
+    if (!r.ok && r.reason === usersLib.PIN_CLASH_REASON)
+      setS((prev) => ({ ...prev, users: usersLib.logPinClash(prev.users, userId, mgr.name) }));
+    return commit(r);
   };
+
+  const assignToStore: AppContextValue["assignToStore"] = (userId, storeId, byAuth) => {
+    const mgr = requireManager(s.users, byAuth);
+    if (!mgr.ok) return { ok: false, reason: mgr.refusal };
+    const r = usersLib.assignToStore(s.users, userId, storeId, mgr.name);
+    if (!r.ok && r.reason === usersLib.PIN_CLASH_REASON)
+      setS((prev) => ({ ...prev, users: usersLib.logPinClash(prev.users, userId, mgr.name) }));
+    return commit(r);
+  };
+
+  const unassignFromStore: AppContextValue["unassignFromStore"] = (userId, storeId, byAuth) => {
+    const mgr = requireManager(s.users, byAuth);
+    if (!mgr.ok) return { ok: false, reason: mgr.refusal };
+    return commit(usersLib.unassignFromStore(s.users, userId, storeId, mgr.name));
+  };
+
+  const requestPasswordReset: AppContextValue["requestPasswordReset"] = (userId, byAuth) => {
+    const mgr = requireManager(s.users, byAuth);
+    if (!mgr.ok) return { ok: false, reason: mgr.refusal };
+    return commit(usersLib.requestPasswordReset(s.users, userId, mgr.name));
+  };
+
+  const setOwnPassword: AppContextValue["setOwnPassword"] = (userId, password) =>
+    commit(usersLib.setOwnPassword(s.users, userId, password));
 
   const addCustomer: AppContextValue["addCustomer"] = (input) => {
     const id = uid("cust");
@@ -5433,12 +5739,22 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
       processOrderStream,
       sessionUser,
       actorName,
-      sessionLapseSeconds: s.sessionLapseSeconds,
-      setSessionLapseSeconds,
       identify,
       endSession,
       touchSession,
       sessionLastActivity: s.sessionLastActivity,
+      currentStoreId,
+      currentStore,
+      storeDetailsFor,
+      terminalName,
+      isPersonalSession,
+      signInStoreAccount,
+      signInPersonal,
+      signInSysadmin,
+      signOut,
+      selectStore,
+      selectableStores,
+      authorizeByPin,
       sections: s.sections,
       tenders: s.tenders,
       currencies: s.currencies,
@@ -5481,8 +5797,11 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
       deactivateUser,
       reactivateUser,
       correctUser,
-      setUserPassword,
-      effectiveLapseSeconds,
+      setUserPin,
+      assignToStore,
+      unassignFromStore,
+      requestPasswordReset,
+      setOwnPassword,
     }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [s],
