@@ -303,10 +303,19 @@ for path in MD_FILES:
 # writes was not validated at all -- not for staleness, not even for existence.
 # --------------------------------------------------------------------------
 
-# "[M-07](M-07-chart-of-accounts.md) d28" or "M-07 d28"
-QUALIFIED_RE = re.compile(r"\[?([EM]-\d{2})\]?(?:\([^)]*\))?\s+d(\d+)")
+# "[M-07](M-07-chart-of-accounts.md) d28" or "M-07 d28", optionally continued
+# as a list or a range -- "d28, d29", "d28 and d29", "d28/d29", "d28-d30" --
+# every member of which belongs to the same flow. check_coverage.py reads lists
+# the same way, so a citation that counts as coverage there resolves here. A
+# range is checked at its two ends; decision numbers are contiguous (check 3),
+# so if both ends exist, everything between them does.
+QUALIFIED_RE = re.compile(
+    r"\[?([EM]-\d{2})\]?(?:\([^)]*\))?\s+d(\d+)\b"
+    r"((?:\s*(?:,|/|&|and|to|[-\u2013\u2014])\s*d\d+\b)*)"
+)
+LIST_TAIL_RE = re.compile(r"d(\d+)\b")
 # a bare "d28", once the qualified ones have been blanked out of the line
-BARE_RE = re.compile(r"(?<![\w-])d(\d+)")
+BARE_RE = re.compile(r"(?<![\w-])d(\d+)\b")
 
 
 def short_citations(path: str, line: str) -> list[tuple[str, int]]:
@@ -314,7 +323,10 @@ def short_citations(path: str, line: str) -> list[tuple[str, int]]:
     found: list[tuple[str, int]] = []
     rest = line
     for m in QUALIFIED_RE.finditer(line):
-        found.append((m.group(1).upper(), int(m.group(2))))
+        flow_id = m.group(1).upper()
+        found.append((flow_id, int(m.group(2))))
+        for tail in LIST_TAIL_RE.finditer(m.group(3)):
+            found.append((flow_id, int(tail.group(1))))
         rest = rest.replace(m.group(0), " " * len(m.group(0)), 1)
     # A bare dN only means something inside a flow document, where it refers to
     # that flow's own table. Elsewhere -- the PRD, the architecture, a skill --
