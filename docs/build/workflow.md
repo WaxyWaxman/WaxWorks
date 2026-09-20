@@ -146,19 +146,14 @@ prototype column gates a milestone.
 
 - **Where `e2e/` lives** and whether `docs/build/orders/` needs an index —
   neither is in [architecture](../architecture.md) §7. Owner: `/architecture`.
-- **Which suites run in CI at M0.** §8 names pgTAP and CI as M0 deliverables
-  without saying whether vitest for `apps/web`, the coverage script, and
-  Playwright are wired at M0 or arrive with the first order that needs them.
-  Owner: `/architecture`.
+- ~~**Which suites run in CI at M0.**~~ **Closed by A-97:** six jobs wired at M0;
+  Playwright a seventh, with the first `/qa automate`.
 - **The interactive `/develop` skill has no path hook.** A hook in
   `settings.json` would bind the whole session, coordinator included. Accepted
   for now because a human is at the keyboard; revisit if an order is ever run
   interactively without one. Owner: the user.
-- **The stack conventions the developer needs and the architecture does not yet
-  give** — the contracts package shape (schema library, wrapper signature, the
-  in-memory fake's switch, `db-types` regeneration), what the M0 contracts
-  skeleton contains, the environment a Vercel preview runs against, migration
-  and seed naming, the package manager and workspace tool, the definer-function
-  header. Listed with recommendations in [`conventions.md`](conventions.md) §8,
-  each `_TBD_` until an A-n or a §7 note answers it. Owner: `/architecture`;
-  answered before the M0 order is approved.
+- ~~**The stack conventions the developer needs and the architecture does not yet
+  give.**~~ **Closed by A-97 to A-103** on 2026-09-20; recorded in
+  [`conventions.md`](conventions.md), which now carries no `_TBD_`. Two items
+  stayed open in [architecture](../architecture.md) §11: enforcement of A-91's
+  key rule, and the preview access protection.
