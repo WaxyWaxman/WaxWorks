@@ -35,8 +35,8 @@ Point-of-sale and inventory management for independent vinyl record stores.
 | M-06 | [Configure the store](flows/M-06-settings.md) | Manager | **Specified** |
 | M-07 | [Chart of accounts](flows/M-07-chart-of-accounts.md) | Manager | **Specified** |
 | M-08 | [Keep the general ledger](flows/M-08-general-ledger.md) | Manager | **Specified** |
-| O-01 | [Administer the organization](flows/O-01-administer-the-organization.md) | Owner | In clarification |
-| S-01 | [Onboard and recover organizations](flows/S-01-onboard-and-recover-organizations.md) | System Administrator | In clarification |
+| O-01 | [Administer the organization](flows/O-01-administer-the-organization.md) | Owner | **Specified** |
+| S-01 | [Onboard and recover organizations](flows/S-01-onboard-and-recover-organizations.md) | System Administrator | **Specified** |
 
 ## Conventions
 

@@ -103,13 +103,13 @@ Each flow is its own document. Status is tracked per flow so parallel work doesn
 
 | ID | Flow | Status |
 |---|---|---|
-| O-01 | [Administer the organization](flows/O-01-administer-the-organization.md) | In clarification |
+| O-01 | [Administer the organization](flows/O-01-administer-the-organization.md) | **Specified** |
 
 ### System Administrator
 
 | ID | Flow | Status |
 |---|---|---|
-| S-01 | [Onboard and recover organizations](flows/S-01-onboard-and-recover-organizations.md) | In clarification |
+| S-01 | [Onboard and recover organizations](flows/S-01-onboard-and-recover-organizations.md) | **Specified** |
 
 ---
 
