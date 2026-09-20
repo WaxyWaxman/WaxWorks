@@ -27,8 +27,8 @@ DOCS_INDEX = os.path.join(ROOT, "docs", "README.md")
 PRD = os.path.join(ROOT, "docs", "PRD.md")
 
 VALID_STATUS = {"Stub", "In clarification", "Specified"}
-FLOW_FILE_RE = re.compile(r"^([EM]-\d{2})-[a-z0-9-]+\.md$")
-CITATION_RE = re.compile(r"\b([EM]-\d{2})\s+decision\s+(\d+)", re.IGNORECASE)
+FLOW_FILE_RE = re.compile(r"^([EMOS]-\d{2})-[a-z0-9-]+\.md$")
+CITATION_RE = re.compile(r"\b([EMOS]-\d{2})\s+decision\s+(\d+)", re.IGNORECASE)
 LINK_RE = re.compile(r"\[[^\]]*\]\(([^)]+)\)")
 STATUS_LINE_RE = re.compile(r"^\*\*Status:\*\*\s*(.+)$", re.MULTILINE)
 RELATED_LINE_RE = re.compile(r"^\*\*Related:\*\*\s*(.+)$", re.MULTILINE)
@@ -216,7 +216,7 @@ def index_rows(path: str) -> dict[str, str]:
         if not line.startswith("|") or "flows/" not in line:
             continue
         cells = [c.strip() for c in line.strip("|").split("|")]
-        if len(cells) < 2 or not re.fullmatch(r"[EM]-\d{2}", cells[0]):
+        if len(cells) < 2 or not re.fullmatch(r"[EMOS]-\d{2}", cells[0]):
             continue
         rows[cells[0]] = norm_status(cells[-1])
     return rows
@@ -477,7 +477,7 @@ for flow_id, flow in sorted(flows.items()):
     if not m:
         continue
     # dedupe: a markdown link repeats the ID in both its label and its filename
-    for other in sorted(set(re.findall(r"\b([EM]-\d{2})\b", m.group(1)))):
+    for other in sorted(set(re.findall(r"\b([EMOS]-\d{2})\b", m.group(1)))):
         target = flows.get(other)
         if target is None:
             err(f"{flow_id}: Related: names {other}, which does not exist")
@@ -499,7 +499,7 @@ for flow_id, flow in sorted(flows.items()):
 
 REGISTER = os.path.join(ROOT, "docs", "qa", "e2e-register.md")
 REGISTER_STATUS = {"Planned", "Walked", "Automated", "Stale", "Blocked", "—", "-"}
-REGISTER_ROW_RE = re.compile(r"^\|\s*(~~)?([EM]-\d{2})-T(\d+)(~~)?\s*\|(.*)$")
+REGISTER_ROW_RE = re.compile(r"^\|\s*(~~)?([EMOS]-\d{2})-T(\d+)(~~)?\s*\|(.*)$")
 
 if not os.path.exists(REGISTER):
     warn("docs/qa/e2e-register.md is missing -- no end-to-end register")

@@ -37,7 +37,7 @@ IGNORED_DIRS = {".git", "node_modules", "dist", ".vite", "worktrees", "test-resu
 TEST_FILE_RE = re.compile(r"\.(test|spec)\.[cm]?[jt]sx?$")
 PGTAP_DIR = os.path.join("supabase", "tests")
 
-FLOW_FILE_RE = re.compile(r"^([EM]-\d{2})-[a-z0-9-]+\.md$")
+FLOW_FILE_RE = re.compile(r"^([EMOS]-\d{2})-[a-z0-9-]+\.md$")
 STATUS_RE = re.compile(r"^\*\*Status:\*\*\s*(.+)$", re.MULTILINE)
 # A decision row: "| 12 | text" -- struck rows begin their text with ~~
 DECISION_ROW_RE = re.compile(r"^\|\s*(\d+)\s*\|\s*(~~)?", re.MULTILINE)
@@ -45,7 +45,7 @@ ARCH_ROW_RE = re.compile(r"^\|\s*(A-\d+[a-z]?)\s*\|\s*(~~)?", re.MULTILINE)
 
 # "E-05 d23", "E-05 decision 23", followed by any number of ", d24" / "/d25" / " and d26"
 FLOW_CITE_RE = re.compile(
-    r"\b([EM]-\d{2})\s+(?:decision\s+|d)(\d+)((?:\s*(?:,|/|&|and)\s*(?:decision\s+|d)?\d+)*)",
+    r"\b([EMOS]-\d{2})\s+(?:decision\s+|d)(\d+)((?:\s*(?:,|/|&|and)\s*(?:decision\s+|d)?\d+)*)",
     re.IGNORECASE,
 )
 FLOW_CITE_TAIL_RE = re.compile(r"(?:decision\s+|d)?(\d+)", re.IGNORECASE)

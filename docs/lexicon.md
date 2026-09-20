@@ -232,8 +232,8 @@ of one pressing **share a Record** but are **distinct InventoryItems**.
 |---|---|---|
 | **Jobs to be Done** | The section of the PRD listing the flows. | "user stories", "use cases" |
 | **flow** | One documented user journey, one file, stable ID. | "workflow", "journey", "feature" (a flow is not a feature) |
-| **Flow ID** | `E-` for Employee jobs, `M-` for Manager jobs. Stable once assigned. | renumbering, re-lettering |
-| **Actor** | The role a flow is written for: `Employee` or `Manager`. | "persona", "user type" |
+| **Flow ID** | `E-` for Employee jobs, `M-` for Manager jobs, `O-` for Owner jobs, `S-` for System Administrator jobs. Stable once assigned. | renumbering, re-lettering |
+| **Actor** | The role a flow is written for: `Employee`, `Manager`, `Owner`, or `System Administrator`. | "persona", "user type" |
 | **Resolved decisions** | The numbered, citable decision table in each flow. Cite as "E-02 decision 14". Append, never renumber. | "decisions log", "ADR" |
 | **Open questions** | Genuinely undecided points. | "TODOs", "issues" |
 | **Inherited from other flows** | Commitments pushed into this document by another flow. **Decided, not open.** | "dependencies", "related decisions" |
