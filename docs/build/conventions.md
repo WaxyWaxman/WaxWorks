@@ -17,9 +17,10 @@ The [workflow](workflow.md) says who writes what. This says how.
 ## 1. Commands
 
 Every command is run from the repository root. The **Track** column says who runs
-it in the course of an order. CI runs the first eight as A-97's six jobs (the two
-Supabase rows are one job's setup); Playwright is a seventh job that lands with
-the first `/qa automate`, not at M0 (A-97).
+it in the course of an order. A-97's six CI jobs, in its order, are the
+Document gate, the Decision-to-test gate, Typecheck, Lint, Unit tests and the
+database tests (with Start and Rebuild as that job's setup). Playwright is a
+seventh job that lands with the first `/qa automate`, not at M0 (A-97).
 
 | Purpose | Command | Track |
 |---|---|---|
