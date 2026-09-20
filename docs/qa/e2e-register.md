@@ -59,9 +59,8 @@ tracks landing for a milestone lets rows be `Automated`.
 
 ## Where the suite lives
 
-_Status: recommended, not yet ratified. Route through `/architecture` as an
-amendment to [architecture](../architecture.md) §7 before any spec file is
-written._
+_**Ratified 2026-09-19** (#114) as [architecture](../architecture.md) **A-85**, which amends §7.
+The layout below is the recorded one; spec files may be written against it._
 
 ```
 e2e/
@@ -76,9 +75,10 @@ Proposed on these grounds: the suite is not part of either app, since it drives
 whichever one `PLAYWRIGHT_BASE_URL` points at — the prototype today, `apps/web`
 from M1; one directory per flow keeps parallel edits conflict-free, the same
 reason the flows are one file each; and a spec named for its row makes
-"which rows are automated" a `ls`. Accepted consequence if ratified: a third
+"which rows are automated" a `ls`. Accepted consequence, now on record in A-85: a third
 top-level directory with its own `package.json` and browser install, which CI
-must cache.
+must cache — and a contributor cloning the repository has three installs rather
+than two.
 
 ---
 
