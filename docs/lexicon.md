@@ -295,10 +295,12 @@ prefer the first form:
 
 ## 14. Accounting and the ledger (M-07)
 
-**Reserved vocabulary, not recorded behavior.** M-07 does not exist and nothing below
-is a decision — every term here is _Status: recommended, not yet ratified._ The section
-exists because four of the words this flow wants are **already taken** by other parts of
-the system, and the cheap moment to settle that is before anything cites them.
+**Ratified vocabulary.** Written before [M-07](flows/M-07-chart-of-accounts.md) existed, as
+reserved wording; ratified as decisions with it ([architecture](architecture.md) A-64 to A-67,
+M-07 d1–d14, and §9's amendment row for this section). The section exists because four of the
+words this flow wanted were **already taken** by other parts of the system, and the cheap
+moment to settle that was before anything cited them. ~~M-07 does not exist and nothing below
+is a decision~~ — it does, and they are.
 
 Appended rather than inserted, so the existing section numbers stay stable.
 
@@ -317,8 +319,8 @@ Appended rather than inserted, so the existing section numbers stay stable.
 
 | Canonical | Meaning | Avoid |
 |---|---|---|
-| **chart of accounts** | The store's list of GL accounts. **It does not exist** — [M-06](flows/M-06-settings.md) d11 carries it as an open question and [architecture](architecture.md) §10 as a risk. Three columns are reserved against it and unread: `tax_types.gl_account` ([M-06](flows/M-06-settings.md) d11), a tender's **Code** (d23), and a Section's **GL code** (d28). Per Store, like everything else ([architecture](architecture.md) A-5). | "COA"; "the ledger" (that is the postings, not the list); treating the three reserved columns as evidence one exists |
-| **GL account** | The canonical name for one row of the chart, and for any field pointing at one. **The three reserved columns currently spell it three ways** — `gl_account`, `Code`, `GL code` — which [architecture](architecture.md) §10 already flags for re-checking when the chart is written. One name from here on. | "GL code", "account code", "nominal code"; **Code** unqualified — a tender, a Section and a tax type each already carry a different `Code` |
+| **chart of accounts** | The store's list of GL accounts — [M-07](flows/M-07-chart-of-accounts.md), pre-loaded at setup with a reserved account per **role** and every seam mapped (M-07 d3, d11). ~~It does not exist; three columns are reserved against it~~ — the three reserved columns (`tax_types.gl_account`, a tender's **Code**, a Section's **GL code**) were retired by [M-06](flows/M-06-settings.md) d58 and [architecture](architecture.md) A-64; every mapping lives in M-07 d4's `gl_account_mappings` instead. Per Store, like everything else ([architecture](architecture.md) A-5). | "COA"; "the ledger" (that is the postings, not the list); a *code typed onto a settings row* as the way to map one |
+| **GL account** | The canonical name for one row of the chart, and for any field pointing at one. It carries a **role** the software resolves it by and a **number and name the store owns** — nothing is ever resolved by number ([M-07](flows/M-07-chart-of-accounts.md) d3). ~~The three reserved columns spell it three ways~~ — those columns are gone (A-64), and the one name stands. | "GL code", "account code", "nominal code"; **Code** unqualified — a tender, a Section and a tax type each already carry a different `Code` |
 | **journal entry** / **posting** | A balanced set of debits and credits written against GL accounts. **Not** a **manual ledger entry** (§4), which is an accounts-payable row — §4 already lists *journal entry* as the wrong word for that one, and this is the artifact it was being kept clear of. [M-06](flows/M-06-settings.md) d39 uses **posting** for the act. | "manual ledger entry" for a posting, or the reverse; "transaction" (ambiguous — a Sale is one too); "GL entry" |
 | **BankDeposit** | The artifact recording **what actually reached the bank**, against the **undeposited funds** a close produced. Money side only: nothing instructs a bank, on the recording-not-executing line [M-05](flows/M-05-accounts-payable.md) draws for payments. PascalCase for the artifact; "bank deposit" in running prose. | "deposit" unqualified — taken by [E-05](flows/E-05-sell-a-record.md) d25; "settlement", "banking run"; "payout" (that is a till behavior, [M-06](flows/M-06-settings.md)) |
 | **undeposited funds** | What a tender has taken in that the bank has not yet paid out, carried at face value. **Per tender, not per behavior**, following [M-06](flows/M-06-settings.md) d22 — `Visa` and `Amex` settle as separate deposits and a merged figure cannot be tied back to a statement. The name is QuickBooks' own for this account, chosen so an export maps one-to-one instead of needing a translation. | "clearing account" — **clearing** is taken (§4); "float", which [M-03](flows/M-03-daily-summary.md) d8 rules out having at all; "cash in transit" as a second name for the same thing |

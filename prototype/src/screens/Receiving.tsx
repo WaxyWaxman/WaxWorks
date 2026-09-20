@@ -451,8 +451,11 @@ function useLinePricing(opts: {
   stickyPrice?: number;
   supplier: Supplier;
 }) {
+  const app = useApp();
   const listPrice = Number(opts.listRaw) || 0;
   const discountPct = Number(opts.discountRaw) || 0;
+  // M-06 d44 / A-49 — the one configured ending the suggestion rounds to.
+  const priceEndingMinor = app.storeSettings.priceEndingMinor;
   // d53 — the rules live in lib/pricing so they can be exercised without
   // a screen, and so the margin benchmark cannot drift from the pre-fill.
   const base = priceLine({
@@ -460,6 +463,7 @@ function useLinePricing(opts: {
     lineDiscountPct: discountPct,
     supplierMarkupPct: opts.supplier.discountPct,
     decidedPrice: opts.stickyPrice,
+    priceEndingMinor,
   });
   const suggested = base.prefill;
   const sellPrice = opts.autoAccept ? suggested : Number(opts.sellRaw ?? suggested.toFixed(2)) || 0;
@@ -469,6 +473,7 @@ function useLinePricing(opts: {
     supplierMarkupPct: opts.supplier.discountPct,
     decidedPrice: opts.stickyPrice,
     acceptedPrice: sellPrice,
+    priceEndingMinor,
   });
   return {
     listPrice,

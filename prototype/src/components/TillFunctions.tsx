@@ -231,7 +231,7 @@ export function SearchModal({ onClose }: { onClose: () => void }) {
             <input type="date" value={dateQuery} onChange={(e) => setDateQuery(e.target.value)} />
           </label>
         </div>
-        <BarcodeInput onScan={setCode} placeholder="…or scan/type an item barcode" />
+        <BarcodeInput onScan={setCode} placeholder="…or scan/type an item barcode" samples={[]} />
         {code && codeFilter?.noMatch && <div className="callout danger">No catalog match for "{code}".</div>}
 
         <table className="data">
