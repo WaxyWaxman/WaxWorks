@@ -10,8 +10,8 @@ register rows eligible for `Automated` ([workflow](workflow.md) §3 step 7).
 | Milestone | Track | Work orders | Landed in | Contract commit | Both landed |
 |---|---|---|---|---|---|
 | M0 Foundation | joint | — | | | |
-| M1 Tenancy and governance | D | | | | |
-| M1 Tenancy and governance | U | | | | |
+| M1 Tenancy and identity | D | | | | |
+| M1 Tenancy and identity | U | | | | |
 | M2 Catalog and scan | D | | | | |
 | M2 Catalog and scan | U | | | | |
 | M3 Receiving | D | | | | |
