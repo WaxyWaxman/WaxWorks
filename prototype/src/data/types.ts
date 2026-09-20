@@ -936,7 +936,8 @@ export interface PayableEntry {
    * The two acts wrote identical `clearedAt`/`clearedBy` and nothing else,
    * so they were indistinguishable. d39 makes a CLEARING reversible; it does
    * not authorise reversing a settlement's disposal, which belongs to that
-   * batch's void (d22) and is an open question in M-05. Discriminating on
+   * batch's void (d22) — and d54 settles that: the void DOES reverse it,
+   * returning the placeholder to outstanding. Discriminating on
    * the absence of `clearedWith` would have been the same implicit trap.
    */
   clearedInBatchId?: string;

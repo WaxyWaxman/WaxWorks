@@ -34,7 +34,7 @@ import {
   tenderedTotal,
   invoiceChargesTotal,
 } from "../lib/totals";
-import { clearedAgainst, entryIsCleared, unclearRefusal } from "../lib/payables";
+import { clearedAgainst, entryIsCleared, unclearRefusal, unretireOnVoid } from "../lib/payables";
 import { giftCardRedeemRefusal } from "../lib/giftCards";
 import {
   finishReturnRefusal,
@@ -4811,7 +4811,16 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
       return {
         ...prev,
         batchVoids: [voidRow, ...prev.batchVoids],
-        payableEntries: [...prev.payableEntries, ...reversals],
+        // d54 — a void un-retires the Claim placeholders THIS batch disposed of.
+        // d22 reverses every target; d27 makes a placeholder not a target and
+        // calls its retirement a real disposal. Neither said what a void does to
+        // one, and the answer follows what clearedInBatchId already models: the
+        // disposal belongs to the BATCH. Without this the row had no exit at all,
+        // since unclearRefusal refuses on a settlement's disposal by design.
+        payableEntries: [
+          ...prev.payableEntries.map((e) => unretireOnVoid(e, batch.id, at, by)),
+          ...reversals,
+        ],
         invoices,
         journals: [journal.batch, ...prev.journals],
         reviewFlags: journalFlags(journal, `the void of ${batch.reference || batch.id}`, prev.reviewFlags),
@@ -4911,8 +4920,8 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
    * REFUSES on a row a SETTLEMENT retired (d27's placeholder disposal), which
    * `clearedInBatchId` is what distinguishes. d39 makes a CLEARING reversible
    * and says nothing about a settlement's disposal — reversing that is its
-   * batch's void (d22), and whether the void even does so is an open question
-   * in M-05. Un-clearing it here would answer that question by accident.
+   * batch's void (d22), which d54 settles: the void un-retires it. This still
+   * refuses, because the void is now the route — not a hole this had to patch.
    */
   const unclearPayableEntries: AppContextValue["unclearPayableEntries"] = (clearingId, byAuth) => {
     // §6 — an M function resolves the Manager ITSELF, in the same
