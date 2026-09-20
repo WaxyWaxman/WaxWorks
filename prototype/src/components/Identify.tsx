@@ -187,16 +187,23 @@ function IdentifyPrompt({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [res.kind, res.kind === "one" ? res.user.id : null]);
 
+  // Subscribed ONCE. The shell's activity listener fires on the same keydown
+  // (App.tsx — any key is activity) and its state update re-renders the
+  // provider, which hands this prompt a new `onCancel`; a subscription keyed
+  // on it would unsubscribe and resubscribe mid-dispatch and never see the
+  // Escape that caused it. E-01 d19: Escape cancels the action.
+  const cancelRef = useRef(onCancel);
+  cancelRef.current = onCancel;
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
         e.preventDefault();
-        onCancel();
+        cancelRef.current();
       }
     };
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
-  }, [onCancel]);
+  }, []);
 
   return (
     <div className="idy-scrim" onPointerDown={onCancel}>

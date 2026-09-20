@@ -4,7 +4,7 @@ import { useNavigate, useParams } from "react-router-dom";
 import { SpecNote } from "../components/SpecNote";
 import { isManagerial, type Store, type User, type UserRole } from "../data/types";
 import { readStored, writeStored } from "../lib/tillMemory";
-import { adminRefusal } from "../lib/userAdminPolicy";
+import { adminRefusal, withArticle } from "../lib/userAdminPolicy";
 import { useApp, type UserWriteResult } from "../store/AppStore";
 import { ManagerAuthorize } from "../components/ManagerAuthorize";
 
@@ -279,12 +279,14 @@ function StoreChecks({
   storeName,
   canToggle,
   onToggle,
+  whyNot = "not one of your Stores",
 }: {
   stores: Store[];
   chosen: string[];
   storeName: (id: string) => string;
   canToggle: (storeId: string) => boolean;
   onToggle: (storeId: string, on: boolean) => void;
+  whyNot?: string;
 }) {
   return (
     <div className="stack" style={{ gap: 4 }}>
@@ -295,7 +297,7 @@ function StoreChecks({
           <label key={s.id} className={"small" + (enabled ? "" : " muted")} style={{ display: "flex", gap: 8, alignItems: "center" }}>
             <input type="checkbox" checked={on} disabled={!enabled} onChange={(e) => onToggle(s.id, e.target.checked)} />
             {storeName(s.id)} <span className="muted">· {s.id}</span>
-            {!enabled && <span className="muted">— not one of your Stores</span>}
+            {!enabled && <span className="muted">— {whyNot}</span>}
           </label>
         );
       })}
@@ -483,7 +485,7 @@ function UserCard({
           {refusal && <div className="callout danger">{refusal}</div>}
           {!canCorrect && (
             <div className="callout small">
-              You may read this record and not change it — {user.role === "Employee" ? "an Employee" : `a ${user.role}`} is touched by an Owner
+              You may read this record and not change it — {withArticle(user.role)} is touched by an Owner
               {user.role === "Employee" ? ", or by a Manager of their Stores" : ""} (M-04 d30).
             </div>
           )}
@@ -508,7 +510,7 @@ function UserCard({
           </label>
 
           <label className="field">
-            <span>Initials</span>
+            <span>Initials{!user.initials && " — none yet; required before a Store assignment (M-04 d34)"}</span>
             <input
               value={initials}
               maxLength={4}
@@ -548,6 +550,7 @@ function UserCard({
               chosen={user.assignments}
               storeName={storeName}
               canToggle={(id) => may(actor, { kind: "assign", role: user.role, storeId: id })}
+              whyNot={isManagerial(user.role) && actor.role !== "Owner" ? "Owner-only (M-04 d30)" : "not one of your Stores"}
               onToggle={(id, on) => onRun(on ? app.assignToStore(user.id, id, by) : app.unassignFromStore(user.id, id, by))}
             />
           </div>

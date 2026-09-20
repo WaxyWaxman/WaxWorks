@@ -474,8 +474,10 @@ export function buildHistory(input: HistoryInput): GeneratedHistory {
   const allRecords = [...RECORDS, ...HISTORY_RECORDS];
 
   const allCustomers = [...CUSTOMERS, ...HISTORY_CUSTOMERS];
-  const clerks = USERS.filter((u) => u.active && u.role === "Employee").map((u) => `${u.name} (${u.role})`);
-  const managers = USERS.filter((u) => u.active && u.role === "Manager").map((u) => `${u.name} (${u.role})`);
+  // E-01 d25 — only people ASSIGNED to this Store work its counter.
+  const staff = USERS.filter((u) => u.active && u.assignments.includes(input.storeId));
+  const clerks = staff.filter((u) => u.role === "Employee").map((u) => `${u.name} (${u.role})`);
+  const managers = staff.filter((u) => u.role === "Manager").map((u) => `${u.name} (${u.role})`);
   const anyClerk = () => clerks[Math.floor(rand() * clerks.length)] ?? managers[0] ?? "Unknown";
   const aManager = managers[0] ?? "Unknown";
 

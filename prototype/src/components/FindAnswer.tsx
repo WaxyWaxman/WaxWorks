@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useIdentify } from "./Identify";
 import { ManagerAuthorize } from "./ManagerAuthorize";
 import { OrderModal } from "./OrderModal";
 import { ReserveModal } from "./ReserveModal";
@@ -24,6 +25,7 @@ export function FindAnswer({
   onStatus: (confirmation: string) => void;
 }) {
   const app = useApp();
+  const identify = useIdentify();
   const [reserving, setReserving] = useState(false);
   const [ordering, setOrdering] = useState(false);
   const [adjusting, setAdjusting] = useState(false);
@@ -125,7 +127,18 @@ export function FindAnswer({
           <button
             className={"btn" + (outstandingOversold.length ? " danger" : "")}
             disabled={outstandingOversold.length === 0}
-            onClick={() => setAdjusting(true)}
+            onClick={() =>
+              // E-01 d12, d15 — adjusting on hand prompts for the acting person's
+              // initials every time; the Manager's PIN follows (E-04, two sets).
+              identify.request({
+                reason: "Adjust on hand",
+                always: true,
+                onOk: (u) => {
+                  app.identify(u.id);
+                  setAdjusting(true);
+                },
+              })
+            }
             title={
               outstandingOversold.length
                 ? `Force ${outstandingOversold.length} outstanding oversold cop${outstandingOversold.length === 1 ? "y" : "ies"} back to zero`

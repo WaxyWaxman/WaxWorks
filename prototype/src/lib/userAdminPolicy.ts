@@ -24,6 +24,7 @@ export type AdminAction =
   | { kind: "requestReset"; role: UserRole; assignments: string[] };
 
 const ownerOnly = (what: string) => `${what} is Owner-only (M-04 d30).`;
+export const withArticle = (role: UserRole) => (role === "Owner" || role === "Employee" ? `an ${role}` : `a ${role}`);
 
 export function adminRefusal(actor: User, action: AdminAction): string | undefined {
   if (!actor.active || !isManagerial(actor.role)) return "This needs a Manager or Owner (A-28a).";
@@ -38,7 +39,7 @@ export function adminRefusal(actor: User, action: AdminAction): string | undefin
 
   switch (action.kind) {
     case "add":
-      if (isManagerial(action.role)) return ownerOnly(`Adding a ${action.role}`);
+      if (isManagerial(action.role)) return ownerOnly(`Adding ${withArticle(action.role)}`);
       return allMine(action.assignments) ? undefined : outside;
     case "changeRole":
       // Any role change that touches Manager or Owner on either side.
@@ -46,14 +47,14 @@ export function adminRefusal(actor: User, action: AdminAction): string | undefin
     case "deactivate":
     case "reactivate":
     case "correct":
-      if (isManagerial(action.role)) return ownerOnly(`Touching a ${action.role}`);
+      if (isManagerial(action.role)) return ownerOnly(`Touching ${withArticle(action.role)}`);
       // d30's "at their own Stores": for an act with no Store argument the
       // narrow reading is used — every Store the Employee holds must be one
       // of the Manager's. The wider reading is M-04's open question.
       return allMine(action.assignments) ? undefined : outside;
     case "assign":
     case "unassign":
-      if (isManagerial(action.role)) return ownerOnly(`Reassigning a ${action.role}`);
+      if (isManagerial(action.role)) return ownerOnly(`Reassigning ${withArticle(action.role)}`);
       return mine.has(action.storeId) ? undefined : outside;
     case "setPin":
       // The one thing about a Manager or Owner a Manager may touch (d28): a

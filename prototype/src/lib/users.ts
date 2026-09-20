@@ -90,6 +90,13 @@ function checkInitials(v: string): string | null {
   return null;
 }
 
+// M-04 d34 / S-01 d5 — a person who holds no Store may hold no initials: there
+// is no counter for them to resolve at. The moment they are assigned, Assign
+// requires them (below).
+function initialsRequired(role: UserRole, assignments: string[]): boolean {
+  return !(role === "Owner" && assignments.length === 0);
+}
+
 // E-01 d26 — exactly four digits.
 export const PIN_LENGTH = 4;
 const PIN_RE = /^\d{4}$/;
@@ -125,6 +132,7 @@ function checkEmail(role: UserRole, email: string | undefined): string | null {
 // assignment is the second enforcement point). Names the holder: initials are
 // not secret.
 function initialsClashAt(users: User[], initials: string, stores: string[], exceptId?: string): string | null {
+  if (!initials) return null;
   for (const storeId of stores) {
     const clash = initialsHeldBy(users, initials, storeId, exceptId);
     if (clash) return `${initials} is already ${clash.name}'s at this Store. Give this person different initials — three letters, or a digit.`;
@@ -152,8 +160,10 @@ export function addUser(
   opts: { id: string; orgId: string; now?: () => string },
 ): UserWrite {
   const now = opts.now ?? defaultNow;
-  const bad = checkInitials(input.initials);
-  if (bad) return { ok: false, reason: bad };
+  if (initialsRequired(input.role, input.assignments)) {
+    const bad = checkInitials(input.initials);
+    if (bad) return { ok: false, reason: bad };
+  }
   if (!input.name.trim()) return { ok: false, reason: "A name is required." };
   const badAssign = checkAssignments(input.role, input.assignments);
   if (badAssign) return { ok: false, reason: badAssign };
@@ -206,6 +216,9 @@ export function changeUserRole(
   const badEmail = checkEmail(role, u.email);
   if (badEmail) return { ok: false, reason: badEmail };
   const changes = [stamp(`Role: ${u.role} → ${role} (by ${by})`, now)];
+  // d33 — a promotion into Manager or Owner is the invite moment for a person
+  // who has no password yet; one who already holds one gets no second invite.
+  if (!isManagerial(u.role) && isManagerial(role) && !u.password) changes.push(stamp(`Invite sent to ${u.email!.trim()}`, now));
   let pin = u.pin;
   // An Employee has no PIN (d28): demotion to Employee clears it, and says so.
   if (!isManagerial(role) && pin !== undefined) {
@@ -302,8 +315,10 @@ export function correctUser(
   const nextInitials = patch.initials === undefined ? u.initials : normalizeInitials(patch.initials);
   const nextEmail = patch.email === undefined ? u.email : patch.email.trim() || undefined;
   if (!nextName) return { ok: false, reason: "A name is required." };
-  const bad = checkInitials(nextInitials);
-  if (bad) return { ok: false, reason: bad };
+  if (initialsRequired(u.role, u.assignments)) {
+    const bad = checkInitials(nextInitials);
+    if (bad) return { ok: false, reason: bad };
+  }
   const badEmail = checkEmail(u.role, nextEmail);
   if (badEmail) return { ok: false, reason: badEmail };
   // A deactivated user's initials are not held against anyone (d16), so the
@@ -347,6 +362,8 @@ export function assignToStore(
   const u = users.find((x) => x.id === userId);
   if (!u) return { ok: false, reason: "No such user." };
   if (u.assignments.includes(storeId)) return { ok: true, users, id: userId };
+  // d34 — initials are what a counter resolves; nobody is assigned without them.
+  if (!u.initials) return { ok: false, reason: `${u.name} has no initials yet — give them some (Correct) before assigning them to a Store (M-04 d34).` };
   if (u.active) {
     const clash = initialsClashAt(users, u.initials, [storeId], userId);
     if (clash) return { ok: false, reason: clash };

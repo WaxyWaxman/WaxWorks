@@ -261,6 +261,9 @@ interface AppState {
   // setting (`storeSettings.sessionLapseSeconds`, M-06 d45) and nothing else.
   sessionUserId: string | null;
   sessionLastActivity: number;
+  // M-04 §Managing users — a role change takes effect on the NEXT session:
+  // the role the staff session opened with is what it keeps until it ends.
+  sessionRole: UserRole | null;
   // WHO SIGNED IN (A-87): a store account, a person, or a System
   // Administrator. Null before any door is opened. See `Principal`.
   principal: Principal | null;
@@ -405,7 +408,7 @@ function loadStore(prev: AppState, storeId: string): AppState {
   if (!incoming) return prev; // no slice for this Store — the caller should have made one
   const parked = { ...prev.parkedStores, [prev.activeStoreId]: sliceOf(prev) };
   delete parked[storeId];
-  return { ...prev, ...incoming, activeStoreId: storeId, parkedStores: parked, sessionUserId: null };
+  return { ...prev, ...incoming, activeStoreId: storeId, parkedStores: parked, sessionUserId: null, sessionRole: null };
 }
 
 // A Store opened in-product starts from M-06's defaults with nothing sold,
@@ -653,6 +656,7 @@ const seed: AppState = {
   defaultTaxGroup: DEFAULT_TAX_GROUP,
   sessionUserId: null,
   sessionLastActivity: Date.now(),
+  sessionRole: null,
   principal: null,
   organizations: ORGANIZATIONS,
   stores: STORES,
@@ -1081,11 +1085,13 @@ interface AppContextValue extends AppState {
   // ---- S-01 — the System Administrator's three functions (A-90) ----
   // Each asserts the principal is a System Administrator and logs into the
   // Organization it touched, where its Owners read it (S-01 d3, O-01 d5).
-  createOrganization: (input: { name: string; ownerName: string; ownerEmail: string; ownerInitials: string }) => { ok: true; id: string } | { ok: false; reason: string };
+  // S-01 d5 — name and email only; the Owner takes initials at their first
+  // assignment (M-04 d34).
+  createOrganization: (input: { name: string; ownerName: string; ownerEmail: string }) => { ok: true; id: string } | { ok: false; reason: string };
   sysadminRequestOwnerReset: (userId: string) => { ok: true } | { ok: false; reason: string };
   sysadminRecoverOwner: (
     orgId: string,
-    how: { reactivate: string } | { invite: { name: string; email: string; initials: string } },
+    how: { reactivate: string } | { invite: { name: string; email: string } },
   ) => { ok: true } | { ok: false; reason: string };
   // The people and Stores of the Organization in session — a Store screen
   // never lists another Organization's (A-86).
@@ -1558,10 +1564,13 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
   // change (E-01 d27), which is why nothing prompts and nothing lapses.
   const sessionUser: User | null = (() => {
     if (principal?.kind === "personal") return s.users.find((u) => u.id === principal.userId && u.active) ?? null;
-    if (principal?.kind === "store")
-      return (
-        s.users.find((u) => u.id === s.sessionUserId && u.active && u.assignments.includes(principal.storeId)) ?? null
-      );
+    if (principal?.kind === "store") {
+      const u = s.users.find((x) => x.id === s.sessionUserId && x.active && x.assignments.includes(principal.storeId)) ?? null;
+      // The role the session opened with (M-04: a role change takes effect on
+      // the next session). What a manager-only write trusts is still resolved
+      // live from the row (A-55, A-89) — this is only what the session is.
+      return u && s.sessionRole ? { ...u, role: s.sessionRole } : u;
+    }
     return null;
   })();
 
@@ -1574,6 +1583,15 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
   // so the fallback names the PRINCIPAL rather than a constant — it is honest
   // (that is who is signed in) and it makes any write that skipped the prompt
   // visible in a log.
+  // E-01 d26 / M-04 d4, d31 — BOTH NAMES. On a store session a manager-only
+  // act carries the Manager whose PIN it was AND the Employee whose session it
+  // was; on a personal session the one name is both. Applied wherever a gated
+  // write derives the name it records, so no write can forget the second.
+  const recorded = (managerName: string, managerUserId: string): string =>
+    principal?.kind === "store" && sessionUser && sessionUser.id !== managerUserId
+      ? `${managerName}, for ${sessionUser.name} (${sessionUser.role})`
+      : managerName;
+
   const actorName: string = sessionUser
     ? `${sessionUser.name} (${sessionUser.role})`
     : principal?.kind === "store"
@@ -1583,10 +1601,15 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
         : CURRENT_USER;
 
   const identify: AppContextValue["identify"] = (userId) =>
-    setS((prev) => ({ ...prev, sessionUserId: userId, sessionLastActivity: Date.now() }));
+    setS((prev) => ({
+      ...prev,
+      sessionUserId: userId,
+      sessionRole: prev.users.find((u) => u.id === userId)?.role ?? null,
+      sessionLastActivity: Date.now(),
+    }));
 
   const endSession: AppContextValue["endSession"] = () =>
-    setS((prev) => ({ ...prev, sessionUserId: null }));
+    setS((prev) => ({ ...prev, sessionUserId: null, sessionRole: null }));
 
   const touchSession: AppContextValue["touchSession"] = () =>
     setS((prev) => (prev.sessionUserId ? { ...prev, sessionLastActivity: Date.now() } : prev));
@@ -1731,7 +1754,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
     // prompt and the write bites (A-28a, A-4, A-48).
     const mgr = requireManager(s.users, byAuth);
     if (!mgr.ok) return;
-    const by = mgr.name;
+    const by = recorded(mgr.name, byAuth.userId);
     setS((prev) => ({
       ...prev,
       reviewFlags: prev.reviewFlags.map((f) =>
@@ -1794,7 +1817,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
     // prompt and the write bites (A-28a, A-4, A-48).
     const mgr = requireManager(s.users, byAuth);
     if (!mgr.ok) return;
-    const by = mgr.name;
+    const by = recorded(mgr.name, byAuth.userId);
     setS((prev) => {
       const suspense = prev.glAccounts.find((a) => a.role === "suspense");
       if (!suspense) return prev;
@@ -1822,7 +1845,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
     // prompt and the write bites (A-28a, A-4, A-48).
     const mgr = requireManager(s.users, byAuth);
     if (!mgr.ok) return;
-    const by = mgr.name;
+    const by = recorded(mgr.name, byAuth.userId);
     setS((prev) => {
       const seal: LedgerPeriodSeal = {
         id: "seal-" + period + "-" + (prev.ledgerSeals.length + 1),
@@ -1877,7 +1900,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
     // prompt and the write bites (A-28a, A-4, A-48).
     const mgr = requireManager(s.users, byAuth);
     if (!mgr.ok) return;
-    const by = mgr.name;
+    const by = recorded(mgr.name, byAuth.userId);
     setS((prev) => {
       const live = prev.ledgerSeals
         .filter((x) => x.period === period)
@@ -1915,7 +1938,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
     // prompt and the write bites (A-28a, A-4, A-48).
     const mgr = requireManager(s.users, byAuth);
     if (!mgr.ok) return;
-    const by = mgr.name;
+    const by = recorded(mgr.name, byAuth.userId);
     setS((prev) => ({
       ...prev,
       ledgerYearFilings: [
@@ -2124,7 +2147,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
     // prompt and the write bites (A-28a, A-4, A-48).
     const mgr = requireManager(s.users, byAuth);
     if (!mgr.ok) return { ok: false, reason: mgr.refusal };
-    const by = mgr.name;
+    const by = recorded(mgr.name, byAuth.userId);
 
     const code = row.code.trim().toLowerCase();
     if (code.length !== 1) return { ok: false, reason: "A tax type code is a single letter." };
@@ -2158,7 +2181,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
     // prompt and the write bites (A-28a, A-4, A-48).
     const mgr = requireManager(s.users, byAuth);
     if (!mgr.ok) return { ok: false, reason: mgr.refusal };
-    const by = mgr.name;
+    const by = recorded(mgr.name, byAuth.userId);
 
     const clean = spec.trim().toLowerCase();
     const { codes } = parseCell(clean);
@@ -2189,7 +2212,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
     // prompt and the write bites (A-28a, A-4, A-48).
     const mgr = requireManager(s.users, byAuth);
     if (!mgr.ok) return { ok: false, reason: mgr.refusal };
-    const by = mgr.name;
+    const by = recorded(mgr.name, byAuth.userId);
 
     if (!row.description.trim()) return { ok: false, reason: "A description is required." };
     const shortName = row.shortName.trim().toUpperCase();
@@ -2212,7 +2235,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
     // prompt and the write bites (A-28a, A-4, A-48).
     const mgr = requireManager(s.users, byAuth);
     if (!mgr.ok) return;
-    const by = mgr.name;
+    const by = recorded(mgr.name, byAuth.userId);
 
     if (groupId === s.defaultTaxGroup) return;
     const before = s.taxGroups.find((g) => g.id === s.defaultTaxGroup)?.shortName ?? s.defaultTaxGroup;
@@ -2257,7 +2280,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
     // prompt and the write bites (A-28a, A-4, A-48).
     const mgr = requireManager(s.users, byAuth);
     if (!mgr.ok) return;
-    const by = mgr.name;
+    const by = recorded(mgr.name, byAuth.userId);
 
     const before = s.storeSettings[key];
     if (before === value) return;
@@ -2272,7 +2295,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
     // prompt and the write bites (A-28a, A-4, A-48).
     const mgr = requireManager(s.users, byAuth);
     if (!mgr.ok) return;
-    const by = mgr.name;
+    const by = recorded(mgr.name, byAuth.userId);
 
     const before = (s.storeDetails as unknown as Record<string, unknown>)[key];
     if (before === value) return;
@@ -2326,7 +2349,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
     // prompt and the write bites (A-28a, A-4, A-48).
     const mgr = requireManager(s.users, byAuth);
     if (!mgr.ok) return { ok: false, reason: mgr.refusal };
-    const by = mgr.name;
+    const by = recorded(mgr.name, byAuth.userId);
 
     const key = normaliseTag(tag);
     const existing = s.genreMap.find((r) => normaliseTag(r.tag) === key);
@@ -2347,7 +2370,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
     // prompt and the write bites (A-28a, A-4, A-48).
     const mgr = requireManager(s.users, byAuth);
     if (!mgr.ok) return { ok: false, reason: mgr.refusal };
-    const by = mgr.name;
+    const by = recorded(mgr.name, byAuth.userId);
 
     const key = normaliseTag(tag);
     const existing = s.genreMap.find((r) => normaliseTag(r.tag) === key);
@@ -2373,7 +2396,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
     // prompt and the write bites (A-28a, A-4, A-48).
     const mgr = requireManager(s.users, byAuth);
     if (!mgr.ok) return { ok: false, reason: mgr.refusal };
-    const by = mgr.name;
+    const by = recorded(mgr.name, byAuth.userId);
 
     const from = s.genres.find((g) => g.id === fromId);
     const to = s.genres.find((g) => g.id === toId);
@@ -2474,7 +2497,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
     // prompt and the write bites (A-28a, A-4, A-48).
     const mgr = requireManager(s.users, byAuth);
     if (!mgr.ok) return { ok: false, reason: mgr.refusal };
-    const by = mgr.name;
+    const by = recorded(mgr.name, byAuth.userId);
 
     // The rules live in lib/taxonomy so they can be exercised without a screen.
     const check = checkGenreWrite(row, {
@@ -2507,7 +2530,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
     // prompt and the write bites (A-28a, A-4, A-48).
     const mgr = requireManager(s.users, byAuth);
     if (!mgr.ok) return { ok: false, reason: mgr.refusal };
-    const by = mgr.name;
+    const by = recorded(mgr.name, byAuth.userId);
 
     const genre = s.genres.find((x) => x.id === genreId);
     const check = checkGenreDelete(genre, genreUseCount(genreId));
@@ -2524,7 +2547,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
     // prompt and the write bites (A-28a, A-4, A-48).
     const mgr = requireManager(s.users, byAuth);
     if (!mgr.ok) return { ok: false, reason: mgr.refusal };
-    const by = mgr.name;
+    const by = recorded(mgr.name, byAuth.userId);
 
     const code = row.code.trim().toUpperCase();
     if (code.length !== 2) return { ok: false, reason: "A Section code is two characters (d28)." };
@@ -2550,7 +2573,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
     // prompt and the write bites (A-28a, A-4, A-48).
     const mgr = requireManager(s.users, byAuth);
     if (!mgr.ok) return { ok: false, reason: mgr.refusal };
-    const by = mgr.name;
+    const by = recorded(mgr.name, byAuth.userId);
 
     if (!row.name.trim()) return { ok: false, reason: "A name is required." };
     const existing = s.tenders.find((x) => x.id === row.id);
@@ -2575,7 +2598,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
     // prompt and the write bites (A-28a, A-4, A-48).
     const mgr = requireManager(s.users, byAuth);
     if (!mgr.ok) return { ok: false, reason: mgr.refusal };
-    const by = mgr.name;
+    const by = recorded(mgr.name, byAuth.userId);
 
     const code = row.code.trim().toUpperCase();
     if (code.length !== 3) return { ok: false, reason: "A currency code is three letters." };
@@ -2604,7 +2627,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
     // prompt and the write bites (A-28a, A-4, A-48).
     const mgr = requireManager(s.users, byAuth);
     if (!mgr.ok) return;
-    const by = mgr.name;
+    const by = recorded(mgr.name, byAuth.userId);
 
     if (code === s.homeCurrency) return;
     const before = s.homeCurrency;
@@ -2643,7 +2666,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
     const actor = s.users.find((u) => u.id === byAuth.userId)!;
     const refused = adminRefusal(actor, action);
     if (refused) return { ok: false, reason: refused };
-    return { ok: true, by: mgr.name };
+    return { ok: true, by: recorded(mgr.name, byAuth.userId) };
   };
   const subject = (userId: string) => s.users.find((u) => u.id === userId);
 
@@ -2818,7 +2841,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
     const org: Organization = { id: orgId, name: input.name.trim(), active: true, log: [] };
     const added = usersLib.addUser(
       s.users,
-      { name: input.ownerName, initials: input.ownerInitials || input.ownerName.trim().split(/\s+/).map((w) => w[0]).join("").slice(0, 3), role: "Owner", assignments: [], email: input.ownerEmail },
+      { name: input.ownerName, initials: "", role: "Owner", assignments: [], email: input.ownerEmail },
       sa.name,
       { id: uid("user"), orgId },
     );
@@ -2863,7 +2886,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
       r = usersLib.reactivateUser(s.users, u.id, u.initials, sa.name);
       what = `Owner ${u.name} reactivated by ${sa.name}`;
     } else {
-      r = usersLib.addUser(s.users, { name: how.invite.name, initials: how.invite.initials, role: "Owner", assignments: [], email: how.invite.email }, sa.name, { id: uid("user"), orgId });
+      r = usersLib.addUser(s.users, { name: how.invite.name, initials: "", role: "Owner", assignments: [], email: how.invite.email }, sa.name, { id: uid("user"), orgId });
       what = `New Owner ${how.invite.name.trim()} invited at ${how.invite.email.trim()} by ${sa.name}`;
     }
     if (!r.ok) return r;
@@ -3216,7 +3239,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
     // the moment of CHOOSING because that is now the moment the Employee
     // performs it. Re-checked again at finish, when the effect actually runs.
     const mgr = opts?.byAuth ? requireManager(s.users, opts.byAuth) : undefined;
-    const by = mgr?.ok ? mgr.name : undefined;
+    const by = mgr?.ok && opts?.byAuth ? recorded(mgr.name, opts.byAuth.userId) : undefined;
     const stockRefusal = routeStockRefusal(
       to,
       mgr?.ok ? { role: "Manager", active: true, name: by! } : undefined,
@@ -3774,7 +3797,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
     // prompt and the write bites (A-28a, A-4, A-48).
     const mgr = requireManager(s.users, byAuth);
     if (!mgr.ok) return;
-    const by = mgr.name;
+    const by = recorded(mgr.name, byAuth.userId);
 
     const batch = s.closeBatches.find((b) => b.id === batchId);
     if (!batch || batch.undoneAt) return;
@@ -4181,7 +4204,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
     // other gated function uses (§6). The write-off route is the only one that
     // needs it; `routeStockRefusal` decides that, not this line.
     const mgr = byAuth ? requireManager(s.users, byAuth) : undefined;
-    const by = mgr?.ok ? mgr.name : undefined;
+    const by = mgr?.ok ? recorded(mgr.name, byAuth!.userId) : undefined;
     const refusal = routeStockRefusal(to, mgr?.ok ? { role: "Manager", active: true, name: by! } : undefined);
     if (refusal) return { routed: false, refusal };
 
@@ -4670,7 +4693,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
     // prompt and the write bites (A-28a, A-4, A-48).
     const mgr = requireManager(s.users, byAuth);
     if (!mgr.ok) return 0;
-    const by = mgr.name;
+    const by = recorded(mgr.name, byAuth.userId);
 
     const outstanding = s.inventory.filter((i) => i.recordId === recordId && i.oversold && !i.oversoldReconciledAt);
     if (outstanding.length === 0) return 0;
@@ -4982,7 +5005,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
     // prompt and the write bites (A-28a, A-4, A-48).
     const mgr = requireManager(s.users, byAuth);
     if (!mgr.ok) return;
-    const by = mgr.name;
+    const by = recorded(mgr.name, byAuth.userId);
     setS((prev) => ({
       ...prev,
       invoices: prev.invoices.map((iv) =>
@@ -5014,7 +5037,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
     // (A-28a, A-4, A-48).
     const mgr = requireManager(s.users, byAuth);
     if (!mgr.ok) return;
-    const by = mgr.name;
+    const by = recorded(mgr.name, byAuth.userId);
     setS((prev) => {
       const at = now();
       const targets: PaymentTarget[] = [];
@@ -5225,7 +5248,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
     // prompt and the write bites (A-28a, A-4, A-48).
     const mgr = requireManager(s.users, byAuth);
     if (!mgr.ok) return;
-    const by = mgr.name;
+    const by = recorded(mgr.name, byAuth.userId);
     setS((prev) => {
       const batch = prev.paymentBatches.find((b) => b.id === batchId);
       if (!batch || prev.batchVoids.some((v) => v.batchId === batchId)) return prev;
@@ -5346,7 +5369,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
     // prompt and the write bites (A-28a, A-4, A-48).
     const mgr = requireManager(s.users, byAuth);
     if (!mgr.ok) return { cleared: false };
-    const by = mgr.name;
+    const by = recorded(mgr.name, byAuth.userId);
 
     const entries = entryIds.map((id) => s.payableEntries.find((e) => e.id === id)).filter((e): e is PayableEntry => !!e);
     if (entries.length < 2 || entries.length !== entryIds.length) return { cleared: false };
@@ -5410,7 +5433,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
     // prompt and the write bites (A-28a, A-4, A-48).
     const mgr = requireManager(s.users, byAuth);
     if (!mgr.ok) return { uncleared: false, reason: mgr.refusal };
-    const by = mgr.name;
+    const by = recorded(mgr.name, byAuth.userId);
 
     const clearing = s.clearings.find((c) => c.id === clearingId);
     const refusal = unclearRefusal(clearing);
@@ -5522,8 +5545,8 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
     // A-54 gates voiding a PurchaseOrder, and §6 has the function resolve the
     // Manager itself rather than trust the caller.
     const mgr = requireManager(s.users, byAuth);
-    if (!mgr.ok) return { returned: 0, split: 0, untouched: 0 };
-    const by = mgr.name;
+    if (!mgr.ok || !byAuth) return { returned: 0, split: 0, untouched: 0 };
+    const by = recorded(mgr.name, byAuth.userId);
     const onPo = s.pendingOrders.filter((o) => o.poNumber === poNumber);
     if (onPo.length === 0) return { returned: 0, split: 0, untouched: 0 };
 

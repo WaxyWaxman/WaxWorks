@@ -419,3 +419,47 @@ describe("M-04 d4 — both names are recorded", () => {
     }
   });
 });
+
+describe("M-04 d33 — a promotion into Manager or Owner sends the invite", () => {
+  it("logs the invite beside the role change for a person with no password yet", () => {
+    const withEmail = shop().map((x) => (x.id === "u-3" ? { ...x, email: "eo@example.test" } : x));
+    const r = changeUserRole(withEmail, "u-3", "Manager", "A. Beaulieu (Owner)", at);
+    expect(r.ok).toBe(true);
+    if (r.ok) {
+      const log = r.users.find((x) => x.id === "u-3")!.log.map((l) => l.text);
+      expect(log).toContain("Role: Employee → Manager (by A. Beaulieu (Owner))");
+      expect(log).toContain("Invite sent to eo@example.test");
+    }
+  });
+
+  it("sends no second invite to somebody who already holds a password", () => {
+    const back = shop().map((x) => (x.id === "u-1" ? { ...x, role: "Employee" as const, password: "kept" } : x));
+    const r = changeUserRole(back, "u-1", "Manager", "AB", at);
+    expect(r.ok).toBe(true);
+    if (r.ok) expect(r.users.find((x) => x.id === "u-1")!.log.map((l) => l.text).join(" ")).not.toMatch(/Invite/);
+  });
+});
+
+describe("M-04 d34 / S-01 d5 — a User may hold no initials while they hold no Store; assignment requires them", () => {
+  it("adds an Owner with no Store and no initials", () => {
+    const r = addUser(shop(), { name: "N. Owner", initials: "", role: "Owner", assignments: [], email: "no@example.test" }, "WaxWorks Support (System Administrator)", opts);
+    expect(r.ok).toBe(true);
+    if (r.ok) expect(r.users.find((x) => x.id === "u-9")!.initials).toBe("");
+  });
+
+  it("still requires initials of anyone who holds a Store", () => {
+    expect(addUser(shop(), emp({ initials: "" }), "Y", opts).ok).toBe(false);
+    expect(addUser(shop(), { name: "N. Owner", initials: "", role: "Owner", assignments: [A], email: "no@example.test" }, "AB", opts).ok).toBe(false);
+  });
+
+  it("refuses to assign a person who has none, saying so", () => {
+    const added = addUser(shop(), { name: "N. Owner", initials: "", role: "Owner", assignments: [], email: "no@example.test" }, "AB", opts);
+    if (!added.ok) throw new Error("setup");
+    const r = assignToStore(added.users, "u-9", A, "AB", at);
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.reason).toMatch(/no initials yet/);
+    const named = correctUser(added.users, "u-9", { initials: "NO" }, "AB", at);
+    if (!named.ok) throw new Error("setup");
+    expect(assignToStore(named.users, "u-9", A, "AB", at).ok).toBe(true);
+  });
+});

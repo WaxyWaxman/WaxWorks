@@ -881,16 +881,30 @@ function StoreDetailsEditor({ by }: { by: ManagerAuth }) {
       <div className="field">
         <span>
           Store ID and position{" "}
-          <SpecNote cite="M-06 d47, M-04 d11">
-            <strong>Assigned, never editable</strong> — by us, when the Store is set up, alongside
-            its authentication. There is no screen, function or role that changes them, which is
-            why there is no tier above Manager holding that power: the write happens before the
-            shop exists as a tenant, so the actor is outside the role model rather than above it.
+          <SpecNote cite="M-06 d47, d70">
+            <strong>Assigned, never editable</strong> — minted by the system when an Owner creates
+            the Store (M-06 d70, O-01 d2; M-04 d11's <em>by the WaxWorks team</em> is superseded).
+            There is no screen, function or role that changes them afterwards.
           </SpecNote>
         </span>
         <div className="btn-row">
           <span className="mono">{d.storeId}</span>
           <span className="muted">· position {d.position}</span>
+        </div>
+      </div>
+
+      <div className="field">
+        <span>
+          Store account{" "}
+          <SpecNote cite="M-06 d70, O-01 d6">
+            The Store's own email and password, with which a terminal opens a store session (E-01
+            d24). Shown here so it can be read out; <strong>rotated on the Organization screen
+            only</strong>, by an Owner, because rotating it signs every terminal of the Store out.
+          </SpecNote>
+        </span>
+        <div className="btn-row">
+          <span className="mono">{app.currentStore?.accountEmail ?? "—"}</span>
+          <span className="muted">· rotated by an Owner under Organization</span>
         </div>
       </div>
     </>

@@ -82,7 +82,6 @@ function Organizations({ run }: { run: (r: { ok: true; id: string } | { ok: true
   const [name, setName] = useState("");
   const [ownerName, setOwnerName] = useState("");
   const [ownerEmail, setOwnerEmail] = useState("");
-  const [ownerInitials, setOwnerInitials] = useState("");
 
   return (
     <section className="org-section">
@@ -139,10 +138,6 @@ function Organizations({ run }: { run: (r: { ok: true; id: string } | { ok: true
               <span>First Owner — name</span>
               <input value={ownerName} onChange={(e) => setOwnerName(e.target.value)} />
             </label>
-            <label className="field" style={{ flex: 1 }}>
-              <span>Initials</span>
-              <input value={ownerInitials} maxLength={4} onChange={(e) => setOwnerInitials(e.target.value)} />
-            </label>
             <label className="field" style={{ flex: 2 }}>
               <span>Email (the invite goes here)</span>
               <input value={ownerEmail} onChange={(e) => setOwnerEmail(e.target.value)} />
@@ -152,17 +147,16 @@ function Organizations({ run }: { run: (r: { ok: true; id: string } | { ok: true
             <button
               className="btn primary"
               onClick={() => {
-                if (run(app.createOrganization({ name, ownerName, ownerEmail, ownerInitials }))) {
+                if (run(app.createOrganization({ name, ownerName, ownerEmail }))) {
                   setName("");
                   setOwnerName("");
                   setOwnerEmail("");
-                  setOwnerInitials("");
                 }
               }}
             >
               Create and invite the Owner
             </button>
-            <span className="small muted">No Store is created here — the Owner creates the first one (O-01 d2).</span>
+            <span className="small muted">No Store is created here — the Owner creates the first one (O-01 d2) — and no initials are asked for: they come at the first assignment (S-01 d5, M-04 d34).</span>
           </div>
         </div>
       </div>
@@ -191,7 +185,7 @@ function OrgRow({
 }) {
   const app = useApp();
   const [open, setOpen] = useState(false);
-  const [inv, setInv] = useState({ name: "", email: "", initials: "" });
+  const [inv, setInv] = useState({ name: "", email: "" });
   return (
     <>
       <tr>
@@ -223,7 +217,6 @@ function OrgRow({
               </div>
               <div className="btn-row" style={{ marginTop: 6 }}>
                 <input placeholder="new Owner — name" value={inv.name} onChange={(e) => setInv({ ...inv, name: e.target.value })} />
-                <input placeholder="initials" maxLength={4} style={{ width: 80 }} value={inv.initials} onChange={(e) => setInv({ ...inv, initials: e.target.value })} />
                 <input placeholder="email" value={inv.email} onChange={(e) => setInv({ ...inv, email: e.target.value })} />
                 <button className="btn sm primary" onClick={() => run(app.sysadminRecoverOwner(orgId, { invite: inv })) && setOpen(false)}>
                   Invite a new Owner

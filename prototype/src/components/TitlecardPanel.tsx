@@ -1,6 +1,7 @@
 import { useState, type ReactNode } from "react";
 import { ClaimModal } from "../components/ClaimModal";
 import { PriceEditModal, PrintLabelModal } from "../components/CopyModals";
+import { useIdentify } from "../components/Identify";
 import { ManagerAuthorize } from "../components/ManagerAuthorize";
 import { OrderModal } from "../components/OrderModal";
 import { ReserveModal } from "../components/ReserveModal";
@@ -40,6 +41,7 @@ export function TitlecardPanel({
   onToggleShowCost: () => void;
 }) {
   const app = useApp();
+  const identify = useIdentify();
   const record = app.recordFor(recordId);
   const [reserveFor, setReserveFor] = useState<InventoryItem | null>(null);
   const [priceEdit, setPriceEdit] = useState<InventoryItem | null>(null);
@@ -174,7 +176,18 @@ export function TitlecardPanel({
                     <button
                       className={"btn sm" + (outstandingOversold.length ? " danger" : "")}
                       disabled={outstandingOversold.length === 0}
-                      onClick={() => setAdjusting(true)}
+                      onClick={() =>
+                        // E-01 d12, d15 — adjusting on hand prompts for the acting person's
+                        // initials every time; the Manager's PIN follows (E-04, two sets).
+                        identify.request({
+                          reason: "Adjust on hand",
+                          always: true,
+                          onOk: (u) => {
+                            app.identify(u.id);
+                            setAdjusting(true);
+                          },
+                        })
+                      }
                       title={
                         outstandingOversold.length
                           ? `Force ${outstandingOversold.length} outstanding oversold cop${outstandingOversold.length === 1 ? "y" : "ies"} back to zero`

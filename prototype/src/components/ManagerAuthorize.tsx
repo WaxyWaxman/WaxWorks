@@ -74,16 +74,20 @@ export function ManagerAuthorize({
     if (!personal) inputRef.current?.focus();
   }, [personal]);
 
+  // Subscribed once, reading the latest `onCancel` through a ref — see
+  // Identify.tsx for why (E-01 d19: Escape cancels the action).
+  const cancelRef = useRef(onCancel);
+  cancelRef.current = onCancel;
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
         e.preventDefault();
-        onCancel();
+        cancelRef.current();
       }
     };
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
-  }, [onCancel]);
+  }, []);
 
   // THE STORE-SESSION DOOR. Submit on the fourth digit, like initials resolve
   // on the last keystroke (E-01 d19): no Enter, no OK. The name is shown only

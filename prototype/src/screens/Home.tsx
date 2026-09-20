@@ -101,6 +101,22 @@ const BUILT = [
       "nothing lapses. Sign out from the session menu to see the doors again; the credentials are printed there.",
   },
   {
+    id: "M-03",
+    to: "/sell",
+    title: "Daily summary",
+    blurb:
+      "Under Point of Sale's Other functions: View Subtotal, Total Today's Sales (a real close, batched) and " +
+      "Undo End of Day behind the manager-only line — a PIN on a store session, nothing on a personal one.",
+  },
+  {
+    id: "M-06",
+    to: "/settings",
+    title: "Configure the store",
+    blurb:
+      "All eight configuration groups, per Store, behind the manager-only line, with the log as the third track. " +
+      "The session lapse set here is what the store session's staff timer reads (A-88).",
+  },
+  {
     id: "O-01",
     to: "/organization",
     title: "Organization",
@@ -111,10 +127,7 @@ const BUILT = [
   },
 ];
 
-const NOT_BUILT = [
-  ["M-03", "Daily summary"],
-  ["M-06", "Configure the store"],
-];
+const NOT_BUILT: [string, string][] = [];
 
 export function Home() {
   const { sales, providerUp, toggleProvider } = useApp();
