@@ -2,7 +2,7 @@
 
 **Flow:** [<ID> <title>](<file>.md)
 **Milestone / track:** M<n> / D | U
-**Status:** Drafted | Approved | In development | In review | Accepted | Returned
+**Status:** Drafted | Approved | In review | Accepted | Returned
 **Approved by:** _human, date_
 **Pull request:** _once opened_
 **Register rows:** <ID>-T1, <ID>-T2 — from `docs/qa/e2e-register.md`
@@ -11,6 +11,11 @@
 
 _One paragraph: what this order builds, and the `packages/contracts` entries it
 implements or consumes. Written by the coordinator._
+
+**Reading list:** [conventions](../build/conventions.md); the flow in full;
+`architecture.md` §1, §7, and §2 rows _A-n, A-n_; §5.1 _rules for these tables_;
+§6 _these functions_; §9 _rows for <ID>_. _`_TBD_` conventions this order hits:
+none | list them._
 
 ## Checklist
 
@@ -21,8 +26,8 @@ is a coordinator error._
 
 | # | Decision | Binds this track because | Evidence required |
 |---|---|---|---|
-| 1 | <ID> decision <n> — _one line of what it says_ | | unit \| integration \| manual — _reason_ |
-| 2 | A-<n> — | | |
+| 1 | <ID> decision <n> — _"the decision's text, quoted from its row"_ | | unit \| integration \| manual — _reason_ |
+| 2 | A-<n> — _"the A-n title, quoted"_ | | |
 
 ## Evidence
 

@@ -20,7 +20,11 @@ Nothing in this skill writes code, tests, or a decision.
 1. **Confirm the flow is buildable.** `Status: Specified` in all three places;
    `python scripts/check_docs.py` clean; the milestone that names this flow in
    `architecture.md` §8 identified. A flow §8 does not place is an open question
-   for `/architecture`, not a work order.
+   for `/architecture`, not a work order. **M0 is the one order with no flow**:
+   its file is `docs/build/orders/M0-foundation.md`, its Checklist rows cite A-n
+   only (A-2, A-7, A-9, A-10, A-31, A-85 and §7's layout), and `check_coverage.py`
+   accepts bare `A-n` citations, so the gate holds without a flow. It is joint,
+   so no track appears in its name and the lane hook enforces no track for it.
 2. **Derive the Checklist.** Read the flow in full — its decision table, its
    *Inherited from other flows* section, and `architecture.md` §9 for what amended
    it. Then list, one row each, every live decision that binds this track:
@@ -32,6 +36,12 @@ Nothing in this skill writes code, tests, or a decision.
      wherever tax is computed.
    A struck-through decision is not listed. A decision you are unsure binds this
    track is listed with the doubt stated, for the human to strike at approval.
+   **Quote the decision's text in the row**, not only its number — the bold
+   sentence of the table row, or the A-n title. The developer then holds the
+   binding text in the order and opens the flow for context, which is what keeps
+   its context small and its reading honest; a number alone invites recall.
+   A flow that is not the order's own (an inherited commitment) is quoted the
+   same way, with the owning flow named.
 3. **Name the evidence each row requires.** `unit` for a rule with a worked
    example; `integration` for a contract exercised against the real function;
    `manual` only with the reason a test cannot hold it — and that reason is a
@@ -39,6 +49,13 @@ Nothing in this skill writes code, tests, or a decision.
 4. **List the register rows** from `docs/qa/e2e-register.md` this order must
    make automatable, and the contract entries from `packages/contracts` it
    implements or consumes.
+   **Write the Reading list** under Scope: the exact sections the developer must
+   open — `architecture.md` §1, §7, the §2 rows the Checklist cites, the §5.1
+   rules for its tables, the §6 rows for its functions, the §9 rows for the flow
+   — with line numbers where the file is long. The developer reads that and the
+   flow, not the whole architecture. Any `_TBD_` in `docs/build/conventions.md`
+   the order will hit is listed here too, so it is answered before approval
+   rather than discovered by the developer.
 5. Write the file, `Status: Drafted`, and hand it to the human with the sentence:
    *"Approving this fixes the scope — anything not on the Checklist is out."*
 

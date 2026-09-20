@@ -18,7 +18,7 @@ colliding or quietly contradicting each other.
 | `docs/lexicon.md` | Controlled vocabulary — the canonical term for each concept |
 | `docs/prototype.md` | The clickable prototype and its flow ↔ screen map |
 | `docs/qa/e2e-register.md` | The end-to-end test register — one row per whole-flow scenario, its status against the prototype and the product |
-| `docs/build/` | The build workflow (`workflow.md`), the build-status table (`status.md`), and the work orders (`orders/`) |
+| `docs/build/` | The build workflow (`workflow.md`), the stack conventions the developer codes to (`conventions.md`), the build-status table (`status.md`), and the work orders (`orders/`) |
 | `docs/reference/` | Worked examples and external-system notes |
 | `docs/templates/` | Starting point for a new flow document |
 | `.claude/skills/` | The planning skills (see below) |

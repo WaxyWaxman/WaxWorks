@@ -35,7 +35,7 @@ never writes its own checklist and never judges its own evidence.
 | **Coordinator** | the main session | [`docs/build/status.md`](status.md); the Scope, Checklist and Verdict sections of a work order; routes | code, tests, decisions | convention |
 | **Planning** | `/plan-check`, `/flow-clarify`, `/flow-new`, `/spec-audit` + `spec-auditor` | `docs/flows/`, `docs/PRD.md`, `docs/lexicon.md` | code | existing |
 | **Architect** | `/architecture` + `architect` (read-only) | `docs/architecture.md` | code | existing |
-| **Developer** | `/develop <order>` (interactive) and the `developer` subagent (runs one order to completion in its own worktree and reports back) | **D:** `supabase/`, `packages/db-types/`; **U:** `apps/web/`; the unit and integration tests for its track; the Evidence section of its work order | `docs/flows/`, `docs/architecture.md`, `docs/PRD.md`, `docs/lexicon.md`, `docs/qa/`, `docs/prototype.md`, `.claude/`, `.github/`, `scripts/check_*.py`; `packages/contracts/` except through a contract pull request both humans review | `tools:` on the subagent, and a `PreToolUse` hook (`scripts/hooks/developer_paths.py`) that refuses an Edit, Write, or write-shaped Bash command on those paths. The interactive skill is bound by convention only — a human is at the keyboard |
+| **Developer** | `/develop <order>` (interactive) and the `developer` subagent (runs one order to completion in its own worktree and reports back). Both code to [`conventions.md`](conventions.md) | **D:** `supabase/`, `packages/db-types/`; **U:** `apps/web/`; the unit and integration tests for its track; the Evidence section of its work order | the other track's tree, `e2e/`, `docs/flows/`, `docs/architecture.md`, `docs/PRD.md`, `docs/lexicon.md`, `docs/qa/`, `docs/prototype.md`, `docs/build/conventions.md`, `.claude/`, `.github/`, `scripts/check_*.py`; `packages/contracts/` except through a contract pull request both humans review | `tools:` on the subagent, and a `PreToolUse` hook (`scripts/hooks/developer_paths.py`) that refuses an Edit, Write, or write-shaped Bash command on those paths — and on the other track's tree, read from the one `Approved` or `In review` order in the worktree. The interactive skill is bound by convention only — a human is at the keyboard |
 | **QA** | `/qa` + `qa-reviewer` (read-only; runs tests) | `e2e/`, `docs/qa/` | product code | existing |
 
 Two rules keep the hand-offs clean. **A reviewer receives the work order and the
@@ -151,3 +151,11 @@ prototype column gates a milestone.
   `settings.json` would bind the whole session, coordinator included. Accepted
   for now because a human is at the keyboard; revisit if an order is ever run
   interactively without one. Owner: the user.
+- **The stack conventions the developer needs and the architecture does not yet
+  give** — the contracts package shape (schema library, wrapper signature, the
+  in-memory fake's switch, `db-types` regeneration), what the M0 contracts
+  skeleton contains, the environment a Vercel preview runs against, migration
+  and seed naming, the package manager and workspace tool, the definer-function
+  header. Listed with recommendations in [`conventions.md`](conventions.md) §8,
+  each `_TBD_` until an A-n or a §7 note answers it. Owner: `/architecture`;
+  answered before the M0 order is approved.
