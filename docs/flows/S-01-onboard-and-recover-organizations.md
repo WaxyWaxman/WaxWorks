@@ -34,14 +34,14 @@
 
 **From [M-04](M-04-manage-users.md):**
 
-- **A System Administrator is not a fourth role in the Organization** but WaxWorks staff outside it, reaching identity data only (d25).
-- **An Organization always has at least one active Owner; recovery of one that has lost its last Owner is a System Administrator's act** (d26).
-- **Owners may hold no Store assignment** (d27) — which is what lets an Organization be created before its first Store.
-- **Passwords are set by their holder through an emailed link; a System Administrator may trigger a reset for an Owner** (d29).
+- **A System Administrator is not a fourth role in the Organization** but WaxWorks staff outside it, reaching identity data only (M-04 d25).
+- **An Organization always has at least one active Owner; recovery of one that has lost its last Owner is a System Administrator's act** (M-04 d26).
+- **Owners may hold no Store assignment** (M-04 d27) — which is what lets an Organization be created before its first Store.
+- **Passwords are set by their holder through an emailed link; a System Administrator may trigger a reset for an Owner** (M-04 d29).
 
 **From [E-01](E-01-authenticate.md):**
 
-- **A System Administrator signs in with a passkey** (d28).
+- **A System Administrator signs in with a passkey** (E-01 d28).
 
 ---
 
