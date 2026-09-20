@@ -1,4 +1,4 @@
-import type { ItemStatus, SaleState, UserRole } from "../data/types";
+import { isManagerial, type ItemStatus, type SaleState, type UserRole } from "../data/types";
 
 /**
  * E-06 step 6 — where a returned copy goes once the Employee has assessed it.
@@ -187,8 +187,8 @@ export function routeStockRefusal(
   if (!manager.active) {
     return `${manager.name} is not an active User — this needs a Manager (A-28a).`;
   }
-  if (manager.role !== "Manager") {
-    return `${manager.name} is an ${manager.role} — this needs a Manager (A-28a).`;
+  if (!isManagerial(manager.role)) {
+    return `${manager.name} is an ${manager.role} — this needs a Manager or Owner (A-28a).`;
   }
   return undefined;
 }

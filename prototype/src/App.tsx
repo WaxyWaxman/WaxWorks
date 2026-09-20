@@ -17,6 +17,10 @@ import { Users } from "./screens/Users";
 import { Settings } from "./screens/Settings";
 import { ChartOfAccounts } from "./screens/ChartOfAccounts";
 import { Ledger } from "./screens/Ledger";
+import { SignIn } from "./screens/SignIn";
+import { PickStore } from "./screens/PickStore";
+import { Organization } from "./screens/Organization";
+import { Sysadmin } from "./screens/Sysadmin";
 import { ReviewQueueBadge } from "./components/ReviewQueue";
 import { useEffect as useEffectShell } from "react";
 
@@ -65,6 +69,7 @@ const MORE_NAV: { group: string; items: { to: string; label: string; flow: strin
     group: "Administration",
     items: [
       { to: "/users", label: "Users", flow: "M-04" },
+      { to: "/organization", label: "Organization", flow: "O-01" },
       { to: "/settings", label: "Settings", flow: "M-06" },
       { to: "/chart", label: "Chart of accounts", flow: "M-07" },
       { to: "/ledger", label: "General ledger", flow: "M-08" },
@@ -81,17 +86,31 @@ const MORE_PATHS = MORE_NAV.flatMap((g) => g.items.map((i) => i.to));
 export function App() {
   return (
     <IdentifyProvider>
-      <AppShell />
+      <Gate />
     </IdentifyProvider>
   );
 }
 
-// E-01's session, drawn where the till can see it.
+// WHO SIGNED IN decides what is on screen (A-87). No principal: the three
+// doors. A System Administrator: the administration area and nothing of any
+// Store (S-01 d1). A personal session with no Store picked: the picker
+// (E-01 d27). Otherwise the shell, on the Store in session.
+function Gate() {
+  const app = useApp();
+  if (!app.principal) return <SignIn />;
+  if (app.principal.kind === "sysadmin") return <Sysadmin />;
+  if (app.principal.kind === "personal" && !app.principal.selectedStoreId) return <PickStore />;
+  return <AppShell />;
+}
+
+// E-01's staff session, drawn where the till can see it.
 //
-// It is an actor and a timer in the browser and nothing else (A-3, A-50), so
-// the whole of it lives in the shell: who is in session, and a lapse that
-// measures INACTIVITY rather than elapsed time — an hour of continuous work
-// never prompts, six minutes away does (M-06 d45).
+// It is an actor and a timer in the browser and nothing else (A-87, A-88), so
+// the whole of it lives in the shell: who is in session ON THE STORE SESSION,
+// and a lapse that measures INACTIVITY rather than elapsed time — an hour of
+// continuous work never prompts, six minutes away does (M-06 d45). On a
+// PERSONAL session there is no staff session to lapse: the person is the
+// actor (E-01 d27), and the chip shows them and their Store instead.
 function SessionChip() {
   const app = useApp();
   const identify = useIdentify();
@@ -99,23 +118,23 @@ function SessionChip() {
   // d10 / A-19a — an Open Sale suppresses the lapse on its terminal, whatever
   // the setting says, so a lapse can never strand a locked Sale mid-ring.
   const openSale = app.sales.some((x) => x.state === "Open");
+  const lapse = app.storeSettings.sessionLapseSeconds;
 
   useEffectShell(() => {
-    if (!app.sessionUser || openSale) return;
+    // A-88 — the lapse governs staff sessions on a store session only.
+    if (app.isPersonalSession || !app.sessionUser || openSale) return;
     const tick = setInterval(() => {
       const idleFor = (Date.now() - app.sessionLastActivity) / 1000;
-      // d21: a password holder's session is capped at the 5-minute default
-      // however long the shop set its own lapse to.
-      if (idleFor >= app.effectiveLapseSeconds) app.endSession();
+      if (idleFor >= lapse) app.endSession();
     }, 1000);
     return () => clearInterval(tick);
-  }, [app, openSale]);
+  }, [app, openSale, lapse]);
 
   // Any interaction is activity. Cheap and global rather than sprinkled
   // through every screen, because the rule is about the terminal, not any
   // particular control.
   useEffectShell(() => {
-    if (!app.sessionUser) return;
+    if (app.isPersonalSession || !app.sessionUser) return;
     const touch = () => app.touchSession();
     document.addEventListener("pointerdown", touch);
     document.addEventListener("keydown", touch);
@@ -132,10 +151,7 @@ function SessionChip() {
           className="btn sm primary"
           onClick={() =>
             identify.request({
-              reason: "Open a session on this terminal",
-              // E-01 d21 — opening a session is one of the two moments a
-              // password is asked for. Users without one are unaffected.
-              requirePassword: true,
+              reason: "Put your initials on this store session",
               onOk: (u) => app.identify(u.id),
             })
           }
@@ -162,7 +178,9 @@ function SessionChip() {
             <circle cx="12" cy="7" r="4" />
           </svg>
         </button>
-        <span className="idy-none">no session · Till 1</span>
+        <span className="idy-none">
+          no session · {app.storeDetails.tradingName} · {app.terminalName}
+        </span>
       </span>
     );
 
@@ -194,6 +212,9 @@ function SessionMenu({ openSale }: { openSale: boolean }) {
   }, [open]);
 
   if (!app.sessionUser) return null;
+  const personal = app.isPersonalSession;
+  const lapseMin = Math.round(app.storeSettings.sessionLapseSeconds / 60);
+  const otherStores = app.selectableStores().filter((x) => x.id !== app.currentStoreId);
 
   return (
     <span className="who sess-wrap" ref={wrapRef}>
@@ -207,27 +228,71 @@ function SessionMenu({ openSale }: { openSale: boolean }) {
       </button>
       <span className="muted">
         {" "}
-        {app.sessionUser.role} · Till 1{openSale ? " · sale open, no lapse" : ""}
+        {app.sessionUser.role} · {app.storeDetails.tradingName}
+        {personal ? " · as yourself" : ` · ${app.terminalName}`}
+        {!personal && openSale ? " · sale open, no lapse" : ""}
       </span>
       {open && (
         <span className="sess-menu" role="menu">
-          <button
-            className="sess-item"
-            role="menuitem"
-            onClick={() => {
-              setOpen(false);
-              app.endSession();
-            }}
-          >
-            Log out
-          </button>
-          <span className="sess-note">
-            {openSale
-              ? "A Sale is open, so the lapse is suppressed (d10) — this till stays signed in until you log out."
-              : app.effectiveLapseSeconds < app.sessionLapseSeconds
-                ? `Lapses after ${Math.round(app.effectiveLapseSeconds / 60)} min idle — capped because you have a password (d21), not the shop's ${Math.round(app.sessionLapseSeconds / 60)} min.`
-                : `Lapses after ${Math.round(app.effectiveLapseSeconds / 60)} min idle (M-06 d45).`}
-          </span>
+          {personal ? (
+            <>
+              {otherStores.map((st) => (
+                <button
+                  key={st.id}
+                  className="sess-item"
+                  role="menuitem"
+                  onClick={() => {
+                    setOpen(false);
+                    app.selectStore(st.id);
+                  }}
+                >
+                  Switch to {app.storeDetailsFor(st.id).tradingName}
+                </button>
+              ))}
+              <button
+                className="sess-item"
+                role="menuitem"
+                onClick={() => {
+                  setOpen(false);
+                  app.signOut();
+                }}
+              >
+                Sign out
+              </button>
+              <span className="sess-note">
+                Signed in as yourself: nothing asks for initials or a PIN, and nothing lapses
+                (E-01 d27). Sign out when you leave this device.
+              </span>
+            </>
+          ) : (
+            <>
+              <button
+                className="sess-item"
+                role="menuitem"
+                onClick={() => {
+                  setOpen(false);
+                  app.endSession();
+                }}
+              >
+                Log out
+              </button>
+              <button
+                className="sess-item"
+                role="menuitem"
+                onClick={() => {
+                  setOpen(false);
+                  app.signOut();
+                }}
+              >
+                Sign out of this store account
+              </button>
+              <span className="sess-note">
+                {openSale
+                  ? "A Sale is open, so the lapse is suppressed (d10) — this till stays signed in until you log out."
+                  : `Lapses after ${lapseMin} min idle (M-06 d45). The store session beneath it does not lapse (E-01 d24).`}
+              </span>
+            </>
+          )}
         </span>
       )}
     </span>
@@ -317,6 +382,7 @@ function AppShell() {
           <Route path="/payable" element={<AccountsPayable />} />
           <Route path="/users" element={<Users />} />
           <Route path="/users/:userId" element={<Users />} />
+          <Route path="/organization" element={<Organization />} />
           <Route path="/chart" element={<ChartOfAccounts />} />
           <Route path="/ledger" element={<Ledger />} />
           <Route path="/settings" element={<Settings />} />

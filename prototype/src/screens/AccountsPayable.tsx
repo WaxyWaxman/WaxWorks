@@ -469,6 +469,7 @@ export function AccountsPayable() {
       </section>
 
       <SettleTrack
+        recordedBy={authorisedBy.name}
         supplier={supplier}
         isCards={isCards}
         giftTotal={giftTotal}

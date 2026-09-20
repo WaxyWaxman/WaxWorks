@@ -9,7 +9,6 @@ import {
 } from "react";
 import type { User } from "../data/types";
 import { resolveInitials, resolutionHint } from "../lib/identify";
-import { passwordAccepted, PASSWORD_MAX } from "../lib/users";
 import { useApp } from "../store/AppStore";
 
 // E-01 identification, built for the counter.
@@ -31,11 +30,6 @@ import { useApp } from "../store/AppStore";
 
 type Request = {
   reason: string;
-  // E-01 d21 — ask for the password where the user has one. Only the two
-  // moments that matter: opening a session, and authorising a manager-only
-  // action. NOT the counter's rhythmic prompts (d12), or a Manager working
-  // the till would type it on every Sale.
-  requirePassword?: boolean;
   // Why the prompt appeared even though a session is open, where that applies
   // — so the person typing can see it is not a bug.
   always?: boolean;
@@ -126,8 +120,24 @@ export function useActor() {
 }
 
 export function IdentifyProvider({ children }: { children: ReactNode }) {
+  const app = useApp();
   const [req, setReq] = useState<Request | null>(null);
-  const request = useCallback((r: Request) => setReq(r), []);
+  // E-01 d27 — ON A PERSONAL SESSION NOTHING ASKS FOR INITIALS. The Manager or
+  // Owner signed in as themselves; the session is the actor and cannot change,
+  // so d12's every-time prompts do not fire and neither does d5's inline one.
+  // Answered here, at the one place every prompt passes through, rather than
+  // at each of the dozen call sites.
+  const personal = app.isPersonalSession ? app.sessionUser : null;
+  const request = useCallback(
+    (r: Request) => {
+      if (personal) {
+        r.onOk(personal);
+        return;
+      }
+      setReq(r);
+    },
+    [personal],
+  );
   return (
     <IdentifyCtx.Provider value={{ request }}>
       {children}
@@ -159,55 +169,41 @@ function IdentifyPrompt({
 }) {
   const app = useApp();
   const [typed, setTyped] = useState("");
-  // Step two. Null means we are still on initials.
-  const [pending, setPending] = useState<User | null>(null);
-  const [pw, setPw] = useState("");
-  const [pwBad, setPwBad] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
-  const pwRef = useRef<HTMLInputElement>(null);
-  const res = resolveInitials(app.users, typed);
+  // E-01 d25 — resolve among the people ASSIGNED to the Store in session.
+  const res = resolveInitials(app.users, typed, app.currentStoreId ?? undefined);
 
   useEffect(() => inputRef.current?.focus(), []);
-  useEffect(() => {
-    if (pending) pwRef.current?.focus();
-  }, [pending]);
 
   // Resolve in an effect rather than in the change handler so the resolved
   // name is painted before the dialog closes. Typing the last character of
   // your initials and seeing the screen change with no idea what it resolved
   // to is how people stop reading prompts.
   useEffect(() => {
-    if (res.kind !== "one" || pending) return;
+    if (res.kind !== "one") return;
     const user = res.user;
-    const needsPw = Boolean(req.requirePassword && user.password);
-    const t = setTimeout(() => (needsPw ? setPending(user) : onDone(user)), 140);
+    const t = setTimeout(() => onDone(user), 140);
     return () => clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [res.kind, res.kind === "one" ? res.user.id : null, pending]);
+  }, [res.kind, res.kind === "one" ? res.user.id : null]);
 
-  // The password is checked on Enter, not as you type. A one-character
-  // password would otherwise resolve on the first keystroke and make the
-  // barrier invisible — and unlike initials, there is no "keep typing" state
-  // to tell the difference between wrong and unfinished.
-  const submitPw = () => {
-    if (!pending) return;
-    if (passwordAccepted(pending, pw)) onDone(pending);
-    else {
-      setPwBad(true);
-      setPw("");
-    }
-  };
-
+  // Subscribed ONCE. The shell's activity listener fires on the same keydown
+  // (App.tsx — any key is activity) and its state update re-renders the
+  // provider, which hands this prompt a new `onCancel`; a subscription keyed
+  // on it would unsubscribe and resubscribe mid-dispatch and never see the
+  // Escape that caused it. E-01 d19: Escape cancels the action.
+  const cancelRef = useRef(onCancel);
+  cancelRef.current = onCancel;
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
         e.preventDefault();
-        onCancel();
+        cancelRef.current();
       }
     };
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
-  }, [onCancel]);
+  }, []);
 
   return (
     <div className="idy-scrim" onPointerDown={onCancel}>
@@ -218,33 +214,6 @@ function IdentifyPrompt({
         onPointerDown={(e) => e.stopPropagation()}
       >
         <div className="idy-reason">{req.reason}</div>
-        {pending ? (
-          <>
-            <div className="idy-who">{pending.name}</div>
-            <input
-              ref={pwRef}
-              className={"idy-input" + (pwBad ? " bad" : "")}
-              type="password"
-              value={pw}
-              maxLength={PASSWORD_MAX}
-              autoComplete="off"
-              aria-label="Password"
-              onChange={(e) => {
-                setPw(e.target.value);
-                setPwBad(false);
-              }}
-              onKeyDown={(e) => e.key === "Enter" && submitPw()}
-            />
-            <div className={"idy-hint" + (pwBad ? " bad" : "")}>
-              {pwBad ? "Not that password." : "Password, then Enter."}
-            </div>
-            <div className="idy-foot">
-              <span>A barrier on the manager-only space, not a login (E-01 d21).</span>
-              <span className="idy-esc">Esc cancels</span>
-            </div>
-          </>
-        ) : (
-        <>
         <input
           ref={inputRef}
           // A partial is somebody mid-keystroke, not a mistake, so it is not
@@ -261,16 +230,14 @@ function IdentifyPrompt({
         <div className="idy-foot">
           {req.always ? (
             <span>
-              Asked every time, session or not — this action is worth attributing on its own
+              Asked every time on a store session — this action is worth attributing on its own
               (E-01 d12, d15).
             </span>
           ) : (
-            <span>Opens your session on this terminal.</span>
+            <span>Puts your initials on this store session (E-01 d24, d25).</span>
           )}
           <span className="idy-esc">Esc cancels</span>
         </div>
-        </>
-        )}
       </div>
     </div>
   );

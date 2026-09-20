@@ -36,6 +36,7 @@ import { payableEntrySignedAmount, round2 } from "../lib/totals";
  */
 export function SettleTrack({
   supplier,
+  recordedBy,
   isCards,
   giftTotal,
   net,
@@ -65,6 +66,9 @@ export function SettleTrack({
   onUnclear,
 }: {
   supplier?: Supplier;
+  // Who the batch will be recorded by — the Manager or Owner who authorised the
+  // screen, and on a store session the Employee whose session it is (E-01 d26).
+  recordedBy?: string;
   isCards: boolean;
   giftTotal: number;
   net: number;
@@ -114,6 +118,7 @@ export function SettleTrack({
     return (
       <Selection
         supplier={supplier}
+        recordedBy={recordedBy}
         plan={plan}
         form={form}
         drawableAccounts={drawableAccounts}
@@ -472,6 +477,7 @@ function Standing({
 
 function Selection({
   supplier,
+  recordedBy,
   plan,
   form,
   expectedMethod,
@@ -485,6 +491,7 @@ function Selection({
   onCancel,
 }: {
   supplier: Supplier;
+  recordedBy?: string;
   plan: SettlementPlan;
   form: { method: PaymentMethod; reference: string; date: string; drawnOnAccountId?: string; paidAmount?: string; credit: Record<string, string>; money: Record<string, string> };
   expectedMethod?: PaymentMethod;
@@ -921,7 +928,7 @@ function Selection({
             </div>
           ) : null}
           <div className="wo-caveat">
-            Free text, on purpose (d5). Required only where money actually moves (d19). Recorded by R. Duval.
+            Free text, on purpose (d5). Required only where money actually moves (d19). Recorded by {recordedBy ?? "the authorising Manager"}.
           </div>
         </div>
 

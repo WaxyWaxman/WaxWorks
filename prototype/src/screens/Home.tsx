@@ -86,17 +86,48 @@ const BUILT = [
     to: "/users",
     title: "Users",
     blurb:
-      "Add, change role, deactivate, reactivate and correct. Both invariants are enforced in the store, " +
-      "not by disabling buttons — try demoting the last Manager, or giving two active people the same " +
-      "initials. A deactivated user's initials are released, which is why every row shows a name.",
+      "Three roles, Store assignments, PINs and invites. Every rule is enforced in the store, not by " +
+      "disabling buttons — try deactivating the only Owner, giving two people at one Store the same " +
+      "initials, or setting a PIN somebody at that Store already holds (refused, naming nobody). What a " +
+      "Manager may touch is bounded to Employees at their own Stores (M-04 d30).",
+  },
+  {
+    id: "E-01",
+    to: "/",
+    title: "Sign in — the three doors",
+    blurb:
+      "A store account opens a shared store session; initials on top of it; a PIN pad at every " +
+      "manager-only line. A Manager or Owner may sign in as themselves instead — then nothing asks and " +
+      "nothing lapses. Sign out from the session menu to see the doors again; the credentials are printed there.",
+  },
+  {
+    id: "M-03",
+    to: "/sell",
+    title: "Daily summary",
+    blurb:
+      "Under Point of Sale's Other functions: View Subtotal, Total Today's Sales (a real close, batched) and " +
+      "Undo End of Day behind the manager-only line — a PIN on a store session, nothing on a personal one.",
+  },
+  {
+    id: "M-06",
+    to: "/settings",
+    title: "Configure the store",
+    blurb:
+      "All eight configuration groups, per Store, behind the manager-only line, with the log as the third track. " +
+      "The session lapse set here is what the store session's staff timer reads (A-88).",
+  },
+  {
+    id: "O-01",
+    to: "/organization",
+    title: "Organization",
+    blurb:
+      "Owner-only in its entirety — a Manager is refused by name. Create a Store (the system mints its ID " +
+      "and position) and rotate a store account, which signs every terminal of that Store out — this one " +
+      "included. No figure of any Store appears here.",
   },
 ];
 
-const NOT_BUILT = [
-  ["E-01", "Authenticate"],
-  ["M-03", "Daily summary"],
-  ["M-06", "Configure the store"],
-];
+const NOT_BUILT: [string, string][] = [];
 
 export function Home() {
   const { sales, providerUp, toggleProvider } = useApp();

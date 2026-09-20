@@ -17,6 +17,7 @@ const copy = (status: InventoryItem["status"]): InventoryItem =>
 const manager = { role: "Manager" as const, active: true, name: "Y. Nakamura" };
 const employee = { role: "Employee" as const, active: true, name: "E. Okafor" };
 const departed = { role: "Manager" as const, active: false, name: "T. Oyelaran" };
+const owner = { role: "Owner" as const, active: true, name: "A. Beaulieu" };
 
 describe("A-81 / A-28a — the write-off route is manager-only", () => {
   it("refuses a write-off with no authorizer at all", () => {
@@ -270,5 +271,11 @@ describe("E-06 decision 30 — a void un-routes, and refuses only when overtaken
 
   it("refuses when the copy the routing produced cannot be found", () => {
     expect(unrouteRefusal("regrade", undefined)).toMatch(/decision 30/);
+  });
+});
+
+describe("M-04 d25 / A-89 — every manager-only line is open to an Owner", () => {
+  it("permits an Owner to authorize the write-off route", () => {
+    expect(routeStockRefusal("writeoff", owner)).toBeUndefined();
   });
 });

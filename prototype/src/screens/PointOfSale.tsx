@@ -91,6 +91,7 @@ export function PointOfSale() {
 function SaleEditor() {
   const app = useApp();
   const withActor = useActor();
+  const identify = useIdentify();
   const nav = useNavigate();
   const sale = app.activeSale!;
   const totals = saleTotals(sale, app.taxCtxFor(sale));
@@ -633,6 +634,20 @@ function SaleEditor() {
           giftCardRefusal={(code, amount) => giftCardRedeemRefusal(app.giftCards, sale, code, amount)}
           onClose={() => setShowTender(null)}
           onAdd={(t) => {
+            // E-01 d12, d15 — a pay-out prompts for initials EVERY time, session
+            // or not: cash leaving the till is worth attributing on its own.
+            if (t.type === "Pay-out") {
+              setShowTender(null);
+              identify.request({
+                reason: "Record a pay-out",
+                always: true,
+                onOk: (u) => {
+                  app.identify(u.id);
+                  app.addTender(sale.id, t);
+                },
+              });
+              return null;
+            }
             // A-51 — the store refuses too; the pad stays open showing why.
             const refusal = app.addTender(sale.id, t);
             if (refusal) return refusal;

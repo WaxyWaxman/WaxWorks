@@ -310,7 +310,7 @@ for path in MD_FILES:
 # range is checked at its two ends; decision numbers are contiguous (check 3),
 # so if both ends exist, everything between them does.
 QUALIFIED_RE = re.compile(
-    r"\[?([EM]-\d{2})\]?(?:\([^)]*\))?\s+d(\d+)\b"
+    r"\[?([EMOS]-\d{2})\]?(?:\([^)]*\))?\s+d(\d+)\b"
     r"((?:\s*(?:,|/|&|and|to|[-\u2013\u2014])\s*d\d+\b)*)"
 )
 LIST_TAIL_RE = re.compile(r"d(\d+)\b")

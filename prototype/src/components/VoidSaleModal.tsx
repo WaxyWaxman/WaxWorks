@@ -3,6 +3,7 @@ import type { Sale } from "../data/types";
 import { money } from "../lib/money";
 import { tenderedTotal } from "../lib/totals";
 import { useApp } from "../store/AppStore";
+import { useIdentify } from "./Identify";
 import { defaultTenderRow } from "../lib/tenders";
 
 // E-05 d31 — Void (and Edit, which is a Void plus a re-ring) only at zero.
@@ -23,6 +24,7 @@ export function VoidSaleModal({
   onDone: (nextId?: string) => void;
 }) {
   const app = useApp();
+  const identify = useIdentify();
   const live = app.sales.find((s) => s.id === sale.id) ?? sale;
   const outstanding = tenderedTotal(live);
   const customer = app.customerFor(live.customerId);
@@ -58,8 +60,17 @@ export function VoidSaleModal({
       onDone(id ?? undefined);
       return;
     }
-    app.voidSale(live.id);
-    onDone();
+    // E-01 d12, d15 — a void prompts for initials EVERY time, session or not:
+    // consequential and occasional rather than rhythmic.
+    identify.request({
+      reason: `Void this ${live.isReturn ? "return" : "sale"}`,
+      always: true,
+      onOk: (u) => {
+        app.identify(u.id);
+        app.voidSale(live.id);
+        onDone();
+      },
+    });
   };
 
   // The same modal serves both till screens, so it calls the document what it

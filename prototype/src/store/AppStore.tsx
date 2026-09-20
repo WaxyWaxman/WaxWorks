@@ -1,4 +1,5 @@
 import {
+  useEffect,
   createContext,
   useContext,
   useMemo,
@@ -45,12 +46,22 @@ import {
   routeStockRefusal,
   statusAfterRoute,
 } from "../lib/returnRouting";
-import { authorizeManager, requireManager, type ManagerAuth } from "../lib/managerAuth";
+import {
+  authorizeByPin as authorizeByPinLib,
+  authorizeManager,
+  requireManager,
+  requireOwner,
+  type ManagerAuth,
+} from "../lib/managerAuth";
+import { adminRefusal, type AdminAction } from "../lib/userAdminPolicy";
+import * as storesLib from "../lib/stores";
+import { otpAccepted, selectableStores as selectableStoresLib, signInPersonal as signInPersonalLib, signInStoreAccount as signInStoreAccountLib, signInSysadmin as signInSysadminLib } from "../lib/signIn";
 import { buildChart } from "../lib/chart";
 import { buildCloseJournal } from "../lib/closeJournal";
 import { retireCloseBatch, undoLogText, type UndoRecord } from "../lib/closeBatch";
 import { buildAdjustmentJournal, buildInvoiceJournal, buildPaymentJournal } from "../lib/artifactJournals";
 import { isImbalanced } from "../lib/journal";
+import { readStored, writeStored } from "../lib/tillMemory";
 // M-08 — the books. Every rule these enforce lives in the lib, never in a
 // screen and never here (A-74, A-4, A-48: a bound enforced in the client is
 // not a bound). The store calls the refusal and stores the result.
@@ -85,6 +96,13 @@ import {
   HOME_CURRENCY,
   STORE_SETTINGS,
   STORE_DETAILS,
+  HOME_ORG_ID,
+  HOME_STORE_ID,
+  PLATEAU_STORE_ID,
+  ORGANIZATIONS,
+  STORES,
+  TERMINALS,
+  SYSADMINS,
   TAX_TYPES,
   PRODUCT_TAX_CODES,
   TAX_GROUPS,
@@ -128,6 +146,11 @@ import type {
   Supplier,
   User,
   UserRole,
+  Organization,
+  Store,
+  Terminal,
+  Sysadmin,
+  Principal,
   SectionRow,
   TenderRow,
   CurrencyRow,
@@ -231,13 +254,33 @@ interface AppState {
   genreMap: GenreMapRow[];
   releaseCache: ReleaseCacheEntry[];
   defaultTaxGroup: string;
-  // E-01. The session is CLIENT state and can be nothing else (A-3, A-50):
-  // what the database trusts is the terminal's enrollment, initials are
-  // attribution on top. Modelled here for the same reason.
+  // E-01. The STAFF session is CLIENT state and can be nothing else (A-3 as
+  // superseded by A-87, A-50 as revisited by A-88): what the database trusts
+  // is the store session's own token, initials are attribution on top.
+  // Modelled here for the same reason. The lapse it obeys is the Store's
+  // setting (`storeSettings.sessionLapseSeconds`, M-06 d45) and nothing else.
   sessionUserId: string | null;
   sessionLastActivity: number;
-  // Store setting, default 300s (M-06 d45, A-50), and NO maximum (E-01 d13).
-  sessionLapseSeconds: number;
+  // M-04 §Managing users — a role change takes effect on the NEXT session:
+  // the role the staff session opened with is what it keeps until it ends.
+  sessionRole: UserRole | null;
+  // WHO SIGNED IN (A-87): a store account, a person, or a System
+  // Administrator. Null before any door is opened. See `Principal`.
+  principal: Principal | null;
+  // The Organization and its Stores (A-86). Identity only — what a Store HOLDS
+  // is the per-Store slice, below.
+  organizations: Organization[];
+  stores: Store[];
+  terminals: Terminal[];
+  sysadmins: Sysadmin[];
+  // THE PARTITION (A-86), as this in-memory prototype carries it. The Store
+  // whose slice is currently loaded flat into this state is `activeStoreId`;
+  // every other Store's slice is parked here, keyed by Store ID, and swapped
+  // in when the principal's Store changes (`loadStore`). Every per-Store read
+  // and write in this file therefore stays exactly as it was — E-01 d27's
+  // "one Store at a time" is the shape of the state, not a filter on it.
+  activeStoreId: string;
+  parkedStores: Record<string, StoreSlice>;
   suppliers: Supplier[];
   giftCards: GiftCard[];
   taxLines: TaxLine[];
@@ -303,6 +346,121 @@ interface AppState {
   /** E-03 decision 8 — toggle to demo graceful degradation when the catalog provider (MusicBrainz) is down */
   providerUp: boolean;
 }
+
+// ---------------------------------------------------------------------------
+// The per-Store slice (A-86)
+//
+// What carries a Store: the physical and operational tables, every M-06
+// setting table, and — for now — the catalog (A-86 keeps records, genres and
+// the genre map per Store until a genre's Section and tax code can live at
+// the Organization; §11). What does NOT carry a Store and stays flat for
+// every Store of the Organization: users, customers, suppliers, gift cards,
+// payables, the chart and the ledger.
+// ---------------------------------------------------------------------------
+
+const SLICE_KEYS = [
+  "records",
+  "inventory",
+  "sections",
+  "tenders",
+  "currencies",
+  "homeCurrency",
+  "storeSettings",
+  "storeDetails",
+  "settingsLog",
+  "taxTypes",
+  "productTaxCodes",
+  "taxGroups",
+  "taxGroupCells",
+  "genres",
+  "genreMap",
+  "defaultTaxGroup",
+  "taxLines",
+  "nonTracked",
+  "sales",
+  "closeBatches",
+  "claims",
+  "claimVoids",
+  "invoices",
+  "pendingOrders",
+  "reviewFlags",
+  "activeSaleId",
+  "nextSaleNumber",
+  "nextHold",
+  "nextClaimNumber",
+  "nextPoNumber",
+  "nextInternalBarcode",
+  "nextInvoiceRef",
+] as const;
+
+type SliceKey = (typeof SLICE_KEYS)[number];
+export type StoreSlice = Pick<AppState, SliceKey>;
+
+const sliceOf = (state: AppState): StoreSlice =>
+  Object.fromEntries(SLICE_KEYS.map((k) => [k, state[k]])) as unknown as StoreSlice;
+
+// Swap the flat slice for another Store's. The staff session goes with it —
+// initials resolve among a Store's assigned people (E-01 d25), so a session
+// opened at one counter means nothing at another.
+function loadStore(prev: AppState, storeId: string): AppState {
+  if (prev.activeStoreId === storeId) return prev;
+  const incoming = prev.parkedStores[storeId];
+  if (!incoming) return prev; // no slice for this Store — the caller should have made one
+  const parked = { ...prev.parkedStores, [prev.activeStoreId]: sliceOf(prev) };
+  delete parked[storeId];
+  return { ...prev, ...incoming, activeStoreId: storeId, parkedStores: parked, sessionUserId: null, sessionRole: null };
+}
+
+// A Store opened in-product starts from M-06's defaults with nothing sold,
+// held or owed (O-01 d2). The catalog is seeded from the same base as the home
+// Store so the second Store is walkable in review; a real second Store
+// adopts its own (A-6, A-86).
+function freshStoreSlice(details: StoreDetails): StoreSlice {
+  return {
+    records: RECORDS,
+    inventory: [],
+    sections: SECTIONS,
+    tenders: TENDERS,
+    currencies: CURRENCIES,
+    homeCurrency: HOME_CURRENCY,
+    storeSettings: STORE_SETTINGS,
+    storeDetails: details,
+    settingsLog: [],
+    taxTypes: TAX_TYPES,
+    productTaxCodes: PRODUCT_TAX_CODES,
+    taxGroups: TAX_GROUPS,
+    taxGroupCells: TAX_GROUP_CELLS,
+    genres: GENRES,
+    genreMap: GENRE_MAP,
+    defaultTaxGroup: DEFAULT_TAX_GROUP,
+    taxLines: [],
+    nonTracked: NON_TRACKED,
+    sales: [],
+    closeBatches: [],
+    claims: [],
+    claimVoids: [],
+    invoices: [],
+    pendingOrders: [],
+    reviewFlags: [],
+    activeSaleId: null,
+    nextSaleNumber: 1,
+    nextHold: 1,
+    nextClaimNumber: 1,
+    nextPoNumber: 0,
+    nextInternalBarcode: 1,
+    nextInvoiceRef: 1,
+  };
+}
+
+const PLATEAU_DETAILS: StoreDetails = {
+  ...STORE_DETAILS,
+  tradingName: "Wax Works — Plateau",
+  address: { line1: "5122 Boulevard Saint-Laurent", city: "Montreal", provinceState: "QC", country: "Canada" },
+  phone: "514-555-0200",
+  email: "plateau@waxworks.example",
+  storeId: PLATEAU_STORE_ID,
+  position: 2,
+};
 
 // M-06 d64 - the fiscal year end defaults to 31 December, and M-08 d5 has this
 // flow READ it and never ask. One constant until M-06's settings screens land.
@@ -498,7 +656,14 @@ const seed: AppState = {
   defaultTaxGroup: DEFAULT_TAX_GROUP,
   sessionUserId: null,
   sessionLastActivity: Date.now(),
-  sessionLapseSeconds: 300,
+  sessionRole: null,
+  principal: null,
+  organizations: ORGANIZATIONS,
+  stores: STORES,
+  terminals: TERMINALS,
+  sysadmins: SYSADMINS,
+  activeStoreId: HOME_STORE_ID,
+  parkedStores: { [PLATEAU_STORE_ID]: freshStoreSlice(PLATEAU_DETAILS) },
   suppliers: [...SUPPLIERS, ...HISTORY.suppliers],
   giftCards: GIFT_CARDS,
   taxLines: TAX_LINES,
@@ -809,12 +974,36 @@ interface AppContextValue extends AppState {
   activeSale: Sale | null;
   sessionUser: User | null;
   actorName: string;
-  sessionLapseSeconds: number;
-  setSessionLapseSeconds: (n: number) => void;
   identify: (userId: string) => void;
   endSession: () => void;
   touchSession: () => void;
   sessionLastActivity: number;
+  // ---- The principals (A-87) ----
+  // The Store whose slice is loaded — the store session's Store, or the Store
+  // a personal session picked. Null only for a System Administrator or before
+  // sign-in, neither of which reaches a Store screen.
+  currentStoreId: string | null;
+  currentStore: Store | null;
+  // A Store's details whether or not its slice is the one loaded — the picker
+  // and the Organization screen name Stores that are not in session.
+  storeDetailsFor: (storeId: string) => StoreDetails;
+  terminalName: string;
+  isPersonalSession: boolean;
+  // E-01 d24 — a terminal signs in with the Store's store account.
+  signInStoreAccount: (email: string, password: string, terminalId: string) => { ok: true } | { ok: false; refusal: string };
+  // E-01 d27, d28 — a Manager or Owner signs in as themselves; the store
+  // checks the password AND the second factor, never the screen alone.
+  signInPersonal: (email: string, password: string, otp: string) => { ok: true } | { ok: false; refusal: string };
+  // S-01 d4 — passkey only; the prototype's passkey is a button.
+  signInSysadmin: (email: string) => { ok: true } | { ok: false; refusal: string };
+  signOut: () => void;
+  // E-01 d27 — the Store pick on a personal session, refused where not
+  // assigned unless Owner (A-87: the pick is a write).
+  selectStore: (storeId: string) => { ok: true } | { ok: false; refusal: string };
+  selectableStores: () => Store[];
+  // E-01 d26 / A-89 — the store-session door to the manager-only line. A miss
+  // names nobody.
+  authorizeByPin: (pin: string) => ReturnType<typeof authorizeByPinLib>;
   // M-06 settings. Every one of these is manager-only (A-28a) and every one
   // appends a settingsLog row carrying the actor and the values BEFORE and
   // AFTER (A-52) — the value is what makes the log worth keeping, since d8's
@@ -863,15 +1052,50 @@ interface AppContextValue extends AppState {
   // rather than throwing, because M-04 d13 and A-54 both require the refusal
   // to say WHICH thing blocked it - a refusal that does not name its cause
   // reads as the system simply saying no.
-  addUser: (input: { name: string; initials: string; role: UserRole }, by: ManagerAuth) => UserWriteResult;
+  // M-04 d27: a User is assigned to Stores. Until the shell carries the store
+  // session, an omitted assignment means the home Store.
+  addUser: (
+    input: { name: string; initials: string; role: UserRole; assignments?: string[]; email?: string; pin?: string },
+    by: ManagerAuth,
+  ) => UserWriteResult;
   changeUserRole: (userId: string, role: UserRole, by: ManagerAuth) => UserWriteResult;
   deactivateUser: (userId: string, by: ManagerAuth) => UserWriteResult;
   reactivateUser: (userId: string, initials: string, by: ManagerAuth) => UserWriteResult;
-  correctUser: (userId: string, patch: { name?: string; initials?: string }, by: ManagerAuth) => UserWriteResult;
-  setUserPassword: (userId: string, password: string, by: ManagerAuth) => UserWriteResult;
-  // E-01 d21 — a password holder's session is capped at the 5-minute default
-  // however long the shop set the lapse to.
-  effectiveLapseSeconds: number;
+  correctUser: (userId: string, patch: { name?: string; initials?: string; email?: string }, by: ManagerAuth) => UserWriteResult;
+  // M-04 d28, d32 — a PIN is set by an Owner or Manager; a clash names nobody
+  // and is logged.
+  setUserPin: (userId: string, pin: string, by: ManagerAuth) => UserWriteResult;
+  // M-04 d27 — assignment is where initials and PINs collide.
+  assignToStore: (userId: string, storeId: string, by: ManagerAuth) => UserWriteResult;
+  unassignFromStore: (userId: string, storeId: string, by: ManagerAuth) => UserWriteResult;
+  // M-04 d29 — an emailed link; the log records that it was sent.
+  requestPasswordReset: (userId: string, by: ManagerAuth) => UserWriteResult;
+  // M-04 d29 — the landing of that link. No `by`: the person set it themselves.
+  setOwnPassword: (userId: string, password: string) => UserWriteResult;
+  // ---- O-01 — the Organization (Owner-only, d1) ----
+  // d2 / M-06 d70 — the system mints the Store ID and position; the Store
+  // starts from M-06 defaults with nobody assigned.
+  addStore: (
+    input: { tradingName: string; accountEmail: string; accountPassword: string },
+    by: ManagerAuth,
+  ) => { ok: true; id: string } | { ok: false; reason: string };
+  // d3 — typed by the Owner, logged never as a value; signs every terminal of
+  // the Store out (E-01 d24).
+  setStoreAccountPassword: (storeId: string, password: string, by: ManagerAuth) => { ok: true; id: string } | { ok: false; reason: string };
+  // ---- S-01 — the System Administrator's three functions (A-90) ----
+  // Each asserts the principal is a System Administrator and logs into the
+  // Organization it touched, where its Owners read it (S-01 d3, O-01 d5).
+  // S-01 d5 — name and email only; the Owner takes initials at their first
+  // assignment (M-04 d34).
+  createOrganization: (input: { name: string; ownerName: string; ownerEmail: string }) => { ok: true; id: string } | { ok: false; reason: string };
+  sysadminRequestOwnerReset: (userId: string) => { ok: true } | { ok: false; reason: string };
+  sysadminRecoverOwner: (
+    orgId: string,
+    how: { reactivate: string } | { invite: { name: string; email: string } },
+  ) => { ok: true } | { ok: false; reason: string };
+  // The people and Stores of the Organization in session — a Store screen
+  // never lists another Organization's (A-86).
+  orgUsers: User[];
 
   recordFor: (id?: string) => RecordEntry | undefined;
   customerFor: (id?: string) => Customer | undefined;
@@ -1301,7 +1525,19 @@ function describe(v: unknown): string {
 const Ctx = createContext<AppContextValue | null>(null);
 
 export function AppStoreProvider({ children }: { children: ReactNode }) {
-  const [s, setS] = useState<AppState>(seed);
+  const [s, setS] = useState<AppState>(() => {
+    // A-87 — the store session is the terminal's and does not lapse; in the
+    // product its token outlives a reload. This is what the terminal remembers
+    // between page loads. The STAFF session (initials) is deliberately not
+    // remembered: it is a timer in the browser and starts over (A-88).
+    const remembered = readStored<Principal | null>("ww.principal", null);
+    if (!remembered) return seed;
+    const storeId =
+      remembered.kind === "store" ? remembered.storeId : remembered.kind === "personal" ? remembered.selectedStoreId : null;
+    const base = storeId && (storeId === seed.activeStoreId || seed.parkedStores[storeId]) ? loadStore(seed, storeId) : seed;
+    return { ...base, principal: remembered };
+  });
+  useEffect(() => writeStored("ww.principal", s.principal), [s.principal]);
 
   // -------------------------------------------------------------------------
   // The staff session (E-01)
@@ -1312,27 +1548,129 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
   // thing will live, rather than pretending there is a session row.
   // -------------------------------------------------------------------------
 
-  const sessionUser = s.users.find((u) => u.id === s.sessionUserId && u.active) ?? null;
+  const principal = s.principal;
+  const currentStoreId: string | null =
+    principal?.kind === "store" ? principal.storeId : principal?.kind === "personal" ? principal.selectedStoreId : null;
+  const currentStore = s.stores.find((x) => x.id === currentStoreId) ?? null;
+  const terminalName =
+    (principal?.kind === "store" ? s.terminals.find((t) => t.id === principal.terminalId)?.name : undefined) ?? "—";
+  const isPersonalSession = principal?.kind === "personal";
+  const storeDetailsFor: AppContextValue["storeDetailsFor"] = (storeId) =>
+    storeId === s.activeStoreId ? s.storeDetails : (s.parkedStores[storeId]?.storeDetails ?? s.storeDetails);
 
-  // What every attributed write stamps. With no session open the actions that
-  // reach the store have all prompted for initials first (d5, d12, d15), so
-  // this is the fallback for the ones that have not been wired through the
-  // prompt yet rather than a state anyone should reach.
-  const effectiveLapseSeconds = usersLib.effectiveLapseSeconds(sessionUser, s.sessionLapseSeconds);
+  // Who is acting. On a store session it is the staff session — initials,
+  // resolved among the people ASSIGNED to this Store (E-01 d25). On a
+  // personal session it is the person: the session IS the actor and cannot
+  // change (E-01 d27), which is why nothing prompts and nothing lapses.
+  const sessionUser: User | null = (() => {
+    if (principal?.kind === "personal") return s.users.find((u) => u.id === principal.userId && u.active) ?? null;
+    if (principal?.kind === "store") {
+      const u = s.users.find((x) => x.id === s.sessionUserId && x.active && x.assignments.includes(principal.storeId)) ?? null;
+      // The role the session opened with (M-04: a role change takes effect on
+      // the next session). What a manager-only write trusts is still resolved
+      // live from the row (A-55, A-89) — this is only what the session is.
+      return u && s.sessionRole ? { ...u, role: s.sessionRole } : u;
+    }
+    return null;
+  })();
 
-  const actorName: string = sessionUser ? `${sessionUser.name} (${sessionUser.role})` : CURRENT_USER;
+  // The Organization in session (A-86): the Store's, or the person's.
+  const currentOrgId = currentStore?.orgId ?? sessionUser?.orgId ?? HOME_ORG_ID;
+  const orgUsers = s.users.filter((u) => u.orgId === currentOrgId);
+
+  // What every attributed write stamps. With no staff session open the actions
+  // that reach the store have all prompted for initials first (d5, d12, d15),
+  // so the fallback names the PRINCIPAL rather than a constant — it is honest
+  // (that is who is signed in) and it makes any write that skipped the prompt
+  // visible in a log.
+  // E-01 d26 / M-04 d4, d31 — BOTH NAMES. On a store session a manager-only
+  // act carries the Manager whose PIN it was AND the Employee whose session it
+  // was; on a personal session the one name is both. Applied wherever a gated
+  // write derives the name it records, so no write can forget the second.
+  const recorded = (managerName: string, managerUserId: string): string =>
+    principal?.kind === "store" && sessionUser && sessionUser.id !== managerUserId
+      ? `${managerName}, for ${sessionUser.name} (${sessionUser.role})`
+      : managerName;
+
+  const actorName: string = sessionUser
+    ? `${sessionUser.name} (${sessionUser.role})`
+    : principal?.kind === "store"
+      ? `Store account · ${currentStore?.id === s.activeStoreId ? s.storeDetails.tradingName : currentStore?.id}`
+      : principal?.kind === "sysadmin"
+        ? `${s.sysadmins.find((x) => x.id === principal.sysadminId)?.name ?? "System Administrator"} (System Administrator)`
+        : CURRENT_USER;
 
   const identify: AppContextValue["identify"] = (userId) =>
-    setS((prev) => ({ ...prev, sessionUserId: userId, sessionLastActivity: Date.now() }));
+    setS((prev) => ({
+      ...prev,
+      sessionUserId: userId,
+      sessionRole: prev.users.find((u) => u.id === userId)?.role ?? null,
+      sessionLastActivity: Date.now(),
+    }));
 
   const endSession: AppContextValue["endSession"] = () =>
-    setS((prev) => ({ ...prev, sessionUserId: null }));
+    setS((prev) => ({ ...prev, sessionUserId: null, sessionRole: null }));
 
   const touchSession: AppContextValue["touchSession"] = () =>
     setS((prev) => (prev.sessionUserId ? { ...prev, sessionLastActivity: Date.now() } : prev));
 
-  const setSessionLapseSeconds: AppContextValue["setSessionLapseSeconds"] = (n) =>
-    setS((prev) => ({ ...prev, sessionLapseSeconds: Math.max(30, n) }));
+  // -------------------------------------------------------------------------
+  // The principals (A-87) — the three doors of E-01 and S-01
+  // -------------------------------------------------------------------------
+
+  const signInStoreAccount: AppContextValue["signInStoreAccount"] = (email, password, terminalId) => {
+    const r = signInStoreAccountLib(s.stores, email, password);
+    if (!r.ok) return r;
+    const storeId = r.value.storeId;
+    const terminal = s.terminals.find((t) => t.id === terminalId && t.storeId === storeId) ?? s.terminals.find((t) => t.storeId === storeId);
+    setS((prev) => ({
+      ...loadStore(prev, storeId),
+      principal: { kind: "store", storeId, terminalId: terminal?.id ?? terminalId },
+      sessionUserId: null,
+    }));
+    return { ok: true };
+  };
+
+  const signInPersonal: AppContextValue["signInPersonal"] = (email, password, otp) => {
+    const r = signInPersonalLib(s.users, email, password);
+    if (!r.ok) return r;
+    // E-01 d28 — not open until the second factor is entered. Checked here,
+    // where the session is minted, and not only on the screen.
+    if (!otpAccepted(otp)) return { ok: false, refusal: "That code was not accepted." };
+    setS((prev) => ({ ...prev, principal: { kind: "personal", userId: r.value.userId, selectedStoreId: null }, sessionUserId: null }));
+    return { ok: true };
+  };
+
+  const signInSysadmin: AppContextValue["signInSysadmin"] = (email) => {
+    const r = signInSysadminLib(s.sysadmins, email);
+    if (!r.ok) return r;
+    setS((prev) => ({ ...prev, principal: { kind: "sysadmin", sysadminId: r.value.sysadminId }, sessionUserId: null }));
+    return { ok: true };
+  };
+
+  const signOut: AppContextValue["signOut"] = () => setS((prev) => ({ ...prev, principal: null, sessionUserId: null }));
+
+  const selectableStores: AppContextValue["selectableStores"] = () => {
+    if (!sessionUser || principal?.kind !== "personal") return [];
+    return selectableStoresLib(s.stores, sessionUser);
+  };
+
+  const selectStore: AppContextValue["selectStore"] = (storeId) => {
+    if (principal?.kind !== "personal" || !sessionUser) return { ok: false, refusal: "Only a personal session picks a Store (E-01 d27)." };
+    if (!selectableStoresLib(s.stores, sessionUser).some((x) => x.id === storeId))
+      return { ok: false, refusal: `${sessionUser.name} is not assigned to that Store (E-01 d27).` };
+    setS((prev) => {
+      const next = loadStore(prev, storeId);
+      return { ...next, principal: { kind: "personal", userId: sessionUser.id, selectedStoreId: storeId } };
+    });
+    return { ok: true };
+  };
+
+  const authorizeByPin: AppContextValue["authorizeByPin"] = (pin) => {
+    if (principal?.kind !== "store")
+      return { ok: false, refusal: "A PIN is asked only on a store session (E-01 d26)." };
+    return authorizeByPinLib(s.users, principal.storeId, pin);
+  };
 
 
   const patchSale = (saleId: string, fn: (sale: Sale) => Sale) =>
@@ -1416,7 +1754,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
     // prompt and the write bites (A-28a, A-4, A-48).
     const mgr = requireManager(s.users, byAuth);
     if (!mgr.ok) return;
-    const by = mgr.name;
+    const by = recorded(mgr.name, byAuth.userId);
     setS((prev) => ({
       ...prev,
       reviewFlags: prev.reviewFlags.map((f) =>
@@ -1479,7 +1817,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
     // prompt and the write bites (A-28a, A-4, A-48).
     const mgr = requireManager(s.users, byAuth);
     if (!mgr.ok) return;
-    const by = mgr.name;
+    const by = recorded(mgr.name, byAuth.userId);
     setS((prev) => {
       const suspense = prev.glAccounts.find((a) => a.role === "suspense");
       if (!suspense) return prev;
@@ -1507,7 +1845,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
     // prompt and the write bites (A-28a, A-4, A-48).
     const mgr = requireManager(s.users, byAuth);
     if (!mgr.ok) return;
-    const by = mgr.name;
+    const by = recorded(mgr.name, byAuth.userId);
     setS((prev) => {
       const seal: LedgerPeriodSeal = {
         id: "seal-" + period + "-" + (prev.ledgerSeals.length + 1),
@@ -1562,7 +1900,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
     // prompt and the write bites (A-28a, A-4, A-48).
     const mgr = requireManager(s.users, byAuth);
     if (!mgr.ok) return;
-    const by = mgr.name;
+    const by = recorded(mgr.name, byAuth.userId);
     setS((prev) => {
       const live = prev.ledgerSeals
         .filter((x) => x.period === period)
@@ -1600,7 +1938,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
     // prompt and the write bites (A-28a, A-4, A-48).
     const mgr = requireManager(s.users, byAuth);
     if (!mgr.ok) return;
-    const by = mgr.name;
+    const by = recorded(mgr.name, byAuth.userId);
     setS((prev) => ({
       ...prev,
       ledgerYearFilings: [
@@ -1809,7 +2147,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
     // prompt and the write bites (A-28a, A-4, A-48).
     const mgr = requireManager(s.users, byAuth);
     if (!mgr.ok) return { ok: false, reason: mgr.refusal };
-    const by = mgr.name;
+    const by = recorded(mgr.name, byAuth.userId);
 
     const code = row.code.trim().toLowerCase();
     if (code.length !== 1) return { ok: false, reason: "A tax type code is a single letter." };
@@ -1843,7 +2181,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
     // prompt and the write bites (A-28a, A-4, A-48).
     const mgr = requireManager(s.users, byAuth);
     if (!mgr.ok) return { ok: false, reason: mgr.refusal };
-    const by = mgr.name;
+    const by = recorded(mgr.name, byAuth.userId);
 
     const clean = spec.trim().toLowerCase();
     const { codes } = parseCell(clean);
@@ -1874,7 +2212,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
     // prompt and the write bites (A-28a, A-4, A-48).
     const mgr = requireManager(s.users, byAuth);
     if (!mgr.ok) return { ok: false, reason: mgr.refusal };
-    const by = mgr.name;
+    const by = recorded(mgr.name, byAuth.userId);
 
     if (!row.description.trim()) return { ok: false, reason: "A description is required." };
     const shortName = row.shortName.trim().toUpperCase();
@@ -1897,7 +2235,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
     // prompt and the write bites (A-28a, A-4, A-48).
     const mgr = requireManager(s.users, byAuth);
     if (!mgr.ok) return;
-    const by = mgr.name;
+    const by = recorded(mgr.name, byAuth.userId);
 
     if (groupId === s.defaultTaxGroup) return;
     const before = s.taxGroups.find((g) => g.id === s.defaultTaxGroup)?.shortName ?? s.defaultTaxGroup;
@@ -1942,7 +2280,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
     // prompt and the write bites (A-28a, A-4, A-48).
     const mgr = requireManager(s.users, byAuth);
     if (!mgr.ok) return;
-    const by = mgr.name;
+    const by = recorded(mgr.name, byAuth.userId);
 
     const before = s.storeSettings[key];
     if (before === value) return;
@@ -1957,7 +2295,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
     // prompt and the write bites (A-28a, A-4, A-48).
     const mgr = requireManager(s.users, byAuth);
     if (!mgr.ok) return;
-    const by = mgr.name;
+    const by = recorded(mgr.name, byAuth.userId);
 
     const before = (s.storeDetails as unknown as Record<string, unknown>)[key];
     if (before === value) return;
@@ -2011,7 +2349,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
     // prompt and the write bites (A-28a, A-4, A-48).
     const mgr = requireManager(s.users, byAuth);
     if (!mgr.ok) return { ok: false, reason: mgr.refusal };
-    const by = mgr.name;
+    const by = recorded(mgr.name, byAuth.userId);
 
     const key = normaliseTag(tag);
     const existing = s.genreMap.find((r) => normaliseTag(r.tag) === key);
@@ -2032,7 +2370,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
     // prompt and the write bites (A-28a, A-4, A-48).
     const mgr = requireManager(s.users, byAuth);
     if (!mgr.ok) return { ok: false, reason: mgr.refusal };
-    const by = mgr.name;
+    const by = recorded(mgr.name, byAuth.userId);
 
     const key = normaliseTag(tag);
     const existing = s.genreMap.find((r) => normaliseTag(r.tag) === key);
@@ -2058,7 +2396,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
     // prompt and the write bites (A-28a, A-4, A-48).
     const mgr = requireManager(s.users, byAuth);
     if (!mgr.ok) return { ok: false, reason: mgr.refusal };
-    const by = mgr.name;
+    const by = recorded(mgr.name, byAuth.userId);
 
     const from = s.genres.find((g) => g.id === fromId);
     const to = s.genres.find((g) => g.id === toId);
@@ -2159,7 +2497,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
     // prompt and the write bites (A-28a, A-4, A-48).
     const mgr = requireManager(s.users, byAuth);
     if (!mgr.ok) return { ok: false, reason: mgr.refusal };
-    const by = mgr.name;
+    const by = recorded(mgr.name, byAuth.userId);
 
     // The rules live in lib/taxonomy so they can be exercised without a screen.
     const check = checkGenreWrite(row, {
@@ -2192,7 +2530,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
     // prompt and the write bites (A-28a, A-4, A-48).
     const mgr = requireManager(s.users, byAuth);
     if (!mgr.ok) return { ok: false, reason: mgr.refusal };
-    const by = mgr.name;
+    const by = recorded(mgr.name, byAuth.userId);
 
     const genre = s.genres.find((x) => x.id === genreId);
     const check = checkGenreDelete(genre, genreUseCount(genreId));
@@ -2209,7 +2547,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
     // prompt and the write bites (A-28a, A-4, A-48).
     const mgr = requireManager(s.users, byAuth);
     if (!mgr.ok) return { ok: false, reason: mgr.refusal };
-    const by = mgr.name;
+    const by = recorded(mgr.name, byAuth.userId);
 
     const code = row.code.trim().toUpperCase();
     if (code.length !== 2) return { ok: false, reason: "A Section code is two characters (d28)." };
@@ -2235,7 +2573,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
     // prompt and the write bites (A-28a, A-4, A-48).
     const mgr = requireManager(s.users, byAuth);
     if (!mgr.ok) return { ok: false, reason: mgr.refusal };
-    const by = mgr.name;
+    const by = recorded(mgr.name, byAuth.userId);
 
     if (!row.name.trim()) return { ok: false, reason: "A name is required." };
     const existing = s.tenders.find((x) => x.id === row.id);
@@ -2260,7 +2598,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
     // prompt and the write bites (A-28a, A-4, A-48).
     const mgr = requireManager(s.users, byAuth);
     if (!mgr.ok) return { ok: false, reason: mgr.refusal };
-    const by = mgr.name;
+    const by = recorded(mgr.name, byAuth.userId);
 
     const code = row.code.trim().toUpperCase();
     if (code.length !== 3) return { ok: false, reason: "A currency code is three letters." };
@@ -2289,7 +2627,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
     // prompt and the write bites (A-28a, A-4, A-48).
     const mgr = requireManager(s.users, byAuth);
     if (!mgr.ok) return;
-    const by = mgr.name;
+    const by = recorded(mgr.name, byAuth.userId);
 
     if (code === s.homeCurrency) return;
     const before = s.homeCurrency;
@@ -2318,26 +2656,33 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
     return { ok: true, id: r.id };
   };
 
-  const addUser: AppContextValue["addUser"] = (input, byAuth) => {
-    // §6 — an M function resolves the Manager ITSELF, in the same
-    // transaction. The brand proves the check passed when the id was
-    // minted; this proves it still holds now, so a demotion between the
-    // prompt and the write bites (A-28a, A-4, A-48).
+  // M-04 d30 / A-89 — WHO MAY DO WHAT TO WHOM, applied in the write path after
+  // the actor has been re-resolved. A Manager reaches Employees at their own
+  // Stores; anything that touches a Manager or Owner is Owner-only. The
+  // screen mirrors this in what it offers; the refusal is the rule.
+  const gate = (byAuth: ManagerAuth, action: AdminAction): { ok: true; by: string } | { ok: false; reason: string } => {
     const mgr = requireManager(s.users, byAuth);
     if (!mgr.ok) return { ok: false, reason: mgr.refusal };
-    const by = mgr.name;
-    return commit(usersLib.addUser(s.users, input, by, { id: uid("user") }));
+    const actor = s.users.find((u) => u.id === byAuth.userId)!;
+    const refused = adminRefusal(actor, action);
+    if (refused) return { ok: false, reason: refused };
+    return { ok: true, by: recorded(mgr.name, byAuth.userId) };
+  };
+  const subject = (userId: string) => s.users.find((u) => u.id === userId);
+
+  const addUser: AppContextValue["addUser"] = (input, byAuth) => {
+    const assignments = input.assignments ?? (currentStoreId ? [currentStoreId] : [HOME_STORE_ID]);
+    const g = gate(byAuth, { kind: "add", role: input.role, assignments });
+    if (!g.ok) return g;
+    return commit(usersLib.addUser(s.users, { ...input, assignments }, g.by, { id: uid("user"), orgId: HOME_ORG_ID }));
   };
 
   const changeUserRole: AppContextValue["changeUserRole"] = (userId, role, byAuth) => {
-    // §6 — an M function resolves the Manager ITSELF, in the same
-    // transaction. The brand proves the check passed when the id was
-    // minted; this proves it still holds now, so a demotion between the
-    // prompt and the write bites (A-28a, A-4, A-48).
-    const mgr = requireManager(s.users, byAuth);
-    if (!mgr.ok) return { ok: false, reason: mgr.refusal };
-    const by = mgr.name;
-    return commit(usersLib.changeUserRole(s.users, userId, role, by));
+    const u = subject(userId);
+    if (!u) return { ok: false, reason: "No such user." };
+    const g = gate(byAuth, { kind: "changeRole", from: u.role, to: role, assignments: u.assignments });
+    if (!g.ok) return g;
+    return commit(usersLib.changeUserRole(s.users, userId, role, g.by));
   };
 
   // M-04 d15 as corrected by d18: a deactivation stops new work under those
@@ -2346,50 +2691,208 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
   // shape as actor_resolve refusing (A-55). An Open Sale is untouched and
   // stays finishable; only the session goes.
   const deactivateUser: AppContextValue["deactivateUser"] = (userId, byAuth) => {
-    // §6 — an M function resolves the Manager ITSELF, in the same
-    // transaction. The brand proves the check passed when the id was
-    // minted; this proves it still holds now, so a demotion between the
-    // prompt and the write bites (A-28a, A-4, A-48).
-    const mgr = requireManager(s.users, byAuth);
-    if (!mgr.ok) return { ok: false, reason: mgr.refusal };
-    const by = mgr.name;
+    const u = subject(userId);
+    if (!u) return { ok: false, reason: "No such user." };
+    const g = gate(byAuth, { kind: "deactivate", role: u.role, assignments: u.assignments });
+    if (!g.ok) return g;
 
-    const r = commit(usersLib.deactivateUser(s.users, userId, by));
+    const r = commit(usersLib.deactivateUser(s.users, userId, g.by));
     if (r.ok && s.sessionUserId === userId) endSession();
+    // E-01 d30 (5): a personal session IS a login to revoke, and deactivation
+    // revokes it.
+    if (r.ok && s.principal?.kind === "personal" && s.principal.userId === userId) signOut();
     return r;
   };
 
   const reactivateUser: AppContextValue["reactivateUser"] = (userId, initials, byAuth) => {
-    // §6 — an M function resolves the Manager ITSELF, in the same
-    // transaction. The brand proves the check passed when the id was
-    // minted; this proves it still holds now, so a demotion between the
-    // prompt and the write bites (A-28a, A-4, A-48).
-    const mgr = requireManager(s.users, byAuth);
-    if (!mgr.ok) return { ok: false, reason: mgr.refusal };
-    const by = mgr.name;
-    return commit(usersLib.reactivateUser(s.users, userId, initials, by));
+    const u = subject(userId);
+    if (!u) return { ok: false, reason: "No such user." };
+    const g = gate(byAuth, { kind: "reactivate", role: u.role, assignments: u.assignments });
+    if (!g.ok) return g;
+    return commit(usersLib.reactivateUser(s.users, userId, initials, g.by));
   };
 
   const correctUser: AppContextValue["correctUser"] = (userId, patch, byAuth) => {
-    // §6 — an M function resolves the Manager ITSELF, in the same
-    // transaction. The brand proves the check passed when the id was
-    // minted; this proves it still holds now, so a demotion between the
-    // prompt and the write bites (A-28a, A-4, A-48).
-    const mgr = requireManager(s.users, byAuth);
-    if (!mgr.ok) return { ok: false, reason: mgr.refusal };
-    const by = mgr.name;
-    return commit(usersLib.correctUser(s.users, userId, patch, by));
+    const u = subject(userId);
+    if (!u) return { ok: false, reason: "No such user." };
+    const g = gate(byAuth, { kind: "correct", role: u.role, assignments: u.assignments });
+    if (!g.ok) return g;
+    return commit(usersLib.correctUser(s.users, userId, patch, g.by));
   };
 
-  const setUserPassword: AppContextValue["setUserPassword"] = (userId, password, byAuth) => {
-    // §6 — an M function resolves the Manager ITSELF, in the same
-    // transaction. The brand proves the check passed when the id was
-    // minted; this proves it still holds now, so a demotion between the
-    // prompt and the write bites (A-28a, A-4, A-48).
-    const mgr = requireManager(s.users, byAuth);
-    if (!mgr.ok) return { ok: false, reason: mgr.refusal };
-    const by = mgr.name;
-    return commit(usersLib.setUserPassword(s.users, userId, password, by));
+  const setUserPin: AppContextValue["setUserPin"] = (userId, pin, byAuth) => {
+    const u = subject(userId);
+    if (!u) return { ok: false, reason: "No such user." };
+    const g = gate(byAuth, { kind: "setPin", role: u.role, assignments: u.assignments });
+    if (!g.ok) return g;
+    const r = usersLib.setUserPin(s.users, userId, pin, g.by);
+    // M-04 d32 — a refused clash leaves a trace against the person it was
+    // tried for, so a run of them is visible to an Owner.
+    if (!r.ok && r.reason === usersLib.PIN_CLASH_REASON)
+      setS((prev) => ({ ...prev, users: usersLib.logPinClash(prev.users, userId, g.by) }));
+    return commit(r);
+  };
+
+  const assignToStore: AppContextValue["assignToStore"] = (userId, storeId, byAuth) => {
+    const u = subject(userId);
+    if (!u) return { ok: false, reason: "No such user." };
+    const g = gate(byAuth, { kind: "assign", role: u.role, storeId });
+    if (!g.ok) return g;
+    const r = usersLib.assignToStore(s.users, userId, storeId, g.by);
+    if (!r.ok && r.reason === usersLib.PIN_CLASH_REASON)
+      setS((prev) => ({ ...prev, users: usersLib.logPinClash(prev.users, userId, g.by) }));
+    return commit(r);
+  };
+
+  const unassignFromStore: AppContextValue["unassignFromStore"] = (userId, storeId, byAuth) => {
+    const u = subject(userId);
+    if (!u) return { ok: false, reason: "No such user." };
+    const g = gate(byAuth, { kind: "unassign", role: u.role, storeId });
+    if (!g.ok) return g;
+    return commit(usersLib.unassignFromStore(s.users, userId, storeId, g.by));
+  };
+
+  const requestPasswordReset: AppContextValue["requestPasswordReset"] = (userId, byAuth) => {
+    const u = subject(userId);
+    if (!u) return { ok: false, reason: "No such user." };
+    const g = gate(byAuth, { kind: "requestReset", role: u.role, assignments: u.assignments });
+    if (!g.ok) return g;
+    return commit(usersLib.requestPasswordReset(s.users, userId, g.by));
+  };
+
+  const setOwnPassword: AppContextValue["setOwnPassword"] = (userId, password) =>
+    commit(usersLib.setOwnPassword(s.users, userId, password));
+
+  // -------------------------------------------------------------------------
+  // O-01 — the Organization. Owner-only in its entirety (d1): `requireOwner`
+  // is the second question after the manager-only line, refused by name.
+  // -------------------------------------------------------------------------
+
+  const addStore: AppContextValue["addStore"] = (input, byAuth) => {
+    const owner = requireOwner(s.users, byAuth);
+    if (!owner.ok) return { ok: false, reason: owner.refusal };
+    const r = storesLib.addStore(s.stores, { ...input, orgId: HOME_ORG_ID }, owner.name);
+    if (!r.ok) return r;
+    // d2 — M-06 defaults, nothing sold or held; the details block carries the
+    // trading name and the minted identifiers (M-06 d46, d47).
+    const created = r.stores.find((x) => x.id === r.id)!;
+    const details: StoreDetails = {
+      ...STORE_DETAILS,
+      tradingName: input.tradingName.trim(),
+      email: created.accountEmail,
+      storeId: created.id,
+      position: created.position,
+    };
+    setS((prev) => ({
+      ...prev,
+      stores: r.stores,
+      parkedStores: { ...prev.parkedStores, [created.id]: freshStoreSlice(details) },
+      organizations: prev.organizations.map((o) =>
+        o.id === HOME_ORG_ID
+          ? { ...o, log: [...o.log, { at: new Date().toISOString().slice(0, 19), text: `Store ${created.id} "${details.tradingName}" created by ${owner.name}` }] }
+          : o,
+      ),
+    }));
+    return { ok: true, id: r.id };
+  };
+
+  const setStoreAccountPassword: AppContextValue["setStoreAccountPassword"] = (storeId, password, byAuth) => {
+    const owner = requireOwner(s.users, byAuth);
+    if (!owner.ok) return { ok: false, reason: owner.refusal };
+    const r = storesLib.setStoreAccountPassword(s.stores, storeId, password, owner.name);
+    if (!r.ok) return r;
+    // E-01 d24 / O-01 d3 — every terminal of that Store is signed out at
+    // once. This browser is one terminal; if it holds that Store's store
+    // session, it goes too.
+    const thisTerminalGoes = s.principal?.kind === "store" && s.principal.storeId === storeId;
+    setS((prev) => ({
+      ...prev,
+      stores: r.stores,
+      ...(thisTerminalGoes ? { principal: null, sessionUserId: null } : {}),
+    }));
+    return { ok: true, id: r.id };
+  };
+
+  // -------------------------------------------------------------------------
+  // S-01 — the System Administrator (A-90). The boundary is re-asserted in
+  // every function: an S function refuses any other principal, and — in the
+  // product — every other function refuses a null Organization. Here the
+  // sysadmin never reaches a Store screen, so the second half is the Gate's.
+  // -------------------------------------------------------------------------
+
+  const sysadminActor = (): { ok: true; name: string } | { ok: false; reason: string } => {
+    if (s.principal?.kind !== "sysadmin") return { ok: false, reason: "This is a System Administrator's act (S-01, A-90)." };
+    const sa = s.sysadmins.find((x) => x.id === (s.principal as { sysadminId: string }).sysadminId);
+    if (!sa) return { ok: false, reason: "That System Administrator does not resolve." };
+    return { ok: true, name: `${sa.name} (System Administrator)` };
+  };
+  const stampNow = () => new Date().toISOString().slice(0, 19);
+  const orgLog = (orgs: Organization[], orgId: string, text: string) =>
+    orgs.map((o) => (o.id === orgId ? { ...o, log: [...o.log, { at: stampNow(), text }] } : o));
+
+  // S-01 d2 — an Organization with its name and its first Owner; the Owner is
+  // invited (M-04 d29) and has no Store yet (M-04 d27). No public sign-up.
+  const createOrganization: AppContextValue["createOrganization"] = (input) => {
+    const sa = sysadminActor();
+    if (!sa.ok) return sa;
+    if (!input.name.trim()) return { ok: false, reason: "An Organization needs a name." };
+    if (!input.ownerName.trim() || !input.ownerEmail.trim()) return { ok: false, reason: "The first Owner needs a name and an email address (S-01 d2, M-04 d29)." };
+    const orgId = uid("org");
+    const org: Organization = { id: orgId, name: input.name.trim(), active: true, log: [] };
+    const added = usersLib.addUser(
+      s.users,
+      { name: input.ownerName, initials: "", role: "Owner", assignments: [], email: input.ownerEmail },
+      sa.name,
+      { id: uid("user"), orgId },
+    );
+    if (!added.ok) return added;
+    setS((prev) => ({
+      ...prev,
+      organizations: orgLog([...prev.organizations, org], orgId, `Created by ${sa.name} — first Owner ${input.ownerName.trim()} invited at ${input.ownerEmail.trim()}`),
+      users: added.users,
+    }));
+    return { ok: true, id: orgId };
+  };
+
+  // S-01 d3 — a reset link for an Owner; logged on the person and on the
+  // Organization, where its Owners read what was done from outside.
+  const sysadminRequestOwnerReset: AppContextValue["sysadminRequestOwnerReset"] = (userId) => {
+    const sa = sysadminActor();
+    if (!sa.ok) return sa;
+    const u = s.users.find((x) => x.id === userId);
+    if (!u) return { ok: false, reason: "No such user." };
+    if (u.role !== "Owner") return { ok: false, reason: `${u.name} is a ${u.role}. A System Administrator resets an Owner's access; an Owner resets everyone else's (S-01 d3).` };
+    const r = usersLib.requestPasswordReset(s.users, userId, sa.name);
+    if (!r.ok) return r;
+    setS((prev) => ({ ...prev, users: r.users, organizations: orgLog(prev.organizations, u.orgId, `Password reset link sent to Owner ${u.name} by ${sa.name}`) }));
+    return { ok: true };
+  };
+
+  // S-01 d3 / A-90 — restore an Owner, never act as one; refused while the
+  // Organization has an active Owner, because an Owner who exists is the one
+  // to act.
+  const sysadminRecoverOwner: AppContextValue["sysadminRecoverOwner"] = (orgId, how) => {
+    const sa = sysadminActor();
+    if (!sa.ok) return sa;
+    const org = s.organizations.find((o) => o.id === orgId);
+    if (!org) return { ok: false, reason: "No such Organization." };
+    const living = s.users.find((u) => u.orgId === orgId && u.active && u.role === "Owner");
+    if (living) return { ok: false, reason: `${org.name} has an active Owner (${living.name}); recovery is for an Organization that has none (S-01 d3, A-90).` };
+    let r: usersLib.UserWrite;
+    let what: string;
+    if ("reactivate" in how) {
+      const u = s.users.find((x) => x.id === how.reactivate && x.orgId === orgId && x.role === "Owner");
+      if (!u) return { ok: false, reason: "That is not a deactivated Owner of this Organization." };
+      r = usersLib.reactivateUser(s.users, u.id, u.initials, sa.name);
+      what = `Owner ${u.name} reactivated by ${sa.name}`;
+    } else {
+      r = usersLib.addUser(s.users, { name: how.invite.name, initials: "", role: "Owner", assignments: [], email: how.invite.email }, sa.name, { id: uid("user"), orgId });
+      what = `New Owner ${how.invite.name.trim()} invited at ${how.invite.email.trim()} by ${sa.name}`;
+    }
+    if (!r.ok) return r;
+    const users = r.users;
+    setS((prev) => ({ ...prev, users, organizations: orgLog(prev.organizations, orgId, what) }));
+    return { ok: true };
   };
 
   const addCustomer: AppContextValue["addCustomer"] = (input) => {
@@ -2736,7 +3239,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
     // the moment of CHOOSING because that is now the moment the Employee
     // performs it. Re-checked again at finish, when the effect actually runs.
     const mgr = opts?.byAuth ? requireManager(s.users, opts.byAuth) : undefined;
-    const by = mgr?.ok ? mgr.name : undefined;
+    const by = mgr?.ok && opts?.byAuth ? recorded(mgr.name, opts.byAuth.userId) : undefined;
     const stockRefusal = routeStockRefusal(
       to,
       mgr?.ok ? { role: "Manager", active: true, name: by! } : undefined,
@@ -3294,7 +3797,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
     // prompt and the write bites (A-28a, A-4, A-48).
     const mgr = requireManager(s.users, byAuth);
     if (!mgr.ok) return;
-    const by = mgr.name;
+    const by = recorded(mgr.name, byAuth.userId);
 
     const batch = s.closeBatches.find((b) => b.id === batchId);
     if (!batch || batch.undoneAt) return;
@@ -3701,7 +4204,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
     // other gated function uses (§6). The write-off route is the only one that
     // needs it; `routeStockRefusal` decides that, not this line.
     const mgr = byAuth ? requireManager(s.users, byAuth) : undefined;
-    const by = mgr?.ok ? mgr.name : undefined;
+    const by = mgr?.ok ? recorded(mgr.name, byAuth!.userId) : undefined;
     const refusal = routeStockRefusal(to, mgr?.ok ? { role: "Manager", active: true, name: by! } : undefined);
     if (refusal) return { routed: false, refusal };
 
@@ -4190,7 +4693,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
     // prompt and the write bites (A-28a, A-4, A-48).
     const mgr = requireManager(s.users, byAuth);
     if (!mgr.ok) return 0;
-    const by = mgr.name;
+    const by = recorded(mgr.name, byAuth.userId);
 
     const outstanding = s.inventory.filter((i) => i.recordId === recordId && i.oversold && !i.oversoldReconciledAt);
     if (outstanding.length === 0) return 0;
@@ -4502,7 +5005,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
     // prompt and the write bites (A-28a, A-4, A-48).
     const mgr = requireManager(s.users, byAuth);
     if (!mgr.ok) return;
-    const by = mgr.name;
+    const by = recorded(mgr.name, byAuth.userId);
     setS((prev) => ({
       ...prev,
       invoices: prev.invoices.map((iv) =>
@@ -4534,7 +5037,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
     // (A-28a, A-4, A-48).
     const mgr = requireManager(s.users, byAuth);
     if (!mgr.ok) return;
-    const by = mgr.name;
+    const by = recorded(mgr.name, byAuth.userId);
     setS((prev) => {
       const at = now();
       const targets: PaymentTarget[] = [];
@@ -4745,7 +5248,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
     // prompt and the write bites (A-28a, A-4, A-48).
     const mgr = requireManager(s.users, byAuth);
     if (!mgr.ok) return;
-    const by = mgr.name;
+    const by = recorded(mgr.name, byAuth.userId);
     setS((prev) => {
       const batch = prev.paymentBatches.find((b) => b.id === batchId);
       if (!batch || prev.batchVoids.some((v) => v.batchId === batchId)) return prev;
@@ -4866,7 +5369,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
     // prompt and the write bites (A-28a, A-4, A-48).
     const mgr = requireManager(s.users, byAuth);
     if (!mgr.ok) return { cleared: false };
-    const by = mgr.name;
+    const by = recorded(mgr.name, byAuth.userId);
 
     const entries = entryIds.map((id) => s.payableEntries.find((e) => e.id === id)).filter((e): e is PayableEntry => !!e);
     if (entries.length < 2 || entries.length !== entryIds.length) return { cleared: false };
@@ -4930,7 +5433,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
     // prompt and the write bites (A-28a, A-4, A-48).
     const mgr = requireManager(s.users, byAuth);
     if (!mgr.ok) return { uncleared: false, reason: mgr.refusal };
-    const by = mgr.name;
+    const by = recorded(mgr.name, byAuth.userId);
 
     const clearing = s.clearings.find((c) => c.id === clearingId);
     const refusal = unclearRefusal(clearing);
@@ -5042,8 +5545,8 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
     // A-54 gates voiding a PurchaseOrder, and §6 has the function resolve the
     // Manager itself rather than trust the caller.
     const mgr = requireManager(s.users, byAuth);
-    if (!mgr.ok) return { returned: 0, split: 0, untouched: 0 };
-    const by = mgr.name;
+    if (!mgr.ok || !byAuth) return { returned: 0, split: 0, untouched: 0 };
+    const by = recorded(mgr.name, byAuth.userId);
     const onPo = s.pendingOrders.filter((o) => o.poNumber === poNumber);
     if (onPo.length === 0) return { returned: 0, split: 0, untouched: 0 };
 
@@ -5421,12 +5924,22 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
       processOrderStream,
       sessionUser,
       actorName,
-      sessionLapseSeconds: s.sessionLapseSeconds,
-      setSessionLapseSeconds,
       identify,
       endSession,
       touchSession,
       sessionLastActivity: s.sessionLastActivity,
+      currentStoreId,
+      currentStore,
+      storeDetailsFor,
+      terminalName,
+      isPersonalSession,
+      signInStoreAccount,
+      signInPersonal,
+      signInSysadmin,
+      signOut,
+      selectStore,
+      selectableStores,
+      authorizeByPin,
       sections: s.sections,
       tenders: s.tenders,
       currencies: s.currencies,
@@ -5469,8 +5982,17 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
       deactivateUser,
       reactivateUser,
       correctUser,
-      setUserPassword,
-      effectiveLapseSeconds,
+      setUserPin,
+      assignToStore,
+      unassignFromStore,
+      requestPasswordReset,
+      setOwnPassword,
+      addStore,
+      setStoreAccountPassword,
+      createOrganization,
+      sysadminRequestOwnerReset,
+      sysadminRecoverOwner,
+      orgUsers,
     }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [s],

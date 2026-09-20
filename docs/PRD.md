@@ -21,9 +21,9 @@ Small and medium record do not have a way to manage their inventory. They don't 
 ### 1.3 Goals
 
 - G-1: Employees know what is in stock so they can help a customer buy a vinyl or order one to the store for the customer to pick up later.
-- G-2: Administrators know what stock is selling so they can analyze market trends and ensure top sellers are stocked at a good price.
+- G-2: Managers and Owners know what stock is selling so they can analyze market trends and ensure top sellers are stocked at a good price.
 - G-3: Employees can easily process new vinyl to get them on the floor quickly and resolve any issues with order - like poor condition, a missing vinyl, or other supplier mistakes.
-- G-4: Admins can enforce vinyl pricing across time to ensure a predictable margin and review individual customer behavior to provide incentives and credit. 
+- G-4: Managers and Owners can enforce vinyl pricing across time to ensure a predictable margin and review individual customer behavior to provide incentives and credit. 
 - G-5: Employees can look-up a customer to help them return an item without a receipt, place holds for them, or provide in-store credit.
 
 ### 1.4 Non-goals
@@ -47,7 +47,7 @@ Employees are members of staff that work at the record store. They have high age
 
 ### 2.2 Manager
 
-The Manager aims to empower their employees to help make good decisions and sometimes needs to provide an override. They also need to look at inventory and customer trends so they can make business decisions. Their Jobs to Be Done include, but are not limited to: 
+The Manager aims to empower their employees to help make good decisions ~~and sometimes needs to provide an override~~ (overrides became review flags — [architecture](architecture.md) A-28). They also need to look at inventory and customer trends so they can make business decisions. Their Jobs to Be Done include, but are not limited to: 
 - Setting a default suggested supplier margin for a given vinyl
 - Administering the system
 - Reviewing all of the pending re-orders that are initiated by employees to confirm the final order to the supplier.
@@ -56,9 +56,17 @@ The Manager aims to empower their employees to help make good decisions and some
 
 The Manager inherits all Employee capabilities (superset).
 
-**Two mechanisms, not one.** A small set of actions is **manager-only** — an Employee cannot perform them at all, and a Manager authorizes in place by entering their own initials, with both names recorded. Everything else that used to be gated behind a *manager override* now **proceeds and raises a review flag** the Manager reviews afterward: below-cost shelf pricing, an accepted subtotal discrepancy, selling into negative stock. (*Invoice adjustments beyond ±2%* were on that list until [architecture](architecture.md) A-48 made them impossible instead.) Both mechanics are defined in [M-04](flows/M-04-manage-users.md) — see decisions 8 and 9, and [architecture](architecture.md) A-28.
+**Two mechanisms, not one.** A small set of actions is **manager-only** — an Employee cannot perform them at all, and a Manager or Owner authorizes in place with their **PIN** on a store session, both names recorded; on a personal session the session itself is the authorization ([E-01](flows/E-01-authenticate.md) d26, d27). Everything else that used to be gated behind a *manager override* now **proceeds and raises a review flag** the Manager reviews afterward: below-cost shelf pricing, an accepted subtotal discrepancy, selling into negative stock. (*Invoice adjustments beyond ±2%* were on that list until [architecture](architecture.md) A-48 made them impossible instead.) Both mechanics are defined in [M-04](flows/M-04-manage-users.md) — see decisions 8 and 9, and [architecture](architecture.md) A-28.
 
 This extends the design intent that Employees have high agency: a Manager sees what happened rather than standing in the way of it.
+
+### 2.3 Owner
+
+The Owner runs the **Organization** — the company behind one or more Stores. Everything a Manager can do, plus: creating Stores and holding their store accounts, adding and re-roling Managers and Owners, assigning anyone to any Store, and rotating a Store's store account to sign every terminal out ([M-04](flows/M-04-manage-users.md) d25, d30; [M-06](flows/M-06-settings.md) d70; [O-01](flows/O-01-administer-the-organization.md)). An Organization always has at least one active Owner (M-04 d26). An Owner works one Store at a time on a personal session and administers all of them from the Organization screen; there is no consolidated reporting across Stores (O-01 d4).
+
+### 2.4 System Administrator
+
+WaxWorks staff, not a role in any Organization. Creates an Organization and invites its first Owner, restores access when an Organization has no active Owner left, and triggers an Owner's password reset — reaching identity data only and never anything a Store sells, holds or owes; there is no *view as* ([S-01](flows/S-01-onboard-and-recover-organizations.md) d1–d4; [architecture](architecture.md) A-90). Signs in with a passkey.
 
 ---
 
@@ -93,11 +101,15 @@ Each flow is its own document. Status is tracked per flow so parallel work doesn
 
 ### Owner
 
-_No flows yet. The `O-` series holds jobs done for the whole Organization — stores, store accounts, Managers and Owners._
+| ID | Flow | Status |
+|---|---|---|
+| O-01 | [Administer the organization](flows/O-01-administer-the-organization.md) | **Specified** |
 
 ### System Administrator
 
-_No flows yet. The `S-` series holds WaxWorks-staff jobs — onboarding an Organization and recovering its access. A System Administrator sees identity data only, never store data._
+| ID | Flow | Status |
+|---|---|---|
+| S-01 | [Onboard and recover organizations](flows/S-01-onboard-and-recover-organizations.md) | **Specified** |
 
 ---
 
@@ -107,11 +119,14 @@ _Partially derived from E-02. Refine as further flows land._
 
 | Entity | Notes |
 |---|---|
-| **Store** | Tenant boundary. The system serves **multiple stores** — inventory, invoices, suppliers, users, and reporting all scope to a store. |
-| **Record** (catalog) | The pressing — artist, title, label, catalog no., format, year, genre, cover art. Sourced locally or from the catalog provider. Carries the sticky retail price (New stock only). Scoped to a Store, like everything else (§6). |
+| **Organization** | **Tenant boundary.** The company that runs one or more Stores. Customers, Suppliers and their balances, gift cards, the chart of accounts and the ledger belong to it; people belong to it and are **assigned to** its Stores ([M-04](flows/M-04-manage-users.md) d25–d27; [architecture](architecture.md) A-86). Created by a System Administrator ([S-01](flows/S-01-onboard-and-recover-organizations.md) d2). |
+| **Store** | One physical location of an Organization — a **dimension**, not the tenant. Inventory, receiving, Sales, Returns, closes, terminals, review flags and every setting scope to a Store; a Store has a seven-digit ID and a position the system assigns ([M-06](flows/M-06-settings.md) d47, d70) and a **StoreAccount**. |
+| **StoreAccount** | A Store's own email and password, with which a terminal opens a **store session** ([E-01](flows/E-01-authenticate.md) d24). Set and reset by an Owner and nobody else; a reset signs out every terminal of the Store ([O-01](flows/O-01-administer-the-organization.md) d3). |
+| **Terminal** | A browser on a device holding a store session, with a till name of its own for its drawer and receipts ([E-01](flows/E-01-authenticate.md) d2, d24). Not a person and not a credential. |
+| **Record** (catalog) | The pressing — artist, title, label, catalog no., format, year, genre, cover art. Sourced locally or from the catalog provider. Carries the sticky retail price (New stock only). Per Store ([architecture](architecture.md) A-6, A-86); moving the catalog to the Organization is recommended and not ratified (architecture §11). |
 | **InventoryItem** | A physical copy of a Record — condition, cost, price, status. Created by receiving, consumed by sale. |
 | **Barcode** | Manufacturer UPC/EAN or a store-generated internal code. Maps to a Record (new) or an individual InventoryItem (second-hand). |
-| **Supplier** | Source of stock. Carries margin config (manager-set). Creatable by employees. |
+| **Supplier** | Source of stock. Carries margin config (manager-set). Creatable by employees. Belongs to the Organization, not to one Store ([architecture](architecture.md) A-86). |
 | **Invoice** | Inbound receiving document. Draft, finalized, then paid; correctable until paid, immutable after ([E-02](flows/E-02-receive-inventory.md) d40). Keyed by `(supplier, invoice_number)`. Carries invoice-level freight / tax / misc. |
 | **InvoiceLine** | One received item on an invoice — links Record, cost (`Ext. Price`), accepted retail price, condition. |
 | ~~**InvoiceScan**~~ | **Removed** — there is no invoice photography and no document extraction ([E-02](flows/E-02-receive-inventory.md) d27). Invoice-level totals are entered manually. |
@@ -123,17 +138,17 @@ _Partially derived from E-02. Refine as further flows land._
 | **Tender** | One payment against a Sale. A Sale may carry several (split tender). Types in M-06. |
 | **Return** | Reversal of a sale (E-06). A negative-quantity SaleLine, not a separate document. |
 | **Hold** | A Sale in the **Held** state — stock committed to a customer, by reservation (E-04) or on receipt of a customer-attached order (M-02). |
-| **Customer** | A person or business the store deals with. Optional on any Sale. Carries a signed account balance, a global discount, and a default tax line (E-07). |
-| **GiftCard** | A `GC`-prefixed code and a movement history; the balance is the **sum of its movements**, stored nowhere ([architecture](architecture.md) A-51). Loaded as a SaleLine, redeemed as a Tender (E-05), reversed by a void or edit. An over-redemption is refused, never clamped. |
+| **Customer** | A person or business the Organization deals with. Optional on any Sale. Carries a signed account balance, a global discount, and a default tax line (E-07). Belongs to the Organization, not to one Store — the balance and history span its Stores ([architecture](architecture.md) A-86). |
+| **GiftCard** | A `GC`-prefixed code and a movement history; the balance is the **sum of its movements**, stored nowhere ([architecture](architecture.md) A-51). Loaded as a SaleLine, redeemed as a Tender (E-05), reversed by a void or edit. An over-redemption is refused, never clamped. Belongs to the Organization and is honoured at any of its Stores ([architecture](architecture.md) A-86). |
 | **SupplierClaim** | A claim for credit against a supplier Invoice for short, damaged, or unshipped stock (E-04). Pending or Credited. |
-| **PaymentBatch** | One settlement act, recorded once however many things it settled — method, reference, date, recorded-by, and **targets** naming what was settled and whether each was money or claim credit ([M-05](flows/M-05-accounts-payable.md) d16, d19). Voided whole, never edited (d22). Supersedes **APPayment**, which named one payment against one Invoice. |
+| **PaymentBatch** | One settlement act, recorded once however many things it settled — method, reference, date, recorded-by, and **targets** naming what was settled and whether each was money or claim credit ([M-05](flows/M-05-accounts-payable.md) d16, d19). Voided whole, never edited (d22). Supersedes **APPayment**, which named one payment against one Invoice. Belongs to the Organization, not to one Store ([architecture](architecture.md) A-86). |
 | **InventoryAdjustment** | A manager-only correction to stock, carrying a reason code, before/after counts, and attribution (E-04). |
 | **ReviewFlag** | A record of something worth a Manager's later attention — **usually an Employee action, and since [architecture](architecture.md) A-68 not always**, since `actor_user_id` is nullable and a null actor means the **system** raised it — below-cost pricing, an accepted derived-versus-stated subtotal discrepancy, a Sale driving stock negative, a broken sale lock. (*An adjustment beyond ±2%* was on this list until [architecture](architecture.md) A-48 made it impossible rather than flagged.) Acknowledged by a Manager (M-04 d17). Carries the actor, the subject, and the figures that raised it. Acknowledged, never deleted ([M-04](flows/M-04-manage-users.md) d8). |
 | **Section** | Top-level reporting category (`VINYL`, `MERCH`). Genres roll up into Sections (M-06). |
 | ~~**TaxLine**~~ | **Superseded by [M-06](flows/M-06-settings.md) d11**, which replaced decision 1's single table — and with it the `tax_lines` / `tax_components` shape ([architecture](architecture.md) §5). Tax is resolved from **two axes that never compete**, not from a line a sellable thing points at. Replaced by the three entities below. |
 | **TaxType** · **TaxGroup** · **ProductTaxCode** | One lookup, three parts ([M-06](flows/M-06-settings.md) d11, d12, d14). A **TaxType** is one tax that exists — code, name, `rate_ppm` ([architecture](architecture.md) A-47), a registration number (d48) and **no active flag** (d57, A-63). A **TaxGroup** is a jurisdiction or customer class carrying a ShortName. A **ProductTaxCode** is carried by a Genre and therefore by everything sellable. A **cell** on `(group, code)` names the taxes to apply. A Sale line snapshots the rates it resolved, at tender ([architecture](architecture.md) A-57). |
 | **CloseBatch** | One end-of-day close — its identifier, timestamp, closing User, and the Sales it moved to Closed (M-03). Carries the day's **stored summary** ([architecture](architecture.md) A-30) and its **JournalBatch** ([M-07](flows/M-07-chart-of-accounts.md) d7). Once a BankDeposit stands against it, Undo End of Day is refused ([architecture](architecture.md) A-66).. The summary carries a **schema version** `close_run` writes, and every reader keys on it ([architecture](architecture.md) A-83) — which is what lets a date-range report say *this figure did not exist that day* rather than printing a zero for it. **A batch is live or retired** ([architecture](architecture.md) A-84): an Undo End of Day retires it, re-closing writes a new one, and **no stored summary is ever rewritten** |
-| **GLAccount** | One row of the store's chart of accounts ([M-07](flows/M-07-chart-of-accounts.md)). Carries a **role** the software resolves it by, and a **number and name the store owns and edits** (d3) — nothing is ever resolved by number. A **bank account is a GLAccount with a bank role**, not an entity of its own, and ~~no balance is held for it~~ — **a bank balance now derives like any other account's** ([M-08](flows/M-08-general-ledger.md) d20; A-65 as amended keeps the account a posting target and not an entity). Every seam maps to one — tender, tax type **twice**, adjustment reason (d5, d11). **A Section does not**: one that counts as revenue resolves by rule to the reserved *Sales* account and carries its Section as a **dimension** on the line (d28, d29, [M-08](flows/M-08-general-ledger.md) d2); only a Section marked *not* revenue keeps a mapping (d33). |
+| **GLAccount** | One row of the Organization's chart of accounts — journal lines carry the Store as `location` ([M-08](flows/M-08-general-ledger.md) d2, d27; [architecture](architecture.md) A-86) ([M-07](flows/M-07-chart-of-accounts.md)). Carries a **role** the software resolves it by, and a **number and name the store owns and edits** (d3) — nothing is ever resolved by number. A **bank account is a GLAccount with a bank role**, not an entity of its own, and ~~no balance is held for it~~ — **a bank balance now derives like any other account's** ([M-08](flows/M-08-general-ledger.md) d20; A-65 as amended keeps the account a posting target and not an entity). Every seam maps to one — tender, tax type **twice**, adjustment reason (d5, d11). **A Section does not**: one that counts as revenue resolves by rule to the reserved *Sales* account and carries its Section as a **dimension** on the line (d28, d29, [M-08](flows/M-08-general-ledger.md) d2); only a Section marked *not* revenue keeps a mapping (d33). |
 | **JournalBatch** | A balanced set of debits and credits, **immutable once written** ([M-07](flows/M-07-chart-of-accounts.md) d7, d8). Written by the artifact that causes it, inside that artifact's transaction ([architecture](architecture.md) A-67); Sales are the exception and batch at the close for volume (d12). Lines carry their own **business date** (d14) and **currency code** (d17). A correction never rewrites one — it posts forward (d8). |
 | **BankDeposit** | What actually reached the bank, recorded against the undeposited funds a close produced ([M-07](flows/M-07-chart-of-accounts.md)). The difference **is** the card processing fee, derived and never configured. Appended and voided by a counter-row, never edited; while one stands, Undo End of Day is refused ([architecture](architecture.md) A-66). **Not** a customer deposit, which is a line-less Sale tendered to their account ([E-05](flows/E-05-sell-a-record.md) d25, [lexicon](lexicon.md) §14). |
 | **LedgerPosting** | A balanced set of debits and credits a **Manager types by hand** — rent, utilities, a loan, depreciation, an owner's draw, tax ([M-08](flows/M-08-general-ledger.md) Phase 2). Manager-only ([architecture](architecture.md) A-74), refused if it does not balance (d10) and refused into a sealed period (d11). **Not** a *manual ledger entry*, which is an accounts-payable row ([lexicon](lexicon.md) §4) **Narrower than the [lexicon](lexicon.md) §14's *posting*,** which also covers the journals artifacts write for themselves; see §15 and [M-08](flows/M-08-general-ledger.md) d47. |
@@ -141,7 +156,7 @@ _Partially derived from E-02. Refine as further flows land._
 | **SealedPeriod** | A month or year that has been **sealed**, never *closed* — *close* is the end of the day ([lexicon](lexicon.md) §15). Derived from seal and unseal rows, never a stored flag, with a live seal unique per period ([architecture](architecture.md) A-75). Only the most recently sealed period unseals (d29); a year marked **filed** never does (d22) |
 | **LedgerIssuance** | A record that something covering a scope **left the building** — a journal export, a P&L, a balance sheet, a reconciliation report — with its figures stored as issued ([M-08](flows/M-08-general-ledger.md) d25, d31, [architecture](architecture.md) A-77). It is what [M-07](flows/M-07-chart-of-accounts.md) d16's overlap warning has needed since M-07 was written |
 | **Reconciliation** | Entries within **one account** marked together because they net to zero, against an outside document — a bank statement, or the two halves of an undeposited-funds movement ([M-08](flows/M-08-general-ledger.md) d25). Balance-neutral, like a [M-05](flows/M-05-accounts-payable.md) d15 clearing and deliberately not that word **Two kinds, and they are not synonyms** — `matched` nets by construction, `cleared` is what appears on an outside document and need not net ([M-08](flows/M-08-general-ledger.md) d37). See [lexicon](lexicon.md) §15 and [M-08](flows/M-08-general-ledger.md) d47. |
-| **User** | Employee or Manager, scoped to a store. |
+| **User** | An Employee, Manager or Owner of one Organization, assigned to one or more of its Stores ([M-04](flows/M-04-manage-users.md) d27). Initials are unique per Store among the active assigned ([E-01](flows/E-01-authenticate.md) d25). A Manager or Owner holds a four-digit **PIN** for the manager-only line on a store session and may hold a **personal session** (E-01 d26–d28). Deactivated, never deleted. |
 
 ### 4.1 Catalog vs. copy
 
@@ -196,7 +211,7 @@ _Status: **ratified**._
 
 **Technical architecture** — stack, data model, database functions, and build order — lives in [architecture.md](architecture.md).
 
-**Auditability.** Attribution is required on every Sale, Return, void, hold cancellation, pay-out, inventory adjustment, override, Invoice finalization, and payment. Beyond attribution, four things are immutable or effectively so:
+**Auditability.** Attribution is required on every Sale, Return, void, hold cancellation, pay-out, inventory adjustment, Invoice finalization, and payment — and on the setting or change of a PIN, an invite or reset sent, a store account created or rotated, a role or assignment changed, and every System Administrator act, each logged with its actor and never with a credential's value ([M-04](flows/M-04-manage-users.md) d28, d29; [O-01](flows/O-01-administer-the-organization.md) d5; [S-01](flows/S-01-onboard-and-recover-organizations.md) d3). Beyond attribution, four things are immutable or effectively so:
 
 - a **paid** Invoice, and only for as long as it is paid ([E-02](flows/E-02-receive-inventory.md) d40, [architecture](architecture.md) A-33, A-33a). Immutability attaches at **paid**, not at finalize, and **releases** if the PaymentBatch that settled it is voided ([M-05](flows/M-05-accounts-payable.md) d22) — so this is the one entry in this list that is conditional rather than permanent. Between finalize and paid an Invoice is **correctable**;
 - SaleLine values, which are snapshotted at time of sale (E-05 decision 13);
@@ -205,7 +220,7 @@ _Status: **ratified**._
 
 **External dependencies.** The **catalog provider** — MusicBrainz, with Cover Art Archive for artwork, behind an adapter (E-03 decision 10). Roughly 1 request/second, mitigated by batched prefetch at PurchaseOrder time (M-02 decision 14) and local-first resolution everywhere (E-02 decision 5). When the provider is unavailable, local search and every till function continue to work and the degradation is visible rather than silent (E-03 decision 8).
 
-**Scale.** The schema is multi-store from the outset; v1 deploys a single store with no cross-store UI.
+**Scale.** The schema is multi-store from the outset: Organizations, each holding Stores. v1 deploys one Organization with one Store and no cross-Store UI ([architecture](architecture.md) A-86).
 
 **Offline behavior — resolved.** v1 is **online-only**. The PWA caches the app shell so the application loads instantly and survives a refresh, but writes fail visibly rather than queuing. For a shop whose card terminal is already independent of this system, a genuine outage already halts card sales. See [architecture](architecture.md) A-1.
 
@@ -223,7 +238,7 @@ _Status: **ratified**._
 
 ### Resolved
 
-- The system is **multi-store**. The schema scopes every entity to a Store from the outset; v1 deploys one store with no cross-store UI.
+- The system is **multi-store**. The Organization is the tenant and a Store a dimension inside it; the schema scopes every entity to an Organization and the physical ones to a Store as well ([architecture](architecture.md) A-86). v1 deploys one Organization with one Store and no cross-Store UI.
 - **MusicBrainz** is the external catalog metadata source, behind a provider adapter. Discogs remains implemented as a second adapter, off by default ([architecture](architecture.md) A-12).
 - **There is a Customer record** ([E-07](flows/E-07-manage-customers.md)) — holds, special orders, store credit, discounts, and receipt-less returns all need somewhere to hang.
 - **Multi-jurisdiction sales tax is in scope** on the outbound side, resolved from two axes that never compete — the Customer's tax group, else the store's default; the Genre's product tax code; then the `(group, code)` cell naming the tax types to apply ([M-06](flows/M-06-settings.md) d11, d12, d14; §4 above). ~~As a table of named tax lines referenced per item~~ — that was M-06 d1's shape, superseded by d11. Inbound tax is **excluded from cost of goods** ([E-02](flows/E-02-receive-inventory.md) d34, amending its decision 17) — see item 4 below.
@@ -232,12 +247,12 @@ _Status: **ratified**._
 
 ### Multi-store consequences — resolved
 
-**Every entity is scoped to a Store. Nothing is shared** ([architecture](architecture.md) A-5). The catalog, suppliers and their margins, Sections, the genre map, and sticky retail prices are all per store. This answers all five questions below the same way, and gives the schema a single access-control shape rather than two classes of table.
+~~**Every entity is scoped to a Store. Nothing is shared** ([architecture](architecture.md) A-5).~~ **Every entity is scoped to an Organization; a Store is a dimension** ([architecture](architecture.md) A-86, superseding A-5 on 2026-09-20). The catalog, Sections, the genre map and sticky retail prices are per Store; Suppliers and their margins, Customers, gift cards and the books are the Organization's. The schema has two access-control shapes rather than one (architecture §5).
 
-- ~~Is the catalog shared across stores, or per-store?~~ **Per store.** The cost this would have carried — two stores each spending a lookup on the same pressing — is absorbed by a shared metadata *cache* sitting underneath the per-store catalogs (A-6). The cache is shared; the catalog is not.
+- ~~Is the catalog shared across stores, or per-store?~~ **Per store** *(moving it to the Organization is recommended, not ratified — architecture §11)*. The cost this would have carried — two stores each spending a lookup on the same pressing — is absorbed by a shared metadata *cache* sitting underneath the per-store catalogs (A-6). The cache is shared; the catalog is not.
 - ~~Are sticky retail prices global or per-store?~~ **Per store.**
-- ~~Are suppliers and their margins per-store or shared?~~ **Per store.**
-- ~~Can a user belong to more than one store?~~ **Not in v1** (E-01 decision 8). Cross-store management is deferred to [M-04](flows/M-04-manage-users.md).
+- ~~Are suppliers and their margins per-store or shared?~~ ~~**Per store.**~~ **Per Organization** ([architecture](architecture.md) A-86).
+- ~~Can a user belong to more than one store?~~ ~~**Not in v1** (E-01 decision 8).~~ **Yes** — a User belongs to the Organization and is assigned to one or more Stores ([E-01](flows/E-01-authenticate.md) d25, [M-04](flows/M-04-manage-users.md) d27).
 - ~~Does inventory search cover other stores' stock?~~ **Not in v1** — the schema carries the Store scope, but no cross-store UI is exposed ([E-03](flows/E-03-search-inventory.md)).
 
 ### Still open
