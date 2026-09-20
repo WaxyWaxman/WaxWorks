@@ -1,6 +1,6 @@
 ---
 name: flow-clarify
-description: Interrogate a WaxWorks user flow to close its gaps and drive it from Stub toward Specified. Use when the user names a flow ID (E-nn or M-nn) and wants to work through it, flesh it out, clarify it, answer its open questions, or "spec it out". Also use when they describe a new capability that belongs to an existing flow.
+description: Interrogate a WaxWorks user flow to close its gaps and drive it from Stub toward Specified. Use when the user names a flow ID (E-nn, M-nn, O-nn or S-nn) and wants to work through it, flesh it out, clarify it, answer its open questions, or "spec it out". Also use when they describe a new capability that belongs to an existing flow.
 ---
 
 # Clarify a flow

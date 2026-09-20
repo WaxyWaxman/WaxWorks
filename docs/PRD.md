@@ -91,6 +91,14 @@ Each flow is its own document. Status is tracked per flow so parallel work doesn
 | M-07 | [Chart of accounts](flows/M-07-chart-of-accounts.md) | **Specified** |
 | M-08 | [Keep the general ledger](flows/M-08-general-ledger.md) | **Specified** |
 
+### Owner
+
+_No flows yet. The `O-` series holds jobs done for the whole Organization — stores, store accounts, Managers and Owners._
+
+### System Administrator
+
+_No flows yet. The `S-` series holds WaxWorks-staff jobs — onboarding an Organization and recovering its access. A System Administrator sees identity data only, never store data._
+
 ---
 
 ## 4. Domain model

@@ -28,7 +28,8 @@ Read it before editing anything under `docs/`.
 
 ## Conventions that are load-bearing
 
-- **Flow IDs are stable.** `E-` employee, `M-` manager. Never renumber.
+- **Flow IDs are stable.** `E-` employee, `M-` manager, `O-` owner, `S-` system
+  administrator. Never renumber.
 - **Decisions are numbered and cited.** "E-02 decision 8" must stay unambiguous
   forever, so **append** to a decision table, never renumber or delete a row.
   A decision that turns out wrong is superseded by a new row that says so.

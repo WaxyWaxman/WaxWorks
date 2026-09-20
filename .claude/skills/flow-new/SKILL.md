@@ -10,7 +10,9 @@ doc set inconsistent, which `/spec-audit` will then flag.
 
 ## 1. Decide the ID
 
-- `E-` for a job an Employee does; `M-` for a Manager job.
+- `E-` for a job an Employee does; `M-` for a Manager job; `O-` for an Owner job
+  (administering the Organization); `S-` for a System Administrator job (WaxWorks
+  staff, outside every Organization).
 - Take the **next unused number** in that series. Read `docs/README.md` and
   `ls docs/flows/` — never reuse a number, even if a flow was abandoned.
 - IDs are permanent. If you are unsure whether this is a new flow or part of an
