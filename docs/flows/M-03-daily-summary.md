@@ -15,7 +15,7 @@ Closing the day is a real state transition, not just a report: it moves every **
 1. Manager runs **View Subtotal** as often as they like during the day. It produces the same breakdown as the close and changes nothing.
 2. Manager runs **Total Today's Sales** to close. The system produces the breakdown and moves all Current Sales to Closed.
 3. The closed group is a **batch**, carrying its own identifier, the timestamp it was run, and the User who ran it.
-4. **Undo End of Day** reverses a batch, returning its Sales to Current. It is **manager-only** ([architecture](../architecture.md) A-28a, and decision 4 below): a Manager authorizes in place by entering their own initials, and both names are recorded ([M-04](M-04-manage-users.md) d3, d4). It is not a *manager override* — that term is retired ([M-04](M-04-manage-users.md) d8), and it never covered this action.
+4. **Undo End of Day** reverses a batch, returning its Sales to Current. It is **manager-only** ([architecture](../architecture.md) A-28a, and decision 4 below): on a store session a Manager or Owner authorizes in place by entering their **PIN**, and both names are recorded — the Manager's and the Employee whose session it is; on a personal session the session itself is the authorization ([E-01](E-01-authenticate.md) d26, d27; [M-04](M-04-manage-users.md) d3 as amended, M-04 d4, M-04 d31). It is not a *manager override* — that term is retired ([M-04](M-04-manage-users.md) d8), and it never covered this action.
 
 A batch is not the same thing as a calendar day. Sales rung after a close belong to the next batch even if the date hasn't changed, and a shop that closes twice in a day produces two batches.
 
@@ -164,6 +164,11 @@ Pay-outs are the one cash movement that is captured, because money leaving the t
 
 - **The close writes a journal batch onto the CloseBatch, beside the summary decision 13 already stores there** ([M-07](M-07-chart-of-accounts.md) d7). Its lines group by **`(business date, account)`**, not by account alone ([M-07](M-07-chart-of-accounts.md) d14) — because step 2 closes **all** Current Sales rather than today's, so a close nobody ran on Monday would otherwise report Monday's revenue on Tuesday, which is harmless most weeks and wrong across a month boundary. If debits and credits disagree the difference posts to **Suspense** and a ReviewFlag is raised; **the close proceeds either way** ([M-07](M-07-chart-of-accounts.md) d10).
 - **Undo End of Day refuses while the batch has been banked. Amends decision 4** ([architecture](../architecture.md) A-66). A non-voided BankDeposit referencing the CloseBatch blocks `close_undo`; voiding that deposit releases it. A-33a's shape with a different trigger — **immutable while banked**, never immutable forever. Decision 4's restore-exactly guarantee is unchanged for every batch that has not been banked.
+
+**From [architecture](../architecture.md) A-86 and the user model (2026-09-20):**
+
+- **Undo End of Day is authorized by PIN on a store session and by the session on a personal session; both names are recorded on a store session** ([E-01](E-01-authenticate.md) d26, d27; [M-04](M-04-manage-users.md) d31). *Enters their own initials* is retired wording (E-01 d29).
+- **Sales by Employee names people whose initials are unique per Store, not per Organization** ([E-01](E-01-authenticate.md) d25) — the section resolves to the **name** ([M-04](M-04-manage-users.md) d16) and, since the close is per Store (A-86 keeps CloseBatches per Store), never has to disambiguate two Stores' people on one page. Consolidated views across Stores stay deferred ([architecture](../architecture.md) A-72, A-86).
 
 ---
 

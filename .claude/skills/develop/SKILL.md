@@ -20,16 +20,25 @@ completion in its own worktree. This skill is for a human pairing on one.
 1. Read the order. `Status: Approved` with a named approver, or stop — an
    unapproved order has no fixed scope, and building to it drops requirements
    silently.
-2. Read the flow the order names, in full, and `architecture.md` §2, §5.1, §6 and
-   §9. **Read the file, don't recall it** — decisions here are superseded often,
-   and the Checklist cites numbers, not text.
+2. Read [`docs/build/conventions.md`](../../../docs/build/conventions.md) — the
+   stack recipe: commands, layout, the definer-function and RLS shapes, the test
+   naming — and follow its §7 reading list: the flow the order names, in full;
+   `architecture.md` §1 and §7; then **only** the A-n rows the Checklist cites in
+   §2, the §5.1 rules for the tables you touch, the §6 rows for your functions,
+   and the §9 rows for your flow. **Read the file, don't recall it** — decisions
+   here are superseded often. The Checklist quotes each decision it cites; the
+   flow is for the worked examples and the context around the quote, and reading
+   all of §2 is noise on a very large file.
 3. Read the `packages/contracts` entries the order names. **D** implements them
    as `SECURITY DEFINER` functions (A-4); **U** consumes them through the typed
    wrappers against the in-memory fake until D lands. A contract that does not fit
    the decision is a **contract pull request both humans review** — never a local
    edit.
-4. Read the tests that already exist for this area, and `docs/lexicon.md` for
-   the terms the code must use.
+4. Read the tests that already exist for this area, and search `docs/lexicon.md`
+   for the terms in your Checklist rows — the code must use them.
+5. A convention the order needs and `conventions.md` marks `_TBD_` — a package
+   manager, a schema library, a migration name — is not yours to choose. Stop
+   there, file it under **Needs a human**, and do the rows that do not need it.
 
 ## The loop, per Checklist row
 
@@ -54,9 +63,9 @@ completion in its own worktree. This skill is for a human pairing on one.
 ## Rules
 
 - **Track boundaries are real.** D writes `supabase/` and `packages/db-types/`;
-  U writes `apps/web/`. Neither writes `docs/flows/`, `docs/architecture.md`,
-  `docs/PRD.md`, `docs/lexicon.md`, `docs/qa/`, `docs/prototype.md`, `.claude/`,
-  or `packages/contracts/`. A spec problem you find is an open question or a
+  U writes `apps/web/`. Neither writes the other's tree, `e2e/`, `docs/flows/`,
+  `docs/architecture.md`, `docs/PRD.md`, `docs/lexicon.md`, `docs/qa/`,
+  `docs/prototype.md`, `.claude/`, or `packages/contracts/`. A spec problem you find is an open question or a
   supersession proposal, filed through the order — not an edit to the spec so the
   code can match it.
 - **Invariants live in the database** (A-4, §5.1). A screen may check first for

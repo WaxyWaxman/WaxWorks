@@ -248,6 +248,12 @@ Held copies count against **available** stock but remain on hand.
 - **A Sale's business date is the date it was tendered** ([M-07](M-07-chart-of-accounts.md) d19), a **calendar** date ending at midnight, with no separate business-day boundary and no setting for one. That is the same moment [architecture](../architecture.md) A-57 resolves tax at, so the two never disagree — and it means a Sale rung at 00:30 after a late night files on the new day.
 - **The day's Sales become journal lines at the close** ([M-07](M-07-chart-of-accounts.md) d7, d14), grouped by `(business date, account)` so a close covering two days files each on its own. A mis-rung tender is therefore worth catching before close — decision 27's Current-Sales search is where, and decisions 31 and 32 are how.
 
+**From [architecture](../architecture.md) A-86 and the user model (2026-09-20):**
+
+- **A gift card is the Organization's liability and is honoured at any of its Stores** ([architecture](../architecture.md) A-86, amending A-51 — *a sister Store cannot honour it* is struck). Which home currency a card carries when two Stores differ is open in architecture §11.
+- **A Customer's account balance and history span the Organization's Stores** ([architecture](../architecture.md) A-86; [E-07](E-07-manage-customers.md)) — a deposit taken at one Store is drawable at another, and a Return with no receipt may be worked against any Store's Sales. Sale numbers stay unique **per Store** (A-11).
+- **Opening a Sale, recording a pay-out and voiding prompt for initials every time on a store session and never on a personal session** ([E-01](E-01-authenticate.md) d12, d15, d27). A void authorized at a manager-only line on a store session records both names ([E-01](E-01-authenticate.md) d26).
+
 ---
 
 ## Resolved decisions
@@ -258,7 +264,7 @@ Held copies count against **available** stock but remain on hand.
 | 2 | Sale numbers are **globally unique** and ascending; supplier Invoice numbers remain unique per `(supplier, invoice_number)` |
 | 3 | Held Sales carry an `H`-prefixed hold reference, replaced by a Sale number on tender; the hold reference is retained |
 | 4 | A voided Sale retains its Sale number — the sequence is never made gapless by reuse |
-| 5 | **Void applies to Open and Current Sales.** Held Sales use Cancel Hold instead; Closed Sales are reopened via Undo End of Day (Admin) or handled as a Return |
+| 5 | **Void applies to Open and Current Sales.** Held Sales use Cancel Hold instead; Closed Sales are reopened via Undo End of Day (manager-only — *Admin* was prototype wording, since retired by the [lexicon](../lexicon.md)) or handled as a Return |
 | 6 | Cancelling a hold is a distinct action from voiding a Sale, and is logged rather than erased |
 | 7 | Holds do not expire; the hold log records creation, customer contact, and age |
 | 8 | A Sale may be split across multiple tenders; each tender is recorded individually |

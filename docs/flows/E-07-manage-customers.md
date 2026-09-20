@@ -122,6 +122,11 @@ This is distinct from a supplier **Invoice** ([E-02](E-02-receive-inventory.md))
   live against the store default when no Customer is attached. A hold is never detached: decision 19's *Waiting*
   band is the only place a hold nobody has chased becomes visible, and an unattached hold would appear in none.
 
+**From [architecture](../architecture.md) A-86 and the user model (2026-09-20):**
+
+- **Customers belong to the Organization, not to one Store** ([architecture](../architecture.md) A-86, superseding A-5; [PRD](../PRD.md) §4): one Customer list serves every Store, and a Customer's balance, discount, default tax line and history span the Organization's Stores. A per-Store copy of a Customer was considered with A-86 and declined.
+- **The inline attribution prompt on a Customer's card** ([E-01](E-01-authenticate.md) d5, d20) does not fire on a personal session (E-01 d27). Whether a Customer edit is an attributed action at all — the prototype stores no actor on one — is an open question shared with [M-04](M-04-manage-users.md).
+
 ## Resolved decisions
 
 | # | Decision |
