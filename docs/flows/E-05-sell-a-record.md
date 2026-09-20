@@ -173,6 +173,15 @@ Held copies count against **available** stock but remain on hand.
   Subtotal* rather than replacing it: the range report sums closed batches, so the batch currently in flight
   is invisible to it and *View Subtotal* stays the only way to see the day being stood in.
 
+**From [E-07](E-07-manage-customers.md) decision 24:**
+
+- **A Customer carrying a credit limit warns at the till when an act would take their balance past it, and the
+  Sale proceeds regardless.** The warning is advisory in both directions it can be reached — [E-07](E-07-manage-customers.md)
+  d10's outbound customer invoice, and an `Account Balance` draw-down ([M-03](M-03-daily-summary.md) d21) — and
+  **nothing at the till refuses**, so no override and no manager authorization is involved: [E-07](E-07-manage-customers.md)
+  d12 leaves everything about a Customer ungated and d24 does not change that. A blank limit is the ordinary case
+  and warns about nothing.
+
 **From [E-06](E-06-process-a-return.md) decision 30:**
 
 - **Decision 31's Void — and therefore its Edit — gains a second refusal on a Return, and it is not about the
