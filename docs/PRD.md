@@ -230,7 +230,7 @@ _Status: **ratified**._
 
 - ~~**Offline behavior**~~ — **Resolved** above: online-only in v1.
 - ~~**Discogs terms of use**~~ — **Moot.** The catalog provider is MusicBrainz, whose core data is CC0 and whose artwork archive is openly licensed ([architecture](architecture.md) A-12).
-- **Data retention** — how long Sales, Invoices, and customer records are kept is still unaddressed. Backups are settled; retention is not.
+- **Data retention** — how long Sales, Invoices, and customer records are kept is still unaddressed. Backups are settled; retention is not. **The logs and the books are bound to this answer** ([architecture](architecture.md) A-95): a domain log lives exactly as long as the record it explains and is never pruned on its own, so answering this for a Sale answers it for every log the Sale wrote; the **books** are their own record with their own horizon — a statutory figure this question now owes, and one not shorter than any other record's — so the answer for Sales does not reach the journal a Sale wrote. Until answered, *forever* is the working answer for every domain log. Operational logs (Vercel, Supabase, Sentry) are outside this question: they live as long as the platform keeps them, and nothing the shop must reconstruct depends on one (A-92).
 
 ---
 
