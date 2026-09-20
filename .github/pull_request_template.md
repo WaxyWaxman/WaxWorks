@@ -48,3 +48,4 @@ rows it makes Stale. A flow promoted to Specified gets rows. Say "none" if none.
 - [ ] If a decision was superseded, it is called out above — a textual merge cannot see it
 - [ ] Register rows asserting any superseded or amended decision are marked `Stale`; a flow promoted to `Specified` has rows
 - [ ] Code PRs: the work order is linked above, `python scripts/check_coverage.py --order <file>` passes, and the reviewers' findings are in the order — a human merges
+- [ ] PRs into `staging`: every `security-review` comment is in the order's Findings table, marked `fixed` or `disputed` (A-96)
