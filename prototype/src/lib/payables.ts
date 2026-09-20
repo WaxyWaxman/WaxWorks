@@ -366,7 +366,7 @@ export function creditDrawdown(
  * reversible: it moves no money and writes no journal lines, so reversing one
  * reverses nothing real. It says nothing about d27's placeholder disposal
  * inside a settlement — that is its batch's void to reverse (d22), and whether
- * the void even does so is an open question in M-05. `clearedInBatchId` is the
+ * the void even does so is settled by d54 — it does; see unretireOnVoid. `clearedInBatchId` is the
  * discriminator; before it existed both acts wrote the same two fields and an
  * un-clear would have silently reversed the wrong one.
  */
@@ -582,3 +582,43 @@ export function suggestedMethod(plan: SettlementPlan): PaymentMethod | undefined
 /** d15's test sums FACE values (d29), which is why a placeholder has two figures. */
 export const clearsToZero = (rows: LedgerRow[]): boolean =>
   rows.length >= 2 && Math.abs(round2(rows.reduce((n, r) => n + r.face, 0))) <= 0.005;
+
+/**
+ * M-05 d54 — **a void un-retires the Claim placeholders its batch disposed of.**
+ *
+ * d22 reverses every target the batch carried; d27 makes a placeholder
+ * explicitly *not* a target and calls its retirement a real disposal. Neither
+ * said what a void does to one, and until d54 nothing did — which left the
+ * only state in this flow with **no exit**: `unclearRefusal` refuses on a
+ * settlement's disposal (deferring to this very question), and the void
+ * restored nothing, so a placeholder retired in a batch later voided could be
+ * reached by no route at all.
+ *
+ * The answer follows what `clearedInBatchId` already models: the disposal
+ * belongs to **that batch**, not to the claim. A void saying the batch never
+ * happened in that shape cannot leave one of its effects standing.
+ *
+ * It returns to **outstanding** — not disposed-and-re-marked. The Manager
+ * re-records the settlement and decides again, as a void asks of every other
+ * target.
+ *
+ * d39's clearing is untouched: `clearedInBatchId` stays the discriminator, and
+ * `unclearRefusal` still refuses on a settlement's disposal, because the void
+ * is now the route rather than a hole it had to patch.
+ */
+export const retiredInBatch = (e: PayableEntry, batchId: string): boolean =>
+  e.clearedInBatchId === batchId;
+
+export function unretireOnVoid(
+  e: PayableEntry,
+  batchId: string,
+  at: string,
+  by: string,
+): PayableEntry {
+  if (!retiredInBatch(e, batchId)) return e;
+  const { clearedAt: _a, clearedBy: _b, clearedInBatchId: _c, ...rest } = e;
+  return {
+    ...rest,
+    log: [...e.log, { at, text: `Un-retired by the void of this settlement by ${by} (d54)` }],
+  };
+}
