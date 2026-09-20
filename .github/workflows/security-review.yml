@@ -1,6 +1,6 @@
 name: security-review
 
-# Model-backed security review of code entering staging (A-92, docs/architecture.md
+# Model-backed security review of code entering staging (A-96, docs/architecture.md
 # §2.7). Advisory by decision: findings land as inline pull-request comments and a
 # JSON artifact, and the coordinator carries them into the work order's Findings
 # table for the architect gate (docs/build/workflow.md §3 gate 3). This job never
@@ -38,7 +38,7 @@ jobs:
       # Bump deliberately, in its own pull request, after reading the diff.
       - id: review
         uses: anthropics/claude-code-security-review@0c6a49f1fa56a1d472575da86a94dbc1edb78eda
-        continue-on-error: true # advisory (A-92); the finding blocks at gate 3, not here
+        continue-on-error: true # advisory (A-96); the finding blocks at gate 3, not here
         with:
           claude-api-key: ${{ secrets.ANTHROPIC_API_KEY }}
           claude-model: claude-opus-5
@@ -53,4 +53,4 @@ jobs:
         if: always()
         run: |
           echo "Security review findings: ${{ steps.review.outputs.findings-count || 'n/a' }}" >> "$GITHUB_STEP_SUMMARY"
-          echo "Advisory (A-92): carry each comment into the work order's Findings table; a human merges." >> "$GITHUB_STEP_SUMMARY"
+          echo "Advisory (A-96): carry each comment into the work order's Findings table; a human merges." >> "$GITHUB_STEP_SUMMARY"

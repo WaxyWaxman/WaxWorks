@@ -98,7 +98,7 @@ A pull request into `staging` gets one more check — `security-review.yml`, a
 model-backed security review of the diff. It reads the only secret CI holds and
 it is **advisory**: its inline comments are carried into the work order's
 Findings table for the architect gate, and the job passes either way. A human
-still merges. Recorded as [architecture.md](docs/architecture.md) §2.7, **A-92**.
+still merges. Recorded as [architecture.md](docs/architecture.md) §2.7, **A-96**.
 
 ## Building past the prototype
 

@@ -1,4 +1,4 @@
-Project-specific instructions for the WaxWorks security review (A-92).
+Project-specific instructions for the WaxWorks security review (A-96).
 
 This repository is a point-of-sale system for a record shop: money, inventory
 shrinkage, and a boundary between what an Employee may do and what is reserved

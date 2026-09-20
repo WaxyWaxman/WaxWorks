@@ -1,4 +1,4 @@
-Additional false-positive filtering for the WaxWorks security review (A-92).
+Additional false-positive filtering for the WaxWorks security review (A-96).
 
 Exclude findings that:
 

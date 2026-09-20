@@ -4,7 +4,7 @@ name: docs-check
 # this workflow reads no API key and runs no model. The judgement calls stay with
 # /spec-audit, which a human runs locally before opening the PR. The one
 # model-backed check in CI is security-review.yml, on pull requests into staging
-# (A-92); it is advisory and reads the only secret CI holds.
+# (A-96); it is advisory and reads the only secret CI holds.
 
 on:
   # No paths filter: a change under .claude/ can break a cross-link too, and the
