@@ -214,7 +214,7 @@ and purchase orders sent to suppliers (decision 46).
 | **Logo** | An **uploaded image** — PNG or JPEG, 512 KB, stored by us (decision 51). Not a URL |
 | **Store ID** | Seven digits, **assigned by the system when an Owner creates the Store, never editable** (decisions 47, 70) |
 | **Store position** | Where this Store sits among the Organization's Stores. Assigned at creation, never editable (decision 70) |
-| **Store account** | The Store's own **email and password**, which a terminal signs in with to open a store session ([E-01](E-01-authenticate.md) d24). **Owner-only** — set at creation and reset by an Owner; rotating the password signs out every terminal of this Store (decision 70) |
+| **Store account** | The Store's own **email and password**, which a terminal signs in with to open a store session ([E-01](E-01-authenticate.md) d24). Shown here **read-only** — the email, so it can be read out; set at creation and **rotated on the Organization screen only**, by an Owner, since rotating it signs out every terminal of this Store (decision 70; [O-01](O-01-administer-the-organization.md) d3, d6) |
 
 Tax registration numbers are **not** here — each sits on its tax type, since GST and
 QST are separate registrations (decision 48).

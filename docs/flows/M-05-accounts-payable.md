@@ -145,6 +145,11 @@ Loading and redeeming happen at the till ([E-05](E-05-sell-a-record.md)); this i
 
 - **Deleting a clearing is permitted, and the un-clear log must name the siblings** ([architecture](../architecture.md) A-70). A-70 records decision 48 and states the four conditions that make it safe — nothing cites the row, no money moved, no journal line was posted, and **its log preserves what the row recorded**. The fourth is a requirement on decision 39's logging rather than a restatement of it: removing the clearing destroys the **grouping**, and *"Cleared against 2 other entries"* does not say which two. Each member's un-clear entry therefore names its siblings. Failing any of the four puts the artifact back under decision 22's append-a-void shape.
 
+**From [architecture](../architecture.md) A-86 and the user model (2026-09-20):**
+
+- **Payables are the Organization's** — entries, credits, batches, voids, clearings and targets are keyed `(org_id, …)` ([architecture](../architecture.md) A-86, amending A-36) — while the Invoices they settle stay per Store. **A Supplier's balance therefore sums Invoices across every Store**, and a store session reads every Store's Invoice *headers* through A-86's Organization-wide select policy so that the same Supplier does not show a smaller debt at one counter than at another. Invoice lines and every Invoice write stay Store-scoped.
+- **Everything in this flow is manager-only and is authorized by PIN on a store session, by the session itself on a personal session; both names are recorded on a store session** ([E-01](E-01-authenticate.md) d26, d27; [M-04](M-04-manage-users.md) d31). A settlement recorded under an Employee's session reads *Recorded by R. Delacroix (Manager), for E. Okafor (Employee)*.
+
 ---
 
 ## Resolved decisions
