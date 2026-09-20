@@ -72,7 +72,8 @@ already places them; a file that fits nowhere is a question for `/architecture`.
 | **Preview** — one Vercel preview deployment per pull request, **access-protected** | a Supabase branch created for the pull request and destroyed with it | `seed.sql` and nothing else — **never** a restore, dump or anonymised copy of production | its own service-role key and its own PIN pepper (Supabase Vault, A-89) |
 | **Production** — one Vercel deployment | one Supabase project, the only place a shop's data exists | the shop's; **never seeded** (A-101) | service-role key in the server-runtime environment only |
 
-There is no staging. The **anon key** ships in the client bundle and nothing
+There is no staging environment; the `staging` branch A-96 proposes deploys as
+a preview like any other (A-100). The **anon key** ships in the client bundle and nothing
 follows from holding it (RLS on every read, A-4 on every write). The
 **service-role key** is a Vercel environment variable scoped to the server
 runtime, never prefixed `NEXT_PUBLIC_`, never in a repository file, never in
@@ -318,7 +319,8 @@ Ratified 2026-09-20. Cite the A-n, not this section.
 | A-102 | pnpm workspaces, no task runner, `tsc` and ESLint |
 | A-103 | The definer-function header: `search_path = ''`, grants, owner, assertion order |
 
-Three things the conventions could not settle stay open in
+Two things the conventions could not settle stay open in
 [architecture](../architecture.md) §11: an enforcement mechanism for A-91's key
-rule; the preview access protection, which is a Vercel setting the repository
-cannot assert; and how A-96's proposed `staging` branch deploys.
+rule, and the preview access protection, which is a Vercel setting the repository
+cannot assert. A-96's proposed `staging` branch, if ratified, deploys as a preview
+like any other and production is cut from it (A-100).
