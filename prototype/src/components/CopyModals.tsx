@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Modal } from "./Modal";
 import type { InventoryItem, RecordEntry } from "../data/types";
-import { money, roundUpShelf } from "../lib/money";
+import { money, roundToEnding } from "../lib/money";
 import { useApp } from "../store/AppStore";
 
 // Two modals that act on a single copy. They were local to TitlecardPanel
@@ -74,11 +74,17 @@ export function PriceEditModal({ item, onClose }: { item: InventoryItem; onClose
   const app = useApp();
   const [raw, setRaw] = useState(String(item.price));
   const next = Number(raw) || 0;
-  const rounded = roundUpShelf(next);
+  // A-49 / E-04 d31 — nearest configured ending, offered beside the field.
+  // E-04 d17 / A-24: a SUGGESTION, never a constraint — what the Employee
+  // typed is what is saved. This modal used to save the rounded figure
+  // instead, which made the suggestion a rule by the back door.
+  const endingMinor = app.storeSettings.priceEndingMinor;
+  const rounded = roundToEnding(next, endingMinor);
+  const endingLabel = `.${String(endingMinor).padStart(2, "0")}`;
   const belowCost = next < item.cost;
 
   const commit = () => {
-    app.setCopyPrice(item.id, rounded);
+    app.setCopyPrice(item.id, next);
     onClose();
   };
 
@@ -105,10 +111,16 @@ export function PriceEditModal({ item, onClose }: { item: InventoryItem; onClose
           <span>New shelf price</span>
           <input type="number" step="0.01" value={raw} onChange={(e) => setRaw(e.target.value)} />
         </label>
-        <div className="callout">
-          Rounds up to <strong>{money(rounded)}</strong> — shelf prices suggest ending in{" "}
-          <span className="mono">.50</span> or <span className="mono">.99</span>, though any amount
-          is accepted (E-02 decision 32 / E-04 decision 17).
+        <div className="callout row" style={{ justifyContent: "space-between", alignItems: "center" }}>
+          <span>
+            Nearest <span className="mono">{endingLabel}</span> is <strong>{money(rounded)}</strong> — a
+            suggestion only; any amount is accepted (E-04 decision 31, decision 17).
+          </span>
+          {next > 0 && Math.abs(rounded - next) > 0.004 && (
+            <button type="button" className="btn sm" onClick={() => setRaw(rounded.toFixed(2))}>
+              Use {money(rounded)}
+            </button>
+          )}
         </div>
         {belowCost && (
           <div className="callout">

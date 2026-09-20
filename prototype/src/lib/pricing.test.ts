@@ -5,9 +5,9 @@ import { priceLine } from "./pricing";
 // thin margin is warned about rather than priced away.
 //
 // The fixture is E-02's own worked example: list 27.99 marked up by a 60%
-// supplier Discount gives 44.78, rounded up the shelf to 44.99.
+// supplier Discount gives 44.78, rounded to the nearest .99 — 44.99 (A-49).
 
-const base = { listPrice: 27.99, lineDiscountPct: 50, supplierMarkupPct: 60 };
+const base = { listPrice: 27.99, lineDiscountPct: 50, supplierMarkupPct: 60, priceEndingMinor: 99 };
 
 describe("pre-fill precedence (d51)", () => {
   it("computes a suggestion from the supplier's markup when nothing is decided", () => {
@@ -68,7 +68,7 @@ describe("the margin complaint (d51)", () => {
   it("says nothing before a cost has been entered", () => {
     // With no list price the margin computes to 100%, a number that invites
     // acceptance and means nothing.
-    const p = priceLine({ listPrice: 0, lineDiscountPct: 0, supplierMarkupPct: 60 });
+    const p = priceLine({ listPrice: 0, lineDiscountPct: 0, supplierMarkupPct: 60, priceEndingMinor: 99 });
     expect(p.thinMargin).toBe(false);
     expect(p.belowCost).toBe(false);
   });

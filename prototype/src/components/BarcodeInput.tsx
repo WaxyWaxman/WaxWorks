@@ -27,6 +27,8 @@ export function BarcodeInput({
 }: {
   onScan: (code: string) => void;
   placeholder?: string;
+  // An empty `samples` shows no quick-scan row at all — for a host where the
+  // chips are noise rather than help, like the past-Sales lookup (#15).
   samples?: { code: string; label: string }[];
   // A real scanner hits Enter on its own, so the button next to the field
   // doesn't have to just re-submit the same value. Pass onAction to give it
@@ -57,7 +59,7 @@ export function BarcodeInput({
           {actionLabel}
         </button>
       </div>
-      {collapsibleSamples ? (
+      {samples.length === 0 ? null : collapsibleSamples ? (
         // Find's slab is 320px wide: ten chips laid out flat push the result
         // list off the bottom of the track, which is the one thing on that
         // screen that has to stay visible. Folded away, they are still one
