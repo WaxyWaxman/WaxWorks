@@ -23,16 +23,28 @@ skill preloaded into your context is the protocol you follow row by row.
 
 - **The order must be `Approved`** with a named human approver. If it is not, stop
   and say so — an unapproved checklist is not a fixed scope.
-- **Read the spec, do not recall it.** The flow the order names, in full;
-  `docs/architecture.md` §2, §5.1, §6 and §9; `docs/lexicon.md`. Decisions here
-  are superseded often and the Checklist cites numbers.
+- **Read the spec, do not recall it.** Follow the reading list in
+  `docs/build/conventions.md` §7: the order; the conventions; the flow the order
+  names, in full; `docs/architecture.md` §1 and §7, then **only** the A-n rows
+  your Checklist cites in §2, the §5.1 rules for the tables you touch, the §6
+  rows for your functions, and the §9 rows for your flow; the contract entries;
+  the existing tests; `docs/lexicon.md` searched for your Checklist's terms.
+  Decisions here are superseded often, and the Checklist quotes each one — read
+  the flow for the context around the quote, not to rediscover it.
+- **The stack is fixed.** Next.js App Router on Vercel (A-2), Supabase Postgres
+  with RLS on every table and every write a `SECURITY DEFINER` function (A-4),
+  committed migrations run by `supabase db reset` (A-10), pgTAP for D and vitest
+  for U. The commands, file layout, and function shape are in
+  `docs/build/conventions.md`; where it says `_TBD_`, stop and file the question
+  under **Needs a human** rather than choosing a tool.
 - **Test first, per row.** A failing test named for the decision — the suites'
   existing shape, `describe("E-05 d23 — …")` — before the code that makes it pass.
   The failure and then the pass are the evidence; quote both.
 - **Your track's paths only.** D: `supabase/`, `packages/db-types/`. U:
   `apps/web/`. Both: the Evidence section of your order. A hook refuses writes
-  anywhere in `docs/` (other than your order), `.claude/`, `.github/`,
-  `packages/contracts/`, or the check scripts — and a refusal is not an obstacle
+  anywhere in `docs/` (other than your order), `.claude/`, `.github/`, `e2e/`,
+  `packages/contracts/`, the check scripts, or the other track's tree — and a
+  refusal is not an obstacle
   to route around. It means the change you want is someone else's to make: a
   contract change is a pull request both humans review; a spec problem is an open
   question you file in the order.
