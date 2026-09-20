@@ -50,9 +50,11 @@ import {
   authorizeByPin as authorizeByPinLib,
   authorizeManager,
   requireManager,
+  requireOwner,
   type ManagerAuth,
 } from "../lib/managerAuth";
 import { adminRefusal, type AdminAction } from "../lib/userAdminPolicy";
+import * as storesLib from "../lib/stores";
 import { otpAccepted, selectableStores as selectableStoresLib, signInPersonal as signInPersonalLib, signInStoreAccount as signInStoreAccountLib, signInSysadmin as signInSysadminLib } from "../lib/signIn";
 import { buildChart } from "../lib/chart";
 import { buildCloseJournal } from "../lib/closeJournal";
@@ -1066,6 +1068,16 @@ interface AppContextValue extends AppState {
   requestPasswordReset: (userId: string, by: ManagerAuth) => UserWriteResult;
   // M-04 d29 — the landing of that link. No `by`: the person set it themselves.
   setOwnPassword: (userId: string, password: string) => UserWriteResult;
+  // ---- O-01 — the Organization (Owner-only, d1) ----
+  // d2 / M-06 d70 — the system mints the Store ID and position; the Store
+  // starts from M-06 defaults with nobody assigned.
+  addStore: (
+    input: { tradingName: string; accountEmail: string; accountPassword: string },
+    by: ManagerAuth,
+  ) => { ok: true; id: string } | { ok: false; reason: string };
+  // d3 — typed by the Owner, logged never as a value; signs every terminal of
+  // the Store out (E-01 d24).
+  setStoreAccountPassword: (storeId: string, password: string, by: ManagerAuth) => { ok: true; id: string } | { ok: false; reason: string };
 
   recordFor: (id?: string) => RecordEntry | undefined;
   customerFor: (id?: string) => Customer | undefined;
@@ -2711,6 +2723,56 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
 
   const setOwnPassword: AppContextValue["setOwnPassword"] = (userId, password) =>
     commit(usersLib.setOwnPassword(s.users, userId, password));
+
+  // -------------------------------------------------------------------------
+  // O-01 — the Organization. Owner-only in its entirety (d1): `requireOwner`
+  // is the second question after the manager-only line, refused by name.
+  // -------------------------------------------------------------------------
+
+  const addStore: AppContextValue["addStore"] = (input, byAuth) => {
+    const owner = requireOwner(s.users, byAuth);
+    if (!owner.ok) return { ok: false, reason: owner.refusal };
+    const r = storesLib.addStore(s.stores, { ...input, orgId: HOME_ORG_ID }, owner.name);
+    if (!r.ok) return r;
+    // d2 — M-06 defaults, nothing sold or held; the details block carries the
+    // trading name and the minted identifiers (M-06 d46, d47).
+    const created = r.stores.find((x) => x.id === r.id)!;
+    const details: StoreDetails = {
+      ...STORE_DETAILS,
+      tradingName: input.tradingName.trim(),
+      email: created.accountEmail,
+      storeId: created.id,
+      position: created.position,
+    };
+    setS((prev) => ({
+      ...prev,
+      stores: r.stores,
+      parkedStores: { ...prev.parkedStores, [created.id]: freshStoreSlice(details) },
+      organizations: prev.organizations.map((o) =>
+        o.id === HOME_ORG_ID
+          ? { ...o, log: [...o.log, { at: new Date().toISOString().slice(0, 19), text: `Store ${created.id} "${details.tradingName}" created by ${owner.name}` }] }
+          : o,
+      ),
+    }));
+    return { ok: true, id: r.id };
+  };
+
+  const setStoreAccountPassword: AppContextValue["setStoreAccountPassword"] = (storeId, password, byAuth) => {
+    const owner = requireOwner(s.users, byAuth);
+    if (!owner.ok) return { ok: false, reason: owner.refusal };
+    const r = storesLib.setStoreAccountPassword(s.stores, storeId, password, owner.name);
+    if (!r.ok) return r;
+    // E-01 d24 / O-01 d3 — every terminal of that Store is signed out at
+    // once. This browser is one terminal; if it holds that Store's store
+    // session, it goes too.
+    const thisTerminalGoes = s.principal?.kind === "store" && s.principal.storeId === storeId;
+    setS((prev) => ({
+      ...prev,
+      stores: r.stores,
+      ...(thisTerminalGoes ? { principal: null, sessionUserId: null } : {}),
+    }));
+    return { ok: true, id: r.id };
+  };
 
   const addCustomer: AppContextValue["addCustomer"] = (input) => {
     const id = uid("cust");
@@ -5804,6 +5866,8 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
       unassignFromStore,
       requestPasswordReset,
       setOwnPassword,
+      addStore,
+      setStoreAccountPassword,
     }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [s],
