@@ -144,6 +144,16 @@ Consequence to accept knowingly: per-item margin reporting reflects only supplie
 
 ---
 
+**From [M-02](M-02-reorder-inventory.md) decision 44:**
+
+- **A line recorded straight as placed may now carry a list price, so decision 20's carry-forward has
+  something to carry on these lines too.** The figure is the supplier's **pre-discount** price, which is what
+  decision 49's suggested-retail formula wants; the **expected cost** derives from it by the Supplier's Discount
+  rather than being typed. It is **optional** — a blank one leaves the line exactly as it was, priced by hand.
+  It is also an **expectation**: decision 7 keeps the supplier's post-discount `Ext. Price` as the cost, and the
+  desk confirms against the Invoice. Where the batch was bought on a promotion the expectation will read high,
+  because it is computed from the Supplier's standing Discount ([M-01](M-01-supplier-margin.md) d2).
+
 ## Resolved decisions
 
 | # | Decision |
