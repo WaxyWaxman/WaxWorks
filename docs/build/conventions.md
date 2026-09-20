@@ -1,6 +1,6 @@
 # Wax Works — build conventions
 
-**Status:** Ratified 2026-09-20 — every rule quoted from [architecture](../architecture.md); the seven conventions it first left `_TBD_` are A-92 to A-98
+**Status:** Ratified 2026-09-20 — every rule quoted from [architecture](../architecture.md); the seven conventions it first left `_TBD_` are A-97 to A-103
 **Owners:** sr-talbot, WaxyWaxman
 **Read by:** the `developer` subagent and `/develop`, before the first line of code; `qa-reviewer` and `architect`, when judging a diff
 
@@ -17,25 +17,25 @@ The [workflow](workflow.md) says who writes what. This says how.
 ## 1. Commands
 
 Every command is run from the repository root. The **Track** column says who runs
-it in the course of an order. CI runs the first eight as A-92's six jobs (the two
+it in the course of an order. CI runs the first eight as A-97's six jobs (the two
 Supabase rows are one job's setup); Playwright is a seventh job that lands with
-the first `/qa automate`, not at M0 (A-92).
+the first `/qa automate`, not at M0 (A-97).
 
 | Purpose | Command | Track |
 |---|---|---|
-| Install | `pnpm install` — pnpm workspaces, lockfile committed, `--frozen-lockfile` in CI (A-97) | both |
+| Install | `pnpm install` — pnpm workspaces, lockfile committed, `--frozen-lockfile` in CI (A-102) | both |
 | Start local Supabase | `supabase start` (A-10: Supabase runs locally in Docker) | D, U for integration |
 | Rebuild the database from migrations and seed | `supabase db reset` (A-10) | D |
 | Run the database tests | `supabase test db` — pgTAP under `supabase/tests/` (§7) | D |
-| Generate `packages/db-types` | `supabase gen types typescript --local > packages/db-types/index.ts` — D regenerates it in the same pull request as the migration that changed the schema; CI re-runs the generator and fails on a diff (A-93) | D |
-| Typecheck | `pnpm typecheck` — `tsc --noEmit` in each workspace member (A-97) | both |
-| Lint | `pnpm lint` — ESLint with `typescript-eslint` and `eslint-config-next` (A-97) | both |
-| Unit tests, screens | `pnpm test` — vitest in `apps/web/` (A-97; `.claude/skills/qa/SKILL.md` §Levels) | U |
+| Generate `packages/db-types` | `supabase gen types typescript --local > packages/db-types/index.ts` — D regenerates it in the same pull request as the migration that changed the schema; CI re-runs the generator and fails on a diff (A-98) | D |
+| Typecheck | `pnpm typecheck` — `tsc --noEmit` in each workspace member (A-102) | both |
+| Lint | `pnpm lint` — ESLint with `typescript-eslint` and `eslint-config-next` (A-102) | both |
+| Unit tests, screens | `pnpm test` — vitest in `apps/web/` (A-102; `.claude/skills/qa/SKILL.md` §Levels) | U |
 | Decision-to-test gate | `python scripts/check_coverage.py --order docs/build/orders/<order>.md` | both |
 | Document gate | `python scripts/check_docs.py` | both |
 | End-to-end | `npx playwright test` from `e2e/` (A-85) — QA's, not the developer's (workflow §1) | neither |
 
-No task runner (A-97): the root scripts call each member directly. A tool this
+No task runner (A-102): the root scripts call each member directly. A tool this
 table does not name is not the developer's to add — file it under **Needs a
 human**.
 
@@ -48,7 +48,7 @@ already places them; a file that fits nowhere is a question for `/architecture`.
 
 | Path | Holds | Written by |
 |---|---|---|
-| `package.json`, `pnpm-workspace.yaml`, `pnpm-lock.yaml` | the root workspace: `apps/*`, `packages/*`, `e2e` — not `prototype/` (A-97) | the M0 order |
+| `package.json`, `pnpm-workspace.yaml`, `pnpm-lock.yaml` | the root workspace: `apps/*`, `packages/*`, `e2e` — not `prototype/` (A-102) | the M0 order |
 | `apps/web/app/(till)/` | sell, return — client components (A-2) | U |
 | `apps/web/app/(back)/` | receive, history, search, titlecard, close, review, settings — server-rendered (A-2) | U |
 | `apps/web/app/print/` | print-only routes with `@page` stylesheets (A-8) | U |
@@ -64,19 +64,21 @@ already places them; a file that fits nowhere is a question for `/architecture`.
 | `e2e/` | the end-to-end suite, own `package.json` (A-85) | QA |
 | `prototype/` | harvested for UI copy and layout, then archived (§7) | nobody, past M0 |
 
-### 2.1 Environments and secrets (A-95)
+### 2.1 Environments and secrets (A-100)
 
 | Environment | Database | Data | Keys |
 |---|---|---|---|
 | **Local** | Supabase in Docker, `supabase db reset` (A-10) | `seed.sql` | the toolchain's fixed development keys — public by design, not secrets |
 | **Preview** — one Vercel preview deployment per pull request, **access-protected** | a Supabase branch created for the pull request and destroyed with it | `seed.sql` and nothing else — **never** a restore, dump or anonymised copy of production | its own service-role key and its own PIN pepper (Supabase Vault, A-89) |
-| **Production** — one Vercel deployment | one Supabase project, the only place a shop's data exists | the shop's; **never seeded** (A-96) | service-role key in the server-runtime environment only |
+| **Production** — one Vercel deployment | one Supabase project, the only place a shop's data exists | the shop's; **never seeded** (A-101) | service-role key in the server-runtime environment only |
 
 There is no staging. The **anon key** ships in the client bundle and nothing
 follows from holding it (RLS on every read, A-4 on every write). The
 **service-role key** is a Vercel environment variable scoped to the server
 runtime, never prefixed `NEXT_PUBLIC_`, never in a repository file, never in
-`e2e/` (A-91, A-95). Only A-91's four Auth handlers read it.
+`e2e/` (A-91, A-100). Only A-91's four Auth handlers read it. CI holds one secret, the `ANTHROPIC_API_KEY` read by
+`security-review.yml` alone (A-96, not yet ratified); `docs-check` and the six
+A-97 jobs are keyless.
 
 ---
 
@@ -86,13 +88,13 @@ runtime, never prefixed `NEXT_PUBLIC_`, never in a repository file, never in
 
 - One file per migration under `supabase/migrations/`, named
   `<UTC timestamp>_<verb>_<object>.sql` as `supabase migration new` mints it,
-  ordered by filename (A-96).
+  ordered by filename (A-101).
 - **A merged migration is never edited.** A wrong migration is followed by a
   correcting one — the append-only rule the decision tables live by, applied to
-  schema (A-96).
+  schema (A-101).
 - One migration per coherent group of Checklist rows — a table with its policies,
   a function with its grants — so a reviewer reads one file against the rows it
-  serves (A-96).
+  serves (A-101).
 - **The seed exercises the write surface:** `supabase/seed.sql` calls definer
   functions (A-4) rather than inserting rows, so it is the first integration test
   of every function it touches. **Two exceptions, each commented with the
@@ -101,7 +103,7 @@ runtime, never prefixed `NEXT_PUBLIC_`, never in a repository file, never in
   covers (`auth_user_id` stays null). The seed sets the session claims
   `auth.org_id()` / `auth.store_id()` / `auth.principal()` before each block,
   **refuses to run against an Organization that already exists, and never runs
-  against production** (A-96). The fixture rule in
+  against production** (A-101). The fixture rule in
   `.claude/skills/qa/SKILL.md` §`/qa automate` says the same for `e2e/`.
 
 ### 3.2 Every table
@@ -146,17 +148,20 @@ function shares, from §3 and §6:
 | Rates | integer parts per million, suffixed `_ppm`, applied once, rounded half away from zero | A-47 |
 | Immutability and sealing | a check in the write path calling `invoice_is_paid()` / `period_is_sealed()`, never a trigger **for these two predicates**. A-41 and A-44 keep local triggers on local facts: SaleLines on Closed Sales, voided Sale numbers, `claim_number` | A-41, A-44, A-80 |
 | Voids | appended reversing rows; a record is deleted only where nothing cites it and no money moved | A-54, A-70 |
-| `search_path` | `set search_path = ''`, every table, type, function and operator schema-qualified — `pg_temp` is otherwise searched first | A-98 |
-| Grants | `revoke execute … from public; grant execute … to authenticated` in the same migration; an **S** function grants to the `sysadmin` role instead | A-98, A-90 |
-| Owner | the dedicated non-superuser role that owns the `app` schema — never `postgres` | A-98 |
-| Assertion order | tenant, then principal and actor, then **M**/**O** PIN resolution, then the body | A-98 |
+| `search_path` | `set search_path = ''`, every table, type, function and operator schema-qualified — `pg_temp` is otherwise searched first | A-103 |
+| Grants | `revoke execute … from public; grant execute … to authenticated` in the same migration; an **S** function grants to the `sysadmin` role instead | A-103, A-90 |
+| Owner | the dedicated non-superuser role that owns the `app` schema — never `postgres` | A-103 |
+| Correlation | `p_request_id` on every function; `p_terminal_id` on a store session, verified against `auth.store_id()`; both stamped with `principal` on every row and log entry the function writes | A-94 |
+| Assertion order | tenant, then principal and actor, then the terminal, then **M**/**O** PIN resolution, then the body | A-103 |
 
-**The header every function starts from (A-98):**
+**The header every function starts from (A-103):**
 
 ```sql
 create or replace function app.<name>(
   p_actor_user_id  uuid,
   p_actor_initials text,
+  p_request_id     uuid,                -- minted by the wrapper; correlates, never authorises (A-94)
+  p_terminal_id    uuid default null,   -- store session only; verified below (A-94)
   p_manager_pin    text default null,   -- M / O only; omitted otherwise
   ...
 ) returns <type>
@@ -175,19 +180,22 @@ begin
   if auth.principal() = 'person' and p_actor_user_id is distinct from auth.user_id() then
     raise exception 'actor is not the session holder' using errcode = '28000'; -- §6
   end if;
+  if auth.principal() = 'store' and not app.terminal_belongs_to(p_terminal_id, v_store_id) then
+    raise exception 'terminal is not this Store''s' using errcode = '28000';     -- A-94
+  end if;
   -- M / O: v_manager_id := app.manager_authorize_pin(p_manager_pin);          -- §6, A-89
   -- O:     assert that person is an Owner, and refuse by name                 -- §6
   ...
 end;
 $$;
 
-revoke execute on function app.<name>(...) from public;   -- A-98, A-90
+revoke execute on function app.<name>(...) from public;   -- A-103, A-90
 grant  execute on function app.<name>(...) to authenticated;
 ```
 
 A pgTAP smoke call per function is part of the suite, because a forgotten
 qualification under an empty `search_path` fails at runtime, not at creation
-(A-98, A-92).
+(A-103, A-97).
 
 The **pure helpers** (`round_to_ending`, `suggested_retail`, `tax_rate_at`,
 `upc_a_check_digit`) take every input as an argument and read no table, so their
@@ -222,7 +230,7 @@ system". Test them from the flows' worked examples.
   wrappers (§7). The fake is a `WaxClient` built once at the app's or test's
   composition root and passed in; it lives on a separate entry point of
   `packages/contracts` so importing it shows in a diff. **No wrapper reads
-  `process.env` and none branches on a flag** (A-93). A screen may **check
+  `process.env` and none branches on a flag** (A-98). A screen may **check
   first** for the user's sake; it never checks **instead** of the function
   (`.claude/skills/develop/SKILL.md` §Rules).
 - **Styling** is Tailwind + shadcn/ui; the prototype's design tokens map to
@@ -251,12 +259,12 @@ is a pull request both humans review (§7, workflow §4).
 
 | Question | Answer |
 |---|---|
-| Schema library | Zod, one library for both tracks (A-93) |
-| Wrapper signature | `<fn>(client: WaxClient, input: <Fn>Input): Promise<<Fn>Output>` — parse input, call, parse output, throw a typed error carrying the database `errcode` and message (A-93) |
-| Fake registration and switch | by construction at the composition root; `WaxClient` has two implementations, `supabase-js` `rpc` and the fake on a separate entry point; never an environment variable (A-93) |
-| Validation in the wrapper | ergonomics only — the function is the enforcement point and asserts everything again (A-4, A-48, A-93) |
-| What lands at M0 | every §6 function's signature and a stub wrapper throwing `not_implemented`; schemas and the fake's behaviour arrive in the contract pull request that opens each milestone (A-94) |
-| How `packages/db-types` is regenerated and by whom | D, with `supabase gen types typescript --local`, in the same pull request as the migration; CI re-runs it and fails on a diff (A-93) |
+| Schema library | Zod, one library for both tracks (A-98) |
+| Wrapper signature | `<fn>(client: WaxClient, input: <Fn>Input): Promise<<Fn>Output>` — parse input, call, parse output, throw a typed error carrying the database `errcode` and message (A-98) |
+| Fake registration and switch | by construction at the composition root; `WaxClient` has two implementations, `supabase-js` `rpc` and the fake on a separate entry point; never an environment variable (A-98) |
+| Validation in the wrapper | ergonomics only — the function is the enforcement point and asserts everything again (A-4, A-48, A-98) |
+| What lands at M0 | every §6 function's signature and a stub wrapper throwing `not_implemented`; schemas and the fake's behaviour arrive in the contract pull request that opens each milestone (A-99) |
+| How `packages/db-types` is regenerated and by whom | D, with `supabase gen types typescript --local`, in the same pull request as the migration; CI re-runs it and fails on a diff (A-98) |
 
 ---
 
@@ -266,10 +274,10 @@ is a pull request both humans review (§7, workflow §4).
 - Use a float anywhere money or a rate passes (A-15, A-47).
 - Gate an action the spec says to flag (A-28), or flag one it says to gate (A-28a).
 - Edit `packages/contracts/`, a merged migration, a spec, the register, or your own Checklist.
-- Read `process.env` in a wrapper, or switch the fake by flag (A-93).
-- Create a function without `set search_path = ''` and the revoke/grant pair (A-98).
-- Seed with an `insert` where a definer function exists (A-96).
-- Put the service-role key anywhere but the server-runtime environment (A-91, A-95).
+- Read `process.env` in a wrapper, or switch the fake by flag (A-98).
+- Create a function without `set search_path = ''` and the revoke/grant pair (A-103).
+- Seed with an `insert` where a definer function exists (A-101).
+- Put the service-role key anywhere but the server-runtime environment (A-91, A-100).
 - Use `waitForTimeout` or a CSS-path selector in any test — `getByRole` / `getByLabel` (`.claude/skills/qa/SKILL.md`).
 - Choose a behaviour the spec does not give. The row is `Blocked`; the question is filed.
 - Report a suite as green without pasting its output.
@@ -302,15 +310,15 @@ Ratified 2026-09-20. Cite the A-n, not this section.
 
 | A-n | Settles |
 |---|---|
-| A-92 | Six CI jobs from M0; Playwright a seventh, with the first `/qa automate` |
-| A-93 | The contracts shape: Zod, one wrapper signature, the fake by construction, `db-types` regenerated by D and checked by CI |
-| A-94 | The M0 skeleton: signatures and `not_implemented` stubs; schemas per milestone |
-| A-95 | Local, preview, production; a Supabase branch per pull request; no staging; no shop data outside production |
-| A-96 | Migration naming and immutability; the seed through definer functions with two named exceptions |
-| A-97 | pnpm workspaces, no task runner, `tsc` and ESLint |
-| A-98 | The definer-function header: `search_path = ''`, grants, owner, assertion order |
+| A-97 | Six CI jobs from M0; Playwright a seventh, with the first `/qa automate` |
+| A-98 | The contracts shape: Zod, one wrapper signature, the fake by construction, `db-types` regenerated by D and checked by CI |
+| A-99 | The M0 skeleton: signatures and `not_implemented` stubs; schemas per milestone |
+| A-100 | Local, preview, production; a Supabase branch per pull request; no staging environment; no shop data outside production |
+| A-101 | Migration naming and immutability; the seed through definer functions with two named exceptions |
+| A-102 | pnpm workspaces, no task runner, `tsc` and ESLint |
+| A-103 | The definer-function header: `search_path = ''`, grants, owner, assertion order |
 
-Two things the conventions could not settle stay open in
+Three things the conventions could not settle stay open in
 [architecture](../architecture.md) §11: an enforcement mechanism for A-91's key
-rule, and the preview access protection, which is a Vercel setting the repository
-cannot assert.
+rule; the preview access protection, which is a Vercel setting the repository
+cannot assert; and how A-96's proposed `staging` branch deploys.

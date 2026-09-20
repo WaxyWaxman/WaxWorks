@@ -1,0 +1,26 @@
+Additional false-positive filtering for the WaxWorks security review (A-96).
+
+Exclude findings that:
+
+- Concern prototype/ using in-memory data instead of a database, lacking
+  authentication, or lacking server-side enforcement. The prototype is a
+  clickable review artifact for the flow documents; it is walked, not built
+  against (docs/build/workflow.md section 6), and ships to no one.
+- Concern content under docs/ or design/. These are specification documents and
+  static HTML mock-ups, not deployed code.
+- Are generic hardening advice (rate limiting, CSRF tokens, Content-Security-Policy,
+  security headers, dependency version bumps) not tied to a recorded decision or
+  to a concrete exploit path visible in the diff.
+- Report a missing control that docs/architecture.md section 11 already lists as
+  an open question. Those are known and owned; repeat them only if the diff makes
+  one worse.
+- Report a SECURITY DEFINER function as dangerous merely for being SECURITY
+  DEFINER. That is the recorded write model (A-4); the question is whether the
+  function re-asserts scope and actor, not whether it exists.
+
+Keep findings that:
+
+- Put a credential in a repository file, a client bundle, or a log.
+- Let a client write a table directly, or let a query cross a tenant boundary.
+- Carry money through floating point.
+- Take a consequential action without an attributable actor.

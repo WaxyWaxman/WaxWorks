@@ -77,7 +77,10 @@ you can see in the diff, not a developer omission you cannot.
    the suites itself** and quotes the output. Unaccounted rows are reported first.
 3. **`architect`** — the diff against A-4, A-5, A-15/A-47, A-28/A-28a: RLS on
    every table, no client writes, integer money, a flag written on every path
-   with an actor, manager-only still gated. A security finding blocks.
+   with an actor, manager-only still gated. A security finding blocks. On a pull
+   request into `staging`, the CI security review's inline comments (A-96) are
+   carried into the order's Findings table first, as input to this pass; that
+   job never blocks on its own.
 4. **`/code-review`** — quality only.
 5. **The developer fixes**; reviewers re-check the findings only, not the whole
    order.
@@ -143,14 +146,14 @@ prototype column gates a milestone.
 
 - **Where `e2e/` lives** and whether `docs/build/orders/` needs an index —
   neither is in [architecture](../architecture.md) §7. Owner: `/architecture`.
-- ~~**Which suites run in CI at M0.**~~ **Closed by A-92:** six jobs wired at M0;
+- ~~**Which suites run in CI at M0.**~~ **Closed by A-97:** six jobs wired at M0;
   Playwright a seventh, with the first `/qa automate`.
 - **The interactive `/develop` skill has no path hook.** A hook in
   `settings.json` would bind the whole session, coordinator included. Accepted
   for now because a human is at the keyboard; revisit if an order is ever run
   interactively without one. Owner: the user.
 - ~~**The stack conventions the developer needs and the architecture does not yet
-  give.**~~ **Closed by A-92 to A-98** on 2026-09-20; recorded in
+  give.**~~ **Closed by A-97 to A-103** on 2026-09-20; recorded in
   [`conventions.md`](conventions.md), which now carries no `_TBD_`. Two items
   stayed open in [architecture](../architecture.md) §11: enforcement of A-91's
   key rule, and the preview access protection.
