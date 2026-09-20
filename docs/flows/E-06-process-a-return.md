@@ -70,6 +70,11 @@ This is a policy choice, not a technical limitation — the system records who p
 - **A Section that has been deactivated still resolves** ([M-07](M-07-chart-of-accounts.md) d18), so a Return of a copy filed in a retired Section posts where it always did rather than failing.
 - **An unmatched Return's four lines are named, and none of the accounts is new** ([M-07](M-07-chart-of-accounts.md) d34, confirming decision 28). The Inventory debit takes the reserved **Inventory** account and the tax debit takes [M-07](M-07-chart-of-accounts.md) d5's **tax collected** — *not* [E-05](E-05-sell-a-record.md) d14's *Second-hand purchases*, which holds a difference and here would take the same figure in and out. Decision 26's *identical in substance to a counter buy* is true of the act and **not** of the account. On decision 28's own figures a `$34.99` disc refunded at `$40.23` posts `Dr Inventory 34.99 · Dr GST collected 1.75 · Dr QST collected 3.49 | Cr Cash 40.23`.
 
+**From [architecture](../architecture.md) A-86 and the user model (2026-09-20):**
+
+- **The written-off route's manager-only gate is a PIN on a store session and nothing on a personal session** ([E-01](E-01-authenticate.md) d26, d27; A-81, A-28a). A wrong PIN names nobody; an Employee has no PIN to be refused *by name* — the refusal-by-name of the old initials prompt does not carry over. Both names are recorded on a store session.
+- **A Return with no receipt may be worked against any Store's Sales of the Organization**, because a Customer's history spans Stores ([architecture](../architecture.md) A-86) — named in §10 as a risk to recognise rather than a defect.
+
 ---
 
 ## Resolved decisions

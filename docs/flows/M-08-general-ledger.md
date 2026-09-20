@@ -208,6 +208,12 @@ the decision it comes from._
   banked"*. Decision 3 below is that pattern a third time, and is proposed rather than
   ratified.
 
+**From [architecture](../architecture.md) A-86 and the user model (2026-09-20):**
+
+- **The ledger is Organization-level by partition** ([architecture](../architecture.md) A-86, superseding A-5; amending A-72): `gl_accounts`, the mappings, `journal_batches`, `journal_lines`, and — by inheritance — the periods, seals, filings, reconciliations, issuances and `bank_deposits` belong to the Organization, and every journal line carries the Store it happened at as `location`. A seal seals **every Store's** month; the statements read the Organization. Decision 27's `location` stops being redundant the day a second Store exists.
+- **Seals, unseals and filings display an actor's initials** (`actorInitials`, `authorizedByInitials`) — and initials are now unique **per Store, not per Organization** ([E-01](E-01-authenticate.md) d25). Two people at two Stores can legitimately share initials on one Organization's books, so these surfaces must resolve to the **name** as [M-04](M-04-manage-users.md) d16 requires of every audit surface, and the artefacts should carry the User rather than the string — **open in [architecture](../architecture.md) §11**, owned here.
+- **Every M-08 act is manager-only and is authorized by PIN on a store session, by the session itself on a personal session** ([E-01](E-01-authenticate.md) d26, d27); an Owner may do anything a Manager may ([M-04](M-04-manage-users.md) d25).
+
 ## Resolved decisions
 
 _Numbered so they can be cited precisely. Append only — never renumber or delete._
@@ -283,7 +289,10 @@ owned elsewhere and are the real dependencies; the rest are this flow's own.
   [architecture](../architecture.md) §11 where it already was. A-72 keeps all three shapes
   open: an A-5 exception on `release_cache`'s footing, the reference model's transfer to a
   main site, or a read principal that does not yet exist — **E-01 d8's (since superseded by d25) multi-store
-  membership is the precondition for any of them.**
+  membership is the precondition for any of them.** *2026-09-20: the precondition is met and the question is
+  answered by construction — [architecture](../architecture.md) A-86 makes the ledger the Organization's and
+  `location` its Store dimension, so the books consolidate as decision 27 wanted; the deferral of consolidated
+  **views** (M-03's) stands. See Inherited.*
 
 - ~~**Exchange gain or loss.**~~ — **Resolved by [M-06](M-06-settings.md) d59, d60, d61 and
   M-06 d62, which own it.** The ledger is kept in the **home currency**; a foreign artifact
