@@ -382,12 +382,7 @@ owned elsewhere and are the real dependencies; the rest are this flow's own.
   nothing because [architecture](../architecture.md) A-73 already refuses a posting dated on or
   before the opening position.
 
-- **Nothing states that a gift card never expires, and decision 33 rests on it.** The lock on the
-  gift card liability is safe only while redemption is the sole way the balance drains, which is
-  true of this shop and is written down **here**, in the flow that relies on it, rather than in
-  [E-05](E-05-sell-a-record.md), which owns the cards and does not mention expiry either way.
-  Whoever adds an expiry will not be reading this file. **Owner: [E-05](E-05-sell-a-record.md).**
-
+- ~~**Nothing states that a gift card never expires, and decision 33 rests on it.**~~ — **Resolved** by [E-05](E-05-sell-a-record.md) d39, which states it where the cards live: **a balance does not expire and redemption is the only drain**, so decision 33's lock holds. *What remains, and it is [E-05](E-05-sell-a-record.md)'s:* **escheatment** — if an unredeemed balance must eventually be remitted as unclaimed property, decision 33's figure has to stop counting it, and the act that removes it is neither a redemption nor anything [A-51](../architecture.md) currently defines. *Original:* The lock on the gift card liability is safe only while redemption is the sole way the balance drains, which is true of this shop and is written down **here**, in the flow that relies on it, rather than in [E-05](E-05-sell-a-record.md), which owns the cards and does not mention expiry either way. Whoever adds an expiry will not be reading this file. **Owner: [E-05](E-05-sell-a-record.md).**
 - ~~**What does a statement do with lines dated after its as-at date?**~~ — **Resolved**
   by decision 30: it **excludes them**, and every statement answers the same way. The
   residual is recorded there rather than closed — the ledger can hold money no statement
