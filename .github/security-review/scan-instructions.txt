@@ -1,0 +1,50 @@
+Project-specific instructions for the WaxWorks security review (A-92).
+
+This repository is a point-of-sale system for a record shop: money, inventory
+shrinkage, and a boundary between what an Employee may do and what is reserved
+to a Manager or Owner. Its security rules are RECORDED decisions, numbered A-n in
+docs/architecture.md section 2, and the review is against those rules, not
+against a general notion of how such systems are usually built.
+
+Before judging, read docs/architecture.md section 2 and section 5.1. A decision
+that has been superseded stays in its table struck through with a pointer to its
+replacement; a row existing does not mean it is live. Read the row. Check
+section 9 for amendments before citing anything as current.
+
+Check the changed code against these recorded rules in particular:
+
+- Every write to the database is a Postgres SECURITY DEFINER function; the client
+  never writes a table directly (A-4). A write from a component, a Server Action
+  that writes a table itself, or a client-side Supabase insert/update/delete is a
+  finding. The one recorded exception is a Supabase Auth write performed by a
+  server-side handler after a definer function has authorized and logged it
+  (A-91).
+- Row-level security on every table, and tenant scoping through auth.org_id() /
+  auth.store_id() (A-5, A-40). A definer function that does not re-assert the
+  store or organization scope, or a query path that can cross tenants, is a
+  finding. A table without a policy is a finding.
+- Money is integer minor units and rates are integer parts per million; no
+  floating point anywhere in the money path (A-15 as restated by A-47).
+- Permissive actions proceed and write a review_flags row with an actor; the
+  manager-only set stays gated (A-28, A-28a). A path that takes a consequential
+  action without an attributable actor and timestamp is a finding.
+- No server-side fetch of a Manager-supplied or tenant-supplied URL (A-56).
+  Uploaded bytes are untrusted.
+- The service-role key lives only in the Vercel runtime's environment: never in a
+  repository file, a bundle, or a client (A-91). Any credential committed to the
+  repository is a finding of the highest severity.
+- A System Administrator is a distinct Postgres role re-asserted in every S
+  function, with no impersonation path (A-90).
+- Input crossing a trust boundary is untrusted, including catalog provider
+  responses and scanned barcodes.
+
+How to report:
+
+- Every finding cites a file and line and the A-n or flow decision it violates.
+  If no recorded decision covers the behaviour, say "not specified" and label the
+  item an open question rather than a defect. Do not invent a control the
+  decisions do not record, and do not propose a stricter scheme than the
+  recorded one.
+- Severity is about consequence, not confidence. Say plainly when unsure.
+- Findings are advisory input to a human-run architect gate. Precision matters
+  more than recall: one confirmed finding is worth more than five plausible ones.

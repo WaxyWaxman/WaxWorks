@@ -1,8 +1,10 @@
 name: docs-check
 
 # Mechanical consistency gate for the specification documents. Deterministic --
-# no API key, no model in the loop. The judgement calls stay with /spec-audit,
-# which a human runs locally before opening the PR.
+# this workflow reads no API key and runs no model. The judgement calls stay with
+# /spec-audit, which a human runs locally before opening the PR. The one
+# model-backed check in CI is security-review.yml, on pull requests into staging
+# (A-92); it is advisory and reads the only secret CI holds.
 
 on:
   # No paths filter: a change under .claude/ can break a cross-link too, and the
@@ -10,7 +12,7 @@ on:
   # merge with main's tip -- so it validates the merged result, not the branch head.
   pull_request:
   push:
-    branches: [main]
+    branches: [main, staging]
 
 jobs:
   check:

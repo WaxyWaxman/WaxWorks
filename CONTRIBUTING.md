@@ -80,8 +80,25 @@ gh pr create
 ```
 
 CI re-runs `check_docs.py` on the pull request, and `check_coverage.py` for the
-decision-to-test report. It does not run the model — there is no API key in CI,
-and the judgement half of the audit is yours to run locally before you open the PR.
+decision-to-test report. That workflow does not run the model — it holds no API
+key, and the judgement half of the audit is yours to run locally before you open
+the PR.
+
+## Staging
+
+`staging` is a long-lived branch after `main`, and the first ref a deployment is
+cut from. Code reaches it by pull request from `main`:
+
+```bash
+git switch main && git pull
+gh pr create --base staging --head main
+```
+
+A pull request into `staging` gets one more check — `security-review.yml`, a
+model-backed security review of the diff. It reads the only secret CI holds and
+it is **advisory**: its inline comments are carried into the work order's
+Findings table for the architect gate, and the job passes either way. A human
+still merges. Recorded as [architecture.md](docs/architecture.md) §2.7, **A-92**.
 
 ## Building past the prototype
 
