@@ -1078,6 +1078,18 @@ interface AppContextValue extends AppState {
   // d3 — typed by the Owner, logged never as a value; signs every terminal of
   // the Store out (E-01 d24).
   setStoreAccountPassword: (storeId: string, password: string, by: ManagerAuth) => { ok: true; id: string } | { ok: false; reason: string };
+  // ---- S-01 — the System Administrator's three functions (A-90) ----
+  // Each asserts the principal is a System Administrator and logs into the
+  // Organization it touched, where its Owners read it (S-01 d3, O-01 d5).
+  createOrganization: (input: { name: string; ownerName: string; ownerEmail: string; ownerInitials: string }) => { ok: true; id: string } | { ok: false; reason: string };
+  sysadminRequestOwnerReset: (userId: string) => { ok: true } | { ok: false; reason: string };
+  sysadminRecoverOwner: (
+    orgId: string,
+    how: { reactivate: string } | { invite: { name: string; email: string; initials: string } },
+  ) => { ok: true } | { ok: false; reason: string };
+  // The people and Stores of the Organization in session — a Store screen
+  // never lists another Organization's (A-86).
+  orgUsers: User[];
 
   recordFor: (id?: string) => RecordEntry | undefined;
   customerFor: (id?: string) => Customer | undefined;
@@ -1552,6 +1564,10 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
       );
     return null;
   })();
+
+  // The Organization in session (A-86): the Store's, or the person's.
+  const currentOrgId = currentStore?.orgId ?? sessionUser?.orgId ?? HOME_ORG_ID;
+  const orgUsers = s.users.filter((u) => u.orgId === currentOrgId);
 
   // What every attributed write stamps. With no staff session open the actions
   // that reach the store have all prompted for initials first (d5, d12, d15),
@@ -2772,6 +2788,88 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
       ...(thisTerminalGoes ? { principal: null, sessionUserId: null } : {}),
     }));
     return { ok: true, id: r.id };
+  };
+
+  // -------------------------------------------------------------------------
+  // S-01 — the System Administrator (A-90). The boundary is re-asserted in
+  // every function: an S function refuses any other principal, and — in the
+  // product — every other function refuses a null Organization. Here the
+  // sysadmin never reaches a Store screen, so the second half is the Gate's.
+  // -------------------------------------------------------------------------
+
+  const sysadminActor = (): { ok: true; name: string } | { ok: false; reason: string } => {
+    if (s.principal?.kind !== "sysadmin") return { ok: false, reason: "This is a System Administrator's act (S-01, A-90)." };
+    const sa = s.sysadmins.find((x) => x.id === (s.principal as { sysadminId: string }).sysadminId);
+    if (!sa) return { ok: false, reason: "That System Administrator does not resolve." };
+    return { ok: true, name: `${sa.name} (System Administrator)` };
+  };
+  const stampNow = () => new Date().toISOString().slice(0, 19);
+  const orgLog = (orgs: Organization[], orgId: string, text: string) =>
+    orgs.map((o) => (o.id === orgId ? { ...o, log: [...o.log, { at: stampNow(), text }] } : o));
+
+  // S-01 d2 — an Organization with its name and its first Owner; the Owner is
+  // invited (M-04 d29) and has no Store yet (M-04 d27). No public sign-up.
+  const createOrganization: AppContextValue["createOrganization"] = (input) => {
+    const sa = sysadminActor();
+    if (!sa.ok) return sa;
+    if (!input.name.trim()) return { ok: false, reason: "An Organization needs a name." };
+    if (!input.ownerName.trim() || !input.ownerEmail.trim()) return { ok: false, reason: "The first Owner needs a name and an email address (S-01 d2, M-04 d29)." };
+    const orgId = uid("org");
+    const org: Organization = { id: orgId, name: input.name.trim(), active: true, log: [] };
+    const added = usersLib.addUser(
+      s.users,
+      { name: input.ownerName, initials: input.ownerInitials || input.ownerName.trim().split(/\s+/).map((w) => w[0]).join("").slice(0, 3), role: "Owner", assignments: [], email: input.ownerEmail },
+      sa.name,
+      { id: uid("user"), orgId },
+    );
+    if (!added.ok) return added;
+    setS((prev) => ({
+      ...prev,
+      organizations: orgLog([...prev.organizations, org], orgId, `Created by ${sa.name} — first Owner ${input.ownerName.trim()} invited at ${input.ownerEmail.trim()}`),
+      users: added.users,
+    }));
+    return { ok: true, id: orgId };
+  };
+
+  // S-01 d3 — a reset link for an Owner; logged on the person and on the
+  // Organization, where its Owners read what was done from outside.
+  const sysadminRequestOwnerReset: AppContextValue["sysadminRequestOwnerReset"] = (userId) => {
+    const sa = sysadminActor();
+    if (!sa.ok) return sa;
+    const u = s.users.find((x) => x.id === userId);
+    if (!u) return { ok: false, reason: "No such user." };
+    if (u.role !== "Owner") return { ok: false, reason: `${u.name} is a ${u.role}. A System Administrator resets an Owner's access; an Owner resets everyone else's (S-01 d3).` };
+    const r = usersLib.requestPasswordReset(s.users, userId, sa.name);
+    if (!r.ok) return r;
+    setS((prev) => ({ ...prev, users: r.users, organizations: orgLog(prev.organizations, u.orgId, `Password reset link sent to Owner ${u.name} by ${sa.name}`) }));
+    return { ok: true };
+  };
+
+  // S-01 d3 / A-90 — restore an Owner, never act as one; refused while the
+  // Organization has an active Owner, because an Owner who exists is the one
+  // to act.
+  const sysadminRecoverOwner: AppContextValue["sysadminRecoverOwner"] = (orgId, how) => {
+    const sa = sysadminActor();
+    if (!sa.ok) return sa;
+    const org = s.organizations.find((o) => o.id === orgId);
+    if (!org) return { ok: false, reason: "No such Organization." };
+    const living = s.users.find((u) => u.orgId === orgId && u.active && u.role === "Owner");
+    if (living) return { ok: false, reason: `${org.name} has an active Owner (${living.name}); recovery is for an Organization that has none (S-01 d3, A-90).` };
+    let r: usersLib.UserWrite;
+    let what: string;
+    if ("reactivate" in how) {
+      const u = s.users.find((x) => x.id === how.reactivate && x.orgId === orgId && x.role === "Owner");
+      if (!u) return { ok: false, reason: "That is not a deactivated Owner of this Organization." };
+      r = usersLib.reactivateUser(s.users, u.id, u.initials, sa.name);
+      what = `Owner ${u.name} reactivated by ${sa.name}`;
+    } else {
+      r = usersLib.addUser(s.users, { name: how.invite.name, initials: how.invite.initials, role: "Owner", assignments: [], email: how.invite.email }, sa.name, { id: uid("user"), orgId });
+      what = `New Owner ${how.invite.name.trim()} invited at ${how.invite.email.trim()} by ${sa.name}`;
+    }
+    if (!r.ok) return r;
+    const users = r.users;
+    setS((prev) => ({ ...prev, users, organizations: orgLog(prev.organizations, orgId, what) }));
+    return { ok: true };
   };
 
   const addCustomer: AppContextValue["addCustomer"] = (input) => {
@@ -5868,6 +5966,10 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
       setOwnPassword,
       addStore,
       setStoreAccountPassword,
+      createOrganization,
+      sysadminRequestOwnerReset,
+      sysadminRecoverOwner,
+      orgUsers,
     }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [s],

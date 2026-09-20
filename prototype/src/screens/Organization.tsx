@@ -55,9 +55,9 @@ export function Organization() {
       </div>
     );
 
-  const org = app.organizations[0];
-  const owners = app.users.filter((u) => u.role === "Owner");
-  const managers = app.users.filter((u) => u.role === "Manager");
+  const org = app.organizations.find((o) => o.id === app.currentStore?.orgId) ?? app.organizations[0];
+  const owners = app.orgUsers.filter((u) => u.role === "Owner");
+  const managers = app.orgUsers.filter((u) => u.role === "Manager");
 
   return (
     <div className="page org">
@@ -95,7 +95,8 @@ export function Organization() {
             </tr>
           </thead>
           <tbody>
-            {[...app.stores]
+            {app.stores
+              .filter((st) => st.orgId === org.id)
               .sort((a, b) => a.position - b.position)
               .map((s) => (
                 <StoreRow key={s.id} storeId={s.id} by={authorisedBy} onRefusal={setRefusal} />

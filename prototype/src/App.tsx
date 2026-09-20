@@ -20,6 +20,7 @@ import { Ledger } from "./screens/Ledger";
 import { SignIn } from "./screens/SignIn";
 import { PickStore } from "./screens/PickStore";
 import { Organization } from "./screens/Organization";
+import { Sysadmin } from "./screens/Sysadmin";
 import { ReviewQueueBadge } from "./components/ReviewQueue";
 import { useEffect as useEffectShell } from "react";
 
@@ -97,41 +98,9 @@ export function App() {
 function Gate() {
   const app = useApp();
   if (!app.principal) return <SignIn />;
-  if (app.principal.kind === "sysadmin") return <SysadminShell />;
+  if (app.principal.kind === "sysadmin") return <Sysadmin />;
   if (app.principal.kind === "personal" && !app.principal.selectedStoreId) return <PickStore />;
   return <AppShell />;
-}
-
-// S-01's area lands with its own screen (P5). Until then the principal is
-// isolated exactly as A-90 asks — nothing of any Store is routed here — and
-// the page says what it is.
-function SysadminShell() {
-  const app = useApp();
-  const me = app.sysadmins.find((x) => x.id === (app.principal?.kind === "sysadmin" ? app.principal.sysadminId : ""));
-  return (
-    <div className="signin">
-      <div className="signin-card">
-        <div className="signin-brand">
-          <span className="dot" /> Wax Works · administration
-        </div>
-        <h2>{me?.name ?? "System Administrator"}</h2>
-        <p className="muted small">
-          A System Administrator reaches identity data only — Organizations, Stores, people, the
-          user-change log — and nothing a Store sells, holds or owes (S-01 d1, A-90). The
-          administration screens are the next build step; nothing of any Store is routed here.
-        </p>
-        <div className="callout small">
-          {app.organizations.length} Organization{app.organizations.length === 1 ? "" : "s"} ·{" "}
-          {app.stores.length} Store{app.stores.length === 1 ? "" : "s"} · {app.users.length} people
-        </div>
-        <div className="btn-row" style={{ marginTop: 16 }}>
-          <button className="btn ghost" onClick={() => app.signOut()}>
-            Sign out
-          </button>
-        </div>
-      </div>
-    </div>
-  );
 }
 
 // E-01's staff session, drawn where the till can see it.

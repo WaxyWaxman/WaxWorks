@@ -73,11 +73,13 @@ export function Users() {
   // The person who crossed the line, as a row — what they may do follows from
   // their role and Stores (M-04 d30).
   const actor = authorisedBy ? (app.users.find((u) => u.id === authorisedBy.userId) ?? null) : null;
-  const owners = app.users.filter((u) => u.active && u.role === "Owner").length;
+  // Only this Organization's people (A-86): a Store screen never lists another Organization's.
+  const people = app.orgUsers;
+  const owners = people.filter((u) => u.active && u.role === "Owner").length;
 
   const rows = useMemo(() => {
     const q = query.trim().toLowerCase();
-    return app.users
+    return people
       .filter((u) => {
         if (filter === "active" && !u.active) return false;
         if (filter === "inactive" && u.active) return false;
@@ -87,21 +89,21 @@ export function Users() {
         return u.name.toLowerCase().includes(q) || u.initials.toLowerCase().includes(q);
       })
       .sort((a, b) => Number(b.active) - Number(a.active) || a.name.localeCompare(b.name));
-  }, [app.users, query, filter]);
+  }, [people, query, filter]);
 
   const counts = useMemo(
     () => ({
-      active: app.users.filter((u) => u.active).length,
-      managers: app.users.filter((u) => u.active && isManagerial(u.role)).length,
+      active: people.filter((u) => u.active).length,
+      managers: people.filter((u) => u.active && isManagerial(u.role)).length,
       owners,
-      inactive: app.users.filter((u) => !u.active).length,
-      all: app.users.length,
+      inactive: people.filter((u) => !u.active).length,
+      all: people.length,
     }),
-    [app.users, owners],
+    [people, owners],
   );
 
-  const selectedId = userId ?? rows[0]?.id ?? app.users[0]?.id ?? null;
-  const selected = app.users.find((u) => u.id === selectedId) ?? null;
+  const selectedId = userId ?? rows[0]?.id ?? people[0]?.id ?? null;
+  const selected = people.find((u) => u.id === selectedId) ?? null;
 
   const select = (id: string) => {
     setRefusal(null);
