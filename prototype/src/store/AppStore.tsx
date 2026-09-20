@@ -85,6 +85,8 @@ import {
   HOME_CURRENCY,
   STORE_SETTINGS,
   STORE_DETAILS,
+  HOME_ORG_ID,
+  HOME_STORE_ID,
   TAX_TYPES,
   PRODUCT_TAX_CODES,
   TAX_GROUPS,
@@ -863,7 +865,12 @@ interface AppContextValue extends AppState {
   // rather than throwing, because M-04 d13 and A-54 both require the refusal
   // to say WHICH thing blocked it - a refusal that does not name its cause
   // reads as the system simply saying no.
-  addUser: (input: { name: string; initials: string; role: UserRole }, by: ManagerAuth) => UserWriteResult;
+  // M-04 d27: a User is assigned to Stores. Until the shell carries the store
+  // session, an omitted assignment means the home Store.
+  addUser: (
+    input: { name: string; initials: string; role: UserRole; assignments?: string[]; email?: string; pin?: string },
+    by: ManagerAuth,
+  ) => UserWriteResult;
   changeUserRole: (userId: string, role: UserRole, by: ManagerAuth) => UserWriteResult;
   deactivateUser: (userId: string, by: ManagerAuth) => UserWriteResult;
   reactivateUser: (userId: string, initials: string, by: ManagerAuth) => UserWriteResult;
@@ -2326,7 +2333,12 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
     const mgr = requireManager(s.users, byAuth);
     if (!mgr.ok) return { ok: false, reason: mgr.refusal };
     const by = mgr.name;
-    return commit(usersLib.addUser(s.users, input, by, { id: uid("user") }));
+    return commit(
+      usersLib.addUser(s.users, { ...input, assignments: input.assignments ?? [HOME_STORE_ID] }, by, {
+        id: uid("user"),
+        orgId: HOME_ORG_ID,
+      }),
+    );
   };
 
   const changeUserRole: AppContextValue["changeUserRole"] = (userId, role, byAuth) => {

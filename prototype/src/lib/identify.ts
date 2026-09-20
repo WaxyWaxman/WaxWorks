@@ -24,6 +24,13 @@ import { normalizeInitials } from "./users";
 // Only ACTIVE users can be resolved. A deactivated user's initials are
 // released to a new hire (M-04 d16), and a deactivated person must not be able
 // to be typed at all (d15, d18).
+//
+// Only users ASSIGNED TO THE STORE IN SESSION can be resolved (E-01 d25,
+// M-04 d27). On Store A's store session, an active User assigned only to Store
+// B does not exist; two people holding the same initials at two Stores each
+// resolve at their own and nowhere else. `storeId` is optional only so a
+// caller with no store session — a test, a screen not yet reworked — can
+// still resolve across the Organization; the shell always passes it.
 
 export type Resolution =
   | { kind: "empty" }
@@ -33,12 +40,13 @@ export type Resolution =
   | { kind: "none"; typed: string; partial: boolean }
   | { kind: "one"; user: User };
 
-export function resolveInitials(users: User[], typed: string): Resolution {
+export function resolveInitials(users: User[], typed: string, storeId?: string): Resolution {
   const want = normalizeInitials(typed);
   if (!want) return { kind: "empty" };
-  const exact = users.find((u) => u.active && u.initials === want);
+  const here = (u: User) => u.active && (storeId === undefined || u.assignments.includes(storeId));
+  const exact = users.find((u) => here(u) && u.initials === want);
   if (exact) return { kind: "one", user: exact };
-  const partial = users.some((u) => u.active && u.initials.startsWith(want));
+  const partial = users.some((u) => here(u) && u.initials.startsWith(want));
   return { kind: "none", typed: want, partial };
 }
 
@@ -51,7 +59,7 @@ export function resolutionHint(r: Resolution): string {
     case "none":
       // A partial is not an error — it is somebody halfway through typing, so
       // it must not be dressed as a failure.
-      return r.partial ? "Keep typing." : `No active user with initials ${r.typed}.`;
+      return r.partial ? "Keep typing." : `Nobody at this Store has initials ${r.typed}.`;
     case "one":
       return r.user.name;
   }

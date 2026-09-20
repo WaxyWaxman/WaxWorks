@@ -1007,18 +1007,33 @@ export interface ReviewFlag {
 // Users (M-04) and the staff session (E-01)
 // ---------------------------------------------------------------------------
 
-// Two roles, Manager a strict superset of Employee (M-04 d1). There is no tier
-// above Manager: M-04 d11 puts the Store's assigned identifiers outside the
-// role model, and d14 protects the last Manager with a floor rule rather than
-// with a role that outranks them.
-export type UserRole = "Employee" | "Manager";
+// Three roles in an Organization, each a strict superset of the one before
+// (M-04 d25, superseding d1 and the "no tier above Manager" of d11 and d14).
+// The Owner administers the Organization — its Stores, their store accounts,
+// its Managers and Owners (O-01) — and is what the floor protects (d26). A
+// System Administrator is NOT a fourth role: WaxWorks staff, outside every
+// Organization, reaching identity data only (S-01 d1) — see `Sysadmin` below.
+export type UserRole = "Employee" | "Manager" | "Owner";
+
+export const isManagerial = (role: UserRole): boolean => role === "Manager" || role === "Owner";
+
+// A-35's log shape, shared by users, stores and organizations (A-89).
+export interface LogEntry {
+  at: string;
+  text: string;
+}
 
 export interface User {
   id: string;
+  // A User belongs to the Organization and is ASSIGNED to its Stores
+  // (M-04 d27) — there is no `storeId` on a person.
+  orgId: string;
   name: string;
   // Stored NORMALISED - trimmed and upper-cased on write (M-04 d20), so the
   // uniqueness check is a plain comparison and no shift key can mint a
-  // near-duplicate at the counter.
+  // near-duplicate at the counter. Unique PER STORE among the active Users
+  // ASSIGNED to it (E-01 d25, M-04 d27) — two people in one Organization may
+  // share initials if no Store has both of them.
   initials: string;
   role: UserRole;
   // Deactivated, never deleted (M-04 d5): every Sale, adjustment and
@@ -1026,17 +1041,105 @@ export interface User {
   // outlive their leaving. Uniqueness of initials is among ACTIVE users only
   // (d13 as amended by d16) - a departed user's initials are released.
   active: boolean;
-  // E-01 d21. OPTIONAL, for anyone, up to 8 characters. It is a barrier and
-  // not authentication — a shop may well use a single letter — so nothing in
-  // the model treats it as proof of identity. Absent means no second step.
+  // Store ids this person may act at (M-04 d27). On a Store's store session,
+  // only the people assigned to it exist: initials and PINs resolve among
+  // them and nobody else. Employees and Managers hold at least one; an Owner
+  // may hold none — their work is the Organization's.
+  assignments: string[];
+  // Required for a Manager or Owner, who is invited by email and sets their own
+  // password through the link (M-04 d29). Nothing in the model uses an
+  // Employee's — whether they need one at all is M-04's open question.
+  email?: string;
+  // M-04 d28 / E-01 d26 — a Manager's or Owner's four-digit credential for the
+  // manager-only line on a store session, typed on its own and unique per
+  // Store among the Managers and Owners assigned there. Set by an Owner or a
+  // Manager, never by its holder at the counter; logged as changed, never as
+  // a value. Employees have none.
   //
-  // Plain text here because this is an in-memory mock with no server; the
-  // real thing hashes it and never logs the value (see the decision).
+  // Plain text here because this is an in-memory mock with no server. The real
+  // thing is a keyed hash in `user_pins` with no client grant, verified only
+  // inside `manager_authorize_pin` (A-89).
+  pin?: string;
+  // E-01 d27 — the PERSONAL SESSION credential: a Manager or Owner signed in as
+  // themselves with email, password and a second factor (d28). Not the barrier
+  // password of E-01 d21, which is retired (d29). Plain text for the same
+  // reason as the PIN; the real thing is Supabase Auth's and this project
+  // never sees it (A-91).
   password?: string;
   // Before-and-after, per A-55: without it, who promoted whom exists nowhere
   // after the second change, and this is the privilege boundary.
-  log: { at: string; text: string }[];
+  log: LogEntry[];
 }
+
+// ---------------------------------------------------------------------------
+// The Organization, its Stores, its terminals — and the principals (A-86, A-87)
+// ---------------------------------------------------------------------------
+
+// The tenant (A-86, superseding A-5). People belong to it; Customers,
+// Suppliers, gift cards and the books are its; a Store is a dimension inside
+// it. Created by a System Administrator with its first Owner (S-01 d2).
+export interface Organization {
+  id: string;
+  name: string;
+  active: boolean;
+  log: LogEntry[];
+}
+
+// One physical location of an Organization (M-06 d70, O-01 d2). This is the
+// Store's IDENTITY; what a Store holds — its settings, details, inventory,
+// Sales — is the per-Store slice of state, keyed by this id.
+export interface Store {
+  // The seven-digit Store ID (M-06 d47). Minted by the system when an Owner
+  // creates the Store, never editable (d70) — one identifier, already what
+  // journal lines carry as `location` (M-08 d27).
+  readonly id: string;
+  readonly orgId: string;
+  // Where this Store sits among the Organization's Stores. Assigned at
+  // creation, never editable (M-06 d47, d70).
+  readonly position: number;
+  // The STORE ACCOUNT (E-01 d24): the Store's own email and password, with
+  // which a terminal opens a store session. Set at creation and reset by an
+  // Owner and nobody else; rotating the password signs every terminal of the
+  // Store out (O-01 d3). Plain text in the mock; Supabase Auth's in the
+  // product (A-87, A-91).
+  accountEmail: string;
+  accountPassword: string;
+  active: boolean;
+  log: LogEntry[];
+}
+
+// A browser on a store session that has named itself (A-87): its identity is
+// a registered row, not a claim, and it travels on the writes that need one —
+// a drawer open, a Sale — as attribution, like initials.
+export interface Terminal {
+  id: string;
+  name: string; // "Till 1"
+  storeId: string;
+}
+
+// WaxWorks staff (S-01). Outside every Organization — no `orgId`, no
+// assignments, no initials, no PIN — and never resolvable as an actor at a
+// counter. Reaches identity data only (S-01 d1, A-90). Signs in with a passkey
+// (E-01 d28, S-01 d4).
+export interface Sysadmin {
+  id: string;
+  name: string;
+  email: string;
+  log: LogEntry[];
+}
+
+// WHO SIGNED IN (A-87) — the thing the database issued a session to. The staff
+// session of E-01 (initials and a timer) is a second layer on top of a store
+// session and lives beside this in state, not inside it.
+export type Principal =
+  // A terminal signed in with the Store's store account (E-01 d24). Shared,
+  // always-on, never lapsing; ends on sign-out or a store account reset.
+  | { kind: "store"; storeId: string; terminalId: string }
+  // A Manager or Owner signed in as themselves (E-01 d27). They pick a Store
+  // and may switch; nothing asks for initials or a PIN and nothing lapses.
+  | { kind: "personal"; userId: string; selectedStoreId: string | null }
+  // A System Administrator (S-01). Reaches the administration area only.
+  | { kind: "sysadmin"; sysadminId: string };
 
 // ---------------------------------------------------------------------------
 // M-06 settings — the configuration other flows resolve against
@@ -1122,8 +1225,10 @@ export interface StoreDetails {
   receiptFooter: string;
   receiptFooterOn: boolean; // d46 — free text with its own on/off flag
   logoPath?: string; // d51, A-56 — an uploaded image, never a URL
-  // d47 — assigned, never editable, and writable by nobody who works in the
-  // shop. M-04 d11 settled who assigns them: we do, at setup.
+  // d47 as amended by d70 — minted by the system when an Owner creates the
+  // Store (O-01 d2), never editable, and writable by nobody afterwards. The
+  // same value as `Store.id`; kept here because receipts and journal lines
+  // read it from the details block.
   readonly storeId: string; // seven digits
   readonly position: number;
 }

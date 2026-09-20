@@ -1,25 +1,29 @@
 import type {
-  GenreMapRow,
-  ReleaseCacheEntry,
+  CurrencyRow,
   Customer,
+  Genre,
+  GenreMapRow,
   GiftCard,
   InventoryItem,
   NonTrackedItem,
+  Organization,
   PendingOrderLine,
-  RecordEntry,
-  Supplier,
-  TaxLine,
-  User,
-  SectionRow,
-  TenderRow,
-  CurrencyRow,
-  StoreSettings,
-  StoreDetails,
-  TaxType,
   ProductTaxCode,
+  RecordEntry,
+  ReleaseCacheEntry,
+  SectionRow,
+  Store,
+  StoreDetails,
+  StoreSettings,
+  Supplier,
+  Sysadmin,
   TaxGroup,
   TaxGroupCell,
-  Genre,
+  TaxLine,
+  TaxType,
+  TenderRow,
+  Terminal,
+  User,
 } from "./types";
 
 // ---- Tax table (M-06) ----
@@ -540,58 +544,157 @@ export const CUSTOMERS: Customer[] = [
   },
 ];
 
+// ---- The Organization, its Stores, its terminals (A-86, A-87) ----
+// One Organization. v1 deploys one Store; a second is seeded so the store
+// picker, multi-store assignment, per-Store initials and PINs, and the
+// Organization screen can be exercised in review (O-01, S-01). It has default
+// settings and no trading history.
+export const HOME_ORG_ID = "org-waxworks";
+export const HOME_STORE_ID = "0041982"; // M-06 d47 — the same value STORE_DETAILS carries
+export const PLATEAU_STORE_ID = "0041983";
+
+export const ORGANIZATIONS: Organization[] = [
+  {
+    id: HOME_ORG_ID,
+    name: "Wax Works",
+    active: true,
+    log: [{ at: "2025-11-03T09:00:00", text: "Created by WaxWorks Support — first Owner A. Beaulieu invited" }],
+  },
+];
+
+export const STORES: Store[] = [
+  {
+    id: HOME_STORE_ID,
+    orgId: HOME_ORG_ID,
+    position: 1,
+    accountEmail: "till@waxworks.example",
+    // Plain text in the mock (E-01 d24; A-87 puts it in Supabase Auth).
+    accountPassword: "waxworks-till",
+    active: true,
+    log: [{ at: "2025-11-03T09:05:00", text: 'Created as "Wax Works" by A. Beaulieu (Owner) — Store ID 0041982, position 1' }],
+  },
+  {
+    id: PLATEAU_STORE_ID,
+    orgId: HOME_ORG_ID,
+    position: 2,
+    accountEmail: "plateau@waxworks.example",
+    accountPassword: "waxworks-plateau",
+    active: true,
+    log: [{ at: "2026-08-01T09:00:00", text: 'Created as "Wax Works — Plateau" by A. Beaulieu (Owner) — Store ID 0041983, position 2' }],
+  },
+];
+
+export const TERMINALS: Terminal[] = [
+  { id: "till-1", name: "Till 1", storeId: HOME_STORE_ID },
+  { id: "till-2", name: "Till 2", storeId: HOME_STORE_ID },
+  { id: "plateau-till-1", name: "Till 1", storeId: PLATEAU_STORE_ID },
+];
+
+// S-01. Outside every Organization; reaches identity data only (d1).
+export const SYSADMINS: Sysadmin[] = [
+  { id: "sa-1", name: "WaxWorks Support", email: "support@waxworks.app", log: [] },
+];
+
 // M-04. Initials are stored trimmed and upper-cased (d20) and are unique among
-// ACTIVE users (d13 as amended by d16) - T. Okonkwo below holds TO because the
-// departed T. Oyelaran released it, which is exactly the case d16 accepts and
-// why every audit surface shows a name rather than stopping at the letters.
+// ACTIVE users ASSIGNED TO A STORE (d13 as amended by d16 and d27) - T. Okonkwo
+// below holds TO because the departed T. Oyelaran released it, which is exactly
+// the case d16 accepts and why every audit surface shows a name rather than
+// stopping at the letters.
+//
+// PINs (d28) and personal passwords (E-01 d27) are plain text here; the real
+// thing hashes one (A-89) and never sees the other (A-91). Every credential in
+// this file is a review convenience and is shown on the sign-in screen.
 export const USERS: User[] = [
   {
     id: "user-eo",
+    orgId: HOME_ORG_ID,
     name: "E. Okafor",
     initials: "EO",
     role: "Employee",
     active: true,
+    assignments: [HOME_STORE_ID],
     log: [{ at: "2026-01-12T09:00:00", text: "Added as Employee by R. Delacroix" }],
   },
   {
     id: "user-rd",
+    orgId: HOME_ORG_ID,
     name: "R. Delacroix",
     initials: "RD",
     role: "Manager",
     active: true,
-    // Seeded so the barrier is reachable in review. One letter, deliberately:
-    // E-01 d21 is explicit that this is a speed bump, not a secret.
-    password: "p",
-    log: [{ at: "2025-11-03T09:00:00", text: "Added as Manager by seed migration" }],
+    // Covers both Stores (d27) — the case per-Store uniqueness exists for.
+    assignments: [HOME_STORE_ID, PLATEAU_STORE_ID],
+    email: "rd@waxworks.example",
+    pin: "1234",
+    password: "waxworks-rd",
+    log: [
+      { at: "2025-11-03T09:00:00", text: "Added as Manager by seed migration" },
+      { at: "2025-11-03T09:00:00", text: "Invite sent to rd@waxworks.example" },
+      { at: "2025-11-03T09:00:00", text: "PIN set by A. Beaulieu (Owner)" },
+      { at: "2026-08-01T09:10:00", text: "Assigned to Store 0041983 by A. Beaulieu (Owner)" },
+    ],
   },
   {
     id: "user-jm",
+    orgId: HOME_ORG_ID,
     name: "J. Mbeki",
     initials: "JM",
     role: "Manager",
     active: true,
+    assignments: [HOME_STORE_ID],
+    email: "jm@waxworks.example",
+    pin: "2345",
+    password: "waxworks-jm",
     log: [
       { at: "2026-02-02T10:15:00", text: "Added as Employee by R. Delacroix" },
-      { at: "2026-06-18T16:40:00", text: "Role: Employee -> Manager (by R. Delacroix)" },
+      { at: "2026-06-18T16:40:00", text: "Role: Employee -> Manager (by A. Beaulieu (Owner))" },
+      { at: "2026-06-18T16:41:00", text: "PIN set by A. Beaulieu (Owner)" },
     ],
   },
   {
-    // Kept deliberately: a Manager reachable with ONE keystroke and NO
-    // password, so the manager-only space is always openable in review
-    // without hunting for a credential. Do not give this one a password.
+    // Kept deliberately: a Manager reachable with ONE keystroke of initials and
+    // a PIN of four of the same digit, so the manager-only space is always
+    // openable in review without hunting for a credential.
     id: "user-y",
+    orgId: HOME_ORG_ID,
     name: "Y. Nakamura",
     initials: "Y",
     role: "Manager",
     active: true,
+    assignments: [HOME_STORE_ID],
+    email: "y@waxworks.example",
+    pin: "1111",
+    password: "waxworks-y",
     log: [{ at: "2025-11-03T09:00:00", text: "Added as Manager by seed migration" }],
   },
   {
+    // The Owner (M-04 d25). Assigned to both Stores so their initials and PIN
+    // work at either counter; on a personal session they may pick any Store
+    // regardless (E-01 d27).
+    id: "user-ab",
+    orgId: HOME_ORG_ID,
+    name: "A. Beaulieu",
+    initials: "AB",
+    role: "Owner",
+    active: true,
+    assignments: [HOME_STORE_ID, PLATEAU_STORE_ID],
+    email: "owner@waxworks.example",
+    pin: "9999",
+    password: "waxworks-owner",
+    log: [
+      { at: "2025-11-03T09:00:00", text: "Added as Owner by WaxWorks Support (System Administrator)" },
+      { at: "2025-11-03T09:00:00", text: "Invite sent to owner@waxworks.example" },
+      { at: "2025-11-03T09:30:00", text: "Password set by the user" },
+    ],
+  },
+  {
     id: "user-to-old",
+    orgId: HOME_ORG_ID,
     name: "T. Oyelaran",
     initials: "TO",
     role: "Employee",
     active: false,
+    assignments: [HOME_STORE_ID],
     log: [
       { at: "2025-09-01T09:00:00", text: "Added as Employee by R. Delacroix" },
       { at: "2026-04-30T17:05:00", text: "Deactivated by R. Delacroix - initials TO released" },
@@ -599,11 +702,26 @@ export const USERS: User[] = [
   },
   {
     id: "user-to-new",
+    orgId: HOME_ORG_ID,
     name: "T. Okonkwo",
     initials: "TO",
     role: "Employee",
     active: true,
+    assignments: [HOME_STORE_ID],
     log: [{ at: "2026-05-11T09:30:00", text: "Added as Employee by J. Mbeki - initials TO, released by T. Oyelaran" }],
+  },
+  {
+    // Plateau's own Employee — shares E. Okafor's initials at a Store E. Okafor
+    // is not assigned to, which E-01 d25 permits and which is why initials
+    // resolve per Store.
+    id: "user-eo-plateau",
+    orgId: HOME_ORG_ID,
+    name: "E. Ouellet",
+    initials: "EO",
+    role: "Employee",
+    active: true,
+    assignments: [PLATEAU_STORE_ID],
+    log: [{ at: "2026-08-02T09:00:00", text: "Added as Employee by R. Delacroix (Manager)" }],
   },
 ];
 
