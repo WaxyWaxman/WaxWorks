@@ -5,7 +5,12 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import { computeDayBreakdown, type DayBreakdown } from "../lib/dayBreakdown";
+import {
+  computeDayBreakdown,
+  SUMMARY_SCHEMA_VERSION,
+  type BreakdownExtras,
+  type DayBreakdown,
+} from "../lib/dayBreakdown";
 import { checkGenreDelete, checkGenreMerge, checkGenreWrite } from "../lib/taxonomy";
 import {
   checkMapRowAdd,
@@ -16,12 +21,13 @@ import {
 } from "../lib/genreMap";
 import { invoiceForItem, supplierIdForItem } from "../lib/provenance";
 import { money } from "../lib/money";
-import { parseCell } from "../lib/tax";
+import { parseCell, taxTypeWrite } from "../lib/tax";
 import { lineTaxComponents, type TaxContext } from "../lib/totals";
 import * as usersLib from "../lib/users";
 import {
   customerBalanceDelta,
   invoiceIsFrozen,
+  isPresent,
   payableEntrySignedAmount,
   payableEntryTotal,
   round2,
@@ -30,10 +36,33 @@ import {
 } from "../lib/totals";
 import { clearedAgainst, entryIsCleared, unclearRefusal } from "../lib/payables";
 import { giftCardRedeemRefusal } from "../lib/giftCards";
+import {
+  finishReturnRefusal,
+  unrouteRefusal,
+  regradeCostRefusal,
+  regradeShortfall,
+  routeDocumentRefusal,
+  routeStockRefusal,
+  statusAfterRoute,
+} from "../lib/returnRouting";
+import { authorizeManager, requireManager, type ManagerAuth } from "../lib/managerAuth";
 import { buildChart } from "../lib/chart";
 import { buildCloseJournal } from "../lib/closeJournal";
+import { retireCloseBatch, undoLogText, type UndoRecord } from "../lib/closeBatch";
 import { buildAdjustmentJournal, buildInvoiceJournal, buildPaymentJournal } from "../lib/artifactJournals";
 import { isImbalanced } from "../lib/journal";
+// M-08 — the books. Every rule these enforce lives in the lib, never in a
+// screen and never here (A-74, A-4, A-48: a bound enforced in the client is
+// not a bound). The store calls the refusal and stores the result.
+import { postingJournal, type LedgerPosting } from "../lib/ledgerPostings";
+import {
+  sealOpeningPosition,
+  type OpeningPositionDraft,
+} from "../lib/ledgerOpeningPosition";
+import { closingTransactionFor, divergenceFlag, suspenseGrossFor } from "../lib/ledgerBalances";
+import { closeUndoRefusal } from "../lib/ledgerPeriods";
+import { yearEndClosingBatch, type LedgerIssuance } from "../lib/ledgerStatements";
+import type { LedgerReconciliation } from "../lib/ledgerReconciliation";
 import { toCalendarDate } from "../lib/calendarDate";
 import {
   CURRENT_USER,
@@ -63,10 +92,15 @@ import {
   GENRES,
   DEFAULT_TAX_GROUP,
 } from "../data/seed";
+import { buildHistory } from "../data/history";
 import type {
   ClaimLineAgainst,
   CloseBatch,
   Customer,
+  LedgerClosingTransaction,
+  LedgerPeriodSeal,
+  LedgerPeriodUnseal,
+  LedgerYearFiling,
   GiftCard,
   Grade,
   IntakeMode,
@@ -234,6 +268,26 @@ interface AppState {
    * Nothing sweeps this, nothing posts it, and there is no month-end routine.
    */
   journals: JournalBatch[];
+  /**
+   * M-08 — the books. Everything below is what M-07 d1 declined and d27
+   * reversed: a period close, held balances, and a stated profit.
+   *
+   * A period's state is DERIVED from the seal and unseal rows and is never
+   * stored (A-75) — there is deliberately no `sealed` flag here to forget.
+   */
+  ledgerSeals: LedgerPeriodSeal[];
+  ledgerUnseals: LedgerPeriodUnseal[];
+  ledgerYearFilings: LedgerYearFiling[];
+  ledgerPostings: LedgerPosting[];
+  /** A-78 — a draft until it is sealed, and the one place unbalanced figures
+   *  legitimately exist. Null before the shop has migrated. */
+  ledgerOpening: OpeningPositionDraft | null;
+  ledgerOpeningSealed: boolean;
+  /** d20, A-76 — the materialised recomputations. */
+  ledgerClosings: LedgerClosingTransaction[];
+  ledgerReconciliations: LedgerReconciliation[];
+  /** A-77 — what has left the building. */
+  ledgerIssuances: LedgerIssuance[];
   pendingOrders: PendingOrderLine[];
   reviewFlags: ReviewFlag[];
   activeSaleId: string | null;
@@ -250,12 +304,182 @@ interface AppState {
   providerUp: boolean;
 }
 
+// M-06 d64 - the fiscal year end defaults to 31 December, and M-08 d5 has this
+// flow READ it and never ask. One constant until M-06's settings screens land.
+const FISCAL_YEAR_END_MONTH = 12;
+
+// Hoisted out of the seed literal below so the history generator can be
+// handed them: they are artifacts this prototype wrote before anything in
+// it wrote journals, and `data/history.ts` explains why they need one.
+const SEED_INVOICES: Invoice[] = [
+  {
+    id: "inv-seed-fab",
+    supplierId: "sup-fab",
+    invoiceNumber: "55021",
+    intakeMode: "New",
+    invoiceDate: "2026-08-27",
+    receivedDate: "2026-08-28",
+    statedSubtotal: 68.65,
+    freight: 0,
+    charges: [],
+    status: "Finalized",
+    lines: [
+      {
+        id: "invline-seed-1",
+        recordId: "r-blue",
+        listPrice: 15.5,
+        discountPct: 20,
+        cost: 12.4,
+        acceptedPrice: 28.99,
+        grade: "NM",
+        qty: 1,
+        itemIds: ["i-blue-1"],
+      },
+      {
+        id: "invline-seed-2",
+        recordId: "r-rumours",
+        listPrice: 25.0,
+        discountPct: 25,
+        cost: 18.75,
+        acceptedPrice: 34.99,
+        grade: "M",
+        qty: 3,
+        itemIds: ["i-rum-1", "i-rum-2", "i-rum-3"],
+      },
+    ],
+    createdBy: CURRENT_USER,
+    createdAt: "2026-08-28 09:00:00",
+    finalizedAt: "2026-08-28 10:00:00",
+    log: [
+      { at: "2026-08-28 09:00:00", text: "Invoice opened — New intake, invoice 55021" },
+      { at: "2026-08-28 10:00:00", text: "Finalized — 4 copies now sellable" },
+    ],
+  },
+  {
+    id: "inv-seed-indie",
+    supplierId: "sup-indie",
+    invoiceNumber: "3390",
+    intakeMode: "New",
+    invoiceDate: "2026-08-30",
+    receivedDate: "2026-08-31",
+    // M-06 d59 — this supplier bills in USD, so the Invoice carries the rate
+    // it was booked at. Seeded because the fallback for an Invoice with no
+    // recorded rate is 1, which is correct for an artifact written before the
+    // field existed and makes the prototype demonstrate the opposite of what
+    // it now does: a USD invoice settling at par, which is the defect d59
+    // closed. 1.42 matches the seeded USD rate in CURRENCIES.
+    exchangeRate: 1.42,
+    statedSubtotal: 17.25,
+    freight: 0,
+    charges: [],
+    status: "Finalized",
+    lines: [
+      {
+        id: "invline-seed-3",
+        recordId: "r-purple",
+        listPrice: 34.5,
+        discountPct: 50,
+        cost: 17.25,
+        acceptedPrice: 32.99,
+        grade: "M",
+        qty: 1,
+        itemIds: ["i-pr-1"],
+      },
+    ],
+    createdBy: CURRENT_USER,
+    createdAt: "2026-08-31 09:00:00",
+    finalizedAt: "2026-08-31 09:30:00",
+    log: [
+      { at: "2026-08-31 09:00:00", text: "Invoice opened — New intake, invoice 3390" },
+      { at: "2026-08-31 09:30:00", text: "Finalized — 1 copy now sellable" },
+    ],
+  },
+  // Already settled — gives Accounts Payable's payment history something to show.
+  {
+    id: "inv-seed-crate-paid",
+    supplierId: "sup-crate",
+    invoiceNumber: "CD-777",
+    intakeMode: "Second-hand",
+    invoiceDate: "2026-08-18",
+    receivedDate: "2026-08-19",
+    statedSubtotal: 20.0,
+    freight: 0,
+    charges: [],
+    status: "Finalized",
+    lines: [
+      {
+        id: "invline-seed-4",
+        recordId: "r-illmatic",
+        listPrice: 25.0,
+        discountPct: 20,
+        cost: 20.0,
+        acceptedPrice: 45.0,
+        grade: "VG",
+        qty: 1,
+        itemIds: [],
+      },
+    ],
+    createdBy: CURRENT_USER,
+    createdAt: "2026-08-19 09:00:00",
+    finalizedAt: "2026-08-19 09:30:00",
+    paidAt: "2026-08-20 14:00:00",
+    paidBy: MANAGER_NAME,
+    log: [
+      { at: "2026-08-19 09:00:00", text: "Invoice opened — Second-hand intake, invoice CD-777" },
+      { at: "2026-08-19 09:30:00", text: "Finalized — 1 copy now sellable" },
+      { at: "2026-08-20 14:00:00", text: `Payment recorded — EFT EFT-88214 ${money(20)} by ${MANAGER_NAME}` },
+      { at: "2026-08-20 14:00:00", text: `Balance settled — marked paid by ${MANAGER_NAME}` },
+    ],
+  },
+];
+
+const SEED_PAYMENT_BATCHES: PaymentBatch[] = [
+  {
+    id: "batch-seed-1",
+    supplierId: "sup-crate",
+    method: "EFT",
+    reference: "EFT-88214",
+    date: "2026-08-20",
+    recordedBy: MANAGER_NAME,
+    createdAt: "2026-08-20 14:00:00",
+    targets: [{ kind: "invoice", id: "inv-seed-crate-paid", amount: 20.0, settleKind: "money" }],
+    credits: [], // A-69 — money only, so no credit funded it
+  },
+];
+
 const SEEDED_CHART = buildChart({ sections: SECTIONS, tenders: TENDERS, taxTypes: TAX_TYPES });
 
+/**
+ * A month of trading, generated at load against the real calendar — see
+ * `data/history.ts` for what it is and, more importantly, what it is not.
+ *
+ * It is built HERE rather than in `seed.ts` because it needs the chart above:
+ * every artifact it makes writes its own journal (M-07 d12, A-67) through the
+ * same builders the app calls, and a journal needs accounts to resolve into.
+ *
+ * `SEED_JOURNALLED` hands it the artifacts `seed.ts` already held so those get
+ * journals too — without which the ledger's Accounts payable would exclude the
+ * shop's own seeded debt.
+ */
+const SEED_JOURNALLED_INVOICES = SEED_INVOICES.filter((iv) => iv.status === "Finalized");
+
+const HISTORY = buildHistory({
+  accounts: SEEDED_CHART.accounts,
+  mappings: SEEDED_CHART.mappings,
+  sections: SECTIONS,
+  tenders: TENDERS,
+  taxTypes: TAX_TYPES,
+  taxGroupCells: TAX_GROUP_CELLS,
+  defaultTaxGroup: DEFAULT_TAX_GROUP,
+  homeCurrency: HOME_CURRENCY,
+  storeId: STORE_DETAILS.storeId,
+  legacy: { invoices: SEED_JOURNALLED_INVOICES, paymentBatches: SEED_PAYMENT_BATCHES },
+});
+
 const seed: AppState = {
-  records: RECORDS,
-  inventory: INVENTORY,
-  customers: CUSTOMERS,
+  records: [...RECORDS, ...HISTORY.records],
+  inventory: [...INVENTORY, ...HISTORY.inventory],
+  customers: [...CUSTOMERS, ...HISTORY.customers],
   users: USERS,
   sections: SECTIONS,
   tenders: TENDERS,
@@ -275,86 +499,25 @@ const seed: AppState = {
   sessionUserId: null,
   sessionLastActivity: Date.now(),
   sessionLapseSeconds: 300,
-  suppliers: SUPPLIERS,
+  suppliers: [...SUPPLIERS, ...HISTORY.suppliers],
   giftCards: GIFT_CARDS,
   taxLines: TAX_LINES,
   nonTracked: NON_TRACKED,
   sales: [
-    // a prior tendered Sale, so E-06 return-linking has something to match
-    {
-      id: "sale-hist-1",
-      state: "Closed",
-      saleNumber: 100238,
-      customerId: "c-ramona",
-      createdBy: CURRENT_USER,
-      createdAt: "2026-09-05 11:04:00",
-      tenders: [{ id: "t-hist-1", type: "Credit Card", amount: 25.11 }],
-      log: [{ at: "2026-09-05 11:04:00", text: "Tendered — Sale number 100238 assigned" }],
-      lines: [
-        {
-          id: "l-hist-1",
-          kind: "item",
-          recordId: "r-kind",
-          inventoryItemId: "i-kob-1",
-          title: "Miles Davis — Kind of Blue",
-          grade: "VG+",
-          qty: 1,
-          price: 24.0,
-          discountPct: 10,
-          productTaxCode: "1",
-        },
-      ],
-    },
-    // Two older Sales of titles we no longer hold a copy of. Without these,
-    // the "had before" stock state in Search has nothing to describe — every
-    // seeded Record is either on the floor, on order, or catalog-only. The
-    // dates are deliberately far apart so the recency stamp shows both a
-    // recent sell-out and a long-cold one.
-    {
-      id: "sale-hist-2",
-      state: "Closed",
-      saleNumber: 100241,
-      createdBy: CURRENT_USER,
-      createdAt: "2026-08-21 16:40:00",
-      tenders: [{ id: "t-hist-2", type: "Cash", amount: 69.28 }],
-      log: [{ at: "2026-08-21 16:40:00", text: "Tendered — Sale number 100241 assigned" }],
-      lines: [
-        {
-          id: "l-hist-2",
-          kind: "item",
-          recordId: "r-madvillainy",
-          title: "Madvillain — Madvillainy",
-          grade: "M",
-          qty: 2,
-          price: 32.99,
-          discountPct: 0,
-          productTaxCode: "1",
-        },
-      ],
-    },
-    {
-      id: "sale-hist-3",
-      state: "Closed",
-      saleNumber: 100177,
-      createdBy: CURRENT_USER,
-      createdAt: "2026-03-14 12:12:00",
-      tenders: [{ id: "t-hist-3", type: "Credit Card", amount: 28.87 }],
-      log: [{ at: "2026-03-14 12:12:00", text: "Tendered — Sale number 100177 assigned" }],
-      lines: [
-        {
-          id: "l-hist-3",
-          kind: "item",
-          recordId: "r-astral",
-          title: "Van Morrison — Astral Weeks",
-          grade: "VG+",
-          qty: 1,
-          price: 27.5,
-          discountPct: 0,
-          productTaxCode: "1",
-        },
-      ],
-    },
-    // one pre-existing Held sale so E-05's "select an existing Held sale" is real
+    // ONE hand-written Sale, and it is Held: a hold is a live document that
+    // belongs to no CloseBatch and writes no journal, so it is the one shape
+    // that can be authored here without lying about the books. E-05's
+    // "select an existing Held sale" needs it, and it carries no Sale number,
+    // so it cannot collide with the numbering the generated month issues.
+    //
+    // The three Closed Sales that used to sit above it are gone. Two of them
+    // carried no InventoryItem at all, so `costPostings` (lib/closeJournal.ts)
+    // returned nothing for their lines and a journal over them would have
+    // balanced while reporting revenue with NO cost of goods behind it. What
+    // they were fixtures for — E-03's *Had before* band, at both ends of the
+    // recency stamp, and a prior Sale for E-06 to link a Return against — the
+    // generated month now supplies with copies, an Invoice, a close and a
+    // journal behind each one (see SELL_OUTS in data/history.ts).
     {
       id: "sale-held-1",
       state: "Held",
@@ -382,8 +545,13 @@ const seed: AppState = {
         },
       ],
     },
+    // The month of trading — see `data/history.ts`. Appended rather than
+    // replacing the four above: those exist to give E-06's return-linking and
+    // Search's "had before" state something specific to match, and the
+    // generator does not know about either.
+    ...HISTORY.sales,
   ],
-  closeBatches: [],
+  closeBatches: HISTORY.closeBatches,
   // Seeded Finalized so Accounts Payable (M-05) has real outstanding balances
   // without first walking a Receiving session — lines mirror the InventoryItems
   // INVENTORY already seeds as "arrived on" these same invoice numbers.
@@ -583,127 +751,7 @@ const seed: AppState = {
       by: MANAGER_NAME,
     },
   ],
-  invoices: [
-    {
-      id: "inv-seed-fab",
-      supplierId: "sup-fab",
-      invoiceNumber: "55021",
-      intakeMode: "New",
-      invoiceDate: "2026-08-27",
-      receivedDate: "2026-08-28",
-      statedSubtotal: 68.65,
-      freight: 0,
-      charges: [],
-      status: "Finalized",
-      lines: [
-        {
-          id: "invline-seed-1",
-          recordId: "r-blue",
-          listPrice: 15.5,
-          discountPct: 20,
-          cost: 12.4,
-          acceptedPrice: 28.99,
-          grade: "NM",
-          qty: 1,
-          itemIds: ["i-blue-1"],
-        },
-        {
-          id: "invline-seed-2",
-          recordId: "r-rumours",
-          listPrice: 25.0,
-          discountPct: 25,
-          cost: 18.75,
-          acceptedPrice: 34.99,
-          grade: "M",
-          qty: 3,
-          itemIds: ["i-rum-1", "i-rum-2", "i-rum-3"],
-        },
-      ],
-      createdBy: CURRENT_USER,
-      createdAt: "2026-08-28 09:00:00",
-      finalizedAt: "2026-08-28 10:00:00",
-      log: [
-        { at: "2026-08-28 09:00:00", text: "Invoice opened — New intake, invoice 55021" },
-        { at: "2026-08-28 10:00:00", text: "Finalized — 4 copies now sellable" },
-      ],
-    },
-    {
-      id: "inv-seed-indie",
-      supplierId: "sup-indie",
-      invoiceNumber: "3390",
-      intakeMode: "New",
-      invoiceDate: "2026-08-30",
-      receivedDate: "2026-08-31",
-      // M-06 d59 — this supplier bills in USD, so the Invoice carries the rate
-      // it was booked at. Seeded because the fallback for an Invoice with no
-      // recorded rate is 1, which is correct for an artifact written before the
-      // field existed and makes the prototype demonstrate the opposite of what
-      // it now does: a USD invoice settling at par, which is the defect d59
-      // closed. 1.42 matches the seeded USD rate in CURRENCIES.
-      exchangeRate: 1.42,
-      statedSubtotal: 17.25,
-      freight: 0,
-      charges: [],
-      status: "Finalized",
-      lines: [
-        {
-          id: "invline-seed-3",
-          recordId: "r-purple",
-          listPrice: 34.5,
-          discountPct: 50,
-          cost: 17.25,
-          acceptedPrice: 32.99,
-          grade: "M",
-          qty: 1,
-          itemIds: ["i-pr-1"],
-        },
-      ],
-      createdBy: CURRENT_USER,
-      createdAt: "2026-08-31 09:00:00",
-      finalizedAt: "2026-08-31 09:30:00",
-      log: [
-        { at: "2026-08-31 09:00:00", text: "Invoice opened — New intake, invoice 3390" },
-        { at: "2026-08-31 09:30:00", text: "Finalized — 1 copy now sellable" },
-      ],
-    },
-    // Already settled — gives Accounts Payable's payment history something to show.
-    {
-      id: "inv-seed-crate-paid",
-      supplierId: "sup-crate",
-      invoiceNumber: "CD-777",
-      intakeMode: "Second-hand",
-      invoiceDate: "2026-08-18",
-      receivedDate: "2026-08-19",
-      statedSubtotal: 20.0,
-      freight: 0,
-      charges: [],
-      status: "Finalized",
-      lines: [
-        {
-          id: "invline-seed-4",
-          recordId: "r-illmatic",
-          listPrice: 25.0,
-          discountPct: 20,
-          cost: 20.0,
-          acceptedPrice: 45.0,
-          grade: "VG",
-          qty: 1,
-          itemIds: [],
-        },
-      ],
-      createdBy: CURRENT_USER,
-      createdAt: "2026-08-19 09:00:00",
-      finalizedAt: "2026-08-19 09:30:00",
-      paidAt: "2026-08-20 14:00:00",
-      paidBy: MANAGER_NAME,
-      log: [
-        { at: "2026-08-19 09:00:00", text: "Invoice opened — Second-hand intake, invoice CD-777" },
-        { at: "2026-08-19 09:30:00", text: "Finalized — 1 copy now sellable" },
-        { at: "2026-08-20 14:00:00", text: `Payment recorded — EFT EFT-88214 ${money(20)} by ${MANAGER_NAME}` },
-        { at: "2026-08-20 14:00:00", text: `Balance settled — marked paid by ${MANAGER_NAME}` },
-      ],
-    },
-  ],
+  invoices: [...SEED_INVOICES, ...HISTORY.invoices],
   payableEntries: [
     // A manual Adjustment — a freight correction Indie Direct Supply billed
     // separately from the Invoice, demonstrating a ledger entry that isn't
@@ -723,39 +771,37 @@ const seed: AppState = {
       createdAt: "2026-09-02 10:00:00",
       log: [{ at: "2026-09-02 10:00:00", text: "Adjustment entered — Freight correction — INDI-3390" }],
     },
+    ...HISTORY.payableEntries,
   ],
-  paymentBatches: [
-    {
-      id: "batch-seed-1",
-      supplierId: "sup-crate",
-      method: "EFT",
-      reference: "EFT-88214",
-      date: "2026-08-20",
-      recordedBy: MANAGER_NAME,
-      createdAt: "2026-08-20 14:00:00",
-      targets: [{ kind: "invoice", id: "inv-seed-crate-paid", amount: 20.0, settleKind: "money" }],
-      credits: [], // A-69 — money only, so no credit funded it
-    },
-  ],
+  paymentBatches: [...SEED_PAYMENT_BATCHES, ...HISTORY.paymentBatches],
   batchVoids: [],
   clearings: [],
   // M-07 d11 — created and mapped before anyone sees the screen, so nothing
   // can be left unmapped and d10's Suspense stays a defect rather than a hole.
   glAccounts: SEEDED_CHART.accounts,
   glMappings: SEEDED_CHART.mappings,
-  journals: [],
+  ledgerSeals: [],
+  ledgerUnseals: [],
+  ledgerYearFilings: [],
+  ledgerPostings: [],
+  ledgerOpening: null,
+  ledgerOpeningSealed: false,
+  ledgerClosings: [],
+  ledgerReconciliations: [],
+  ledgerIssuances: [],
+  journals: HISTORY.journals,
   pendingOrders: PENDING_ORDERS,
   reviewFlags: [],
   activeSaleId: null,
   lastViewedSupplierId: null,
   lastViewedCustomerId: null,
-  nextSaleNumber: 100241,
+  nextSaleNumber: HISTORY.nextSaleNumber,
   nextHold: 2,
   nextClaimNumber: 42, // d26 — 36, 40 and 41 are spent; gaps are expected
   nextPoNumber: 0,
-  nextInternalBarcode: 9000,
+  nextInternalBarcode: HISTORY.nextInternalBarcode,
   nextInvoiceRef: 1,
-  nextCustomerPrimaryId: CUSTOMERS.length + 1,
+  nextCustomerPrimaryId: CUSTOMERS.length + HISTORY.customers.length + 1,
   providerUp: true,
 };
 
@@ -786,41 +832,43 @@ interface AppContextValue extends AppState {
   defaultTaxGroup: string;
   taxCtxFor: (sale?: Sale | null) => TaxContext;
   productTaxCodeForRecord: (recordId?: string) => string;
-  upsertTaxType: (row: TaxType, by: string) => SettingsWriteResult;
-  setTaxCell: (groupId: string, productTaxCode: string, spec: string, by: string) => SettingsWriteResult;
-  upsertTaxGroup: (row: TaxGroup, by: string) => SettingsWriteResult;
-  setDefaultTaxGroup: (groupId: string, by: string) => void;
-  setStoreSetting: <K extends keyof StoreSettings>(key: K, value: StoreSettings[K], by: string) => void;
-  setStoreDetail: (key: keyof Omit<StoreDetails, "storeId" | "position">, value: string | boolean | PostalAddress, by: string) => void;
-  upsertSection: (row: SectionRow, by: string) => SettingsWriteResult;
-  upsertGenre: (row: Genre, by: string) => SettingsWriteResult;
+  upsertTaxType: (row: TaxType, by: ManagerAuth) => SettingsWriteResult;
+  setTaxCell: (groupId: string, productTaxCode: string, spec: string, by: ManagerAuth) => SettingsWriteResult;
+  upsertTaxGroup: (row: TaxGroup, by: ManagerAuth) => SettingsWriteResult;
+  setDefaultTaxGroup: (groupId: string, by: ManagerAuth) => void;
+  setStoreSetting: <K extends keyof StoreSettings>(key: K, value: StoreSettings[K], by: ManagerAuth) => void;
+  setStoreDetail: (key: keyof Omit<StoreDetails, "storeId" | "position">, value: string | boolean | PostalAddress, by: ManagerAuth) => void;
+  upsertSection: (row: SectionRow, by: ManagerAuth) => SettingsWriteResult;
+  upsertGenre: (row: Genre, by: ManagerAuth) => SettingsWriteResult;
   adoptRelease: (releaseId: string, genreId: string, price?: number) => RecordEntry | null;
   resolveAdoptionGenre: (releaseId: string) => {
     release: ReleaseCacheEntry | undefined;
     match: GenreMatch | undefined;
     unmapped: ProviderTag[];
   };
+  // A-59 — NOT manager-only: adding a row for a tag that has none cannot
+  // change where anything already goes. Update and remove below stay M.
   addMapRow: (tag: string, genreId: string, by: string) => SettingsWriteResult;
-  updateMapRow: (tag: string, patch: Partial<GenreMapRow>, by: string) => SettingsWriteResult;
-  removeMapRow: (tag: string, by: string) => SettingsWriteResult;
-  mergeGenres: (fromId: string, toId: string, by: string) => SettingsWriteResult;
-  deleteGenre: (genreId: string, by: string) => SettingsWriteResult;
+  updateMapRow: (tag: string, patch: Partial<GenreMapRow>, by: ManagerAuth) => SettingsWriteResult;
+  removeMapRow: (tag: string, by: ManagerAuth) => SettingsWriteResult;
+  mergeGenres: (fromId: string, toId: string, by: ManagerAuth) => SettingsWriteResult;
+  deleteGenre: (genreId: string, by: ManagerAuth) => SettingsWriteResult;
   genreUseCount: (genreId: string) => number;
-  upsertTender: (row: TenderRow, by: string) => SettingsWriteResult;
-  upsertCurrency: (row: CurrencyRow, by: string) => SettingsWriteResult;
-  setHomeCurrency: (code: string, by: string) => void;
+  upsertTender: (row: TenderRow, by: ManagerAuth) => SettingsWriteResult;
+  upsertCurrency: (row: CurrencyRow, by: ManagerAuth) => SettingsWriteResult;
+  setHomeCurrency: (code: string, by: ManagerAuth) => void;
   userFor: (id?: string) => User | undefined;
   activeManagerCount: () => number;
   // Every one of these is manager-only (A-55) and every one returns a reason
   // rather than throwing, because M-04 d13 and A-54 both require the refusal
   // to say WHICH thing blocked it - a refusal that does not name its cause
   // reads as the system simply saying no.
-  addUser: (input: { name: string; initials: string; role: UserRole }, by: string) => UserWriteResult;
-  changeUserRole: (userId: string, role: UserRole, by: string) => UserWriteResult;
-  deactivateUser: (userId: string, by: string) => UserWriteResult;
-  reactivateUser: (userId: string, initials: string, by: string) => UserWriteResult;
-  correctUser: (userId: string, patch: { name?: string; initials?: string }, by: string) => UserWriteResult;
-  setUserPassword: (userId: string, password: string, by: string) => UserWriteResult;
+  addUser: (input: { name: string; initials: string; role: UserRole }, by: ManagerAuth) => UserWriteResult;
+  changeUserRole: (userId: string, role: UserRole, by: ManagerAuth) => UserWriteResult;
+  deactivateUser: (userId: string, by: ManagerAuth) => UserWriteResult;
+  reactivateUser: (userId: string, initials: string, by: ManagerAuth) => UserWriteResult;
+  correctUser: (userId: string, patch: { name?: string; initials?: string }, by: ManagerAuth) => UserWriteResult;
+  setUserPassword: (userId: string, password: string, by: ManagerAuth) => UserWriteResult;
   // E-01 d21 — a password holder's session is capped at the 5-minute default
   // however long the shop set the lapse to.
   effectiveLapseSeconds: number;
@@ -841,6 +889,8 @@ interface AppContextValue extends AppState {
    * Returned alongside the breakdown so the close screen can tell the Manager
    * what was written, and tell them loudly when it did not balance (d10).
    */
+  // A-28a gates **Undo End of Day**, not the close itself, and M-04 d2 makes
+  // anything unlisted an Employee action. This takes the acting actor.
   totalTodaysSales: (by: string) => {
     batchId: string;
     breakdown: DayBreakdown;
@@ -848,7 +898,12 @@ interface AppContextValue extends AppState {
     unresolved: string[];
     ambiguousTenders: string[];
   };
-  undoEndOfDay: (batchId: string, by: string) => void;
+  /**
+   * M-04 d4 — records both names. `actor` is whoever holds the session; omit
+   * it when nobody does and the authorizing Manager stands in, since they are
+   * then the person at the terminal. The till therefore asks **once**.
+   */
+  undoEndOfDay: (batchId: string, by: ManagerAuth, actor?: string) => void;
   attachCustomer: (saleId: string, customerId: string | null) => void;
   addCustomer: (input: Omit<Customer, "id" | "primaryId" | "balance">) => string;
   updateCustomer: (customerId: string, patch: Partial<Omit<Customer, "id" | "primaryId">>) => void;
@@ -871,17 +926,67 @@ interface AppContextValue extends AppState {
   addTender: (saleId: string, t: Omit<Tender, "id">) => string | null;
   removeTender: (saleId: string, tenderId: string) => void;
   completeSale: (saleId: string) => number;
+  /**
+   * E-06 d29 — record the stock disposition on a returned line, on the draft.
+   * Validates the write-off gate (A-28a) and the re-grade cap (A-82) here, at
+   * the moment of choosing, and mints nothing.
+   */
+  chooseReturnRoute: (
+    saleId: string,
+    lineId: string,
+    to: "sellable" | "regrade" | "writeoff",
+    opts?: {
+      grade?: Grade;
+      price?: number;
+      reason?: AdjustmentReason;
+      assessedCost?: number;
+      byAuth?: ManagerAuth;  // the live authorization, checked now
+    },
+  ) => { chosen: boolean; refusal?: string };
+  /**
+   * E-06 d29 — finish a Return: refuse while any returned line is undecided,
+   * otherwise carry out every chosen disposition and tender the document as
+   * one act. Returns the Sale number, or the refusal.
+   */
+  finishReturn: (saleId: string) => { saleNumber?: number; refusal?: string };
+  /** E-06 d29 — why this Return cannot be finished yet, for the screen to show. */
+  finishReturnBlocked: (saleId: string) => string | undefined;
+  /** E-06 d30 — why the stock refuses a void, naming the copy. A pure read. */
+  voidStockRefusal: (saleId: string) => string | undefined;
   holdSale: (saleId: string) => string;
   // E-05 d31 — refuses unless the tenders net zero, returning how much is
   // still on the Sale so the caller can offer to refund it, move it onto the
   // Customer's account, or remove the line. E-06 d10 — also refuses while a
   // Return has routed stock, since putting that back is its own job.
-  voidSale: (saleId: string) => { voided: boolean; outstanding: number; routedCopies: number };
+  voidSale: (saleId: string) => {
+    voided: boolean;
+    outstanding: number;
+    routedCopies: number;
+    /** E-06 d30 — why the stock refuses the void, naming the copy. */
+    refusal?: string;
+  };
   cancelHold: (saleId: string) => void;
   releaseHoldLine: (itemId: string) => { holdRef: string; holdClosed: boolean } | null;
   forceUnlockSale: (saleId: string) => void;
-  acknowledgeReviewFlag: (id: string, by: string) => void;
-  reconcileOversold: (recordId: string, by: string) => number;
+  acknowledgeReviewFlag: (id: string, by: ManagerAuth) => void;
+
+  // ---- M-08, the books ----------------------------------------------------
+  // Every one is MANAGER-ONLY (A-74), so every one takes the authorising
+  // Manager's initials. None of them decides anything: the refusal functions in
+  // lib/ledger*.ts are the rules, and these store whatever those permit.
+  ledgerSaveOpening: (draft: OpeningPositionDraft) => void;
+  ledgerSealOpening: (by: ManagerAuth) => void;
+  ledgerPost: (posting: Omit<LedgerPosting, "writtenAt">, by: ManagerAuth) => void;
+  ledgerSeal: (period: string, suspenseGross: number, by: ManagerAuth) => void;
+  ledgerUnseal: (period: string, reason: string, by: ManagerAuth) => void;
+  ledgerMarkYearFiled: (fiscalYearEnd: string, by: ManagerAuth) => void;
+  ledgerReconcile: (reconciliation: LedgerReconciliation) => void;
+  ledgerIssue: (issuance: LedgerIssuance) => void;
+  /** d40, M-07 d25 — a period's Suspense total, gross. What the seal refuses on. */
+  ledgerSuspenseGross: (period: string) => number;
+  /** M-08 d11 - why an Undo End of Day is refused, or undefined. */
+  closeUndoRefusalFor: (batchId: string) => string | undefined;
+  reconcileOversold: (recordId: string, by: ManagerAuth) => number;
   addLog: (saleId: string, text: string) => void;
 
   raiseClaim: (
@@ -925,7 +1030,27 @@ interface AppContextValue extends AppState {
      * that choice was for."*
      */
     reason?: AdjustmentReason,
-  ) => void;
+    /**
+     * The authorizing Manager, for the `writeoff` route only — architecture
+     * §6 gates `return_route_stock` **M** where the route is *written off*.
+     *
+     * REQUIRED BY THE WRITE PATH, not by the screen. A-4 and A-48: a bound
+     * enforced in the client is not a bound. The screen presenting
+     * `ManagerAuthorize` is how a Manager is asked; this parameter is what
+     * makes the absence of one a refusal rather than a convention, so a second
+     * caller cannot route a write-off by forgetting to ask.
+     */
+    by?: ManagerAuth,
+    /**
+     * The re-grade route only — what the copy is assessed at now that it has
+     * come back in a different condition. **Capped at the cost the sold copy
+     * carried** (A-82, E-06 d19); the write path refuses above it, because the
+     * excess would be income the store did not earn. Defaults to the sold
+     * copy's cost when the Employee does not move it, which is the ordinary
+     * case: most discs come back fine.
+     */
+    assessedCost?: number,
+  ) => { routed: boolean; refusal?: string };
   toggleProvider: () => void;
 
   invoiceFor: (id?: string) => Invoice | undefined;
@@ -992,7 +1117,7 @@ interface AppContextValue extends AppState {
   finalizeInvoice: (
     invoiceId: string,
   ) => { itemCount: number; journal: JournalBatch; unresolved: string[] } | null;
-  markInvoicePaid: (invoiceId: string, by: string) => void;
+  markInvoicePaid: (invoiceId: string, by: ManagerAuth) => void;
 
   // M-05 — Accounts Payable. One PaymentBatch per Record-Payment action,
   // covering whatever mix of Invoices and PayableEntries it was paying,
@@ -1027,10 +1152,10 @@ interface AppContextValue extends AppState {
       credits: { id: string; amount: number; label: string }[];
       placeholderIds: string[];
     },
-    by: string,
+    by: ManagerAuth,
   ) => void;
   // M-05 d22/d30 — appended, never edited; never refuses.
-  voidPaymentBatch: (batchId: string, by: string) => void;
+  voidPaymentBatch: (batchId: string, by: ManagerAuth) => void;
 
   payableEntryFor: (id?: string) => PayableEntry | undefined;
   // M-05 "Create new" — a manual ledger line unlinked to any InventoryItem.
@@ -1051,10 +1176,10 @@ interface AppContextValue extends AppState {
   // already cleared) as cleared against each other — only if their signed
   // amounts sum to zero. Returns { cleared: false } and changes nothing
   // otherwise (mismatched sum, wrong supplier, already cleared, etc).
-  clearPayableEntries: (entryIds: string[], by: string) => { cleared: boolean };
+  clearPayableEntries: (entryIds: string[], by: ManagerAuth) => { cleared: boolean };
   // M-05 d39 — a clearing is a REVERSIBLE MARK, not a terminal state.
   // d46 — addressed by the CLEARING, the way a void addresses a batch.
-  unclearPayableEntries: (clearingId: string, by: string) => { uncleared: boolean; reason?: string };
+  unclearPayableEntries: (clearingId: string, by: ManagerAuth) => { uncleared: boolean; reason?: string };
   // M-07 — the chart. d3: the number and name are the store's; the ROLE is not
   // editable, because the software resolves by it.
   updateGLAccount: (id: string, patch: { number?: string; name?: string; active?: boolean }) => void;
@@ -1073,7 +1198,7 @@ interface AppContextValue extends AppState {
    */
   voidPurchaseOrder: (
     poNumber: string,
-    by?: string,
+    by?: ManagerAuth,
   ) => { returned: number; split: number; untouched: number };
   /** Set or clear one of the statuses a person sets (M-02 d12, d22). */
   setPendingOrderLineStatus: (
@@ -1284,13 +1409,228 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
     ];
   };
 
-  const acknowledgeReviewFlag: AppContextValue["acknowledgeReviewFlag"] = (id, by) =>
+  const acknowledgeReviewFlag: AppContextValue["acknowledgeReviewFlag"] = (id, byAuth) => {
+    // §6 — an M function resolves the Manager ITSELF, in the same
+    // transaction. The brand proves the check passed when the id was
+    // minted; this proves it still holds now, so a demotion between the
+    // prompt and the write bites (A-28a, A-4, A-48).
+    const mgr = requireManager(s.users, byAuth);
+    if (!mgr.ok) return;
+    const by = mgr.name;
     setS((prev) => ({
       ...prev,
       reviewFlags: prev.reviewFlags.map((f) =>
         f.id === id ? { ...f, acknowledged: true, acknowledgedBy: by, acknowledgedAt: now() } : f,
       ),
     }));
+  };
+
+  // -------------------------------------------------------------------------
+  // M-08 - the books
+  // -------------------------------------------------------------------------
+  //
+  // Thin on purpose. A-74 moves M-08's invariants into the definer function and
+  // out of the screen, and in the prototype the lib modules ARE that function:
+  // every refusal is a *Refusal() in lib/ledger*.ts, tested there, and called by
+  // the screen before it calls any of these. A second copy of a rule here would
+  // be the divergence A-48 warns about wearing a different hat.
+
+  const ledgerSaveOpening: AppContextValue["ledgerSaveOpening"] = (draft) =>
+    setS((prev) => ({ ...prev, ledgerOpening: draft }));
+
+  // A-78 - sealing MATERIALISES equity as a journal line. Until this runs the
+  // opening position is a draft carrying assets and liabilities only, and
+  // nothing may read it as though it were a journal.
+  const ledgerSealOpening: AppContextValue["ledgerSealOpening"] = (byAuth) => {
+    // §6 — an M function resolves the Manager ITSELF, in the same
+    // transaction. The brand proves the check passed when the id was
+    // minted; this proves it still holds now, so a demotion between the
+    // prompt and the write bites (A-28a, A-4, A-48).
+    const mgr = requireManager(s.users, byAuth);
+    if (!mgr.ok) return;
+    setS((prev) => {
+      if (!prev.ledgerOpening || prev.ledgerOpeningSealed) return prev;
+      const equity = prev.glAccounts.find((a) => a.role === "owners-equity");
+      const suspense = prev.glAccounts.find((a) => a.role === "suspense");
+      if (!equity || !suspense) return prev;
+      const sealed = sealOpeningPosition(
+        prev.ledgerOpening,
+        prev.glAccounts,
+        equity.id,
+        suspense.id,
+        now(),
+      );
+      return {
+        ...prev,
+        ledgerOpeningSealed: true,
+        journals: [sealed.batch, ...prev.journals],
+        // d28's typed figure is DISCARDED; only the acknowledgement survives,
+        // carried on the sealed artifact.
+        ledgerOpening: { ...prev.ledgerOpening, accountantsEquity: undefined },
+      };
+    });
+  };
+
+  // Step 15 - the posting joins the journal beside everything artifacts wrote.
+  const ledgerPost: AppContextValue["ledgerPost"] = (posting, byAuth) => {
+    // §6 — an M function resolves the Manager ITSELF, in the same
+    // transaction. The brand proves the check passed when the id was
+    // minted; this proves it still holds now, so a demotion between the
+    // prompt and the write bites (A-28a, A-4, A-48).
+    const mgr = requireManager(s.users, byAuth);
+    if (!mgr.ok) return;
+    const by = mgr.name;
+    setS((prev) => {
+      const suspense = prev.glAccounts.find((a) => a.role === "suspense");
+      if (!suspense) return prev;
+      const full: LedgerPosting = { ...posting, writtenAt: now(), authorizedByInitials: by };
+      // Throws rather than writing a Suspense line if it does not balance - the
+      // screen has already called postingRefusal, so reaching that throw means
+      // the screen skipped its own gate.
+      const batch = postingJournal(full, suspense.id, prev.homeCurrency);
+      return {
+        ...prev,
+        ledgerPostings: [full, ...prev.ledgerPostings],
+        journals: [batch, ...prev.journals],
+      };
+    });
+  };
+
+  // A-75 - a seal APPENDS a row, and d20/A-76 write the closing transaction as
+  // the result of the recomputation. The two happen together because A-76's
+  // "stored is by definition the last recomputed" is only true if nothing can
+  // seal without recomputing.
+  const ledgerSeal: AppContextValue["ledgerSeal"] = (period, suspenseGross, byAuth) => {
+    // §6 — an M function resolves the Manager ITSELF, in the same
+    // transaction. The brand proves the check passed when the id was
+    // minted; this proves it still holds now, so a demotion between the
+    // prompt and the write bites (A-28a, A-4, A-48).
+    const mgr = requireManager(s.users, byAuth);
+    if (!mgr.ok) return;
+    const by = mgr.name;
+    setS((prev) => {
+      const seal: LedgerPeriodSeal = {
+        id: "seal-" + period + "-" + (prev.ledgerSeals.length + 1),
+        period,
+        sealedAt: now(),
+        actorInitials: by,
+        authorizedByInitials: by,
+      };
+
+      // d17 - where this seal ends a fiscal year it writes VISIBLE closing
+      // postings first. The ORDER is the substance: the zeroing is dated the
+      // last day of the year, which is inside the period being sealed, so the
+      // closing transaction must be computed from journals that already carry
+      // it. Recompute first and the seal stores balance-forwards the zeroing
+      // never reached, which is A-76's divergence arriving by our own hand.
+      const retained = prev.glAccounts.find((a) => a.role === "retained-earnings");
+      const suspense = prev.glAccounts.find((a) => a.role === "suspense");
+      const yearEnd =
+        retained && suspense
+          ? yearEndClosingBatch(
+              period,
+              FISCAL_YEAR_END_MONTH,
+              prev.glAccounts,
+              prev.journals,
+              retained.id,
+              suspense.id,
+              now(),
+            )
+          : undefined;
+
+      const journals = yearEnd ? [yearEnd, ...prev.journals] : prev.journals;
+
+      return {
+        ...prev,
+        journals,
+        ledgerSeals: [...prev.ledgerSeals, seal],
+        ledgerClosings: [
+          ...prev.ledgerClosings,
+          closingTransactionFor(period, seal.id, journals, suspenseGross, now()),
+        ],
+      };
+    });
+  };
+
+  // d18 - an unseal is an artifact: who, when, a required reason, and which
+  // period it reopened. A-76 has a divergence against what was stored raise a
+  // system flag with a null actor.
+  const ledgerUnseal: AppContextValue["ledgerUnseal"] = (period, reason, byAuth) => {
+    // §6 — an M function resolves the Manager ITSELF, in the same
+    // transaction. The brand proves the check passed when the id was
+    // minted; this proves it still holds now, so a demotion between the
+    // prompt and the write bites (A-28a, A-4, A-48).
+    const mgr = requireManager(s.users, byAuth);
+    if (!mgr.ok) return;
+    const by = mgr.name;
+    setS((prev) => {
+      const live = prev.ledgerSeals
+        .filter((x) => x.period === period)
+        .find((x) => !prev.ledgerUnseals.some((u) => u.sealId === x.id));
+      if (!live) return prev;
+
+      const stored = prev.ledgerClosings.find((c) => c.sealId === live.id);
+      const flag = stored
+        ? divergenceFlag(stored, prev.journals, prev.ledgerSeals, prev.ledgerUnseals, now())
+        : undefined;
+
+      return {
+        ...prev,
+        ledgerUnseals: [
+          ...prev.ledgerUnseals,
+          {
+            id: "unseal-" + period + "-" + (prev.ledgerUnseals.length + 1),
+            sealId: live.id,
+            unsealedAt: now(),
+            actorInitials: by,
+            authorizedByInitials: by,
+            reason,
+          },
+        ],
+        ...(flag ? { reviewFlags: [flag, ...prev.reviewFlags] } : {}),
+      };
+    });
+  };
+
+  // d22 - the only permanently irreversible state in this system.
+  const ledgerMarkYearFiled: AppContextValue["ledgerMarkYearFiled"] = (fiscalYearEnd, byAuth) => {
+    // §6 — an M function resolves the Manager ITSELF, in the same
+    // transaction. The brand proves the check passed when the id was
+    // minted; this proves it still holds now, so a demotion between the
+    // prompt and the write bites (A-28a, A-4, A-48).
+    const mgr = requireManager(s.users, byAuth);
+    if (!mgr.ok) return;
+    const by = mgr.name;
+    setS((prev) => ({
+      ...prev,
+      ledgerYearFilings: [
+        ...prev.ledgerYearFilings,
+        {
+          id: "filed-" + fiscalYearEnd,
+          fiscalYearEnd,
+          filedAt: now(),
+          actorInitials: by,
+          authorizedByInitials: by,
+        },
+      ],
+    }));
+  };
+
+  // d25 - a mark that moves no money. No journal is written here, ever.
+  const ledgerReconcile: AppContextValue["ledgerReconcile"] = (reconciliation) =>
+    setS((prev) => ({
+      ...prev,
+      ledgerReconciliations: [...prev.ledgerReconciliations, reconciliation],
+    }));
+
+  // d31, A-77 - what left the building, with its figures frozen.
+  const ledgerSuspenseGross: AppContextValue["ledgerSuspenseGross"] = (period) => {
+    const suspense = s.glAccounts.find((a) => a.role === "suspense");
+    return suspense ? suspenseGrossFor(period, s.journals, suspense.id) : 0;
+  };
+
+  const ledgerIssue: AppContextValue["ledgerIssue"] = (issuance) =>
+    setS((prev) => ({ ...prev, ledgerIssuances: [issuance, ...prev.ledgerIssuances] }));
 
   const recordFor = (id?: string) => s.records.find((r) => r.id === id);
   const customerFor = (id?: string) => s.customers.find((c) => c.id === id);
@@ -1462,7 +1802,15 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
     at: new Date().toISOString().slice(0, 10),
   });
 
-  const upsertTaxType: AppContextValue["upsertTaxType"] = (row, by) => {
+  const upsertTaxType: AppContextValue["upsertTaxType"] = (row, byAuth) => {
+    // §6 — an M function resolves the Manager ITSELF, in the same
+    // transaction. The brand proves the check passed when the id was
+    // minted; this proves it still holds now, so a demotion between the
+    // prompt and the write bites (A-28a, A-4, A-48).
+    const mgr = requireManager(s.users, byAuth);
+    if (!mgr.ok) return { ok: false, reason: mgr.refusal };
+    const by = mgr.name;
+
     const code = row.code.trim().toLowerCase();
     if (code.length !== 1) return { ok: false, reason: "A tax type code is a single letter." };
     if (!row.name.trim()) return { ok: false, reason: "A name is required." };
@@ -1470,14 +1818,16 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
     if ((row.pendingRatePpm === undefined) !== (row.pendingFrom === undefined))
       return { ok: false, reason: "A pending change needs both a rate and the date it starts (d52)." };
     const existing = s.taxTypes.find((x) => x.code === code);
-    // d52 — a pending change that has already taken effect is PROMOTED before
-    // a new one is accepted, so an elapsed change is never silently dropped.
+    // d52 — an elapsed pending change is PROMOTED before a new one is
+    // accepted. The rule lives in lib/tax.ts because the promotion used to be
+    // computed here and then undone by the spread that followed it, which is
+    // exactly the silent drop d52 forbids.
     const today = new Date().toISOString().slice(0, 10);
-    const promoted =
-      existing?.pendingFrom && existing.pendingRatePpm !== undefined && today >= existing.pendingFrom
-        ? { ...existing, ratePpm: existing.pendingRatePpm, pendingRatePpm: undefined, pendingFrom: undefined }
-        : existing;
-    const next: TaxType = { ...promoted, ...row, code, name: row.name.trim() };
+    const next: TaxType = {
+      ...taxTypeWrite(existing, row, today),
+      code,
+      name: row.name.trim(),
+    };
     setS((prev) => ({
       ...prev,
       taxTypes: existing ? prev.taxTypes.map((x) => (x.code === code ? next : x)) : [...prev.taxTypes, next],
@@ -1486,7 +1836,15 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
     return { ok: true };
   };
 
-  const setTaxCell: AppContextValue["setTaxCell"] = (groupId, productTaxCode, spec, by) => {
+  const setTaxCell: AppContextValue["setTaxCell"] = (groupId, productTaxCode, spec, byAuth) => {
+    // §6 — an M function resolves the Manager ITSELF, in the same
+    // transaction. The brand proves the check passed when the id was
+    // minted; this proves it still holds now, so a demotion between the
+    // prompt and the write bites (A-28a, A-4, A-48).
+    const mgr = requireManager(s.users, byAuth);
+    if (!mgr.ok) return { ok: false, reason: mgr.refusal };
+    const by = mgr.name;
+
     const clean = spec.trim().toLowerCase();
     const { codes } = parseCell(clean);
     // d16 — two maximum, and every letter has to name a type that exists.
@@ -1509,7 +1867,15 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
     return { ok: true };
   };
 
-  const upsertTaxGroup: AppContextValue["upsertTaxGroup"] = (row, by) => {
+  const upsertTaxGroup: AppContextValue["upsertTaxGroup"] = (row, byAuth) => {
+    // §6 — an M function resolves the Manager ITSELF, in the same
+    // transaction. The brand proves the check passed when the id was
+    // minted; this proves it still holds now, so a demotion between the
+    // prompt and the write bites (A-28a, A-4, A-48).
+    const mgr = requireManager(s.users, byAuth);
+    if (!mgr.ok) return { ok: false, reason: mgr.refusal };
+    const by = mgr.name;
+
     if (!row.description.trim()) return { ok: false, reason: "A description is required." };
     const shortName = row.shortName.trim().toUpperCase();
     if (!shortName || shortName.length > 4)
@@ -1524,7 +1890,15 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
     return { ok: true };
   };
 
-  const setDefaultTaxGroup: AppContextValue["setDefaultTaxGroup"] = (groupId, by) => {
+  const setDefaultTaxGroup: AppContextValue["setDefaultTaxGroup"] = (groupId, byAuth) => {
+    // §6 — an M function resolves the Manager ITSELF, in the same
+    // transaction. The brand proves the check passed when the id was
+    // minted; this proves it still holds now, so a demotion between the
+    // prompt and the write bites (A-28a, A-4, A-48).
+    const mgr = requireManager(s.users, byAuth);
+    if (!mgr.ok) return;
+    const by = mgr.name;
+
     if (groupId === s.defaultTaxGroup) return;
     const before = s.taxGroups.find((g) => g.id === s.defaultTaxGroup)?.shortName ?? s.defaultTaxGroup;
     const after = s.taxGroups.find((g) => g.id === groupId)?.shortName ?? groupId;
@@ -1561,14 +1935,30 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
       ],
     }));
 
-  const setStoreSetting: AppContextValue["setStoreSetting"] = (key, value, by) => {
+  const setStoreSetting: AppContextValue["setStoreSetting"] = (key, value, byAuth) => {
+    // §6 — an M function resolves the Manager ITSELF, in the same
+    // transaction. The brand proves the check passed when the id was
+    // minted; this proves it still holds now, so a demotion between the
+    // prompt and the write bites (A-28a, A-4, A-48).
+    const mgr = requireManager(s.users, byAuth);
+    if (!mgr.ok) return;
+    const by = mgr.name;
+
     const before = s.storeSettings[key];
     if (before === value) return;
     setS((prev) => ({ ...prev, storeSettings: { ...prev.storeSettings, [key]: value } }));
     logSetting("Store settings", String(key), before, value, by);
   };
 
-  const setStoreDetail: AppContextValue["setStoreDetail"] = (key, value, by) => {
+  const setStoreDetail: AppContextValue["setStoreDetail"] = (key, value, byAuth) => {
+    // §6 — an M function resolves the Manager ITSELF, in the same
+    // transaction. The brand proves the check passed when the id was
+    // minted; this proves it still holds now, so a demotion between the
+    // prompt and the write bites (A-28a, A-4, A-48).
+    const mgr = requireManager(s.users, byAuth);
+    if (!mgr.ok) return;
+    const by = mgr.name;
+
     const before = (s.storeDetails as unknown as Record<string, unknown>)[key];
     if (before === value) return;
     setS((prev) => ({ ...prev, storeDetails: { ...prev.storeDetails, [key]: value } }));
@@ -1614,7 +2004,15 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
     return { ok: true };
   };
 
-  const updateMapRow: AppContextValue["updateMapRow"] = (tag, patch, by) => {
+  const updateMapRow: AppContextValue["updateMapRow"] = (tag, patch, byAuth) => {
+    // §6 — an M function resolves the Manager ITSELF, in the same
+    // transaction. The brand proves the check passed when the id was
+    // minted; this proves it still holds now, so a demotion between the
+    // prompt and the write bites (A-28a, A-4, A-48).
+    const mgr = requireManager(s.users, byAuth);
+    if (!mgr.ok) return { ok: false, reason: mgr.refusal };
+    const by = mgr.name;
+
     const key = normaliseTag(tag);
     const existing = s.genreMap.find((r) => normaliseTag(r.tag) === key);
     if (!existing) return { ok: false, reason: `No map row for "${tag}".` };
@@ -1627,7 +2025,15 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
     return { ok: true };
   };
 
-  const removeMapRow: AppContextValue["removeMapRow"] = (tag, by) => {
+  const removeMapRow: AppContextValue["removeMapRow"] = (tag, byAuth) => {
+    // §6 — an M function resolves the Manager ITSELF, in the same
+    // transaction. The brand proves the check passed when the id was
+    // minted; this proves it still holds now, so a demotion between the
+    // prompt and the write bites (A-28a, A-4, A-48).
+    const mgr = requireManager(s.users, byAuth);
+    if (!mgr.ok) return { ok: false, reason: mgr.refusal };
+    const by = mgr.name;
+
     const key = normaliseTag(tag);
     const existing = s.genreMap.find((r) => normaliseTag(r.tag) === key);
     if (!existing) return { ok: false, reason: `No map row for "${tag}".` };
@@ -1645,7 +2051,15 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
   // THE MAP ROWS ARE THE HALF EASILY MISSED AND THE HALF THAT MATTERS: a merge
   // that leaves them behind has the next adoption recreate the genre under the
   // old tag, which is the problem returning by the door it came in.
-  const mergeGenres: AppContextValue["mergeGenres"] = (fromId, toId, by) => {
+  const mergeGenres: AppContextValue["mergeGenres"] = (fromId, toId, byAuth) => {
+    // §6 — an M function resolves the Manager ITSELF, in the same
+    // transaction. The brand proves the check passed when the id was
+    // minted; this proves it still holds now, so a demotion between the
+    // prompt and the write bites (A-28a, A-4, A-48).
+    const mgr = requireManager(s.users, byAuth);
+    if (!mgr.ok) return { ok: false, reason: mgr.refusal };
+    const by = mgr.name;
+
     const from = s.genres.find((g) => g.id === fromId);
     const to = s.genres.find((g) => g.id === toId);
     const check = checkGenreMerge(from, to);
@@ -1738,7 +2152,15 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
     };
   };
 
-  const upsertGenre: AppContextValue["upsertGenre"] = (row, by) => {
+  const upsertGenre: AppContextValue["upsertGenre"] = (row, byAuth) => {
+    // §6 — an M function resolves the Manager ITSELF, in the same
+    // transaction. The brand proves the check passed when the id was
+    // minted; this proves it still holds now, so a demotion between the
+    // prompt and the write bites (A-28a, A-4, A-48).
+    const mgr = requireManager(s.users, byAuth);
+    if (!mgr.ok) return { ok: false, reason: mgr.refusal };
+    const by = mgr.name;
+
     // The rules live in lib/taxonomy so they can be exercised without a screen.
     const check = checkGenreWrite(row, {
       genres: s.genres,
@@ -1763,7 +2185,15 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
   //
   // The refusal names its cause, because M-04 d13 and A-54 both require that -
   // a refusal that does not say what blocked it sends someone hunting.
-  const deleteGenre: AppContextValue["deleteGenre"] = (genreId, by) => {
+  const deleteGenre: AppContextValue["deleteGenre"] = (genreId, byAuth) => {
+    // §6 — an M function resolves the Manager ITSELF, in the same
+    // transaction. The brand proves the check passed when the id was
+    // minted; this proves it still holds now, so a demotion between the
+    // prompt and the write bites (A-28a, A-4, A-48).
+    const mgr = requireManager(s.users, byAuth);
+    if (!mgr.ok) return { ok: false, reason: mgr.refusal };
+    const by = mgr.name;
+
     const genre = s.genres.find((x) => x.id === genreId);
     const check = checkGenreDelete(genre, genreUseCount(genreId));
     if (!check.ok) return check;
@@ -1772,7 +2202,15 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
     return { ok: true };
   };
 
-  const upsertSection: AppContextValue["upsertSection"] = (row, by) => {
+  const upsertSection: AppContextValue["upsertSection"] = (row, byAuth) => {
+    // §6 — an M function resolves the Manager ITSELF, in the same
+    // transaction. The brand proves the check passed when the id was
+    // minted; this proves it still holds now, so a demotion between the
+    // prompt and the write bites (A-28a, A-4, A-48).
+    const mgr = requireManager(s.users, byAuth);
+    if (!mgr.ok) return { ok: false, reason: mgr.refusal };
+    const by = mgr.name;
+
     const code = row.code.trim().toUpperCase();
     if (code.length !== 2) return { ok: false, reason: "A Section code is two characters (d28)." };
     if (!row.name.trim()) return { ok: false, reason: "A name is required." };
@@ -1790,7 +2228,15 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
     return { ok: true };
   };
 
-  const upsertTender: AppContextValue["upsertTender"] = (row, by) => {
+  const upsertTender: AppContextValue["upsertTender"] = (row, byAuth) => {
+    // §6 — an M function resolves the Manager ITSELF, in the same
+    // transaction. The brand proves the check passed when the id was
+    // minted; this proves it still holds now, so a demotion between the
+    // prompt and the write bites (A-28a, A-4, A-48).
+    const mgr = requireManager(s.users, byAuth);
+    if (!mgr.ok) return { ok: false, reason: mgr.refusal };
+    const by = mgr.name;
+
     if (!row.name.trim()) return { ok: false, reason: "A name is required." };
     const existing = s.tenders.find((x) => x.id === row.id);
     if (existing?.systemOwned && (row.name !== existing.name || !row.active))
@@ -1807,7 +2253,15 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
     return { ok: true };
   };
 
-  const upsertCurrency: AppContextValue["upsertCurrency"] = (row, by) => {
+  const upsertCurrency: AppContextValue["upsertCurrency"] = (row, byAuth) => {
+    // §6 — an M function resolves the Manager ITSELF, in the same
+    // transaction. The brand proves the check passed when the id was
+    // minted; this proves it still holds now, so a demotion between the
+    // prompt and the write bites (A-28a, A-4, A-48).
+    const mgr = requireManager(s.users, byAuth);
+    if (!mgr.ok) return { ok: false, reason: mgr.refusal };
+    const by = mgr.name;
+
     const code = row.code.trim().toUpperCase();
     if (code.length !== 3) return { ok: false, reason: "A currency code is three letters." };
     if (!(row.rate > 0)) return { ok: false, reason: "A rate has to be greater than zero." };
@@ -1828,7 +2282,15 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
     return { ok: true };
   };
 
-  const setHomeCurrency: AppContextValue["setHomeCurrency"] = (code, by) => {
+  const setHomeCurrency: AppContextValue["setHomeCurrency"] = (code, byAuth) => {
+    // §6 — an M function resolves the Manager ITSELF, in the same
+    // transaction. The brand proves the check passed when the id was
+    // minted; this proves it still holds now, so a demotion between the
+    // prompt and the write bites (A-28a, A-4, A-48).
+    const mgr = requireManager(s.users, byAuth);
+    if (!mgr.ok) return;
+    const by = mgr.name;
+
     if (code === s.homeCurrency) return;
     const before = s.homeCurrency;
     setS((prev) => ({ ...prev, homeCurrency: code }));
@@ -1856,31 +2318,79 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
     return { ok: true, id: r.id };
   };
 
-  const addUser: AppContextValue["addUser"] = (input, by) =>
-    commit(usersLib.addUser(s.users, input, by, { id: uid("user") }));
+  const addUser: AppContextValue["addUser"] = (input, byAuth) => {
+    // §6 — an M function resolves the Manager ITSELF, in the same
+    // transaction. The brand proves the check passed when the id was
+    // minted; this proves it still holds now, so a demotion between the
+    // prompt and the write bites (A-28a, A-4, A-48).
+    const mgr = requireManager(s.users, byAuth);
+    if (!mgr.ok) return { ok: false, reason: mgr.refusal };
+    const by = mgr.name;
+    return commit(usersLib.addUser(s.users, input, by, { id: uid("user") }));
+  };
 
-  const changeUserRole: AppContextValue["changeUserRole"] = (userId, role, by) =>
-    commit(usersLib.changeUserRole(s.users, userId, role, by));
+  const changeUserRole: AppContextValue["changeUserRole"] = (userId, role, byAuth) => {
+    // §6 — an M function resolves the Manager ITSELF, in the same
+    // transaction. The brand proves the check passed when the id was
+    // minted; this proves it still holds now, so a demotion between the
+    // prompt and the write bites (A-28a, A-4, A-48).
+    const mgr = requireManager(s.users, byAuth);
+    if (!mgr.ok) return { ok: false, reason: mgr.refusal };
+    const by = mgr.name;
+    return commit(usersLib.changeUserRole(s.users, userId, role, by));
+  };
 
   // M-04 d15 as corrected by d18: a deactivation stops new work under those
   // initials AT ONCE. There is no server-side session to end, so what
   // "immediately" means here is that the actor no longer resolves — the same
   // shape as actor_resolve refusing (A-55). An Open Sale is untouched and
   // stays finishable; only the session goes.
-  const deactivateUser: AppContextValue["deactivateUser"] = (userId, by) => {
+  const deactivateUser: AppContextValue["deactivateUser"] = (userId, byAuth) => {
+    // §6 — an M function resolves the Manager ITSELF, in the same
+    // transaction. The brand proves the check passed when the id was
+    // minted; this proves it still holds now, so a demotion between the
+    // prompt and the write bites (A-28a, A-4, A-48).
+    const mgr = requireManager(s.users, byAuth);
+    if (!mgr.ok) return { ok: false, reason: mgr.refusal };
+    const by = mgr.name;
+
     const r = commit(usersLib.deactivateUser(s.users, userId, by));
     if (r.ok && s.sessionUserId === userId) endSession();
     return r;
   };
 
-  const reactivateUser: AppContextValue["reactivateUser"] = (userId, initials, by) =>
-    commit(usersLib.reactivateUser(s.users, userId, initials, by));
+  const reactivateUser: AppContextValue["reactivateUser"] = (userId, initials, byAuth) => {
+    // §6 — an M function resolves the Manager ITSELF, in the same
+    // transaction. The brand proves the check passed when the id was
+    // minted; this proves it still holds now, so a demotion between the
+    // prompt and the write bites (A-28a, A-4, A-48).
+    const mgr = requireManager(s.users, byAuth);
+    if (!mgr.ok) return { ok: false, reason: mgr.refusal };
+    const by = mgr.name;
+    return commit(usersLib.reactivateUser(s.users, userId, initials, by));
+  };
 
-  const correctUser: AppContextValue["correctUser"] = (userId, patch, by) =>
-    commit(usersLib.correctUser(s.users, userId, patch, by));
+  const correctUser: AppContextValue["correctUser"] = (userId, patch, byAuth) => {
+    // §6 — an M function resolves the Manager ITSELF, in the same
+    // transaction. The brand proves the check passed when the id was
+    // minted; this proves it still holds now, so a demotion between the
+    // prompt and the write bites (A-28a, A-4, A-48).
+    const mgr = requireManager(s.users, byAuth);
+    if (!mgr.ok) return { ok: false, reason: mgr.refusal };
+    const by = mgr.name;
+    return commit(usersLib.correctUser(s.users, userId, patch, by));
+  };
 
-  const setUserPassword: AppContextValue["setUserPassword"] = (userId, password, by) =>
-    commit(usersLib.setUserPassword(s.users, userId, password, by));
+  const setUserPassword: AppContextValue["setUserPassword"] = (userId, password, byAuth) => {
+    // §6 — an M function resolves the Manager ITSELF, in the same
+    // transaction. The brand proves the check passed when the id was
+    // minted; this proves it still holds now, so a demotion between the
+    // prompt and the write bites (A-28a, A-4, A-48).
+    const mgr = requireManager(s.users, byAuth);
+    if (!mgr.ok) return { ok: false, reason: mgr.refusal };
+    const by = mgr.name;
+    return commit(usersLib.setUserPassword(s.users, userId, password, by));
+  };
 
   const addCustomer: AppContextValue["addCustomer"] = (input) => {
     const id = uid("cust");
@@ -2063,6 +2573,13 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
         qty: -1,
         price: refund,
         discountPct: 0,
+        // d25, d26, d27 — is this a disc the shop has no sold record for?
+        // Judged HERE, when the Employee picks the copy, because routing
+        // changes that copy's status and the posting must not change with it
+        // (A-57's shape). A copy that is `sellable`, `held` or `written_off` is
+        // demonstrably not the one the customer is holding — d24's point — and
+        // there is no sale of it to reverse.
+        unmatchedReturn: item.status !== "sold",
         linkedSaleNumber,
         note: linkedSaleNumber
           ? `Return — linked to Sale ${linkedSaleNumber}`
@@ -2166,9 +2683,171 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
       };
     });
 
+  /**
+   * E-06 d29 — how a returned line is described in a refusal. The Record as
+   * the counter reads it, because "line 3" means nothing across the counter.
+   */
+  const describeReturnLine = (l: { inventoryItemId?: string }) => {
+    const item = s.inventory.find((i) => i.id === l.inventoryItemId);
+    const rec = item && s.records.find((r) => r.id === item.recordId);
+    return rec ? `${rec.artist} — ${rec.title}` : "A returned copy";
+  };
+
+  /** E-06 d29 — the finish gate, as the lib states it. */
+  const returnFinishRefusal = (sale: Sale | undefined) =>
+    sale
+      ? finishReturnRefusal(
+          sale.lines.map((l) => ({
+            qty: l.qty,
+            inventoryItemId: l.inventoryItemId,
+            routedTo: l.routedTo,
+            describe: describeReturnLine(l),
+          })),
+        )
+      : undefined;
+
+  const finishReturnBlocked: AppContextValue["finishReturnBlocked"] = (saleId) =>
+    returnFinishRefusal(s.sales.find((x) => x.id === saleId));
+
+  // E-06 d30 — the same test `voidSale` applies, asked without writing. One
+  // definition, two callers: the modal shows it and the write path enforces it.
+  const voidStockRefusal: AppContextValue["voidStockRefusal"] = (saleId) =>
+    (s.sales.find((x) => x.id === saleId)?.lines ?? [])
+      .filter((l) => l.stockRouted && l.routedTo)
+      .map((l) =>
+        unrouteRefusal(
+          l.routedTo!,
+          s.inventory.find((i) => i.id === (l.routedItemId ?? l.inventoryItemId)),
+        ),
+      )
+      .find(Boolean);
+
+  const chooseReturnRoute: AppContextValue["chooseReturnRoute"] = (saleId, lineId, to, opts) => {
+    const doc = s.sales.find((x) => x.id === saleId);
+    // d29, d22 — the DOCUMENT first. Refused here and not merely by hiding the
+    // control (A-4, A-48): a second caller reaches this whatever the screen
+    // renders, which is how the voided-Return hole was found the first time.
+    const docRefusal = doc
+      ? routeDocumentRefusal(doc)
+      : "That Return no longer exists.";
+    if (docRefusal) return { chosen: false, refusal: docRefusal };
+
+    // A-81, A-28a — the write-off route is manager-only, and it is gated at
+    // the moment of CHOOSING because that is now the moment the Employee
+    // performs it. Re-checked again at finish, when the effect actually runs.
+    const mgr = opts?.byAuth ? requireManager(s.users, opts.byAuth) : undefined;
+    const by = mgr?.ok ? mgr.name : undefined;
+    const stockRefusal = routeStockRefusal(
+      to,
+      mgr?.ok ? { role: "Manager", active: true, name: by! } : undefined,
+    );
+    if (stockRefusal) return { chosen: false, refusal: stockRefusal };
+
+    const line = doc!.lines.find((l) => l.id === lineId);
+    const soldCopy = s.inventory.find((i) => i.id === line?.inventoryItemId);
+    // A-82 / d19 — the cap is applied when the figure is entered, which under
+    // d29 is on the draft. d26 — an UNMATCHED copy has no prior cost to cap
+    // against and is booked at the refund paid, so the cap does not reach it.
+    if (to === "regrade" && !line?.unmatchedReturn) {
+      const costRefusal = regradeCostRefusal(
+        opts?.assessedCost ?? soldCopy?.cost ?? 0,
+        soldCopy?.cost ?? 0,
+      );
+      if (costRefusal) return { chosen: false, refusal: costRefusal };
+    }
+
+    setS((prev) => ({
+      ...prev,
+      sales: prev.sales.map((x) =>
+        x.id === saleId
+          ? {
+              ...x,
+              lines: x.lines.map((l) =>
+                l.id === lineId
+                  ? {
+                      ...l,
+                      // THE CHOICE ONLY. No mint, no status change, no journal
+                      // — those are the finish act's (d29). An abandoned draft
+                      // therefore leaves no copy behind, which is the loss
+                      // retired d20 existed to close.
+                      routedTo: to,
+                      routeChoice: {
+                        grade: opts?.grade,
+                        price: opts?.price,
+                        reason: opts?.reason,
+                        assessedCost: opts?.assessedCost,
+                        authorizedByUserId: mgr?.ok ? opts?.byAuth?.userId : undefined,
+                      },
+                    }
+                  : l,
+              ),
+              log: [
+                ...x.log,
+                {
+                  at: now(),
+                  text: by
+                    ? `Stock disposition chosen → ${to} (${opts?.reason ?? ""}) — authorized by ${by}`
+                    : `Stock disposition chosen → ${to}`,
+                },
+              ],
+            }
+          : x,
+      ),
+    }));
+    return { chosen: true };
+  };
+
+  /** A-28a — turn a stored User id back into a live authorization, or nothing. */
+  const reauthorize = (userId?: string) => {
+    if (!userId) return undefined;
+    const res = authorizeManager(s.users, userId);
+    return res.ok ? res.auth : undefined;
+  };
+
+  const finishReturn: AppContextValue["finishReturn"] = (saleId) => {
+    const sale = s.sales.find((x) => x.id === saleId);
+    // d29 — THE GATE. On the write path, not on a disabled button: E-06-T22
+    // asserts exactly this, for the reason A-82 gives about the re-grade cap.
+    const refusal = returnFinishRefusal(sale);
+    if (refusal) return { refusal };
+
+    // d29 — the effects run inside the finish act. They are applied here,
+    // immediately before the document takes its number, rather than strictly
+    // after the tenders settle: from the counter it is one press, and the
+    // guarantee that matters holds either way — nothing exists on a draft, and
+    // everything exists once the Return is finished. Applying them while the
+    // document is still a draft is also what `routeDocumentRefusal` now
+    // permits, so the write path stays honest about what it is doing.
+    for (const l of sale?.lines ?? []) {
+      if (l.qty < 0 && l.inventoryItemId && l.routedTo && !l.stockRouted) {
+        routeReturnLine(
+          saleId,
+          l.id,
+          l.inventoryItemId,
+          l.routedTo,
+          l.routeChoice?.grade,
+          l.routeChoice?.price,
+          l.routeChoice?.reason,
+          // A-28a — RE-AUTHORIZE from the id rather than replaying a brand the
+          // draft carried. A Manager deactivated between choosing and
+          // finishing is refused here, which is the check §6 puts at the
+          // moment of the write.
+          reauthorize(l.routeChoice?.authorizedByUserId),
+          l.routeChoice?.assessedCost,
+        );
+      }
+    }
+    return { saleNumber: completeSale(saleId) };
+  };
+
   const completeSale: AppContextValue["completeSale"] = (saleId) => {
     const num = s.nextSaleNumber;
     const sale = s.sales.find((x) => x.id === saleId);
+    // E-06 d29 — a Return cannot be finished with a returned line undecided.
+    // Guarded HERE as well as in `finishReturn`, because this is the function
+    // the till calls and a gate only one caller respects is not a gate
+    // (A-4, A-48). Returns 0, which is not a Sale number.
+    if (sale?.isReturn && returnFinishRefusal(sale)) return 0;
     setS((prev) => {
       let giftCards = prev.giftCards;
       let customers = prev.customers;
@@ -2298,14 +2977,72 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
       return { voided: false, outstanding: 0, routedCopies: 0 };
     }
     const outstanding = tenderedTotal(sale);
-    // E-06 d10 — a routed copy is already back on the shelf (or re-graded, or
-    // written off), and putting it back where it came from is a different
-    // operation from voiding the paperwork. Void refuses while any line on a
-    // Return is routed rather than quietly leaving stock in the wrong place.
-    const routedCopies = sale.lines.filter((l) => l.stockRouted).length;
-    if (routedCopies > 0) return { voided: false, outstanding, routedCopies };
+    // E-06 d30 SUPERSEDES d10's blanket refusal. d10 refused while any copy
+    // was routed, which was nearly harmless while routing was optional and
+    // TOTAL once d29 makes every finished Return a routed one — it would have
+    // forbidden every void, and with it every Edit (E-05 d31). So a void now
+    // UN-ROUTES, and refuses only while the copy the routing produced is no
+    // longer as the routing left it. The test and the sentence live in
+    // lib/returnRouting.ts (A-4, A-48).
+    const routedLines = sale.lines.filter((l) => l.stockRouted && l.routedTo);
+    const stockRefusal = routedLines
+      .map((l) =>
+        unrouteRefusal(
+          l.routedTo!,
+          s.inventory.find((i) => i.id === (l.routedItemId ?? l.inventoryItemId)),
+        ),
+      )
+      .find(Boolean);
+    if (stockRefusal) {
+      return { voided: false, outstanding, routedCopies: routedLines.length, refusal: stockRefusal };
+    }
     if (Math.abs(outstanding) > 0.005) return { voided: false, outstanding, routedCopies: 0 };
     setS((prev) => {
+      // E-06 d30 — undo each routing as the mirror of how it was done. A
+      // MINTED copy (a re-grade, or d24's unmatched arrival) is removed and
+      // the pointer on the copy it came from cleared; a copy that went back to
+      // the shelf or was written off returns to `sold`, which is where the
+      // Return found it.
+      const mintedToDrop = new Set(
+        routedLines
+          .filter((l) => l.routedItemId && l.routedItemId !== l.inventoryItemId)
+          .map((l) => l.routedItemId!),
+      );
+      const restoreToSold = new Set(
+        routedLines
+          .filter((l) => !l.routedItemId || l.routedItemId === l.inventoryItemId)
+          .map((l) => l.inventoryItemId!)
+          .filter(Boolean),
+      );
+      // M-07 d8 — a write-off's reason-coded adjustment is reversed by POSTING
+      // FORWARD, dated the void, never by editing the original journal.
+      const writeOffReversals = routedLines
+        .filter((l) => l.routedTo === "writeoff" && l.routeChoice?.reason)
+        .map((l) => {
+          const copy = prev.inventory.find((i) => i.id === l.inventoryItemId);
+          if (!copy?.cost) return null;
+          const built = buildAdjustmentJournal({
+            id: uid("adj"),
+            reason: l.routeChoice!.reason!,
+            cost: copy.cost,
+            businessDate: now(),
+            writtenAt: now(),
+            memo: `Void of return — write-off reversed (${l.routeChoice!.reason})`,
+            accounts: prev.glAccounts,
+            mappings: prev.glMappings,
+            currency: prev.homeCurrency,
+            location: prev.storeDetails.storeId,
+          });
+          // The reversal is the same journal with its sides swapped. Built
+          // fresh rather than looked up, so it cannot be thrown by an original
+          // that was written under a mapping since repointed (M-07 step 5).
+          return {
+            ...built.batch,
+            lines: built.batch.lines.map((jl) => ({ ...jl, debit: jl.credit, credit: jl.debit })),
+          };
+        })
+        .filter(Boolean);
+
       // Only copies this Sale consumed come back. A Return's lines are
       // negative quantities against copies that are already sold — there is
       // nothing to give back, and marking them sellable would put stock on
@@ -2320,7 +3057,19 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
       );
       return {
         ...prev,
+        journals: [...(writeOffReversals as JournalBatch[]), ...prev.journals],
         inventory: prev.inventory
+          // E-06 d30 — a copy minted by the routing is removed outright. It
+          // exists only because the Return happened, and the void says it did
+          // not.
+          .filter((i) => !mintedToDrop.has(i.id))
+          .map((i) =>
+            restoreToSold.has(i.id)
+              ? { ...i, status: "sold" as const, heldByCustomerId: undefined }
+              : mintedToDrop.has(i.regradedIntoItemId ?? "")
+                ? { ...i, regradedIntoItemId: undefined }
+                : i,
+          )
           // An unreconciled oversold copy never became real stock — voiding
           // the Sale that invented it un-invents it, rather than leaving a
           // phantom debt a later receipt would wrongly pay down.
@@ -2354,8 +3103,23 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
           const text =
             "Voided at zero" +
             (returned ? ` — ${returned} cop${returned === 1 ? "y" : "ies"} returned to stock` : "") +
+            (routedLines.length
+              ? ` — ${routedLines.length} returned cop${routedLines.length === 1 ? "y" : "ies"} un-routed`
+              : "") +
             (x.saleNumber ? `${returned ? "," : " —"} Sale number ${x.saleNumber} retained` : "");
-          return { ...x, state: "Void", log: [...x.log, { at: now(), text }] };
+          return {
+            ...x,
+            state: "Void",
+            // E-06 d30 — the routing is undone, so the lines stop claiming it.
+            // E-06 d22 then refuses any attempt to route again, which is what
+            // E-06-T26 holds.
+            lines: x.lines.map((l) =>
+              l.stockRouted
+                ? { ...l, stockRouted: false, routedItemId: undefined }
+                : l,
+            ),
+            log: [...x.log, { at: now(), text }],
+          };
         }),
       };
     });
@@ -2380,17 +3144,66 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
 
   // M-03 — View Subtotal computes the same breakdown as a close without
   // touching anything; it's a pure read.
+  // d21, d22, d25 — the eight sections need the customer list (Account type),
+  // the configured tenders and the chart, so the report can name the GL account
+  // each tender posts to. Gathered once rather than at two call sites, because
+  // View Subtotal and the close must never compute different reports.
+  const breakdownExtras = (): BreakdownExtras => ({
+    customers: s.customers,
+    tenderRows: s.tenders,
+    accounts: s.glAccounts,
+    mappings: s.glMappings,
+    createdAt: now(),
+    // The void count's period. See `BreakdownExtras.sinceClosedAt` — this is
+    // an approximation the decision table has not ratified, not an answer.
+    // A-84: only a LIVE batch counts, a retired one being history.
+    sinceClosedAt: s.closeBatches.filter((b) => !b.undoneAt).map((b) => b.at).sort().slice(-1)[0],
+  });
+
   const viewSubtotal: AppContextValue["viewSubtotal"] = () =>
-    computeDayBreakdown(s.sales, s.records, taxCtxFor(null), s.inventory, s.genres, s.sections);
+    computeDayBreakdown(s.sales, s.records, taxCtxFor(null), s.inventory, s.genres, s.sections, breakdownExtras());
 
   // Total Today's Sales — the close is a real state transition (M-03
   // decision 1): every Current Sale becomes Closed and stops being
   // editable, batched under one identifier so it can be undone as a unit.
   const totalTodaysSales: AppContextValue["totalTodaysSales"] = (by) => {
-    const breakdown = computeDayBreakdown(s.sales, s.records, taxCtxFor(null), s.inventory, s.genres, s.sections);
-    const saleIds = s.sales.filter((sale) => sale.state === "Current" && !sale.isReturn).map((sale) => sale.id);
+    const breakdown = computeDayBreakdown(s.sales, s.records, taxCtxFor(null), s.inventory, s.genres, s.sections, breakdownExtras());
+    // EVERY Current Sale, Returns included. This read `&& !sale.isReturn`,
+    // which contradicted three things at once: M-03 d1 and this function's own
+    // comment above ("every Current Sale becomes Closed"), E-06 d8's returns
+    // flowing into the close, and M-07 d7 as E-06 inherits it — "a Return
+    // produces journal lines like any Sale, through the close it lands in".
+    //
+    // The consequences were not cosmetic. A Return produced NO journal at all,
+    // so M-07 d2's perpetual inventory never ran backwards for a returned copy
+    // and A-82's arithmetic could not close: the write-off route posted
+    // `Dr Damaged / Cr Inventory` against a cost that had never come back out
+    // of cost of goods. And a Return never reached `Closed`, so it stayed
+    // `Current` for ever and E-06 d23's after-the-close routing was
+    // unobservable.
+    //
+    // `buildCloseJournal` was always ready for this — `costPostings` says "a
+    // RETURN always reverses it, whatever E-06 step 6 then does with the copy"
+    // — it was simply never handed one.
+    const saleIds = s.sales.filter((sale) => sale.state === "Current").map((sale) => sale.id);
     const batchId = uid("batch");
-    const batch: CloseBatch = { id: batchId, at: now(), by, saleIds };
+    // M-03 d13 / A-30 — the summary is STORED on the batch, not recomputed
+    // when someone asks for it again. A-83 stamps the schema version beside
+    // it, so a date-range report summing these knows which sections this batch
+    // can answer for and prints the count of those it cannot rather than
+    // zero-filling them.
+    //
+    // A-84 — a new batch id every close, so this summary is written once and
+    // never rewritten. An undo retires the batch below and keeps its summary
+    // exactly as computed here.
+    const batch: CloseBatch = {
+      id: batchId,
+      at: now(),
+      by,
+      saleIds,
+      summary: breakdown as unknown as CloseBatch["summary"],
+      summaryVersion: SUMMARY_SCHEMA_VERSION,
+    };
 
     // M-07 d7 — the journal is a SECOND thing the close produces, written onto
     // the CloseBatch beside the summary M-03 d13 already stores there. A-67
@@ -2459,15 +3272,58 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
   // Undo End of Day — Admin (M-03 decision 4). Restores every Sale in the
   // batch to Current, Sale numbers included; the batch itself stays in
   // history, marked undone, rather than disappearing.
-  const undoEndOfDay: AppContextValue["undoEndOfDay"] = (batchId, by) => {
+  /**
+   * M-08 d11 - why this batch may not be undone, or undefined if it may.
+   *
+   * Exposed so the till can DISABLE and EXPLAIN rather than letting a Manager
+   * press a button that quietly does nothing. The same predicate also guards
+   * the write below, because A-48 is explicit that a bound enforced in the
+   * client is not a bound - the screen reads it to be helpful, the act reads it
+   * to be correct.
+   */
+  const closeUndoRefusalFor: AppContextValue["closeUndoRefusalFor"] = (batchId) => {
+    const batch = s.closeBatches.find((b) => b.id === batchId);
+    if (!batch) return "That batch no longer exists.";
+    return closeUndoRefusal(batch.at.slice(0, 10), s.ledgerSeals, s.ledgerUnseals);
+  };
+
+  const undoEndOfDay: AppContextValue["undoEndOfDay"] = (batchId, byAuth, actor) => {
+    // §6 — an M function resolves the Manager ITSELF, in the same
+    // transaction. The brand proves the check passed when the id was
+    // minted; this proves it still holds now, so a demotion between the
+    // prompt and the write bites (A-28a, A-4, A-48).
+    const mgr = requireManager(s.users, byAuth);
+    if (!mgr.ok) return;
+    const by = mgr.name;
+
     const batch = s.closeBatches.find((b) => b.id === batchId);
     if (!batch || batch.undoneAt) return;
+    // d11 - "nothing may write into a sealed period, BY ANY ROUTE, including
+    // M-03's Undo End of Day, which is the one reversal in this system that
+    // does not post forward."
+    if (closeUndoRefusal(batch.at.slice(0, 10), s.ledgerSeals, s.ledgerUnseals)) return;
+    // M-04 d4 — BOTH names. `by` is the Manager who authorized; the actor is
+    // whoever was at the terminal. This recorded only `by`, so the one surface
+    // that could say who reopened the day named the person who merely allowed
+    // it — while the dialog's own copy promised both were being kept.
+    //
+    // **The Manager stands in as actor when nobody is signed in**, rather than
+    // the till asking twice. §6 puts `p_actor_user_id` on every function and
+    // `p_manager_user_id` only on the manager-only ones, so the actor is the
+    // baseline and the Manager doing this alone is genuinely both. Defaulted
+    // HERE rather than on the screen: `by` is the name re-resolved at the
+    // write, so the stand-in can never be a label the prompt merely displayed.
+    const rec: UndoRecord = { manager: by, actor: actor ?? by, at: now() };
     setS((prev) => ({
       ...prev,
-      closeBatches: prev.closeBatches.map((b) => (b.id === batchId ? { ...b, undoneAt: now(), undoneBy: by } : b)),
+      // A-84 — RETIRED, not deleted and not recomputed. The batch keeps its
+      // id, timestamp, closing User and the summary it computed, and gains the
+      // undo's actor; re-closing writes a new batch rather than rewriting this
+      // one, so a past day's figures can never move.
+      closeBatches: prev.closeBatches.map((b) => (b.id === batchId ? retireCloseBatch(b, rec) : b)),
       sales: prev.sales.map((sale) =>
         batch.saleIds.includes(sale.id)
-          ? { ...sale, state: "Current", batchId: undefined, log: [...sale.log, { at: now(), text: `Batch ${batchId} undone by ${by} — back to Current` }] }
+          ? { ...sale, state: "Current", batchId: undefined, log: [...sale.log, { at: rec.at, text: undoLogText(batchId, rec) }] }
           : sale,
       ),
     }));
@@ -2834,7 +3690,55 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
     grade,
     price,
     reason,
+    byAuth,
+    assessedCost,
   ) => {
+    // A-81, A-28a — the write-off route is manager-only, because routing a
+    // returned copy to *written off* IS adjusting on hand. The rule and its
+    // reasoning live in lib/returnRouting.ts, never here and never in the
+    // screen (A-4, A-48); the store calls the refusal and stores the result.
+    // Resolved here, at the moment of the write, through the same door every
+    // other gated function uses (§6). The write-off route is the only one that
+    // needs it; `routeStockRefusal` decides that, not this line.
+    const mgr = byAuth ? requireManager(s.users, byAuth) : undefined;
+    const by = mgr?.ok ? mgr.name : undefined;
+    const refusal = routeStockRefusal(to, mgr?.ok ? { role: "Manager", active: true, name: by! } : undefined);
+    if (refusal) return { routed: false, refusal };
+
+    // d20, d22 — the DOCUMENT has to allow routing before anything else is
+    // asked. Refused here and not only by hiding the control (A-4, A-48): the
+    // walk that found this reached it on a voided Return through the screen,
+    // and a second caller would reach it whatever the screen renders.
+    const doc = s.sales.find((x) => x.id === saleId);
+    const docRefusal = doc ? routeDocumentRefusal(doc) : "That Return no longer exists.";
+    if (docRefusal) return { routed: false, refusal: docRefusal };
+
+    const soldCopy = s.inventory.find((i) => i.id === itemId);
+    // d24, d27 — was this a disc the shop has no sold record for? The fact was
+    // stamped on the line when it was added and is read back here, never
+    // re-derived: the picked copy's status may since have moved.
+    const returnLine = doc?.lines.find((l) => l.id === lineId);
+    const unmatched = !!returnLine?.unmatchedReturn;
+    // A-82 / E-06 d19 — the re-graded copy's cost is capped at the cost the
+    // sold copy carried. Refused HERE, not by the screen declining to offer a
+    // higher figure, which A-82 says in terms is not a cap.
+    // d26 — an UNMATCHED copy is booked at the REFUND PAID. Nothing ever paid
+    // for it, so there is no cost to inherit, and A-82 does not reach it:
+    // A-82 caps against the cost the SOLD copy carried and here there is no
+    // sold copy. Which is also why the cap is not applied below — there is no
+    // prior figure to cap against, and that is the accepted consequence d26
+    // names as the widest such door in the system.
+    const refundOnLine = Math.abs(returnLine?.price ?? 0);
+    const bookedCost = unmatched
+      ? refundOnLine
+      : to === "regrade"
+        ? (assessedCost ?? soldCopy?.cost ?? 0)
+        : (soldCopy?.cost ?? 0);
+    if (to === "regrade" && !unmatched) {
+      const costRefusal = regradeCostRefusal(bookedCost, soldCopy?.cost ?? 0);
+      if (costRefusal) return { routed: false, refusal: costRefusal };
+    }
+
     const note =
       to === "regrade"
         ? "Re-graded on return — own grade and price (E-06 step 6)"
@@ -2851,7 +3755,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
     // the copy came back over the counter (d2 run backwards). This is what
     // takes it out again, into the reason-coded account rather than leaving it
     // in cost of goods where nobody chose to put it.
-    const item = s.inventory.find((i) => i.id === itemId);
+    const item = soldCopy;
     const adjustment =
       to === "writeoff" && reason && item?.cost
         ? buildAdjustmentJournal({
@@ -2868,37 +3772,158 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
           })
         : null;
 
+    // E-06 d19 / A-82 — where the copy is assessed BELOW what the sold copy
+    // carried, the shortfall is a period cost and posts to its E-04 reason
+    // code. `Damaged` is where M-07 d6 already sends condition losses, and a
+    // re-grade is a condition loss by definition. Assessed at or above the
+    // cap, nothing is stranded and no journal is written.
+    // Nothing to strand on an unmatched line: the shortfall is the difference
+    // between a copy's old cost and its new one, and this copy had no old cost.
+    const shortfall =
+      to === "regrade" && !unmatched ? regradeShortfall(bookedCost, soldCopy?.cost ?? 0) : 0;
+    const regradeAdjustment =
+      to === "regrade" && shortfall > 0
+        ? buildAdjustmentJournal({
+            id: uid("adj"),
+            reason: "Damaged",
+            cost: shortfall,
+            businessDate: now(),
+            writtenAt: now(),
+            memo: `Re-graded on return — booked at ${money(bookedCost)}, down from ${money(soldCopy?.cost ?? 0)}`,
+            accounts: s.glAccounts,
+            mappings: s.glMappings,
+            currency: s.homeCurrency,
+            location: s.storeDetails.storeId,
+          })
+        : null;
+
+    // E-06 d15 — the re-grade MINTS. The copy that sold stays sold, at the
+    // grade it sold at, so "what did this copy sell as" stays answerable; the
+    // disc that came back enters as its own copy. Deliberately not E-04's
+    // *Edit copy*, which edits a grade in place and is still right for a copy
+    // that never left the shelf.
+    // d24 — an UNMATCHED return mints on every route, not just the re-grade.
+    // The copy the Employee picked is a different physical object from the one
+    // on the counter, so it is never mutated: the disc that came in gets its
+    // own InventoryItem, in whatever state step 6 routed it to. d27 puts the
+    // mint here rather than at line-add, so an unassessed copy simply does not
+    // exist yet and the Requirements stay literally true.
+    const mintsForReturn = to === "regrade" || unmatched;
+    const mintedId = mintsForReturn ? uid("item") : "";
+    const minted: InventoryItem | null =
+      mintsForReturn && soldCopy
+        ? {
+            id: mintedId,
+            recordId: soldCopy.recordId,
+            grade: grade ?? soldCopy.grade,
+            price: price ?? soldCopy.price,
+            cost: bookedCost,
+            // d18 — the barcode is minted NOW, because a copy with no code is
+            // unscannable and therefore unsellable, and architecture §6
+            // resolves a scan to exactly one InventoryItem. The STICKER is a
+            // separate act: E-02 puts the label printer at the receiving desk,
+            // and this flow does not get to commit one to every till.
+            internalBarcode: `29${String(s.nextInternalBarcode).padStart(10, "0")}`,
+            labelPending: true,
+            // Whatever step 6 decided. A re-grade puts it on the shelf; an
+            // unmatched copy written off arrives already off the books, which
+            // is the honest record that a disc came in and was discarded.
+            status: statusAfterRoute(to),
+            // d17 — it arrives now. As a distinct copy at a distinct grade it
+            // did not exist before, so A-81's chain reads cleanly: the sold
+            // copy departed, this one arrived. Accepted consequence: E-03 d16's
+            // dead-stock clock restarts.
+            receivedAt: now(),
+            regradedFromItemId: soldCopy.id,
+            conditionNote: note,
+          }
+        : null;
+
     setS((prev) => ({
       ...prev,
+      nextInternalBarcode: prev.nextInternalBarcode + (minted ? 1 : 0),
       ...(adjustment
         ? {
             journals: [adjustment.batch, ...prev.journals],
             reviewFlags: journalFlags(adjustment, `the write-off of a returned copy`, prev.reviewFlags),
           }
         : {}),
-      inventory: prev.inventory.map((i) =>
-        i.id === itemId
-          ? {
-              ...i,
-              status: to === "writeoff" ? "sold" : "sellable",
-              grade: to === "regrade" && grade ? grade : i.grade,
-              price: to === "regrade" && price != null ? price : i.price,
-              conditionNote: note,
-            }
-          : i,
-      ),
+      ...(regradeAdjustment
+        ? {
+            journals: [regradeAdjustment.batch, ...prev.journals],
+            reviewFlags: journalFlags(regradeAdjustment, `the re-grade of a returned copy`, prev.reviewFlags),
+          }
+        : {}),
+      inventory: [
+        ...prev.inventory.map((i) =>
+          i.id === itemId
+            ? mintsForReturn
+              ? // d15, d24 — untouched but for a pointer at what replaced it.
+                // For a re-grade its status, grade and cost are the record of
+                // what actually sold; for an unmatched line it was never the
+                // customer's copy at all, so touching it would be the
+                // mis-identification d24 exists to end.
+                { ...i, regradedIntoItemId: mintedId }
+              : {
+                  ...i,
+                  // A-81 — a written-off copy gets its OWN status,
+                  // `written_off`. See lib/returnRouting.ts.
+                  status: statusAfterRoute(to),
+                  conditionNote: note,
+                }
+            : i,
+        ),
+        ...(minted ? [minted] : []),
+      ],
       sales: prev.sales.map((sale) =>
         sale.id === saleId
           ? {
               ...sale,
               lines: sale.lines.map((l) =>
-                l.id === lineId ? { ...l, stockRouted: true, routedTo: to } : l,
+                l.id === lineId
+                  ? {
+                      ...l,
+                      stockRouted: true,
+                      routedTo: to,
+                      // E-06 d30 — the copy this routing PRODUCED, so a void
+                      // can ask whether it is still as the routing left it.
+                      // For a re-grade or d24's unmatched arrival that is the
+                      // MINTED copy; otherwise the copy on the line.
+                      routedItemId: mintsForReturn ? mintedId : itemId,
+                    }
+                  : l,
               ),
-              log: [...sale.log, { at: now(), text: `Returned copy routed → ${to}` }],
+              log: [
+                ...sale.log,
+                {
+                  at: now(),
+                  // Both names, per A-28a: the Employee holds the Sale, the
+                  // Manager authorized the disposition.
+                  text: by
+                    ? `Returned copy routed → ${to} (${reason}) — authorized by ${by}`
+                    : `Returned copy routed → ${to}`,
+                },
+              ],
             }
           : sale,
       ),
     }));
+
+    // E-06 d21 / E-04 d16 — the mint is the ONE place an Employee can create a
+    // sellable copy at a price of their own choosing, and it was escaping the
+    // guardrail on a technicality: d16's flag fires when a price is EDITED
+    // below cost, and a mint is not an edit. Raised after the write, because
+    // d16 flags rather than blocks — nothing slows at the counter, and what
+    // this restores is the compensating record a permissive design rests on.
+    if (minted && minted.price < minted.cost) {
+      const rec = s.records.find((r) => r.id === minted.recordId);
+      raiseReviewFlag(
+        "below-cost",
+        `Re-graded on return: shelf price ${money(minted.price)} below assessed cost ${money(minted.cost)} for ${rec ? `${rec.artist} — ${rec.title}` : minted.recordId} (${minted.internalBarcode}).`,
+      );
+    }
+
+    return { routed: true };
   };
 
   const toggleProvider = () => setS((prev) => ({ ...prev, providerUp: !prev.providerUp }));
@@ -3158,7 +4183,15 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
   // Manager-only "adjust on hand" (E-04) for when an outstanding oversold
   // copy can't be explained by an incoming shipment and needs to be forced
   // back to zero for the count's own sanity, rather than waiting on receiving.
-  const reconcileOversold: AppContextValue["reconcileOversold"] = (recordId, by) => {
+  const reconcileOversold: AppContextValue["reconcileOversold"] = (recordId, byAuth) => {
+    // §6 — an M function resolves the Manager ITSELF, in the same
+    // transaction. The brand proves the check passed when the id was
+    // minted; this proves it still holds now, so a demotion between the
+    // prompt and the write bites (A-28a, A-4, A-48).
+    const mgr = requireManager(s.users, byAuth);
+    if (!mgr.ok) return 0;
+    const by = mgr.name;
+
     const outstanding = s.inventory.filter((i) => i.recordId === recordId && i.oversold && !i.oversoldReconciledAt);
     if (outstanding.length === 0) return 0;
     const ids = outstanding.map((i) => i.id);
@@ -3284,8 +4317,17 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
     const line = invoice?.lines.find((l) => l.id === lineId);
     if (!invoice || invoiceIsFrozen(invoice, s.paymentBatches, s.batchVoids) || !line) return { blocked: true };
     const itemIds = line.itemIds ?? [];
-    const anySold = itemIds.some((id) => s.inventory.find((i) => i.id === id)?.status === "sold");
-    if (anySold) return { blocked: true };
+    // A line cannot be removed once any copy it minted has LEFT — removing it
+    // deletes those copies, and a departed copy has already been accounted
+    // for somewhere. Asked positively (§5.1, A-81): written off is a
+    // departure exactly as sold is, so a test for `=== "sold"` alone would
+    // have let the line be removed out from under a written-off copy and
+    // deleted the only record of the shrinkage.
+    const anyGone = itemIds.some((id) => {
+      const copy = s.inventory.find((i) => i.id === id);
+      return !!copy && !isPresent(copy);
+    });
+    if (anyGone) return { blocked: true };
 
     setS((prev) => ({
       ...prev,
@@ -3453,7 +4495,14 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
   // Only this locks an Invoice (decision — finalize alone no longer does).
   // Manager-only, per M-05: Accounts Payable settling the balance is what
   // makes the paperwork official.
-  const markInvoicePaid: AppContextValue["markInvoicePaid"] = (invoiceId, by) =>
+  const markInvoicePaid: AppContextValue["markInvoicePaid"] = (invoiceId, byAuth) => {
+    // §6 — an M function resolves the Manager ITSELF, in the same
+    // transaction. The brand proves the check passed when the id was
+    // minted; this proves it still holds now, so a demotion between the
+    // prompt and the write bites (A-28a, A-4, A-48).
+    const mgr = requireManager(s.users, byAuth);
+    if (!mgr.ok) return;
+    const by = mgr.name;
     setS((prev) => ({
       ...prev,
       invoices: prev.invoices.map((iv) =>
@@ -3467,6 +4516,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
           : iv,
       ),
     }));
+  };
 
   // M-05 d27 — THE settlement. One selection, one act, one PaymentBatch.
   //
@@ -3478,7 +4528,13 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
   // Attaching a credit does NOT move the Supplier's balance (d26) — the credit
   // already counted, and attaching only changes what it is attached to. The
   // balance moves by exactly the money that left.
-  const settlePayables: AppContextValue["settlePayables"] = (input, by) =>
+  const settlePayables: AppContextValue["settlePayables"] = (input, byAuth) => {
+    // §6 — an M function resolves the Manager ITSELF, in the same
+    // transaction, so a demotion between the prompt and the write bites
+    // (A-28a, A-4, A-48).
+    const mgr = requireManager(s.users, byAuth);
+    if (!mgr.ok) return;
+    const by = mgr.name;
     setS((prev) => {
       const at = now();
       const targets: PaymentTarget[] = [];
@@ -3671,6 +4727,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
         reviewFlags: journalFlags(journal, `payment ${batch.reference || batch.id}`, prev.reviewFlags),
       };
     });
+  };
 
   // M-05 d22 / d30 — void a PaymentBatch. Whole or not at all, appended never
   // edited, and it NEVER REFUSES: where the settlement emitted a remainder, the
@@ -3681,7 +4738,14 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
   // Nothing un-consumes a credit by writing to it — a credit is consumed by the
   // PRESENCE of a live target (A-37), so voiding the batch releases it with
   // nothing to flip. The same is true of the Invoice's immutability (A-33a).
-  const voidPaymentBatch: AppContextValue["voidPaymentBatch"] = (batchId, by) =>
+  const voidPaymentBatch: AppContextValue["voidPaymentBatch"] = (batchId, byAuth) => {
+    // §6 — an M function resolves the Manager ITSELF, in the same
+    // transaction. The brand proves the check passed when the id was
+    // minted; this proves it still holds now, so a demotion between the
+    // prompt and the write bites (A-28a, A-4, A-48).
+    const mgr = requireManager(s.users, byAuth);
+    if (!mgr.ok) return;
+    const by = mgr.name;
     setS((prev) => {
       const batch = prev.paymentBatches.find((b) => b.id === batchId);
       if (!batch || prev.batchVoids.some((v) => v.batchId === batchId)) return prev;
@@ -3753,6 +4817,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
         reviewFlags: journalFlags(journal, `the void of ${batch.reference || batch.id}`, prev.reviewFlags),
       };
     });
+  };
 
   const payableEntryFor: AppContextValue["payableEntryFor"] = (id) =>
     id ? s.payableEntries.find((e) => e.id === id) : undefined;
@@ -3785,7 +4850,15 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
   // against the Credit that eventually replaced it, say — and clears them
   // against each other. Nothing is deleted or edited beyond the clearing
   // fields; both stay in the ledger as the record of what happened.
-  const clearPayableEntries: AppContextValue["clearPayableEntries"] = (entryIds, by) => {
+  const clearPayableEntries: AppContextValue["clearPayableEntries"] = (entryIds, byAuth) => {
+    // §6 — an M function resolves the Manager ITSELF, in the same
+    // transaction. The brand proves the check passed when the id was
+    // minted; this proves it still holds now, so a demotion between the
+    // prompt and the write bites (A-28a, A-4, A-48).
+    const mgr = requireManager(s.users, byAuth);
+    if (!mgr.ok) return { cleared: false };
+    const by = mgr.name;
+
     const entries = entryIds.map((id) => s.payableEntries.find((e) => e.id === id)).filter((e): e is PayableEntry => !!e);
     if (entries.length < 2 || entries.length !== entryIds.length) return { cleared: false };
     // d46 — cleared is now DERIVED from a clearing naming the entry, so the
@@ -3841,7 +4914,15 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
    * batch's void (d22), and whether the void even does so is an open question
    * in M-05. Un-clearing it here would answer that question by accident.
    */
-  const unclearPayableEntries: AppContextValue["unclearPayableEntries"] = (clearingId, by) => {
+  const unclearPayableEntries: AppContextValue["unclearPayableEntries"] = (clearingId, byAuth) => {
+    // §6 — an M function resolves the Manager ITSELF, in the same
+    // transaction. The brand proves the check passed when the id was
+    // minted; this proves it still holds now, so a demotion between the
+    // prompt and the write bites (A-28a, A-4, A-48).
+    const mgr = requireManager(s.users, byAuth);
+    if (!mgr.ok) return { uncleared: false, reason: mgr.refusal };
+    const by = mgr.name;
+
     const clearing = s.clearings.find((c) => c.id === clearingId);
     const refusal = unclearRefusal(clearing);
     if (refusal || !clearing) return { uncleared: false, reason: refusal };
@@ -3948,7 +5029,12 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
   //                       Invoice is what E-02 d30 counts, and the remainder
   //                       is still wanted.
   //   fully received    → untouched. There is nothing to reverse.
-  const voidPurchaseOrder: AppContextValue["voidPurchaseOrder"] = (poNumber, by) => {
+  const voidPurchaseOrder: AppContextValue["voidPurchaseOrder"] = (poNumber, byAuth) => {
+    // A-54 gates voiding a PurchaseOrder, and §6 has the function resolve the
+    // Manager itself rather than trust the caller.
+    const mgr = requireManager(s.users, byAuth);
+    if (!mgr.ok) return { returned: 0, split: 0, untouched: 0 };
+    const by = mgr.name;
     const onPo = s.pendingOrders.filter((o) => o.poNumber === poNumber);
     if (onPo.length === 0) return { returned: 0, split: 0, untouched: 0 };
 
@@ -4259,6 +5345,16 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
       releaseHoldLine,
       forceUnlockSale,
       acknowledgeReviewFlag,
+      ledgerSaveOpening,
+      ledgerSealOpening,
+      ledgerPost,
+      ledgerSeal,
+      ledgerUnseal,
+      ledgerMarkYearFiled,
+      ledgerReconcile,
+      ledgerIssue,
+      ledgerSuspenseGross,
+      closeUndoRefusalFor,
       reconcileOversold,
       addLog,
       raiseClaim,
@@ -4269,6 +5365,10 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
       reserve,
       setCopyPrice,
       routeReturnLine,
+      chooseReturnRoute,
+      finishReturn,
+      finishReturnBlocked,
+      voidStockRefusal,
       toggleProvider,
       invoiceFor,
       startInvoice,

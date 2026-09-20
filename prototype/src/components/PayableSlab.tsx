@@ -1,6 +1,6 @@
 import { useEffect, useRef } from "react";
 import type { Supplier } from "../data/types";
-import { ledgerRows, type PayablesData } from "../lib/payables";
+import { isOverdue, ledgerRows, type PayablesData } from "../lib/payables";
 import { money } from "../lib/money";
 import { round2 } from "../lib/totals";
 import { ChevronLeft, ChevronRight } from "./Chevrons";
@@ -66,7 +66,11 @@ export function PayableSlab({
 
   const facts = (s: Supplier) => {
     const rows = ledgerRows(s.id, data, suppliers);
-    const overdue = rows.filter((r) => r.overdueBy != null && r.overdueBy > 0 && r.balance > 0.005);
+    // d35/d52 — via isOverdue, so a Prepaid or COD balance is never counted
+    // late here. It feeds the Overdue chip, the sort, the tint, the row key,
+    // the rail badge and the OWED panel figure, which all agreed and were all
+    // wrong together.
+    const overdue = rows.filter((r) => isOverdue(r) && r.balance > 0.005);
     return {
       net: balanceOf(s.id),
       credit: round2(rows.filter((r) => r.role === "credit").reduce((n, r) => n - r.balance, 0)),
@@ -131,12 +135,18 @@ export function PayableSlab({
 
   const row = (s: Supplier, dim?: boolean) => {
     const f = facts(s);
+    // d35 — a Prepaid Supplier carrying a balance says "prepaid — confirm it"
+    // rather than anything implying a bill is due. It sits below overdue and
+    // credit, which are about other suppliers' money, and above plain "owing",
+    // which is what this row wrongly reduced to once it stopped saying "past due".
     const key = f.overdue.length
       ? `${f.worst}d past due`
       : f.credit > 0.005
         ? `${money(f.credit)} credit`
         : f.net > 0.005
-          ? "owing"
+          ? s.paymentTerms === "Prepaid"
+            ? "prepaid — confirm"
+            : "owing"
           : "settled";
     return (
       <button

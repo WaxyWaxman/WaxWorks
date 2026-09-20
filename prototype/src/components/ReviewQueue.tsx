@@ -13,6 +13,10 @@ const KIND_LABEL: Record<ReviewFlagKind, string> = {
   // architecture A-68 — the first kind with no actor. The queue stops meaning
   // "what the staff did" and starts meaning "what wants a look".
   "journal-imbalance": "Journal imbalance",
+  // architecture A-76 — the second. A sealed period no longer recomputes to
+  // what was stored, which means something wrote into a period M-08 d11 says
+  // nothing may write into by any route.
+  "ledger-balance-divergence": "Ledger balance divergence",
 };
 
 // M-04 decision 8 — actions that used to block on a manager override now

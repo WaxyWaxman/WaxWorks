@@ -9,7 +9,7 @@ import { money } from "../lib/money";
 import { genreNameFor, sectionLabelFor } from "../lib/taxonomy";
 import { OversoldList } from "./OversoldList";
 import { stockFacts } from "../lib/stockState";
-import { availableOnHand, backroomCount, heldCount, oversoldCopies } from "../lib/totals";
+import { availableOnHand, backroomCount, heldCount, isPresent, oversoldCopies } from "../lib/totals";
 import { useApp } from "../store/AppStore";
 
 // The titlecard is a view, not a route of its own (E-04 decision 1). Given a
@@ -49,7 +49,11 @@ export function TitlecardPanel({
   const [adjusting, setAdjusting] = useState(false);
 
   if (!record) return <p className="muted">Unknown Record.</p>;
-  const copies = app.inventory.filter((i) => i.recordId === record.id && i.status !== "sold");
+  // Copies still here, asked positively (§5.1, A-81) — see FindSelection for
+  // what `!== "sold"` did to a written-off copy. E-04's own adjust-on-hand
+  // lives on this panel, so a screen that gates shrinkage must not also
+  // display the result of it as stock.
+  const copies = app.inventory.filter((i) => i.recordId === record.id && isPresent(i));
   // One derivation, shared with Find. `stockFacts` already applies M-02 d21's
   // rule that a received line stays on file, so what it reports is the
   // OUTSTANDING quantity rather than what was ordered — counting the latter

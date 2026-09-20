@@ -17,6 +17,7 @@ import {
   batchMoneyPaid,
   clearsToZero,
   creditOn,
+  isOverdue,
   moneyOn,
   type LedgerRow,
   type SettlementPlan,
@@ -179,7 +180,10 @@ function Standing({
   const credits = rows.filter((r) => r.role === "credit");
   const creditTotal = round2(credits.reduce((n, r) => n - r.balance, 0));
   const debits = rows.filter((r) => r.role === "debit" && r.balance > 0.005);
-  const overdue = debits.filter((r) => r.overdueBy != null && r.overdueBy > 0);
+  // d35/d52 — no due date, never overdue. Without this the header said a
+  // Prepaid balance was "past due" six lines above the aged block calling the
+  // same row "Not aged".
+  const overdue = debits.filter(isOverdue);
   const lateSum = round2(overdue.reduce((n, r) => n + r.balance, 0));
   const worst = overdue.length ? Math.max(...overdue.map((r) => r.overdueBy!)) : null;
   const owed = round2(debits.reduce((n, r) => n + r.balance, 0));
@@ -299,10 +303,24 @@ function Standing({
               and that rate lives in M-06, which is not built.
             </div>
           )}
+          {/* d35 answered this. The copy here used to say the question was
+              M-01 d19's to settle, which it never was: d19 deferred it to M-05
+              ("left open in M-05 rather than answered here"), and d35 closed it. */}
           {(supplier.paymentTerms === "Prepaid" || supplier.paymentTerms === "COD") && debits.length > 0 && (
-            <div className="wo-caveat warn">
-              <strong>{supplier.paymentTerms}</strong>, and yet something is outstanding. Whether such a Supplier may
-              carry a balance at all is behaviour M-01 d19 has to answer — shown rather than hidden.
+            <div className="wo-caveat">
+              <strong>{supplier.paymentTerms}</strong> produces no due date (
+              <code>E-02</code> d45), so this balance is <strong>outstanding without ever being overdue</strong> — it
+              ages nowhere (d35) and sits in no bucket (d52).
+              {supplier.paymentTerms === "Prepaid" && (
+                <>
+                  {" "}
+                  What it means is a <strong>prepayment nobody has recorded yet</strong>, not a bill the store still
+                  owes: the money left at ordering, weeks before this Invoice existed. Finalizing never settles it —{" "}
+                  <strong>confirm it</strong>, and the settlement is pre-filled from the Invoice for you to attach a
+                  reference to (d35). Until then the figure above overstates what is owed, which is the cost of
+                  counting it rather than forgetting it.
+                </>
+              )}
             </div>
           )}
         </div>
@@ -730,7 +748,7 @@ function Selection({
                 </div>
                 <div className="m">
                   balance {money(d.balance)}
-                  {d.overdueBy != null && d.overdueBy > 0 ? ` · ${d.overdueBy}d over` : ""}
+                  {isOverdue(d) ? ` · ${d.overdueBy}d over` : ""}
                 </div>
               </div>
               {/* d33 — the credit is shown where it landed, not asked for. */}

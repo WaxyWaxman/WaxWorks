@@ -36,6 +36,7 @@ It shows:
 | **Reserve** | Employee | Creates a **Held** Sale ([E-05](E-05-sell-a-record.md)), prompting for a quantity, or attaches a customer to an existing order line ([M-02](M-02-reorder-inventory.md)). |
 | **Order** | Employee | Raises a pending order line ([M-02](M-02-reorder-inventory.md)). |
 | **Claim** | Employee | Raises a return or credit claim against the supplier Invoice the copy arrived on — see below. |
+| **Adjust on hand** | **Manager** | *Extended by [architecture](../architecture.md) A-81 — the adjustment writes **one movement row per copy**, so the recorded *before and after counts* stop being the only record of what moved and the attribution reaches the copies rather than stopping at the adjustment.* |
 | **Void or amend Invoice** | **Manager** | Inherited from E-02. A **paid** Invoice is immutable ([E-02](E-02-receive-inventory.md) d40) — before that it is corrected in E-02 itself, and **after** it, if the payment that settled it is voided ([M-05](M-05-accounts-payable.md) d22, [architecture](../architecture.md) A-33a): immutability holds only while the Invoice is paid, so reach for an amendment here only while it still is. The amendment is appended as a separate artifact against the original record, never an in-place edit. |
 | **Delete Record** | **Manager** | Removes a catalog Record. Past Sales referencing it are unaffected — line values are snapshotted (E-05 decision 13). |
 
@@ -100,6 +101,37 @@ An optional cross-reference links the two, so a payout can be traced to the copi
 ---
 
 ## Inherited from other flows
+
+**From [E-06](E-06-process-a-return.md) decision 30:**
+
+- **A reason-coded adjustment written by a Return's write-off can be reversed when that Return is voided, and
+  the reversal posts forward.** [E-06](E-06-process-a-return.md) decision 29 makes the write-off route part of
+  finishing a Return, and decision 30 lets a void undo it — the copy returns to `sold` and the adjustment this
+  flow's reason codes carried is reversed by a **new** adjustment dated when the void happened, never by editing
+  the original ([M-07](M-07-chart-of-accounts.md) d8). **Manager-only, because the write-off was**
+  ([architecture](../architecture.md) A-81, A-28a): it moves stock back on hand. **It refuses where the copy is
+  no longer as the routing left it** — sold again, reserved, or adjusted since — and names that copy. *This is
+  the one route by which an adjustment recorded here is undone by an act performed somewhere else*, so a reader
+  of the reason-code history needs to know a reversing pair may originate on a Return rather than on this screen.
+
+**From [E-06](E-06-process-a-return.md) decision 21:**
+
+- **Decision 16's below-cost ReviewFlag now fires from E-06's re-grade as well as from an edit here.**
+  A copy minted by a re-grade is priced by the Employee at the counter, and is the only sellable copy an
+  Employee can create at a price of their choosing. It was escaping the guardrail: the flag fires when a
+  price is *edited* below cost, and a mint is not an edit. It flags rather than blocks, as decision 16
+  does, so the review queue gains rows from the Return counter that previously did not reach it.
+
+**From [E-06](E-06-process-a-return.md) decision 15:**
+
+- **E-06's re-grade is not this flow's *Edit copy*, and the two must not be merged.**
+  **Edit copy** (§"Functions") edits grade, note and price **in place** on one
+  InventoryItem, and stays the right tool for correcting a mistake on a copy still on the
+  shelf. **E-06's re-grade mints a new InventoryItem** and leaves the copy that sold
+  *sold, at the grade it sold at* — the case where one physical disc has been two
+  different things to two different people. This narrows, but does not close, the open
+  question below on *re-grading a copy after it is sellable*: E-06 answers it for a copy
+  coming back over the counter and says nothing about the rest.
 
 **From [M-06](M-06-settings.md):**
 

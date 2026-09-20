@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { useApp } from "../store/AppStore";
 import { resolveInitials, resolutionHint } from "../lib/identify";
 import { passwordAccepted, PASSWORD_MAX } from "../lib/users";
+import { authorizeManager, type ManagerAuth } from "../lib/managerAuth";
 
 // Entering a manager-locked area or authorising a manager-only action.
 //
@@ -37,7 +38,21 @@ export function ManagerAuthorize({
 }: {
   reason: string;
   title?: string;
-  onConfirm: (by: string) => void;
+  /**
+   * `by` is the display name; `managerUserId` is the resolved Manager.
+   *
+   * Architecture §6 — *"the id is what the function trusts and the initials are
+   * what it displays"*, because M-04 d16 releases a deactivated User's initials
+   * to a new hire, so a string alone resolves to a different person over time.
+   * A write path that gates on the string is gating on a label.
+   */
+  /**
+   * `by` is a **ManagerAuth** — a display name proved to belong to an active
+   * Manager (lib/managerAuth.ts). This component is the only place one is
+   * minted, and a gated store function will not accept anything else, so the
+   * compiler refuses a call that skipped the check.
+   */
+  onConfirm: (by: ManagerAuth, managerUserId: string) => void;
   onCancel: () => void;
 }) {
   const app = useApp();
@@ -66,7 +81,12 @@ export function ManagerAuthorize({
     if (!who || !isManager || person) return;
     const t = setTimeout(() => {
       if (who.password) setPending(who.id);
-      else onConfirm(`${who.name} (Manager)`);
+      else {
+        // Minted by the resolver, not formatted here: the role and active
+        // checks live in one place (§6's `manager_authorize`).
+        const res = authorizeManager(app.users, who.id);
+        if (res.ok) onConfirm(res.auth, who.id);
+      }
     }, 140);
     return () => clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -85,7 +105,11 @@ export function ManagerAuthorize({
 
   const submitPw = () => {
     if (!person) return;
-    if (passwordAccepted(person, pw)) onConfirm(`${person.name} (Manager)`);
+    if (passwordAccepted(person, pw)) {
+      const res = authorizeManager(app.users, person.id);
+      if (res.ok) onConfirm(res.auth, person.id);
+      else setPwBad(true);
+    }
     else {
       setPwBad(true);
       setPw("");

@@ -30,10 +30,14 @@ export function VoidSaleModal({
     (l) => l.inventoryItemId && l.qty > 0,
   ).length;
   const took = outstanding > 0;
-  // E-06 d10 — routed stock is already back on the shelf; putting it back is
-  // its own job, not something Void should do silently.
+  // E-06 d30 SUPERSEDES d10 — a void UN-ROUTES rather than refusing, and
+  // refuses only while the copy the routing produced is no longer as the
+  // routing left it. The test is the store's (A-4, A-48); this asks it rather
+  // than counting routed lines, which is what d10 did and what d29 would have
+  // turned into a refusal on every finished Return.
   const routed = live.lines.filter((l) => l.stockRouted);
-  const settled = Math.abs(outstanding) <= 0.005 && routed.length === 0;
+  const stockRefusal = app.voidStockRefusal(live.id);
+  const settled = Math.abs(outstanding) <= 0.005 && !stockRefusal;
 
   const reverse = (type: "Cash" | "Account Balance") =>
     app.addTender(live.id, {
@@ -98,13 +102,23 @@ export function VoidSaleModal({
           </>
         ) : (
           <>
-            {routed.length > 0 && (
+            {stockRefusal && (
               <div className="callout warn">
-                {routed.length} returned cop
-                {routed.length === 1 ? "y has" : "ies have"} already been routed
-                — {routed.map((l) => l.routedTo).join(", ")}. Putting stock back
-                where it came from is its own job, so this Return can't be
-                voided while that stands.
+                {/* d30 — the store's own sentence, which NAMES THE COPY and
+                    what happened to it. "A copy is routed" told a counter
+                    nothing it could act on. */}
+                {stockRefusal}
+              </div>
+            )}
+
+            {!stockRefusal && routed.length > 0 && (
+              <div className="callout">
+                {/* d30 — what the void is about to undo, said before it is
+                    done. A re-grade's minted copy goes; a copy that went back
+                    to the shelf returns to sold. */}
+                Voiding this return will un-route {routed.length} cop
+                {routed.length === 1 ? "y" : "ies"} —{" "}
+                {routed.map((l) => l.routedTo).join(", ")}.
               </div>
             )}
 

@@ -5,6 +5,8 @@ import { Modal } from "./Modal";
 import type { JournalBatch, Sale } from "../data/types";
 import type { DayBreakdown } from "../lib/dayBreakdown";
 import { money } from "../lib/money";
+import { DayReport, RangeReportView } from "./DayReport";
+import { computeRangeReport, presetRange, type RangeReport } from "../lib/rangeReport";
 import { resolveScan } from "../lib/resolve";
 import { saleTotals } from "../lib/totals";
 import { datesIn, isImbalanced } from "../lib/journal";
@@ -301,7 +303,12 @@ export function SearchModal({ onClose }: { onClose: () => void }) {
 
 export function OtherFunctionsModal({ onClose }: { onClose: () => void }) {
   const app = useApp();
-  const [undoing, setUndoing] = useState<string | null>(null);
+  // The batch awaiting a Manager, and whoever holds the session — `undefined`
+  // when nobody does, which is not a gap: the store then records the
+  // authorizing Manager as the actor too, because with no session open they
+  // are the person standing at the terminal. M-04 d4 gets both names either
+  // way, and the till asks once rather than twice.
+  const [undoing, setUndoing] = useState<{ batchId: string; actor?: string } | null>(null);
   const withActor = useActor();
   const [breakdown, setBreakdown] = useState<{
     closing: boolean;
@@ -314,25 +321,51 @@ export function OtherFunctionsModal({ onClose }: { onClose: () => void }) {
       ambiguousTenders: string[];
     };
   } | null>(null);
+  // d27 — the range report is its own view over the same eight sections minus
+  // the listing. Separate state from `breakdown` because it is a different
+  // scope, not a different rendering of the batch in flight.
+  const [range, setRange] = useState<RangeReport | null>(null);
+  // A-84 — a retired batch is history: it keeps its summary and nothing sums
+  // it, and it is not offered for undo a second time.
   const openBatches = app.closeBatches.filter((b) => !b.undoneAt);
 
-  if (breakdown) {
-    if (undoing)
+  // FIRST, above every other view. Undo is reached from the Other Functions
+  // list, where neither `range` nor `breakdown` is set — so a branch nested
+  // under one of those never renders, the button does nothing, and the
+  // pending batch then surfaces this dialog on whatever view opens next.
+  // Cancelling or confirming clears `undoing` and drops back to the list
+  // underneath.
+  if (undoing) {
     return (
       <ManagerAuthorize
         title="Undo End of Day — manager only"
-        reason="Reopens settled takings: the batch's Sales return to Current (M-03 d4). Manager-only under architecture A-28a."
+        reason={
+          "Reopens settled takings: the batch's Sales return to Current (M-03 d4). Manager-only under architecture A-28a." +
+          (undoing.actor
+            ? ` Recorded against ${undoing.actor}, whose session this does not replace (M-04 d3, d4).`
+            : " Nobody is signed in, so this is recorded against you alone (M-04 d4).")
+        }
         onConfirm={(by) => {
-          app.undoEndOfDay(undoing, by);
+          app.undoEndOfDay(undoing.batchId, by, undoing.actor);
           setUndoing(null);
         }}
         onCancel={() => setUndoing(null)}
       />
     );
+  }
 
-  return (
+  if (range) {
+    return (
+      <Modal title={`Sales — ${range.from} to ${range.to}`} onClose={() => setRange(null)}>
+        <RangeReportView data={range} />
+      </Modal>
+    );
+  }
+
+  if (breakdown) {
+    return (
       <Modal title={breakdown.closing ? "Today's Sales — Totalled" : "Subtotal"} onClose={onClose}>
-        <BreakdownView data={breakdown.data} />
+        <DayReport data={breakdown.data} />
         {breakdown.closing && (
           <div className="callout ok" style={{ marginTop: "var(--sp-3)" }}>
             Current Sales moved to Closed. Undo from Other Functions if needed.
@@ -365,6 +398,24 @@ export function OtherFunctionsModal({ onClose }: { onClose: () => void }) {
               Total Today's Sales
             </button>
           </div>
+          {/* d27 — the SECOND entry point. A read: it closes nothing, and it
+              sums closed batches, so the batch in flight is invisible to it.
+              That is why View Subtotal stays beside it rather than being
+              replaced by it. */}
+          <div className="card-body btn-row" style={{ paddingTop: 0 }}>
+            {(["this-month", "last-month", "ytd"] as const).map((preset) => (
+              <button
+                key={preset}
+                className="btn"
+                onClick={() => {
+                  const { from, to } = presetRange(preset, new Date());
+                  setRange(computeRangeReport(app.closeBatches, from, to, new Date().toISOString()));
+                }}
+              >
+                {preset === "this-month" ? "This month" : preset === "last-month" ? "Last month" : "Year to date"}
+              </button>
+            ))}
+          </div>
           <div className="card-body xsmall muted" style={{ paddingTop: 0 }}>
             Total Today's Sales moves every Current Sale to Closed — no longer editable except via
             Undo End of Day below (M-03).
@@ -375,22 +426,48 @@ export function OtherFunctionsModal({ onClose }: { onClose: () => void }) {
           <div className="card-head">Undo End of Day (Admin)</div>
           <div className="card-body stack">
             {openBatches.length === 0 && <p className="small muted">No batches to undo.</p>}
-            {openBatches.map((b) => (
-              <div key={b.id} className="row" style={{ justifyContent: "space-between" }}>
-                <span className="small">
-                  Batch <span className="mono">{b.id}</span> — {b.saleIds.length} Sale
-                  {b.saleIds.length === 1 ? "" : "s"} — {b.at} by {b.by}
-                </span>
-                <button
-                  className="btn sm danger"
-                  // Manager-only (A-28a, M-03 d4) and the last one in the
-                  // prototype with no gate — it reopens settled takings.
-                  onClick={() => setUndoing(b.id)}
-                >
-                  Undo
-                </button>
-              </div>
-            ))}
+            {openBatches.map((b) => {
+              // M-08 d11 — "nothing may write into a sealed period, BY ANY
+              // ROUTE, including M-03's Undo End of Day, which is the one
+              // reversal in this system that does not post forward." Every
+              // other correction appends a dated entry (M-07 d8); this one
+              // reaches back and restates the day.
+              //
+              // The predicate is the LEDGER's and lives in lib/ledgerPeriods.ts.
+              // Read here to disable and explain, and read again inside
+              // undoEndOfDay to refuse — A-48: a bound enforced in the client
+              // is not a bound, so the screen being helpful is not the guard.
+              const sealedWhy = app.closeUndoRefusalFor(b.id);
+              return (
+                <div key={b.id} className="stack">
+                  <div className="row" style={{ justifyContent: "space-between" }}>
+                    <span className="small">
+                      Batch <span className="mono">{b.id}</span> — {b.saleIds.length} Sale
+                      {b.saleIds.length === 1 ? "" : "s"} — {b.at} by {b.by}
+                    </span>
+                    <button
+                      className="btn sm danger"
+                      // Manager-only (A-28a, M-03 d4) — it reopens settled takings.
+                      // Reads the session directly rather than going through
+                      // `withActor`: that helper prompts when nobody is signed
+                      // in, which would ask for initials twice for one act. The
+                      // Manager about to authorize IS the actor in that case,
+                      // so there is nothing a first prompt could learn.
+                      disabled={sealedWhy !== undefined}
+                      onClick={() =>
+                        setUndoing({
+                          batchId: b.id,
+                          actor: app.sessionUser ? `${app.sessionUser.name} (${app.sessionUser.role})` : undefined,
+                        })
+                      }
+                    >
+                      Undo
+                    </button>
+                  </div>
+                  {sealedWhy && <p className="wo-caveat warn small">{sealedWhy}</p>}
+                </div>
+              );
+            })}
           </div>
         </div>
       </div>
@@ -474,167 +551,6 @@ function JournalNotice({
           deposits</em>, and that reconciliation is not reachable until the till offers the configured tenders. Raised
           against E-05.
         </p>
-      )}
-    </div>
-  );
-}
-
-function BreakdownView({ data }: { data: DayBreakdown }) {
-  return (
-    <div className="stack">
-      <table className="data">
-        <tbody>
-          <tr>
-            <td className="muted">Transactions</td>
-            <td className="num">{data.transactionCount}</td>
-          </tr>
-          <tr>
-            <td className="muted">Gross sales</td>
-            <td className="num">{money(data.grossSales)}</td>
-          </tr>
-          <tr>
-            <td className="muted">Returns</td>
-            <td className="num">{money(data.returnsAmount)}</td>
-          </tr>
-          <tr>
-            <td className="muted">Net sales</td>
-            <td className="num">
-              <strong>{money(data.netSales)}</strong>
-            </td>
-          </tr>
-        </tbody>
-      </table>
-
-      <div className="card">
-        <div className="card-head">By Section</div>
-        <div className="card-body" style={{ padding: 0 }}>
-          <table className="data">
-            <tbody>
-              {data.bySection.map((s) => (
-                <tr key={s.label}>
-                  <td>{s.label}</td>
-                  <td className="num">{money(s.amount)}</td>
-                </tr>
-              ))}
-              {data.bySection.length === 0 && (
-                <tr>
-                  <td className="small muted">Nothing sold.</td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
-      </div>
-
-      <div className="card">
-        <div className="card-head">By Tender</div>
-        <div className="card-body" style={{ padding: 0 }}>
-          <table className="data">
-            <tbody>
-              {data.byTender.map((t) => (
-                <tr key={t.label}>
-                  <td>{t.label}</td>
-                  <td className="num">{money(t.amount)}</td>
-                </tr>
-              ))}
-              {/* Money through the tenders that was not a sale, so this
-                  column can be reconciled against net sales rather than
-                  quietly disagreeing with it (M-03 d14). */}
-              {data.giftCardsLoaded !== 0 && (
-                <tr>
-                  <td className="muted">
-                    of which gift cards loaded
-                    <div className="xsmall muted">money in, not a sale — a balance the store now owes</div>
-                  </td>
-                  <td className="num muted">{money(data.giftCardsLoaded)}</td>
-                </tr>
-              )}
-              {/* M-03 d16 — the day's cash movement, net of what left the
-                  drawer. A subtotal beneath the movements rather than one of
-                  them, because d14 keeps every movement in the column above
-                  and this is the figure you count against.
-
-                  NOT a drawer figure, and the wording has to keep saying so:
-                  this flow holds no opening float and runs no
-                  counted-versus-expected comparison, so what it can report is
-                  how much cash MOVED, never how much is in the till. */}
-              {data.cashNet !== null && (
-                <tr>
-                  <td>
-                    <strong>Cash, net</strong>
-                    <div className="xsmall muted">
-                      what the drawer took less what left it — no float, so this is the day's movement rather than
-                      what is in the till
-                    </div>
-                  </td>
-                  <td className="num">
-                    <strong>{money(data.cashNet)}</strong>
-                  </td>
-                </tr>
-              )}
-              {data.byTender.length === 0 && (
-                <tr>
-                  <td className="small muted">Nothing tendered.</td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
-      </div>
-
-      <div className="card">
-        <div className="card-head">Tax</div>
-        <div className="card-body" style={{ padding: 0 }}>
-          <table className="data">
-            <tbody>
-              {data.byTaxLine.map((t) => (
-                <tr key={t.name}>
-                  <td>{t.name}</td>
-                  <td className="num">{money(t.amount)}</td>
-                </tr>
-              ))}
-              {data.byTaxLine.length === 0 && (
-                <tr>
-                  <td className="small muted">No tax collected.</td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
-      </div>
-
-      <div className="card">
-        <div className="card-head">Movements</div>
-        <div className="card-body small stack">
-          <div>Voids: {data.voidCount}</div>
-          <div>Holds created: {data.holdsCreatedCount}</div>
-          <div>Holds cancelled: {data.holdsCancelledCount}</div>
-          {data.payouts.map((p, i) => (
-            <div key={i} className="xsmall muted">
-              Pay-out {p.saleLabel} — {money(p.amount)} — {p.note}
-            </div>
-          ))}
-        </div>
-      </div>
-
-      {data.belowMin.length > 0 && (
-        <div className="card">
-          <div className="card-head">Stock position — below minimum</div>
-          <div className="card-body" style={{ padding: 0 }}>
-            <table className="data">
-              <tbody>
-                {data.belowMin.map((r) => (
-                  <tr key={r.recordId}>
-                    <td className="small">{r.label}</td>
-                    <td className="num small">
-                      {r.onHand} / {r.minOnHand}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
       )}
     </div>
   );

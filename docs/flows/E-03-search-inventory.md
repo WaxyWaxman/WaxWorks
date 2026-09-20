@@ -51,6 +51,15 @@ A scanned barcode short-circuits to resolution rather than keyword search: a man
 
 ## Inherited from other flows
 
+**From [E-06](E-06-process-a-return.md) decision 17:**
+
+- **A re-graded returned copy restarts decision 16's dead-stock clock.** Re-grading mints
+  a **new** InventoryItem ([E-06](E-06-process-a-return.md) decision 15) dated at the
+  moment of re-grade, so a copy that sat unsold for a year reads as stock that arrived
+  today once it has been sold and taken back. E-06 accepts this knowingly — a returned
+  copy is, for reorder purposes, a fresh proposition — but anything here that reasons
+  from *how long has this sat* is reading a clock that a return resets.
+
 - **The three-track frame is [E-05](E-05-sell-a-record.md) d29's**, adopted here by decision 14. The result slab retracts to a strip, the Record and its copies hold the middle, and the stock answer is a sticky right-hand track — the same shape [E-02](E-02-receive-inventory.md) d38, [E-06](E-06-process-a-return.md) d9, [E-07](E-07-manage-customers.md) d17 and [M-01](M-01-supplier-margin.md) d12 take. Find does not own it and should not diverge from it.
 
 **From [M-06](M-06-settings.md):**

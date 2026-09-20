@@ -1,6 +1,8 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import type { ManagerAuth } from "../lib/managerAuth";
 import { useNavigate, useParams } from "react-router-dom";
 import { ManagerAuthorize } from "../components/ManagerAuthorize";
+import { Modal } from "../components/Modal";
 import { SpecNote } from "../components/SpecNote";
 import type {
   CurrencyRow,
@@ -13,7 +15,7 @@ import type {
 import { genreNameFor, sectionLabelFor } from "../lib/taxonomy";
 import { unmappedTagReport } from "../lib/genreMap";
 import { useApp, type SettingsWriteResult } from "../store/AppStore";
-import { taxTypeUseCount, resolveLineTax } from "../lib/tax";
+import { taxTypeUseCount, resolveLineTax, taxRateAt } from "../lib/tax";
 import { money } from "../lib/money";
 
 // M-06 Settings, on the till's three tracks: the group you are in, the editor,
@@ -57,7 +59,7 @@ const GROUPS: { key: GroupKey; tile: string; label: string; blurb: string }[] = 
 export function Settings() {
   const nav = useNavigate();
   const { group } = useParams();
-  const [authorisedBy, setAuthorisedBy] = useState<string | null>(null);
+  const [authorisedBy, setAuthorisedBy] = useState<ManagerAuth | null>(null);
   const [refusal, setRefusal] = useState<string | null>(null);
 
   const active = (GROUPS.find((g) => g.key === group)?.key ?? "sections") as GroupKey;
@@ -111,7 +113,7 @@ export function Settings() {
       <section className="cust-main">
         <div className="cust-head">
           <h2>{GROUPS.find((g) => g.key === active)?.label}</h2>
-          <span className="small muted">Authorised by {authorisedBy}</span>
+          <span className="small muted">Authorised by {authorisedBy.name}</span>
         </div>
         <div className="cust-scroll">
           <div className="stack">
@@ -135,7 +137,7 @@ export function Settings() {
 
 // ---------------------------------------------------------------------------
 
-function SectionsEditor({ by, onRun }: { by: string; onRun: (r: SettingsWriteResult) => boolean }) {
+function SectionsEditor({ by, onRun }: { by: ManagerAuth; onRun: (r: SettingsWriteResult) => boolean }) {
   const app = useApp();
   const [draft, setDraft] = useState<SectionRow | null>(null);
 
@@ -259,7 +261,7 @@ function Flag({ on, onChange }: { on: boolean; onChange: (v: boolean) => void })
 // M-06 d12, d19, d32 — the shop's own taxonomy. Finer than a Section, and the
 // thing a Record actually stores: its Section is derived from the parent here
 // (d31), and its product tax code is read from here at the scan (d12).
-function GenresEditor({ by, onRun }: { by: string; onRun: (r: SettingsWriteResult) => boolean }) {
+function GenresEditor({ by, onRun }: { by: ManagerAuth; onRun: (r: SettingsWriteResult) => boolean }) {
   const app = useApp();
   const [draft, setDraft] = useState<Genre | null>(null);
 
@@ -454,7 +456,7 @@ function GenresEditor({ by, onRun }: { by: string; onRun: (r: SettingsWriteResul
 // the Section follows from the genre's required parent and is never guessed,
 // which is what makes an import able to put a Record on the wrong shelf and
 // unable to put it in the wrong Section.
-function GenreMapEditor({ by, onRun }: { by: string; onRun: (r: SettingsWriteResult) => boolean }) {
+function GenreMapEditor({ by, onRun }: { by: ManagerAuth; onRun: (r: SettingsWriteResult) => boolean }) {
   const app = useApp();
   const mappable = app.genres.filter((g) => g.active && !g.internal);
   const unmapped = unmappedTagReport(app.records, app.genreMap);
@@ -567,7 +569,7 @@ function GenreMapEditor({ by, onRun }: { by: string; onRun: (r: SettingsWriteRes
                 <td>
                   <select
                     value=""
-                    onChange={(e) => e.target.value && onRun(app.addMapRow(u.tag, e.target.value, by))}
+                    onChange={(e) => e.target.value && onRun(app.addMapRow(u.tag, e.target.value, by.name))}
                   >
                     <option value="">Choose a genre…</option>
                     {mappable.map((g) => (
@@ -588,7 +590,7 @@ function GenreMapEditor({ by, onRun }: { by: string; onRun: (r: SettingsWriteRes
 
 // ---------------------------------------------------------------------------
 
-function TendersEditor({ by, onRun }: { by: string; onRun: (r: SettingsWriteResult) => boolean }) {
+function TendersEditor({ by, onRun }: { by: ManagerAuth; onRun: (r: SettingsWriteResult) => boolean }) {
   const app = useApp();
   const save = (row: TenderRow) => onRun(app.upsertTender(row, by));
 
@@ -640,7 +642,7 @@ function TendersEditor({ by, onRun }: { by: string; onRun: (r: SettingsWriteResu
 
 // ---------------------------------------------------------------------------
 
-function CurrenciesEditor({ by, onRun }: { by: string; onRun: (r: SettingsWriteResult) => boolean }) {
+function CurrenciesEditor({ by, onRun }: { by: ManagerAuth; onRun: (r: SettingsWriteResult) => boolean }) {
   const app = useApp();
   const save = (row: CurrencyRow) => onRun(app.upsertCurrency(row, by));
 
@@ -705,7 +707,7 @@ function CurrenciesEditor({ by, onRun }: { by: string; onRun: (r: SettingsWriteR
 
 // ---------------------------------------------------------------------------
 
-function StoreSettingsEditor({ by }: { by: string }) {
+function StoreSettingsEditor({ by }: { by: ManagerAuth }) {
   const app = useApp();
   const st = app.storeSettings;
   return (
@@ -816,7 +818,7 @@ function StoreSettingsEditor({ by }: { by: string }) {
 
 // ---------------------------------------------------------------------------
 
-function StoreDetailsEditor({ by }: { by: string }) {
+function StoreDetailsEditor({ by }: { by: ManagerAuth }) {
   const app = useApp();
   const d = app.storeDetails;
   const set = (k: Parameters<typeof app.setStoreDetail>[0], v: string | boolean) =>
@@ -897,8 +899,16 @@ function StoreDetailsEditor({ by }: { by: string }) {
 
 // ---------------------------------------------------------------------------
 
-function TaxEditor({ by, onRun }: { by: string; onRun: (r: SettingsWriteResult) => boolean }) {
+// A rate is stored as parts per million (A-47), because QST is 9.975% and
+// basis points could not hold it. Rendering it as a percent by dividing twice
+// reintroduces exactly the float noise the integer was chosen to avoid —
+// 9.975 comes back as 9.975000000000001 — so format from the integer.
+const pct = (ppm: number): string => String(Math.round(ppm) / 10000);
+
+function TaxEditor({ by, onRun }: { by: ManagerAuth; onRun: (r: SettingsWriteResult) => boolean }) {
   const app = useApp();
+  const [scheduling, setScheduling] = useState(false);
+  const today = new Date().toISOString().slice(0, 10);
 
   return (
     <>
@@ -927,8 +937,6 @@ function TaxEditor({ by, onRun }: { by: string; onRun: (r: SettingsWriteResult) 
             <th>Code</th>
             <th>Name</th>
             <th>Rate %</th>
-            <th>Pending %</th>
-            <th>From</th>
             <th>Registration</th>
             <th>In use</th>
           </tr>
@@ -938,43 +946,38 @@ function TaxEditor({ by, onRun }: { by: string; onRun: (r: SettingsWriteResult) 
             <tr key={t.code}>
               <td className="mono">{t.code}</td>
               <td>{t.name}</td>
+              {/* d66 — the rate IN FORCE, not the figure stored beside it.
+                  A-58 makes the rate a function of time, so a queued change
+                  takes effect on its date with no write at all and `ratePpm`
+                  lags until something next edits this type. Reading through
+                  `taxRateAt` is what stops the column saying 5% while every
+                  Sale charges 10%. Editing it is still an edit of the stored
+                  rate, which `taxTypeWrite` treats as the explicit intent it
+                  is (M-06 d52). */}
               <td>
                 <input
                   className="mini"
-                  defaultValue={t.ratePpm / 10000}
+                  aria-label={`Rate for ${t.name}`}
+                  // KEYED ON THE RATE IN FORCE. The field is uncontrolled, so
+                  // `defaultValue` is read once at mount and never again — and
+                  // a queued change takes effect with no write (A-58), so
+                  // nothing else would remount it. Without this the column went
+                  // on reading 5% the moment the change landed, which is the
+                  // divergence d66 exists to close rather than reproduce.
+                  key={taxRateAt(t, today)}
+                  defaultValue={pct(taxRateAt(t, today) * 1_000_000)}
                   onBlur={(e) =>
                     onRun(app.upsertTaxType({ ...t, ratePpm: Math.round(Number(e.target.value) * 10000) }, by))
                   }
                 />
-              </td>
-              <td>
-                <input
-                  className="mini"
-                  defaultValue={t.pendingRatePpm !== undefined ? t.pendingRatePpm / 10000 : ""}
-                  placeholder="—"
-                  onBlur={(e) =>
-                    onRun(
-                      app.upsertTaxType(
-                        {
-                          ...t,
-                          pendingRatePpm: e.target.value ? Math.round(Number(e.target.value) * 10000) : undefined,
-                          pendingFrom: e.target.value ? t.pendingFrom ?? "" : undefined,
-                        },
-                        by,
-                      ),
-                    )
-                  }
-                />
-              </td>
-              <td>
-                <input
-                  className="mini"
-                  defaultValue={t.pendingFrom ?? ""}
-                  placeholder="YYYY-MM-DD"
-                  onBlur={(e) =>
-                    onRun(app.upsertTaxType({ ...t, pendingFrom: e.target.value || undefined }, by))
-                  }
-                />
+                {/* Badged only while the change is still TO COME. An elapsed
+                    one is the rate in force and is already the figure above;
+                    calling it pending would be a second, wrong answer. */}
+                {t.pendingFrom && t.pendingRatePpm !== undefined && t.pendingFrom > today && (
+                  <span className="badge warn" style={{ marginLeft: 6 }}>
+                    {pct(t.pendingRatePpm)}% from {t.pendingFrom}
+                  </span>
+                )}
               </td>
               <td>
                 <input
@@ -998,11 +1001,25 @@ function TaxEditor({ by, onRun }: { by: string; onRun: (r: SettingsWriteResult) 
           ))}
         </tbody>
       </table>
-      <p className="small muted">
-        A pending change needs <strong>both</strong> a rate and the date it starts. Only one can be
-        queued: a second replaces it, and a pending change whose date has passed is promoted into
-        the current rate first, so an elapsed one is never silently dropped (d52).
-      </p>
+      <div className="row" style={{ justifyContent: "space-between", alignItems: "center" }}>
+        <p className="small muted" style={{ margin: 0 }}>
+          A legislated change is entered <strong>when it is announced</strong> and lands by the
+          clock (d52). One queued change per type: a second replaces it, and one whose date has
+          passed is promoted into the rate in force first, so an elapsed one is never silently
+          dropped.
+        </p>
+        {/* d66 — off the table and behind a button. Two columns stood dark for
+            an event that reaches a given type perhaps once in years, and the
+            dialog also submits the rate and the date TOGETHER, which the two
+            separate saves could not: a new rate paired with an old, elapsed
+            date read as in force that instant. */}
+        <button className="btn sm" onClick={() => setScheduling(true)}>
+          Schedule tax change
+        </button>
+      </div>
+      {scheduling && (
+        <ScheduleTaxChange by={by} onRun={onRun} onClose={() => setScheduling(false)} />
+      )}
       <NewTaxType by={by} onRun={onRun} />
 
       <h3>Product tax codes</h3>
@@ -1098,7 +1115,125 @@ function TaxEditor({ by, onRun }: { by: string; onRun: (r: SettingsWriteResult) 
 
 // Adding a tax type. Nothing is ever deleted (d9) — a type that stops
 // applying is deactivated, because cells and completed Sales reference it.
-function NewTaxType({ by, onRun }: { by: string; onRun: (r: SettingsWriteResult) => boolean }) {
+// M-06 d66, d67 — scheduling a rate change, off the table and in one act.
+//
+// WHY A DIALOG AND NOT TWO COLUMNS. A legislated change reaches a given type
+// perhaps once in years, and the columns stood dark the rest of the time. d13
+// settles that screen shape is this flow's to choose: "storage shape and screen
+// shape are decoupled deliberately". A-58 fixes the storage and `tax_rate_at`,
+// not how a Manager enters one.
+//
+// AND IT FIXES A REAL DEFECT, not just the clutter. The columns saved the rate
+// and the date SEPARATELY, so between the two writes a newly typed rate was
+// paired with whatever date was already there — and where that date had passed,
+// the half-entered pair read as in force that instant and the next save promoted
+// it. Queueing 12% for December on top of an elapsed 10% banked 12% as the rate
+// in force, a figure nobody typed. Here the pair is submitted together and the
+// case cannot arise.
+function ScheduleTaxChange({
+  by,
+  onRun,
+  onClose,
+}: {
+  by: ManagerAuth;
+  onRun: (r: SettingsWriteResult) => boolean;
+  onClose: () => void;
+}) {
+  const app = useApp();
+  const today = new Date().toISOString().slice(0, 10);
+  const [code, setCode] = useState(app.taxTypes[0]?.code ?? "");
+  const type = app.taxTypes.find((t) => t.code === code);
+  // A change still to come. An ELAPSED one is the rate in force and is not
+  // offered for editing here — d52 promotes it, and clearing must never be a
+  // way to unwind a change that has already landed (d67).
+  const queued = type?.pendingFrom && type.pendingRatePpm !== undefined && type.pendingFrom > today;
+  const [rate, setRate] = useState("");
+  const [from, setFrom] = useState("");
+
+  // Re-read the fields when the type changes, so the dialog shows what THAT
+  // type has queued rather than what the last one did.
+  useEffect(() => {
+    setRate(queued ? pct(type!.pendingRatePpm!) : "");
+    setFrom(queued ? type!.pendingFrom! : "");
+  }, [code]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const save = () => {
+    if (!type) return;
+    if (!rate.trim() || !from.trim()) return;
+    if (
+      onRun(
+        app.upsertTaxType(
+          { ...type, pendingRatePpm: Math.round(Number(rate) * 10000), pendingFrom: from },
+          by,
+        ),
+      )
+    )
+      onClose();
+  };
+
+  // d67 — clearing, which d52 never provided: an announced change that is
+  // deferred or repealed had no way out but queueing a rate nobody believed in.
+  const clear = () => {
+    if (!type) return;
+    if (
+      onRun(
+        app.upsertTaxType({ ...type, pendingRatePpm: undefined, pendingFrom: undefined }, by),
+      )
+    )
+      onClose();
+  };
+
+  return (
+    <Modal
+      title="Schedule tax change"
+      onClose={onClose}
+      foot={
+        <>
+          <button className="btn ghost" onClick={onClose}>
+            Cancel
+          </button>
+          {queued && (
+            <button className="btn" onClick={clear}>
+              Clear scheduled change
+            </button>
+          )}
+          <button className="btn primary" disabled={!rate.trim() || !from.trim()} onClick={save}>
+            {queued ? "Replace" : "Schedule"}
+          </button>
+        </>
+      }
+    >
+      <div className="stack">
+        <label className="field">
+          <span>Tax type</span>
+          <select value={code} onChange={(e) => setCode(e.target.value)}>
+            {app.taxTypes.map((t) => (
+              <option key={t.code} value={t.code}>
+                {t.code} · {t.name} — {pct(taxRateAt(t, today) * 1_000_000)}% now
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="field">
+          <span>New rate %</span>
+          <input value={rate} onChange={(e) => setRate(e.target.value)} placeholder="e.g. 6" />
+        </label>
+        <label className="field">
+          <span>Takes effect</span>
+          <input value={from} onChange={(e) => setFrom(e.target.value)} placeholder="YYYY-MM-DD" />
+        </label>
+        <p className="small muted">
+          Both are required (d52). Only one change can be queued per type — this{" "}
+          {queued ? "replaces the one already scheduled" : "is the only one"}. A change whose date
+          has already passed is promoted into the rate in force before a new one is accepted, so an
+          elapsed one is never silently dropped.
+        </p>
+      </div>
+    </Modal>
+  );
+}
+
+function NewTaxType({ by, onRun }: { by: ManagerAuth; onRun: (r: SettingsWriteResult) => boolean }) {
   const app = useApp();
   const [open, setOpen] = useState(false);
   const [code, setCode] = useState("");
@@ -1167,7 +1302,7 @@ function NewTaxType({ by, onRun }: { by: string; onRun: (r: SettingsWriteResult)
 // Adding a tax group. A new group starts with EVERY CELL BLANK, which is out
 // of scope rather than zero-rated (d15) — a jurisdiction charges nothing until
 // somebody says what it charges, and blank is the honest starting state.
-function NewTaxGroup({ by, onRun }: { by: string; onRun: (r: SettingsWriteResult) => boolean }) {
+function NewTaxGroup({ by, onRun }: { by: ManagerAuth; onRun: (r: SettingsWriteResult) => boolean }) {
   const app = useApp();
   const [open, setOpen] = useState(false);
   const [description, setDescription] = useState("");

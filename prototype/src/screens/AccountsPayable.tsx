@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import type { ManagerAuth } from "../lib/managerAuth";
 import { PayableSlab, type PayableChip, type PayableSort } from "../components/PayableSlab";
 import { SettleTrack } from "../components/SettleTrack";
 import type { PayableEntryType, PaymentMethod } from "../data/types";
@@ -6,6 +7,7 @@ import {
   autoPlacement,
   creditOn,
   duplicateReference,
+  isOverdue,
   ledgerRows,
   moneyOn,
   settlementPlan,
@@ -61,7 +63,7 @@ export function AccountsPayable() {
   // the authoriser here are the SAME person: there is no Employee acting
   // underneath, so this replaces the Tier 2 prompt rather than adding to it.
   const nav = useNavigate();
-  const [authorisedBy, setAuthorisedBy] = useState<string | null>(null);
+  const [authorisedBy, setAuthorisedBy] = useState<ManagerAuth | null>(null);
   const [slabOpen, setSlabOpen] = useState(() => readStored(SLAB_KEY, true));
   const [scope, setScope] = useState<string>("");
   const [query, setQuery] = useState("");
@@ -176,12 +178,16 @@ export function AccountsPayable() {
   const counted = rows.filter((r) => r.band === "counted");
   const uncounted = rows.filter((r) => r.band === "uncounted");
   const settled = rows.filter((r) => r.band === "settled");
-  const overdue = counted.filter((r) => r.overdueBy != null && r.overdueBy > 0 && r.balance > 0.005);
+  // d35/d52 — no due date, never overdue.
+  const overdue = counted.filter((r) => isOverdue(r) && r.balance > 0.005);
 
   const giftTotal = round2(app.giftCards.reduce((n, g) => n + g.balance, 0));
 
   // Tier 2 (d5). Manager-only under A-28a, which records BOTH names — this is the acting half.
   const doSettle = () => {
+    // Manager-only (A-28a) — accounts payable is named in its gated list.
+    // Refuse rather than coerce; this read `authorisedBy ?? ""`.
+    if (!authorisedBy) return;
     if (!supplier) return;
     const auto = autoPlacement(plan);
     app.settlePayables(
@@ -207,7 +213,7 @@ export function AccountsPayable() {
         credits: plan.credits.map((c) => ({ id: c.creditId!, amount: -c.balance, label: c.reference })),
         placeholderIds: plan.holds.map((h) => h.id),
       },
-      authorisedBy ?? "",
+      authorisedBy,
     );
     const closed = plan.debits.filter((d) => d.balance <= round2(creditOn(form, d.key, auto) + moneyOn(form, d.key, d.balance, auto)) + 0.005).length;
     setMsg(
@@ -221,9 +227,13 @@ export function AccountsPayable() {
   };
 
   const doClear = () => {
+    // Manager-only (A-28a). Refuse rather than coerce: this read
+    // `authorisedBy ?? ""`, which handed a gated write an empty
+    // authorizer whenever none was present.
+    if (!authorisedBy) return;
     const before = supplier ? balanceOf(supplier.id) : 0;
     const ids = selectedRows.filter((r) => r.kind === "entry").map((r) => r.id);
-    const result = app.clearPayableEntries(ids, authorisedBy ?? "");
+    const result = app.clearPayableEntries(ids, authorisedBy);
     // The return value used to be dropped, so a refused clearing still reported
     // "2 retired against each other" and the Manager was told an act happened
     // that had not. d15 makes a clearing the Manager's manual call over a set
@@ -246,10 +256,14 @@ export function AccountsPayable() {
   };
 
   const doVoid = (batchId: string) => {
+    // Manager-only (A-28a). Refuse rather than coerce: this read
+    // `authorisedBy ?? ""`, which handed a gated write an empty
+    // authorizer whenever none was present.
+    if (!authorisedBy) return;
     if (!supplier) return;
     const before = balanceOf(supplier.id);
     const batch = app.paymentBatches.find((b) => b.id === batchId);
-    app.voidPaymentBatch(batchId, authorisedBy ?? "");
+    app.voidPaymentBatch(batchId, authorisedBy);
     setOpenBatch(null);
 
     // d40 — pre-fill the replacement from what was just voided. d18's objection
@@ -475,7 +489,7 @@ export function AccountsPayable() {
         // Manager confirms against is not the figure that will post.
         rateFor={(targetId) => app.invoices.find((iv) => iv.id === targetId)?.exchangeRate ?? 1}
         onUnclear={(id) => {
-          const r = app.unclearPayableEntries(id, authorisedBy ?? "");
+          const r = app.unclearPayableEntries(id, authorisedBy);
           setMsg(
             r.uncleared
               ? "Clearing reversed and removed — its members are back on the outstanding list, and each one's log names what it was cleared against (d47, d48, A-70)."
@@ -586,7 +600,10 @@ function LedgerTable({
       <tbody>
         {rows.map((r) => {
           const shown = r.band === "uncounted" ? r.face : r.balance;
-          const over = r.overdueBy != null && r.overdueBy > 0 && r.balance > 0.005;
+          // d35/d52 — this drives the row TINT as well as the badge. The due
+          // cell below already branched on dueDate, so a Prepaid row read
+          // "20D UNPAID" in red: the words were right and the colour was not.
+          const over = isOverdue(r) && r.balance > 0.005;
           const settled = r.band === "settled";
           const batches = batchesFor?.(r) ?? [];
           return (
@@ -635,8 +652,23 @@ function LedgerTable({
                     </>
                   ) : (
                     <>
-                      <span className={"due" + (over ? " over" : " none")}>{r.terms}</span>
-                      {r.overdueBy != null && r.overdueBy > 0 && <span className="terms">{r.overdueBy}d unpaid</span>}
+                      {/* No due date, so nothing here may imply a bill is due
+                          (d35). `over` cannot be true in this branch now that
+                          isOverdue gates it, so the tint is unconditional. */}
+                      <span className="due none">{r.terms}</span>
+                      {r.terms === "Prepaid" ? (
+                        // d35 names this copy exactly: the row says "prepaid —
+                        // confirm it". The money left at ordering, weeks before
+                        // this Invoice existed; confirming is a person asserting
+                        // that, and it is the only record the system will hold.
+                        <span className="terms">prepaid — confirm it</span>
+                      ) : (
+                        // COD falls under the same rule (d35) but the store does
+                        // not ship COD, so no affordance is built — just the
+                        // days-since figure, which d52 calls outstanding.
+                        r.overdueBy != null &&
+                        r.overdueBy > 0 && <span className="terms">{r.overdueBy}d outstanding</span>
+                      )}
                     </>
                   )
                 ) : (

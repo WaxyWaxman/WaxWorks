@@ -161,6 +161,41 @@ Held copies count against **available** stock but remain on hand.
 
 ## Inherited from other flows
 
+**From [M-03](M-03-daily-summary.md) decisions 27 and 28:**
+
+- **The close's modal grows into an eight-section report that scrolls, and it stays a modal.** Decision 28
+  places it here deliberately rather than promoting it to a screen: d28 of this flow put the close behind
+  **Till functions** because it is touched when nobody is waiting, and d29's three-track till is the thing the
+  report must not destroy — dismissing it puts the Employee back at the counter with the Sale underneath
+  unchanged. Sections 5–8 arrive **collapsed** and the state is not remembered between openings.
+- **Other functions gains a second entry point: the same report over a date range** — this month, last month,
+  year to date ([M-03](M-03-daily-summary.md) d27). It is a **read**, closes nothing, and sits beside *View
+  Subtotal* rather than replacing it: the range report sums closed batches, so the batch currently in flight
+  is invisible to it and *View Subtotal* stays the only way to see the day being stood in.
+
+**From [E-06](E-06-process-a-return.md) decision 30:**
+
+- **Decision 31's Void — and therefore its Edit — gains a second refusal on a Return, and it is not about the
+  money.** d31's zero-tender gate is untouched and **still fires first**: a Return whose refund has not been
+  collected back cannot be voided, which is why a void has never been a route to chasing money that has already
+  left the till. What [E-06](E-06-process-a-return.md) decision 30 adds is a **stock** condition on top of it —
+  a void undoes the Return's routing, and refuses while the copy that routing produced is **no longer as the
+  routing left it** (sold again, reserved, or adjusted since), naming that copy. **The reason it matters here
+  rather than only there:** d31 defines *Edit* as a Void plus a re-ring, so this refusal governs correcting a
+  mis-rung Return as well as cancelling one, and a reader of d31 would not otherwise learn that the two travel
+  together. The undo is **manager-only where the routing was** — a written-off copy
+  ([architecture](../architecture.md) A-81, A-28a).
+
+**From [M-08](M-08-general-ledger.md):**
+
+- **A gift card expiry may not be added without reopening [M-08](M-08-general-ledger.md) d33 in the
+  same change.** d33 locks the gift card liability account against typed postings, and it is safe
+  **only because the balance drains through redemption and through nothing else** — this shop's
+  cards do not expire. Give them one and the write-off becomes a real accounting act with nowhere
+  to post it, which is the exact trap [M-08](M-08-general-ledger.md) d34 found in the tax accounts
+  and refused to build. The rule about expiry is **this flow's** to state; d33 records that it is
+  relying on it, because whoever adds an expiry will be reading this file and not that one.
+
 **From [M-04](M-04-manage-users.md):**
 
 - **A Sale's header displays the Employee's name, not their initials** ([M-04](M-04-manage-users.md) d16). Initials are released when a User is deactivated and may be reissued, so they no longer identify one person on their own. Attribution itself is unchanged — the Sale points at the User row.

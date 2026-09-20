@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import type { ManagerAuth } from "../lib/managerAuth";
 import { useNavigate, useParams } from "react-router-dom";
 import { Modal } from "../components/Modal";
 import { TillRail } from "../components/TillRail";
@@ -11,6 +12,7 @@ import { balanceDue, saleTotals } from "../lib/totals";
 import { defaultTenderRow } from "../lib/tenders";
 import { useApp } from "../store/AppStore";
 import { useActor } from "../components/Identify";
+import { ManagerAuthorize } from "../components/ManagerAuthorize";
 
 // Entered exclusively from the till rail's + New return (mirrors how
 // /sell/:saleId is never itself a nav item). A Return is a Sale with isReturn
@@ -75,6 +77,16 @@ function ReturnEditor({ saleId }: { saleId: string }) {
   );
 
   const finished = !!sale.saleNumber;
+  // d22 — a void RETAINS the Sale number (E-05 d31), so `finished` alone kept
+  // the Route control alive on a voided Return. The store refuses either way;
+  // this stops offering something that would be refused.
+  // E-06 d29 — the disposition is chosen WHILE THE RETURN IS A DRAFT, which
+  // is the reversal of d20. `finished` was the test; now it is the bar.
+  const routable = !finished;
+  // d29 — why Finish is refused, straight from the store's own gate. Shown
+  // here so the counter can act on it; ENFORCED there, because a disabled
+  // button is not a gate (A-4, A-48).
+  const finishBlocked = app.finishReturnBlocked(sale.id);
   const latestLog = sale.log.length ? sale.log[sale.log.length - 1] : null;
 
   return (
@@ -179,13 +191,44 @@ function ReturnEditor({ saleId }: { saleId: string }) {
                       {l.inventoryItemId ? (
                         routed ? (
                           <span className="badge ok">{l.routedTo}</span>
-                        ) : (
+                        ) : routable ? (
                           <button
-                            className="btn sm"
+                            className={l.routedTo ? "btn sm" : "btn sm primary"}
                             onClick={() => setRouteItem({ lineId: l.id, itemId: l.inventoryItemId! })}
                           >
-                            Route stock →
+                            {/* d29 — chosen, but not yet carried out. The copy
+                                does not exist and nothing has moved: the
+                                effects run inside the finish act. */}
+                            {l.routedTo ? `${l.routedTo} — change` : "Route stock →"}
                           </button>
+                        ) : (
+                          // E-06 d20 — step 6 follows step 5 in time, not just on
+                          // the page. Routing an unfinished draft minted a
+                          // sellable copy at a grade and price the Employee chose,
+                          // with no refund paid and no tendered document — and the
+                          // draft could not then be cleaned up, because d10's void
+                          // refusal fires on a routed copy and stranded it.
+                          //
+                          // d29 REVERSES THE MOMENT and keeps the protection:
+                          // the choice is made on the draft, the effects run at
+                          // finish, so an abandoned draft still mints nothing.
+                          // Once finished there is nothing left to choose.
+                          // d30 — a void UN-ROUTES, so the column stops
+                          // claiming the disposition happened. The choice is
+                          // still shown, because what was decided is part of
+                          // the record; what changed is that it was undone.
+                          <span
+                            className={sale.state === "Void" ? "badge" : "badge ok"}
+                            title={
+                              sale.state === "Void"
+                                ? "E-06 decision 30 — the void un-routed this copy"
+                                : "E-06 decision 29 — carried out when the Return was finished"
+                            }
+                          >
+                            {sale.state === "Void"
+                              ? `${l.routedTo ?? "—"} — un-routed`
+                              : (l.routedTo ?? "—")}
+                          </span>
                         )
                       ) : (
                         <span className="muted xsmall">n/a</span>
@@ -340,14 +383,20 @@ function ReturnEditor({ saleId }: { saleId: string }) {
 
           {!finished && (
             <div className="xsmall muted">
-              Returned stock isn't back on the shelf until routed (E-06 step 6). Refund amount and
+              Returned stock isn't back on the shelf until the Return is finished (E-06 step 6, decision 29). Refund amount and
               disposition are independent — full refund + write-off is a valid combination.
             </div>
           )}
-          {!finished && unroutedCopies > 0 && (
+          {/* d20 — this is the LIMBO state and it only exists once the Return
+              is finished: the customer has gone, the copy is off the shelf and
+              not yet anywhere else. It used to read on a draft, where routing
+              was possible and the copy was still in front of you; now it reads
+              where it is actually needed. Where an Employee finds these copies
+              across Returns is E-06's open question, not answered here. */}
+          {finished && unroutedCopies > 0 && (
             <div className="callout">
               {unroutedCopies} returned cop{unroutedCopies > 1 ? "ies" : "y"} still{" "}
-              {unroutedCopies > 1 ? "need" : "needs"} routing.
+              {unroutedCopies > 1 ? "need" : "needs"} routing — off the shelf until assessed (E-06 step 6).
             </div>
           )}
           {!finished && sale.lines.length > 0 && Math.abs(due) > 0.001 && (
@@ -363,12 +412,25 @@ function ReturnEditor({ saleId }: { saleId: string }) {
 
         {!finished && (
           <div className="till-money-foot">
+            {/* d29 — the gate, said out loud and naming the line. The store
+                refuses regardless of what this renders (A-4, A-48); showing it
+                is so the Employee knows which disc to look at rather than
+                finding a dead button. */}
+            {finishBlocked && (
+              <div className="xsmall muted till-finish-why">{finishBlocked}</div>
+            )}
             <button
               className="btn primary till-finish"
-              disabled={sale.lines.length === 0 || Math.abs(due) > 0.001 || unroutedCopies > 0}
+              // d29 — Finish IS now gated on the stock disposition, reversing
+              // d20. d10's dead-letter problem is answered by d30 instead: a
+              // void un-routes rather than refusing, so voiding a Return stays
+              // reachable and E-05 d31's Edit with it.
+              disabled={sale.lines.length === 0 || Math.abs(due) > 0.001 || !!finishBlocked}
               onClick={() => {
-                app.completeSale(sale.id);
-                setReceipt(true);
+                const res = app.finishReturn(sale.id);
+                // The store decides. A refusal leaves the Return open saying
+                // why, rather than a receipt for something that did not happen.
+                if (res.saleNumber) setReceipt(true);
               }}
             >
               FINISH RETURN
@@ -391,12 +453,34 @@ function ReturnEditor({ saleId }: { saleId: string }) {
       )}
       {receipt && (
         <Modal
-          title="Return complete"
+          // E-06 step 7 — "System prompts to print a receipt for the return."
+          // It offered only Done, where a Sale offers Skip / Print / Email, so
+          // the one thing the step asks for was the one thing missing. Same
+          // three controls and the same email fallback as E-05 decision 24,
+          // because a Return is a Sale with negative lines (decision 1) and
+          // the customer wants the paperwork just as much.
+          title={customer?.email ? "Send return receipt?" : "Print return receipt?"}
           onClose={() => setReceipt(false)}
           foot={
-            <button className="btn primary" onClick={() => setReceipt(false)}>
-              Done
-            </button>
+            <>
+              <button className="btn ghost" onClick={() => setReceipt(false)}>
+                Skip
+              </button>
+              <button
+                className={"btn" + (customer?.email ? "" : " primary")}
+                onClick={() => setReceipt(false)}
+              >
+                Print
+              </button>
+              <button
+                className={"btn" + (customer?.email ? " primary" : "")}
+                disabled={!customer?.email}
+                title={customer?.email ? undefined : "No email on file for this customer"}
+                onClick={() => setReceipt(false)}
+              >
+                Email
+              </button>
+            </>
           }
         >
           <div className="callout ok">
@@ -478,12 +562,23 @@ function AddReturnedItem({ saleId, onClose }: { saleId: string; onClose: () => v
   const query = q.trim().toLowerCase();
   const results = useMemo(() => {
     if (!query) return [];
+    // E-06 d12 — THE SEARCH MATCHES A COPY'S OWN STICKER, not just catalogue
+    // text. `onSubmit` below resolves a whole internal barcode on Enter, which
+    // is what a scanner sends; this is the other half, for a barcode typed by
+    // hand, read aloud, or partially entered, and for a scanner with no Enter
+    // suffix. Without it the field answered "No match" for a copy that was
+    // sitting in the results the moment you searched its title instead —
+    // which is d12's counter path failing in the one case it exists for.
+    const matchesCopy = (r: RecordEntry) =>
+      app.inventory.some(
+        (i) => i.recordId === r.id && i.internalBarcode?.toLowerCase().includes(query),
+      );
     const match = (r: RecordEntry) =>
       [r.artist, r.title, r.label, r.catalogNo, genreNameFor(app.genres, r.genreId), r.manufacturerUpc]
         .filter(Boolean)
-        .some((f) => String(f).toLowerCase().includes(query));
+        .some((f) => String(f).toLowerCase().includes(query)) || matchesCopy(r);
     return app.records.filter(match).slice(0, 12);
-  }, [query, app.records]);
+  }, [query, app.records, app.inventory]);
 
   // Enter on an internal barcode goes straight to that copy — the counter
   // path, where the sticker is right there on the sleeve.
@@ -503,10 +598,35 @@ function AddReturnedItem({ saleId, onClose }: { saleId: string; onClose: () => v
     setScanNote(`No copy matches "${raw}".`);
   };
 
-  // candidate prior Sales to link against (E-06 step 3)
+  // Candidate prior Sales to link against (E-06 step 3). Offered BROADLY —
+  // any tendered Sale of this title — because the Employee may know something
+  // the data does not, and d2 keeps linking optional either way.
   const priorSales = app.sales.filter(
     (s) => s.saleNumber && s.lines.some((l) => l.recordId === item?.recordId && l.qty > 0),
   );
+
+  // E-06 d14 — but PRESELECTED narrowly. Step 3's "the line is linked" is a
+  // default the Employee can undo, not a prompt they must answer. The match
+  // has to be unambiguous to be assumed: this exact copy (not merely this
+  // title), sold to the Customer attached to the Return, on exactly one Sale.
+  //
+  // Offered-only cost money and the walk priced it: a copy sold at $31.49
+  // under a 10% discount defaulted to its $34.99 current price, because d5
+  // reads the refund default off the link. Accepting the default over-refunded
+  // by $3.50 and lost the Customer-history link, with nothing on screen saying
+  // a match existed. Several matches, or none, still leave it unlinked.
+  const returnDoc = app.sales.find((s) => s.id === saleId);
+  const autoLinkFor = (copyId: string): string => {
+    const forCopy = app.sales.filter(
+      (s) =>
+        s.saleNumber &&
+        s.customerId &&
+        s.customerId === returnDoc?.customerId &&
+        s.lines.some((l) => l.inventoryItemId === copyId && l.qty > 0),
+    );
+    return forCopy.length === 1 ? String(forCopy[0].saleNumber) : "";
+  };
+
   const [link, setLink] = useState<string>("");
   const linkedSale = priorSales.find((s) => String(s.saleNumber) === link);
   const linkedLine = linkedSale?.lines.find((l) => l.recordId === item?.recordId);
@@ -514,15 +634,26 @@ function AddReturnedItem({ saleId, onClose }: { saleId: string; onClose: () => v
 
   const pickCopy = (id: string) => {
     setItemId(id);
-    setLink("");
     setQ("");
     setScanNote(null);
-    setRefund((app.itemFor(id)?.price ?? 0).toFixed(2));
+    // d14 — take the sole unambiguous match, and let d5's refund default
+    // follow it to the linked line price rather than the copy's current one.
+    const auto = autoLinkFor(id);
+    setLink(auto);
+    const linked = auto
+      ? app.sales.find((s) => String(s.saleNumber) === auto)?.lines.find((l) => l.inventoryItemId === id)
+      : undefined;
+    setRefund((linked ? linked.price * (1 - linked.discountPct / 100) : (app.itemFor(id)?.price ?? 0)).toFixed(2));
   };
 
+  // A-81's fourth status reads as itself. Shown as a departure rather than a
+  // sale, because "sold" against a copy nobody bought is the confusion the
+  // status exists to end.
   const statusBadge = (status: string) =>
     status === "sold" ? (
       <span className="badge ok">sold</span>
+    ) : status === "written_off" ? (
+      <span className="badge warn">written off</span>
     ) : status === "held" ? (
       <span className="badge warn">held</span>
     ) : (
@@ -674,8 +805,10 @@ function AddReturnedItem({ saleId, onClose }: { saleId: string; onClose: () => v
             </label>
 
             <div className="callout">
-              After tendering the refund you'll route this copy: back to sellable, re-graded as its
-              own InventoryItem, or written off.
+              {/* d29 — this used to read "after tendering the refund you'll
+                  route this copy", which was d20's order and is now backwards. */}
+              You'll route this copy before finishing: back to sellable, re-graded as its own
+              InventoryItem, or written off. The Return won't finish until you have.
             </div>
           </>
         )}
@@ -709,6 +842,46 @@ function RouteStock({
   const [reason, setReason] = useState<AdjustmentReason>("Damaged");
   const [grade, setGrade] = useState<Grade>(item.grade);
   const [price, setPrice] = useState(String(item.price));
+  // E-06 d19 / A-82 — what the copy is assessed at now. Defaults to the cost
+  // the sold copy carried, which is also the CAP: most discs come back fine
+  // and carry it unchanged. The store refuses anything above (A-4, A-48).
+  const [cost, setCost] = useState(item.cost.toFixed(2));
+  const [costRefusal, setCostRefusal] = useState<string | null>(null);
+  // A-81, A-28a — the write-off route only. The store refuses without an
+  // authorizing Manager (A-4, A-48); this is how one is asked for.
+  const [authorizing, setAuthorizing] = useState(false);
+
+  const apply = (by?: ManagerAuth) => {
+    // d29 — RECORD THE CHOICE. Nothing is minted, no status moves and no
+    // journal is written: all of that runs inside the finish act. What the
+    // Employee does here is decide, and what the store stores is the decision.
+    const res = app.chooseReturnRoute(saleId, lineId, mode, {
+      grade: mode === "regrade" ? grade : undefined,
+      price: mode === "regrade" ? Number(price) || 0 : undefined,
+      reason: mode === "writeoff" ? reason : undefined,
+      assessedCost: mode === "regrade" ? Number(cost) || 0 : undefined,
+      byAuth: by,
+    });
+    // The store is the one that decides. If it refused, the modal stays open
+    // saying why rather than closing on a write that never happened.
+    if (res.chosen) onClose();
+    else setCostRefusal(res.refusal ?? null);
+    return res;
+  };
+
+  if (authorizing) {
+    return (
+      <ManagerAuthorize
+        title="Manager only — write off"
+        reason={`Write off ${item.grade} copy of this returned record as ${reason}, removing it from stock. Adjusting on hand is manager-only (A-28a); E-06's ungated Return covers the refund, not the disposition.`}
+        onCancel={() => setAuthorizing(false)}
+        onConfirm={(by) => {
+          setAuthorizing(false);
+          apply(by);
+        }}
+      />
+    );
+  }
 
   return (
     <Modal
@@ -721,20 +894,15 @@ function RouteStock({
           </button>
           <button
             className="btn primary"
-            onClick={() =>
-              withActor("Route returned copy", () => {
-              app.routeReturnLine(
-                saleId,
-                lineId,
-                itemId,
-                mode,
-                mode === "regrade" ? grade : undefined,
-                mode === "regrade" ? Number(price) || 0 : undefined,
-                mode === "writeoff" ? reason : undefined,
-              );
-              onClose();
-            })
-            }
+            onClick={() => {
+              // Two doors, deliberately. Back to sellable and re-grade are
+              // assessments and stay on the ordinary initials prompt, which is
+              // E-06 d3's permissive Return working as designed. Write off
+              // removes a copy from stock, so it crosses the manager-only line
+              // (A-81) and always asks, session or not (E-01 d23).
+              if (mode === "writeoff") setAuthorizing(true);
+              else withActor("Route returned copy", () => apply());
+            }}
           >
             Apply
           </button>
@@ -763,13 +931,50 @@ function RouteStock({
                 </option>
               ))}
             </select>
-            <input className="inline-num" type="number" step="0.01" value={price} onChange={(e) => setPrice(e.target.value)} />
+            <input
+              className="inline-num"
+              type="number"
+              step="0.01"
+              aria-label="Shelf price"
+              value={price}
+              onChange={(e) => setPrice(e.target.value)}
+            />
+            <label className="small muted">
+              cost{" "}
+              <input
+                className="inline-num"
+                type="number"
+                step="0.01"
+                aria-label="Assessed cost"
+                value={cost}
+                onChange={(e) => {
+                  setCost(e.target.value);
+                  setCostRefusal(null);
+                }}
+              />
+            </label>
+          </div>
+        )}
+        {mode === "regrade" && (
+          <div className="row" style={{ paddingLeft: 24 }}>
+            <span className="small muted">
+              A <strong>new copy</strong> is minted and gets its own barcode; the copy that sold stays sold at{" "}
+              <strong>{item.grade}</strong> (E-06 d15). Its label is printed after (d18). Cost is capped at the{" "}
+              <strong>{money(item.cost)}</strong> the sold copy carried — below that, the difference posts to{" "}
+              <em>Damaged</em>; above it would be income the store did not earn (A-82).
+            </span>
+          </div>
+        )}
+        {costRefusal && (
+          <div className="row" style={{ paddingLeft: 24 }}>
+            <span className="small bad">{costRefusal}</span>
           </div>
         )}
         <label className="row">
           <input type="radio" checked={mode === "writeoff"} onChange={() => setMode("writeoff")} />
           <span>
-            <strong>Write off</strong> — not sellable at all; reason-coded adjustment (E-04).
+            <strong>Write off</strong> — not sellable at all; reason-coded adjustment (E-04).{" "}
+            <em className="small muted">Manager only — this adjusts on hand (A-28a).</em>
           </span>
         </label>
         {mode === "writeoff" && (
