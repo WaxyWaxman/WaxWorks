@@ -291,7 +291,7 @@ The record of what was asked before the build follows below the new ones.
   number is the store's; or accept it and let the accountant re-group. **Owned here**,
   and it constrains [M-08](M-08-general-ledger.md) d25's P&L rather than this flow's
   chart — nothing is blocked until that statement is built. **Deferred with M-08**
-  ([M-08](M-08-general-ledger.md) d32, #77): the P&L it constrains is second-iteration work.
+  ([M-08](M-08-general-ledger.md) d46, #77): the P&L it constrains ships after the first release.
 
 ### Raised by the ledger split
 
