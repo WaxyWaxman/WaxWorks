@@ -52,6 +52,7 @@ import {
   requireManager,
   type ManagerAuth,
 } from "../lib/managerAuth";
+import { adminRefusal, type AdminAction } from "../lib/userAdminPolicy";
 import { otpAccepted, selectableStores as selectableStoresLib, signInPersonal as signInPersonalLib, signInStoreAccount as signInStoreAccountLib, signInSysadmin as signInSysadminLib } from "../lib/signIn";
 import { buildChart } from "../lib/chart";
 import { buildCloseJournal } from "../lib/closeJournal";
@@ -2604,31 +2605,33 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
     return { ok: true, id: r.id };
   };
 
-  const addUser: AppContextValue["addUser"] = (input, byAuth) => {
-    // §6 — an M function resolves the Manager ITSELF, in the same
-    // transaction. The brand proves the check passed when the id was
-    // minted; this proves it still holds now, so a demotion between the
-    // prompt and the write bites (A-28a, A-4, A-48).
+  // M-04 d30 / A-89 — WHO MAY DO WHAT TO WHOM, applied in the write path after
+  // the actor has been re-resolved. A Manager reaches Employees at their own
+  // Stores; anything that touches a Manager or Owner is Owner-only. The
+  // screen mirrors this in what it offers; the refusal is the rule.
+  const gate = (byAuth: ManagerAuth, action: AdminAction): { ok: true; by: string } | { ok: false; reason: string } => {
     const mgr = requireManager(s.users, byAuth);
     if (!mgr.ok) return { ok: false, reason: mgr.refusal };
-    const by = mgr.name;
-    return commit(
-      usersLib.addUser(s.users, { ...input, assignments: input.assignments ?? [HOME_STORE_ID] }, by, {
-        id: uid("user"),
-        orgId: HOME_ORG_ID,
-      }),
-    );
+    const actor = s.users.find((u) => u.id === byAuth.userId)!;
+    const refused = adminRefusal(actor, action);
+    if (refused) return { ok: false, reason: refused };
+    return { ok: true, by: mgr.name };
+  };
+  const subject = (userId: string) => s.users.find((u) => u.id === userId);
+
+  const addUser: AppContextValue["addUser"] = (input, byAuth) => {
+    const assignments = input.assignments ?? (currentStoreId ? [currentStoreId] : [HOME_STORE_ID]);
+    const g = gate(byAuth, { kind: "add", role: input.role, assignments });
+    if (!g.ok) return g;
+    return commit(usersLib.addUser(s.users, { ...input, assignments }, g.by, { id: uid("user"), orgId: HOME_ORG_ID }));
   };
 
   const changeUserRole: AppContextValue["changeUserRole"] = (userId, role, byAuth) => {
-    // §6 — an M function resolves the Manager ITSELF, in the same
-    // transaction. The brand proves the check passed when the id was
-    // minted; this proves it still holds now, so a demotion between the
-    // prompt and the write bites (A-28a, A-4, A-48).
-    const mgr = requireManager(s.users, byAuth);
-    if (!mgr.ok) return { ok: false, reason: mgr.refusal };
-    const by = mgr.name;
-    return commit(usersLib.changeUserRole(s.users, userId, role, by));
+    const u = subject(userId);
+    if (!u) return { ok: false, reason: "No such user." };
+    const g = gate(byAuth, { kind: "changeRole", from: u.role, to: role, assignments: u.assignments });
+    if (!g.ok) return g;
+    return commit(usersLib.changeUserRole(s.users, userId, role, g.by));
   };
 
   // M-04 d15 as corrected by d18: a deactivation stops new work under those
@@ -2637,15 +2640,12 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
   // shape as actor_resolve refusing (A-55). An Open Sale is untouched and
   // stays finishable; only the session goes.
   const deactivateUser: AppContextValue["deactivateUser"] = (userId, byAuth) => {
-    // §6 — an M function resolves the Manager ITSELF, in the same
-    // transaction. The brand proves the check passed when the id was
-    // minted; this proves it still holds now, so a demotion between the
-    // prompt and the write bites (A-28a, A-4, A-48).
-    const mgr = requireManager(s.users, byAuth);
-    if (!mgr.ok) return { ok: false, reason: mgr.refusal };
-    const by = mgr.name;
+    const u = subject(userId);
+    if (!u) return { ok: false, reason: "No such user." };
+    const g = gate(byAuth, { kind: "deactivate", role: u.role, assignments: u.assignments });
+    if (!g.ok) return g;
 
-    const r = commit(usersLib.deactivateUser(s.users, userId, by));
+    const r = commit(usersLib.deactivateUser(s.users, userId, g.by));
     if (r.ok && s.sessionUserId === userId) endSession();
     // E-01 d30 (5): a personal session IS a login to revoke, and deactivation
     // revokes it.
@@ -2654,57 +2654,59 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
   };
 
   const reactivateUser: AppContextValue["reactivateUser"] = (userId, initials, byAuth) => {
-    // §6 — an M function resolves the Manager ITSELF, in the same
-    // transaction. The brand proves the check passed when the id was
-    // minted; this proves it still holds now, so a demotion between the
-    // prompt and the write bites (A-28a, A-4, A-48).
-    const mgr = requireManager(s.users, byAuth);
-    if (!mgr.ok) return { ok: false, reason: mgr.refusal };
-    const by = mgr.name;
-    return commit(usersLib.reactivateUser(s.users, userId, initials, by));
+    const u = subject(userId);
+    if (!u) return { ok: false, reason: "No such user." };
+    const g = gate(byAuth, { kind: "reactivate", role: u.role, assignments: u.assignments });
+    if (!g.ok) return g;
+    return commit(usersLib.reactivateUser(s.users, userId, initials, g.by));
   };
 
   const correctUser: AppContextValue["correctUser"] = (userId, patch, byAuth) => {
-    // §6 — an M function resolves the Manager ITSELF, in the same
-    // transaction. The brand proves the check passed when the id was
-    // minted; this proves it still holds now, so a demotion between the
-    // prompt and the write bites (A-28a, A-4, A-48).
-    const mgr = requireManager(s.users, byAuth);
-    if (!mgr.ok) return { ok: false, reason: mgr.refusal };
-    const by = mgr.name;
-    return commit(usersLib.correctUser(s.users, userId, patch, by));
+    const u = subject(userId);
+    if (!u) return { ok: false, reason: "No such user." };
+    const g = gate(byAuth, { kind: "correct", role: u.role, assignments: u.assignments });
+    if (!g.ok) return g;
+    return commit(usersLib.correctUser(s.users, userId, patch, g.by));
   };
 
   const setUserPin: AppContextValue["setUserPin"] = (userId, pin, byAuth) => {
-    const mgr = requireManager(s.users, byAuth);
-    if (!mgr.ok) return { ok: false, reason: mgr.refusal };
-    const r = usersLib.setUserPin(s.users, userId, pin, mgr.name);
+    const u = subject(userId);
+    if (!u) return { ok: false, reason: "No such user." };
+    const g = gate(byAuth, { kind: "setPin", role: u.role, assignments: u.assignments });
+    if (!g.ok) return g;
+    const r = usersLib.setUserPin(s.users, userId, pin, g.by);
     // M-04 d32 — a refused clash leaves a trace against the person it was
     // tried for, so a run of them is visible to an Owner.
     if (!r.ok && r.reason === usersLib.PIN_CLASH_REASON)
-      setS((prev) => ({ ...prev, users: usersLib.logPinClash(prev.users, userId, mgr.name) }));
+      setS((prev) => ({ ...prev, users: usersLib.logPinClash(prev.users, userId, g.by) }));
     return commit(r);
   };
 
   const assignToStore: AppContextValue["assignToStore"] = (userId, storeId, byAuth) => {
-    const mgr = requireManager(s.users, byAuth);
-    if (!mgr.ok) return { ok: false, reason: mgr.refusal };
-    const r = usersLib.assignToStore(s.users, userId, storeId, mgr.name);
+    const u = subject(userId);
+    if (!u) return { ok: false, reason: "No such user." };
+    const g = gate(byAuth, { kind: "assign", role: u.role, storeId });
+    if (!g.ok) return g;
+    const r = usersLib.assignToStore(s.users, userId, storeId, g.by);
     if (!r.ok && r.reason === usersLib.PIN_CLASH_REASON)
-      setS((prev) => ({ ...prev, users: usersLib.logPinClash(prev.users, userId, mgr.name) }));
+      setS((prev) => ({ ...prev, users: usersLib.logPinClash(prev.users, userId, g.by) }));
     return commit(r);
   };
 
   const unassignFromStore: AppContextValue["unassignFromStore"] = (userId, storeId, byAuth) => {
-    const mgr = requireManager(s.users, byAuth);
-    if (!mgr.ok) return { ok: false, reason: mgr.refusal };
-    return commit(usersLib.unassignFromStore(s.users, userId, storeId, mgr.name));
+    const u = subject(userId);
+    if (!u) return { ok: false, reason: "No such user." };
+    const g = gate(byAuth, { kind: "unassign", role: u.role, storeId });
+    if (!g.ok) return g;
+    return commit(usersLib.unassignFromStore(s.users, userId, storeId, g.by));
   };
 
   const requestPasswordReset: AppContextValue["requestPasswordReset"] = (userId, byAuth) => {
-    const mgr = requireManager(s.users, byAuth);
-    if (!mgr.ok) return { ok: false, reason: mgr.refusal };
-    return commit(usersLib.requestPasswordReset(s.users, userId, mgr.name));
+    const u = subject(userId);
+    if (!u) return { ok: false, reason: "No such user." };
+    const g = gate(byAuth, { kind: "requestReset", role: u.role, assignments: u.assignments });
+    if (!g.ok) return g;
+    return commit(usersLib.requestPasswordReset(s.users, userId, g.by));
   };
 
   const setOwnPassword: AppContextValue["setOwnPassword"] = (userId, password) =>

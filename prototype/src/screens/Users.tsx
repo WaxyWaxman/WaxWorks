@@ -2,43 +2,50 @@ import { useMemo, useState } from "react";
 import type { ManagerAuth } from "../lib/managerAuth";
 import { useNavigate, useParams } from "react-router-dom";
 import { SpecNote } from "../components/SpecNote";
-import type { User, UserRole } from "../data/types";
+import { isManagerial, type Store, type User, type UserRole } from "../data/types";
 import { readStored, writeStored } from "../lib/tillMemory";
+import { adminRefusal } from "../lib/userAdminPolicy";
 import { useApp, type UserWriteResult } from "../store/AppStore";
 import { ManagerAuthorize } from "../components/ManagerAuthorize";
 
 // M-04 Users, on the till's three tracks like every other back-office screen:
 // the slab you look in, the person you opened, and their log.
 //
-// Two things about this screen are not cosmetic.
+// Three things about this screen are not cosmetic.
 //
-// FIRST, nothing here is enforced by disabling a button. Architecture A-55
-// puts both invariants in the write path — a partial unique index on active
-// initials, and the last-Manager floor as an assertion under a lock — so every
-// action calls the store and renders whatever reason comes back. A disabled
-// control is a hint; the refusal is the rule. The Demote and Deactivate
-// buttons on the last active Manager are therefore LIVE, and pressing one
-// tells you why it will not happen. That is deliberate: a greyed-out button
-// with no explanation is the thing A-54 warns reads as the system simply
-// saying no.
+// FIRST, nothing here is enforced by disabling a button. Architecture A-89
+// puts every invariant in the write path — initials and PIN uniqueness as
+// assertions under a lock, the Owner floor as an assertion under a lock, and
+// M-04 d30's reach as a policy the store applies after re-resolving the
+// actor — so every action calls the store and renders whatever reason comes
+// back. What the screen OFFERS follows the same policy (`adminRefusal`), so a
+// Manager is not shown a Manager to demote; but the refusal is the rule, and
+// the Deactivate button on the last Owner is LIVE and tells you why not.
 //
 // SECOND, every row shows a NAME, not initials alone. M-04 d16 releases a
-// deactivated user's initials to a new hire, so the letters stop identifying a
-// person — the seed carries T. Oyelaran (gone) and T. Okonkwo (current) both
-// as TO to make that visible rather than theoretical. The initials tile is
-// there because it is what people type; the name beside it is what makes the
-// record readable.
+// deactivated user's initials to a new hire, and E-01 d25 makes them unique
+// only per Store, so the letters stop identifying a person — the seed carries
+// T. Oyelaran (gone) and T. Okonkwo (current) both as TO, and E. Okafor and E.
+// Ouellet both as EO at two different Stores, to make that visible.
+//
+// THIRD, who crossed the line decides what is offered. On a store session a
+// PIN opened this screen; on a personal session the session did (M-04 d31).
+// Either way the authoriser is a real active Manager or Owner, and their name
+// is what every log row carries.
 
 const SLAB_KEY = "waxworks.users.slab";
 
-type Filter = "active" | "managers" | "inactive" | "all";
+type Filter = "active" | "managers" | "owners" | "inactive" | "all";
 
 const FILTERS: { key: Filter; label: string }[] = [
   { key: "active", label: "Active" },
   { key: "managers", label: "Managers" },
+  { key: "owners", label: "Owners" },
   { key: "inactive", label: "Deactivated" },
   { key: "all", label: "Everyone" },
 ];
+
+type Draft = { name: string; initials: string; role: UserRole; assignments: string[]; email: string; pin: string };
 
 export function Users() {
   const app = useApp();
@@ -48,20 +55,14 @@ export function Users() {
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState<Filter>("active");
   const [slabOpen, setSlabOpen] = useState(() => readStored(SLAB_KEY, true));
-  const [draft, setDraft] = useState<{ name: string; initials: string; role: UserRole } | null>(null);
+  const [draft, setDraft] = useState<Draft | null>(null);
   // One refusal at a time, shown where the action was taken. Cleared by the
   // next action rather than by a timer, so it cannot vanish while being read.
   const [refusal, setRefusal] = useState<string | null>(null);
-  // M-04 d11 and architecture A-55 make ALL user administration manager-only,
-  // and the screen was enforcing none of it — anyone could open /users and
-  // clear a Manager's password. A-28a's mechanism is an in-place
-  // authorisation, so the whole screen is gated once on arrival and the
-  // authorising Manager's name is what lands in every log row from then on,
-  // rather than a hardcoded constant.
-  //
-  // Gated as a WHOLE rather than per action, following M-05's "manager-only
-  // in its entirety": administering users is a sitting-down job, and a prompt
-  // per row is d12's trains-you-not-to-read problem again.
+  // Gated as a WHOLE rather than per action (M-04 d24, d31): administering
+  // users is a sitting-down job, and a prompt per row is d12's
+  // trains-you-not-to-read problem again. The authoriser's name lands in every
+  // log row from then on.
   const [authorisedBy, setAuthorisedBy] = useState<ManagerAuth | null>(null);
 
   const setSlab = (v: boolean) => {
@@ -69,7 +70,10 @@ export function Users() {
     writeStored(SLAB_KEY, v);
   };
 
-  const managers = app.activeManagerCount();
+  // The person who crossed the line, as a row — what they may do follows from
+  // their role and Stores (M-04 d30).
+  const actor = authorisedBy ? (app.users.find((u) => u.id === authorisedBy.userId) ?? null) : null;
+  const owners = app.users.filter((u) => u.active && u.role === "Owner").length;
 
   const rows = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -77,7 +81,8 @@ export function Users() {
       .filter((u) => {
         if (filter === "active" && !u.active) return false;
         if (filter === "inactive" && u.active) return false;
-        if (filter === "managers" && !(u.active && u.role === "Manager")) return false;
+        if (filter === "managers" && !(u.active && isManagerial(u.role))) return false;
+        if (filter === "owners" && !(u.active && u.role === "Owner")) return false;
         if (!q) return true;
         return u.name.toLowerCase().includes(q) || u.initials.toLowerCase().includes(q);
       })
@@ -87,11 +92,12 @@ export function Users() {
   const counts = useMemo(
     () => ({
       active: app.users.filter((u) => u.active).length,
-      managers,
+      managers: app.users.filter((u) => u.active && isManagerial(u.role)).length,
+      owners,
       inactive: app.users.filter((u) => !u.active).length,
       all: app.users.length,
     }),
-    [app.users, managers],
+    [app.users, owners],
   );
 
   const selectedId = userId ?? rows[0]?.id ?? app.users[0]?.id ?? null;
@@ -115,12 +121,18 @@ export function Users() {
   };
 
   const addDraft = () => {
-    if (!draft) return;
-    // Manager-only (A-28a). Refuse rather than coerce: this read
-    // `authorisedBy ?? ""`, which handed a gated write an empty
-    // authorizer whenever none was present.
-    if (!authorisedBy) return;
-    const r = app.addUser(draft, authorisedBy);
+    if (!draft || !authorisedBy) return;
+    const r = app.addUser(
+      {
+        name: draft.name,
+        initials: draft.initials,
+        role: draft.role,
+        assignments: draft.assignments,
+        email: draft.email.trim() || undefined,
+        pin: draft.pin.trim() || undefined,
+      },
+      authorisedBy,
+    );
     if (run(r) && r.ok) {
       setDraft(null);
       setQuery("");
@@ -128,15 +140,17 @@ export function Users() {
     }
   };
 
-  if (!authorisedBy)
+  if (!authorisedBy || !actor)
     return (
       <ManagerAuthorize
         title="Users — manager only"
-        reason="Adding, re-roling, deactivating and setting a password are manager-only (M-04 d11, architecture A-55). A Manager authorises in place; their name is recorded against everything done here."
+        reason="User administration is manager-only (A-55, A-89); a Manager reaches Employees at their own Stores, and anything touching a Manager or Owner is Owner-only (M-04 d30). Authorised once for the screen (d24, d31); the authoriser's name is recorded against everything done here."
         onConfirm={(by) => setAuthorisedBy(by)}
         onCancel={() => nav(-1)}
       />
     );
+
+  const storeName = (id: string) => app.storeDetailsFor(id).tradingName;
 
   return (
     <div className={"cust-frame" + (slabOpen ? "" : " slab-shut")}>
@@ -150,17 +164,20 @@ export function Users() {
               </button>
             </div>
             <div className="slab-search">
-              <input
-                type="search"
-                value={query}
-                placeholder="Name or initials"
-                onChange={(e) => setQuery(e.target.value)}
-              />
+              <input type="search" value={query} placeholder="Name or initials" onChange={(e) => setQuery(e.target.value)} />
               <button
                 className="btn primary"
                 onClick={() => {
                   setRefusal(null);
-                  setDraft({ name: "", initials: "", role: "Employee" });
+                  setDraft({
+                    name: "",
+                    initials: "",
+                    role: "Employee",
+                    // The Store in session is pre-ticked: a hire is usually for here.
+                    assignments: app.currentStoreId ? [app.currentStoreId] : [],
+                    email: "",
+                    pin: "",
+                  });
                 }}
               >
                 ＋ New
@@ -168,11 +185,7 @@ export function Users() {
             </div>
             <div className="slab-chips">
               {FILTERS.map((f) => (
-                <button
-                  key={f.key}
-                  className={"filter-chip" + (filter === f.key ? " on" : "")}
-                  onClick={() => setFilter(f.key)}
-                >
+                <button key={f.key} className={"filter-chip" + (filter === f.key ? " on" : "")} onClick={() => setFilter(f.key)}>
                   {f.label} <span className="n">{counts[f.key]}</span>
                 </button>
               ))}
@@ -193,6 +206,7 @@ export function Users() {
                     <span className="m" style={{ display: "block" }}>
                       {u.role}
                       {u.active ? "" : " · deactivated"}
+                      {u.assignments.length ? ` · ${u.assignments.map(storeName).join(", ")}` : " · no Store"}
                     </span>
                   </span>
                 </button>
@@ -210,7 +224,9 @@ export function Users() {
       {draft ? (
         <NewUserCard
           draft={draft}
-          managers={managers}
+          actor={actor}
+          stores={app.stores.filter((s) => s.active)}
+          storeName={storeName}
           refusal={refusal}
           by={authorisedBy}
           onChange={(p) => setDraft((d) => (d ? { ...d, ...p } : d))}
@@ -224,7 +240,10 @@ export function Users() {
         <UserCard
           key={selected.id}
           user={selected}
-          managers={managers}
+          actor={actor}
+          owners={owners}
+          stores={app.stores.filter((s) => s.active)}
+          storeName={storeName}
           refusal={refusal}
           onRun={run}
           by={authorisedBy}
@@ -233,35 +252,83 @@ export function Users() {
         <div className="cust-nosel">
           <div>
             <h2>No users</h2>
-            <p className="muted">Unreachable in practice — M-04 d14 keeps at least one Manager.</p>
+            <p className="muted">Unreachable in practice — M-04 d26 keeps at least one Owner.</p>
           </div>
         </div>
       )}
 
-      <UserLog user={draft ? null : selected} managers={managers} />
+      <UserLog user={draft ? null : selected} owners={owners} actor={actor} />
     </div>
   );
 }
 
 // ---------------------------------------------------------------------------
 
+// What a Manager may touch (M-04 d30), asked of the same policy the store
+// enforces — so the screen never offers what the write path would refuse, and
+// never hides what it would permit.
+function may(actor: User, action: Parameters<typeof adminRefusal>[1]): boolean {
+  return adminRefusal(actor, action) === undefined;
+}
+
+function StoreChecks({
+  stores,
+  chosen,
+  storeName,
+  canToggle,
+  onToggle,
+}: {
+  stores: Store[];
+  chosen: string[];
+  storeName: (id: string) => string;
+  canToggle: (storeId: string) => boolean;
+  onToggle: (storeId: string, on: boolean) => void;
+}) {
+  return (
+    <div className="stack" style={{ gap: 4 }}>
+      {stores.map((s) => {
+        const on = chosen.includes(s.id);
+        const enabled = canToggle(s.id);
+        return (
+          <label key={s.id} className={"small" + (enabled ? "" : " muted")} style={{ display: "flex", gap: 8, alignItems: "center" }}>
+            <input type="checkbox" checked={on} disabled={!enabled} onChange={(e) => onToggle(s.id, e.target.checked)} />
+            {storeName(s.id)} <span className="muted">· {s.id}</span>
+            {!enabled && <span className="muted">— not one of your Stores</span>}
+          </label>
+        );
+      })}
+    </div>
+  );
+}
+
 function NewUserCard({
   draft,
-  managers,
+  actor,
+  stores,
+  storeName,
   refusal,
   by,
   onChange,
   onCancel,
   onAdd,
 }: {
-  draft: { name: string; initials: string; role: UserRole };
-  managers: number;
+  draft: Draft;
+  actor: User;
+  stores: Store[];
+  storeName: (id: string) => string;
   refusal: string | null;
   by: ManagerAuth;
-  onChange: (p: Partial<{ name: string; initials: string; role: UserRole }>) => void;
+  onChange: (p: Partial<Draft>) => void;
   onCancel: () => void;
   onAdd: () => void;
 }) {
+  // A Manager may add Employees only (M-04 d30); an Owner anyone. The select
+  // offers what the policy allows; the write path refuses regardless.
+  const roles: UserRole[] = (["Employee", "Manager", "Owner"] as UserRole[]).filter((r) =>
+    may(actor, { kind: "add", role: r, assignments: draft.assignments.length ? draft.assignments : [actor.assignments[0] ?? ""] }),
+  );
+  const managerial = isManagerial(draft.role);
+
   return (
     <section className="cust-main">
       <div className="cust-head">
@@ -273,43 +340,79 @@ function NewUserCard({
           {refusal && <div className="callout danger">{refusal}</div>}
           <label className="field">
             <span>Name</span>
-            <input
-              autoFocus
-              value={draft.name}
-              placeholder="e.g. A. Nakamura"
-              onChange={(e) => onChange({ name: e.target.value })}
-            />
+            <input autoFocus value={draft.name} placeholder="e.g. A. Nakamura" onChange={(e) => onChange({ name: e.target.value })} />
           </label>
           <label className="field">
             <span>
               Initials{" "}
-              <SpecNote cite="M-04 d13, d20">
-                Unique among <strong>active</strong> users and refused at creation, so the Manager
-                resolves a clash there and then rather than the till disambiguating at use. Stored
-                trimmed and upper-cased (d20), so <code>jd</code> and <code>JD</code> cannot both
-                exist.
+              <SpecNote cite="M-04 d13, d20, d27 / E-01 d25">
+                Unique among the <strong>active</strong> users <strong>assigned to each Store</strong>{" "}
+                this person is given, and refused at creation — the clash is resolved there and then
+                rather than the till disambiguating at use. Two people in the Organization may share
+                initials if no Store has both. Stored trimmed and upper-cased (d20).
               </SpecNote>
             </span>
-            <input
-              value={draft.initials}
-              maxLength={4}
-              placeholder="e.g. AN"
-              onChange={(e) => onChange({ initials: e.target.value })}
-            />
+            <input value={draft.initials} maxLength={4} placeholder="e.g. AN" onChange={(e) => onChange({ initials: e.target.value })} />
           </label>
           <label className="field">
-            <span>Role</span>
+            <span>
+              Role{" "}
+              <SpecNote cite="M-04 d25, d30">
+                Employee ⊂ Manager ⊂ Owner. A Manager may add Employees at their own Stores; adding a
+                Manager or Owner is <strong>Owner-only</strong>. What this list offers follows that rule,
+                and the write path refuses what it should not have offered.
+              </SpecNote>
+            </span>
             <select value={draft.role} onChange={(e) => onChange({ role: e.target.value as UserRole })}>
-              <option value="Employee">Employee</option>
-              <option value="Manager">Manager</option>
+              {(["Employee", "Manager", "Owner"] as UserRole[]).map((r) => (
+                <option key={r} value={r} disabled={!roles.includes(r)}>
+                  {r}
+                  {roles.includes(r) ? "" : " — Owner-only"}
+                </option>
+              ))}
             </select>
           </label>
-          <p className="small muted">
-            No credentials are issued — v1 identifies by initials only (E-01 d3), so there is no
-            invite step (M-04 d7). That changes the day credentials arrive; E-01 d18 lists what has
-            to be revisited then.
-          </p>
-          <p className="small muted">This Store has {managers} active Manager{managers === 1 ? "" : "s"}.</p>
+          <div className="field">
+            <span>
+              Stores{" "}
+              <SpecNote cite="M-04 d27">
+                Where this person's initials and PIN resolve. Employees and Managers need at least one;
+                an Owner may have none. A Manager assigns to their own Stores only (d30).
+              </SpecNote>
+            </span>
+            <StoreChecks
+              stores={stores}
+              chosen={draft.assignments}
+              storeName={storeName}
+              canToggle={(id) => actor.role === "Owner" || actor.assignments.includes(id)}
+              onToggle={(id, on) =>
+                onChange({ assignments: on ? [...draft.assignments, id] : draft.assignments.filter((x) => x !== id) })
+              }
+            />
+          </div>
+          <label className="field">
+            <span>
+              Email{managerial ? "" : " (optional)"}{" "}
+              <SpecNote cite="M-04 d29">
+                A Manager or Owner is <strong>invited by email</strong> and sets their own password through
+                the link — nobody types it for them. An Employee has no personal sign-in and needs none.
+              </SpecNote>
+            </span>
+            <input value={draft.email} placeholder={managerial ? "required — the invite goes here" : "none needed"} onChange={(e) => onChange({ email: e.target.value })} />
+          </label>
+          {managerial && (
+            <label className="field">
+              <span>
+                PIN (optional at Add){" "}
+                <SpecNote cite="M-04 d28, d32">
+                  Four digits for the manager-only line on a store session; unique among the Managers and
+                  Owners assigned to each Store. A clash is refused as <em>in use at this Store</em> with no
+                  name. Whether a Manager may be saved without one is M-04's open question.
+                </SpecNote>
+              </span>
+              <input type="password" inputMode="numeric" maxLength={4} value={draft.pin} onChange={(e) => onChange({ pin: e.target.value.replace(/\D/g, "") })} />
+            </label>
+          )}
         </div>
       </div>
       <div className="cust-acct-foot">
@@ -317,7 +420,7 @@ function NewUserCard({
           Add user
         </button>
         <div className="cust-foot-sub">
-          Name and unique initials are the only two required.{" "}
+          {managerial ? "An invite is sent on Add." : "Name, initials and a Store are required."}{" "}
           <button className="btn ghost sm" onClick={onCancel}>
             Cancel
           </button>
@@ -331,38 +434,44 @@ function NewUserCard({
 
 function UserCard({
   user,
-  managers,
+  actor,
+  owners,
+  stores,
+  storeName,
   refusal,
   onRun,
   by,
 }: {
   user: User;
-  managers: number;
+  actor: User;
+  owners: number;
+  stores: Store[];
+  storeName: (id: string) => string;
   refusal: string | null;
   onRun: (r: UserWriteResult) => boolean;
-  // The Manager who authorised this screen (M-04 d11, A-28a). Every log row
-  // written here carries their name rather than a constant.
   by: ManagerAuth;
 }) {
   const app = useApp();
   // d22 — corrections. Live fields like the Supplier and Customer cards, but
   // committed on BLUR rather than per keystroke, because each commit appends a
-  // log row (A-55) and committing live would file one per character. Same
-  // trade M-01 d13 already made.
+  // log row (A-55) and committing live would file one per character.
   const [name, setName] = useState(user.name);
   const [initials, setInitials] = useState(user.initials);
+  const [email, setEmail] = useState(user.email ?? "");
   const [reactivateWith, setReactivateWith] = useState(user.initials);
 
-  const lastManager = user.active && user.role === "Manager" && managers <= 1;
+  const lastOwner = user.active && user.role === "Owner" && owners <= 1;
+  const canCorrect = may(actor, { kind: "correct", role: user.role, assignments: user.assignments });
+  const canRole = (to: UserRole) => may(actor, { kind: "changeRole", from: user.role, to, assignments: user.assignments });
+  const canDeactivate = may(actor, { kind: "deactivate", role: user.role, assignments: user.assignments });
+  const canPin = may(actor, { kind: "setPin", role: user.role, assignments: user.assignments });
+  const canReset = may(actor, { kind: "requestReset", role: user.role, assignments: user.assignments });
 
   return (
     <section className="cust-main">
       <div className="cust-head">
         <h2>
-          {user.name}{" "}
-          <span className={"badge" + (user.active ? "" : " off")}>
-            {user.active ? user.role : "Deactivated"}
-          </span>
+          {user.name} <span className={"badge" + (user.active ? "" : " off")}>{user.active ? user.role : "Deactivated"}</span>
         </h2>
         <span className="small muted">{user.initials}</span>
       </div>
@@ -370,25 +479,28 @@ function UserCard({
       <div className="cust-scroll">
         <div className="stack">
           {refusal && <div className="callout danger">{refusal}</div>}
+          {!canCorrect && (
+            <div className="callout small">
+              You may read this record and not change it — {user.role === "Employee" ? "an Employee" : `a ${user.role}`} is touched by an Owner
+              {user.role === "Employee" ? ", or by a Manager of their Stores" : ""} (M-04 d30).
+            </div>
+          )}
 
           <label className="field">
             <span>
               Name{" "}
               <SpecNote cite="M-04 d22">
-                Correcting is not reassigning: it changes what this row is called, never which row
-                a past action points at. Because every audit surface resolves through to the User
-                (d16), a correction shows <strong>retroactively</strong> — fix a name today and
-                last month's Sales show the corrected one. The log is the only place the old value
-                survives, and paper already printed does not follow.
+                Correcting is not reassigning: it changes what this row is called, never which row a
+                past action points at. Because every audit surface resolves through to the User (d16), a
+                correction shows <strong>retroactively</strong>.
               </SpecNote>
             </span>
             <input
               value={name}
+              disabled={!canCorrect}
               onChange={(e) => setName(e.target.value)}
               onBlur={() => {
-                if (name !== user.name) {
-                  if (!onRun(app.correctUser(user.id, { name }, by))) setName(user.name);
-                }
+                if (name !== user.name && !onRun(app.correctUser(user.id, { name }, by))) setName(user.name);
               }}
             />
           </label>
@@ -398,44 +510,79 @@ function UserCard({
             <input
               value={initials}
               maxLength={4}
+              disabled={!canCorrect}
               onChange={(e) => setInitials(e.target.value)}
               onBlur={() => {
-                if (initials.trim().toUpperCase() !== user.initials) {
-                  if (!onRun(app.correctUser(user.id, { initials }, by)))
-                    setInitials(user.initials);
-                }
+                if (initials.trim().toUpperCase() !== user.initials && !onRun(app.correctUser(user.id, { initials }, by)))
+                  setInitials(user.initials);
               }}
             />
           </label>
 
-          {user.active && user.role !== "Employee" && (
-            <PinField key={user.id} user={user} onRun={onRun} by={by} />
-          )}
+          <label className="field">
+            <span>Email{isManagerial(user.role) ? "" : " (optional)"}</span>
+            <input
+              value={email}
+              disabled={!canCorrect}
+              onChange={(e) => setEmail(e.target.value)}
+              onBlur={() => {
+                if (email.trim() !== (user.email ?? "") && !onRun(app.correctUser(user.id, { email }, by))) setEmail(user.email ?? "");
+              }}
+            />
+          </label>
+
+          <div className="field">
+            <span>
+              Stores{" "}
+              <SpecNote cite="M-04 d27">
+                Assignment is the second enforcement point: a Store where this person's initials are held
+                refuses them, naming the holder; one where a Manager's PIN is held refuses it, naming
+                nobody (d32). Unassigning an Employee's or Manager's last Store is refused — deactivate
+                them instead.
+              </SpecNote>
+            </span>
+            <StoreChecks
+              stores={stores}
+              chosen={user.assignments}
+              storeName={storeName}
+              canToggle={(id) => may(actor, { kind: "assign", role: user.role, storeId: id })}
+              onToggle={(id, on) => onRun(on ? app.assignToStore(user.id, id, by) : app.unassignFromStore(user.id, id, by))}
+            />
+          </div>
+
+          {user.active && isManagerial(user.role) && canPin && <PinField key={user.id} user={user} onRun={onRun} by={by} />}
+
+          {user.active && isManagerial(user.role) && canReset && <ResetField key={`reset-${user.id}`} user={user} onRun={onRun} by={by} />}
 
           {user.active ? (
             <>
               <div className="field">
-                <span>Role</span>
+                <span>
+                  Role{" "}
+                  <SpecNote cite="M-04 d25, d26, d30">
+                    Any change to or from Manager or Owner is Owner-only. The last active Owner cannot be
+                    demoted, including by themselves — an Organization always keeps one (d26). A demotion
+                    to Employee clears the PIN (d28).
+                  </SpecNote>
+                </span>
                 <div className="btn-row">
-                  <button
-                    className={"btn" + (user.role === "Employee" ? " primary" : " ghost")}
-                    onClick={() => onRun(app.changeUserRole(user.id, "Employee", by))}
-                  >
-                    Employee
-                  </button>
-                  <button
-                    className={"btn" + (user.role === "Manager" ? " primary" : " ghost")}
-                    onClick={() => onRun(app.changeUserRole(user.id, "Manager", by))}
-                  >
-                    Manager
-                  </button>
+                  {(["Employee", "Manager", "Owner"] as UserRole[]).map((r) => (
+                    <button
+                      key={r}
+                      className={"btn" + (user.role === r ? " primary" : " ghost")}
+                      disabled={user.role !== r && !canRole(r)}
+                      title={user.role !== r && !canRole(r) ? "Owner-only (M-04 d30)" : undefined}
+                      onClick={() => user.role !== r && onRun(app.changeUserRole(user.id, r, by))}
+                    >
+                      {r}
+                    </button>
+                  ))}
                 </div>
               </div>
               <p className="small muted">
                 A role change takes effect on the next session for what the shell draws, but every
-                manager-only function resolves the authorising person to an active Manager{" "}
-                <em>at the moment of the call</em> — so a demotion bites server-side at once
-                (A-55).
+                manager-only function resolves the authorising person <em>at the moment of the call</em> —
+                so a demotion bites server-side at once (A-55, A-89).
               </p>
             </>
           ) : (
@@ -443,22 +590,14 @@ function UserCard({
               <span>
                 Reactivate with initials{" "}
                 <SpecNote cite="M-04 d19">
-                  Reactivation restores the <strong>original</strong> row, so one person keeps one
-                  history (d5). Their old initials may have been reissued in the meantime — d16
-                  released them — so this asks rather than assuming, and refuses a clash by naming
-                  who holds them.
+                  Reactivation restores the <strong>original</strong> row, so one person keeps one history
+                  (d5). Their old initials may have been reissued at one of their Stores — d16 released
+                  them — so this asks rather than assuming, and refuses a clash by naming who holds them.
                 </SpecNote>
               </span>
               <div className="btn-row">
-                <input
-                  value={reactivateWith}
-                  maxLength={4}
-                  onChange={(e) => setReactivateWith(e.target.value)}
-                />
-                <button
-                  className="btn primary"
-                  onClick={() => onRun(app.reactivateUser(user.id, reactivateWith, by))}
-                >
+                <input value={reactivateWith} maxLength={4} onChange={(e) => setReactivateWith(e.target.value)} />
+                <button className="btn primary" onClick={() => onRun(app.reactivateUser(user.id, reactivateWith, by))}>
                   Reactivate
                 </button>
               </div>
@@ -471,17 +610,17 @@ function UserCard({
         {user.active && (
           <button
             className="btn danger cust-primary"
-            // Deliberately NOT disabled on the last Manager — see the note at
-            // the top of this file. The store refuses and says why.
+            // Deliberately NOT disabled on the last Owner — see the note at the
+            // top of this file. The store refuses and says why.
             onClick={() => onRun(app.deactivateUser(user.id, by))}
-            title={lastManager ? "Will be refused — this is the only active Manager" : undefined}
+            title={lastOwner ? "Will be refused — this is the only active Owner" : !canDeactivate ? "Owner-only (M-04 d30)" : undefined}
           >
             Deactivate
           </button>
         )}
         <div className="cust-foot-sub">
           Users are deactivated, never deleted (d5) — attribution has to survive their leaving.
-          {lastManager && " This is the only active Manager, so it will be refused (d14)."}
+          {lastOwner && " This is the only active Owner, so it will be refused (d26)."}
         </div>
       </div>
     </section>
@@ -494,15 +633,7 @@ function UserCard({
 // Manager, never by its holder at the counter. The log records that it changed
 // and never what it was; a clash is refused as "in use at this Store" with no
 // name (d32). Employees have none.
-function PinField({
-  user,
-  onRun,
-  by,
-}: {
-  user: User;
-  onRun: (r: UserWriteResult) => boolean;
-  by: ManagerAuth;
-}) {
+function PinField({ user, onRun, by }: { user: User; onRun: (r: UserWriteResult) => boolean; by: ManagerAuth }) {
   const app = useApp();
   const [value, setValue] = useState("");
   const [open, setOpen] = useState(false);
@@ -534,23 +665,14 @@ function PinField({
       <span>
         PIN{" "}
         <SpecNote cite="M-04 d28, d32">
-          Exactly <strong>four digits</strong>, unique among the Managers and Owners assigned to
-          each of this person's Stores. Set by an Owner or a Manager rather than chosen at the
-          counter, where there is no private moment. The log records that it changed and{" "}
-          <strong>never what it was</strong>; a clash is refused as <em>in use at this Store</em>{" "}
-          with no name, and every refusal is logged (d32).
+          Exactly <strong>four digits</strong>, unique among the Managers and Owners assigned to each of this
+          person's Stores. Set by an Owner or a Manager rather than chosen at the counter, where there is no
+          private moment. The log records that it changed and <strong>never what it was</strong>; a clash is
+          refused as <em>in use at this Store</em> with no name, and every refusal is logged (d32).
         </SpecNote>
       </span>
       <div className="btn-row">
-        <input
-          type="password"
-          inputMode="numeric"
-          autoFocus
-          value={value}
-          maxLength={4}
-          autoComplete="off"
-          onChange={(e) => setValue(e.target.value.replace(/\D/g, ""))}
-        />
+        <input type="password" inputMode="numeric" autoFocus value={value} maxLength={4} autoComplete="off" onChange={(e) => setValue(e.target.value.replace(/\D/g, ""))} />
         <button
           className="btn primary sm"
           onClick={() => {
@@ -576,7 +698,63 @@ function PinField({
   );
 }
 
-function UserLog({ user, managers }: { user: User | null; managers: number }) {
+// M-04 d29 — nobody sets another person's password. An administrator triggers
+// an emailed link; the person sets their own. The prototype has no email, so
+// the link "lands" here, labelled as the fake it is, and the set-own-password
+// write is the real thing under test.
+function ResetField({ user, onRun, by }: { user: User; onRun: (r: UserWriteResult) => boolean; by: ManagerAuth }) {
+  const app = useApp();
+  const [sent, setSent] = useState(false);
+  const [pw, setPw] = useState("");
+
+  return (
+    <div className="field">
+      <span>
+        Password{" "}
+        <SpecNote cite="M-04 d29, E-01 d27">
+          The personal-session credential. Set by its holder through an emailed link — an invite when they
+          are added, a reset when one is requested. The log records that a link was sent and that a password
+          was set, <strong>never a value, never the link</strong>.
+        </SpecNote>
+      </span>
+      <div className="btn-row">
+        <span className="small muted" style={{ flex: 1 }}>
+          {user.password ? "Set by the user." : "Not yet set — the invite is outstanding."}
+        </span>
+        <button
+          className="btn ghost sm"
+          onClick={() => {
+            if (onRun(app.requestPasswordReset(user.id, by))) setSent(true);
+          }}
+        >
+          Send reset link
+        </button>
+      </div>
+      {sent && (
+        <div className="callout small" style={{ marginTop: 8 }}>
+          <strong>Prototype — the emailed link lands here.</strong> In the product this form is on a page only{" "}
+          {user.email} can reach.
+          <div className="btn-row" style={{ marginTop: 6 }}>
+            <input type="password" placeholder="new password (8+)" value={pw} onChange={(e) => setPw(e.target.value)} autoComplete="new-password" />
+            <button
+              className="btn primary sm"
+              onClick={() => {
+                if (onRun(app.setOwnPassword(user.id, pw))) {
+                  setPw("");
+                  setSent(false);
+                }
+              }}
+            >
+              Set my password
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function UserLog({ user, owners, actor }: { user: User | null; owners: number; actor: User }) {
   return (
     <aside className="cust-acct">
       <div className="cust-head">
@@ -586,21 +764,31 @@ function UserLog({ user, managers }: { user: User | null; managers: number }) {
         <div className="stack">
           <div className="callout small">
             <strong>
-              {managers} active Manager{managers === 1 ? "" : "s"}
+              {owners} active Owner{owners === 1 ? "" : "s"}
             </strong>
             <div className="muted">
-              A Store always has at least one (M-04 d14). Demoting or deactivating the last one is
-              refused in the write path at every role — including a Manager doing it to themselves.
-              No authorisation lifts it, and there is no tier above Manager to lift it with (d11).
+              An Organization always keeps at least one (M-04 d26). Demoting or deactivating the last one
+              is refused in the write path at every role — including an Owner doing it to themselves. No
+              Store is required to have a Manager; a Store with none does its manager-only work through
+              an Owner.
+            </div>
+          </div>
+          <div className="callout small">
+            <strong>
+              You are {actor.name} ({actor.role})
+            </strong>
+            <div className="muted">
+              {actor.role === "Owner"
+                ? "An Owner administers everyone in the Organization."
+                : `A Manager administers Employees at ${actor.assignments.length} Store${actor.assignments.length === 1 ? "" : "s"} and sets PINs there; anything touching a Manager or Owner is Owner-only (M-04 d30).`}
             </div>
           </div>
 
           {user ? (
             <>
               <div className="small muted">
-                Actor, timestamp and before-and-after, on the same log a role change appends to
-                (A-55). Without it, who promoted whom exists nowhere after the second change — and
-                this is the privilege boundary.
+                Actor, timestamp and before-and-after, on the same log a role change appends to (A-55).
+                Credentials are logged as changed, never as a value (d28, d29).
               </div>
               <ul className="loglist">
                 {[...user.log].reverse().map((l, i) => (
