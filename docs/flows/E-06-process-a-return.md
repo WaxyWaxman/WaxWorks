@@ -79,7 +79,7 @@ This is a policy choice, not a technical limitation — the system records who p
 | 1 | A Return is a **negative-quantity line** on a Sale, not a separate document type |
 | 2 | Linking to the original Sale is done **when possible, never required** — no receipt, no lookup, no blocker |
 | 3 | No time window, no receipt requirement, and no manager approval for a Return |
-| 4 | Refunds settle as cash out of the till or as store credit on the Customer's accounts-receivable balance. *Amended by decision 16* — or, with no Customer, onto a gift card |
+| 4 | Refunds settle as cash out of the till or as store credit on the Customer's accounts-receivable balance. *Amended by decision 33* — or, with no Customer, onto a gift card |
 | 5 | Refund amount defaults to the linked Sale's line price, or the current price when unlinked; both overridable |
 | 6 | A returned copy is explicitly routed — back to sellable, re-graded as its own InventoryItem, or written off — before it is sellable again |
 | 7 | Refund and stock disposition are independent decisions |
@@ -168,4 +168,4 @@ correction of the first.
 - ~~**Does a returned New-stock copy become second-hand once opened?**~~ — **Resolved** by decision 31: no policy; step 6's routing is the whole rule. *Original:* E-02 fixes intake mode per Invoice, and a Mint/Sealed copy that comes back opened is no longer Mint/Sealed. Step 6 gives the mechanism — a re-graded InventoryItem — but not the policy on whether an opened copy may ever return to New stock at its sticky price.
 - ~~**Exchanges.**~~ — **Resolved** by decision 32: a Return line plus a sale line on one Sale, netting to the difference; no affordance of its own. *Original:* Whether that needs its own affordance at the till, or is left as two lines, was unsettled.
 - **Return of a non-tracked item.** Freight and services have no stock to route back; presumably refund-only, but unstated.
-- ~~**Store credit issued without a Customer.**~~ — **Resolved** by decision 16: a Customer is required for store credit, and a walk-in who declines a record is refunded onto a gift card. *Original:* Whether a walk-in return with no Customer record should be able to issue a gift card instead of cash was undecided.
+- ~~**Store credit issued without a Customer.**~~ — **Resolved** by decision 33: a Customer is required for store credit, and a walk-in who declines a record is refunded onto a gift card. *Original:* Whether a walk-in return with no Customer record should be able to issue a gift card instead of cash was undecided.
