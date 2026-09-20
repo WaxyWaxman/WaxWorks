@@ -93,11 +93,15 @@ Each flow is its own document. Status is tracked per flow so parallel work doesn
 
 ### Owner
 
-_No flows yet. The `O-` series holds jobs done for the whole Organization — stores, store accounts, Managers and Owners._
+| ID | Flow | Status |
+|---|---|---|
+| O-01 | [Administer the organization](flows/O-01-administer-the-organization.md) | In clarification |
 
 ### System Administrator
 
-_No flows yet. The `S-` series holds WaxWorks-staff jobs — onboarding an Organization and recovering its access. A System Administrator sees identity data only, never store data._
+| ID | Flow | Status |
+|---|---|---|
+| S-01 | [Onboard and recover organizations](flows/S-01-onboard-and-recover-organizations.md) | In clarification |
 
 ---
 

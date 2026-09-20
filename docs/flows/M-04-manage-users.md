@@ -2,11 +2,11 @@
 
 **Actor:** Manager (Owner for anything that touches a Manager or an Owner — decision 30)
 **Status:** Specified
-**Related:** [E-01 Authenticate](E-01-authenticate.md) · [M-06 Configure the store](M-06-settings.md)
+**Related:** [E-01 Authenticate](E-01-authenticate.md) · [M-06 Configure the store](M-06-settings.md) · [O-01 Administer the organization](O-01-administer-the-organization.md) · [S-01 Onboard and recover organizations](S-01-onboard-and-recover-organizations.md)
 
 **Job:** As a manager, I need to control who has access to the system and at what level.
 
-**Scope note:** This flow is the people of one Organization — their role, their Stores, their PIN, their standing. The Organization itself — its Stores, their store accounts, and the Owners — is the `O-` series; the Organization's creation and recovery is the `S-` series.
+**Scope note:** This flow is the people of one Organization — their role, their Stores, their PIN, their standing. The Organization itself — its Stores, their store accounts, and the Owners — is [O-01](O-01-administer-the-organization.md); the Organization's creation and recovery is [S-01](S-01-onboard-and-recover-organizations.md).
 
 ---
 

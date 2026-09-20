@@ -2,7 +2,7 @@
 
 **Actor:** Manager
 **Status:** Specified
-**Related:** [E-01 Authenticate](E-01-authenticate.md) · [E-05 Point of Sale](E-05-sell-a-record.md) · [M-03 Daily summary](M-03-daily-summary.md) · [M-04 Manage users](M-04-manage-users.md) · [M-07 Chart of accounts](M-07-chart-of-accounts.md) · [M-08 Keep the general ledger](M-08-general-ledger.md)
+**Related:** [E-01 Authenticate](E-01-authenticate.md) · [E-05 Point of Sale](E-05-sell-a-record.md) · [O-01 Administer the organization](O-01-administer-the-organization.md) · [M-03 Daily summary](M-03-daily-summary.md) · [M-04 Manage users](M-04-manage-users.md) · [M-07 Chart of accounts](M-07-chart-of-accounts.md) · [M-08 Keep the general ledger](M-08-general-ledger.md)
 
 **Job:** As a manager, I need to configure the things every other flow reads — tax, tenders, sections, and currency — so the till and the reports behave the way this shop actually works.
 

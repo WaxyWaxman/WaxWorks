@@ -2,11 +2,11 @@
 
 **Actor:** Employee (steps 6 and 7 are a Manager's or an Owner's)
 **Status:** Specified
-**Related:** [M-04 Manage users](M-04-manage-users.md) · [M-06 Configure the store](M-06-settings.md)
+**Related:** [M-04 Manage users](M-04-manage-users.md) · [M-06 Configure the store](M-06-settings.md) · [O-01 Administer the organization](O-01-administer-the-organization.md) · [S-01 Onboard and recover organizations](S-01-onboard-and-recover-organizations.md)
 
 **Job:** As an employee, I need to identify myself to the system so my actions are attributed to me and I can access the till.
 
-**Scope note:** This flow is how a person becomes known to a terminal. Who may be a User, which Stores they are assigned to, and who sets a PIN or sends an invite is [M-04](M-04-manage-users.md)'s; a Store's own account is [M-06](M-06-settings.md)'s and the Organization around it is the Owner's (`O-` series).
+**Scope note:** This flow is how a person becomes known to a terminal. Who may be a User, which Stores they are assigned to, and who sets a PIN or sends an invite is [M-04](M-04-manage-users.md)'s; a Store's own account is [M-06](M-06-settings.md)'s and the Organization around it is the Owner's ([O-01](O-01-administer-the-organization.md)).
 
 ---
 

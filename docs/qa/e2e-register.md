@@ -623,9 +623,31 @@ covered only as a clause above. Both want rows appended by `/qa register M-08`.
 
 ---
 
+### O-01 — Administer the organization
+
+_Status: In clarification — rows are `Planned` against the decisions recorded so far._
+
+| # | Scenario | Steps | Asserts | Needs | Prototype | Product | Spec |
+|---|---|---|---|---|---|---|---|
+| O-01-T1 | **The Organization screen is Owner-only.** Reach it as a Manager on a store session: the PIN pad opens the line and the screen refuses the Manager by name; a Manager's call to create a Store is refused by role in the write path. As an Owner on a personal session: nothing is asked. | 1 | O-01 decision 1, M-04 decision 30, E-01 decision 26, E-01 decision 27 | A Manager with a PIN; an Owner with a personal login | Planned | — | |
+| O-01-T2 | **Creating a Store assigns its identifiers.** Create a Store with a trading name and store account email: it takes the next seven-digit Store ID and the next position, both read-only; it starts from M-06's defaults with nobody assigned; a duplicate store account email is refused. | 3 | O-01 decision 2, M-06 decision 70, M-06 decision 47 | One existing Store | Planned | — | |
+| O-01-T3 | **Resetting the store account signs every terminal out.** Reset a Store's store account password: two terminals on its store session are both signed out; the log records a change and no value. | 4 | O-01 decision 3, E-01 decision 24 | Two terminals on one Store | Planned | — | |
+| O-01-T4 | **Nothing here is a figure.** The Organization screen lists Stores, Owners and Managers and their logs, and no inventory, Sale, Customer, Supplier, balance or total of any Store appears on it. | 2 | O-01 decision 4 | An Organization with trading history | Planned | — | |
+| O-01-T5 | **Every act is logged with before and after.** Create a Store, add an Owner, change a role: each writes a log row naming the Owner who did it and the values before and after; the store account password row names no value. | 3–5 | O-01 decision 5 | As T1 | Planned | — | |
+
+### S-01 — Onboard and recover organizations
+
+_Status: In clarification — rows are `Planned` against the decisions recorded so far._
+
+| # | Scenario | Steps | Asserts | Needs | Prototype | Product | Spec |
+|---|---|---|---|---|---|---|---|
+| S-01-T1 | **A System Administrator sees identity data and nothing else.** Sign in with a passkey: Organizations, Stores' identity, people and the user-change log are listed; no route, query or identifier reaches a Store's inventory, Sales, Customers, Suppliers, ledger or settings; there is no *view as*. | 1–2 | S-01 decision 1, S-01 decision 4 | Two Organizations with trading history; product only for the read-path half | Planned | Planned | |
+| S-01-T2 | **Onboarding creates an Organization and invites its first Owner.** Create an Organization with a name and an Owner's name and email: the Owner is invited, holds no Store, and creates the first Store themselves; a password is never typed by the administrator. | 3 | S-01 decision 2, M-04 decision 29, M-04 decision 27 | — | Planned | — | |
+| S-01-T3 | **Recovery restores an Owner and is logged where the Organization reads it.** In an Organization whose only Owner is deactivated: reactivate them, or invite a new Owner; trigger a password reset for an Owner. Each act appears in that Organization's own log, readable by its Owners. | 4 | S-01 decision 3, M-04 decision 26, O-01 decision 5 | An Organization with one deactivated Owner | Planned | — | |
+
 ### Registered
 
-Every flow at `Specified` has rows above — **fifteen of fifteen**, M-08 included.
+Every flow at `Specified` has rows above — **fifteen of fifteen**, M-08 included. The two `In clarification` flows of the `O-` and `S-` series (O-01, S-01) are registered early, against the decisions they already carry.
 
 ---
 
@@ -647,6 +669,7 @@ milestones have both tracks landed.
 | M6 Hardening | Every row above, run as one seeded trading day |
 | M7 Payables (A-39) | M-05-T1–T9, E-02-T9, M-01-T4, **M-08-T16** *(A-80 — it asserts no M-08 decision and runs here)* |
 | M8 The general ledger (A-80) | M-08-T1–T15, T17–T22. **Placed on 2026-09-18** by A-80, immediately after M7 and the last milestone with the v1 two-track shape — d7's payoff, *the Accounts payable balance **is** M-05's balance*, is not checkable until payables exists. **M-08-T16 belongs to M7 and not here**: it asserts M-06 d59, d60 and M-07 d8 and **no M-08 decision at all**, so it bounds when the row runs rather than what M8 builds |
+| Unplaced — O-01, S-01 | O-01-T1–T5 and S-01-T1–T3 belong with the identity functions, which [architecture](../architecture.md) §8 puts at M1; §8 has not yet been amended for the Organization model, so they are recorded as unplaced rather than guessed into M1 |
 | Post-v1, in §8's order | M-02-T1–T10 → M-04-T1, T3, T4, **T9, T11–T13** *(Add and Deactivate first, M-04 decision 21; T2, T5, T6 `Stale`)* → M-06-T3, T5–T7, T9, T10, T12–T15 *(the settings screens)* → M-07-T1–T7 and M-03-T6 *(the chart **screen** and the journal export — still unplaced. A-79 moved M-07's **tables** into M2 and M3 where A-67 required them, and deliberately left its functions and screens here)* |
 | **Unplaced** | ~~M-03-T18~~ — **placed in M5** on 2026-09-18, the same day [architecture](../architecture.md) §11 answered its open question: nothing in this system gates a read by role, so the row asserts that rather than waiting on it, and it walks the same close modal as T7–T17. This cell had still called it `Blocked` after the row itself moved to `Planned` — register drift, corrected here. ~~M-03-T17~~ — **placed in M5** by A-83 and §8 on 2026-09-18 |
 
