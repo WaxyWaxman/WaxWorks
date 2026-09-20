@@ -286,12 +286,12 @@ owned elsewhere and are the real dependencies; the rest are this flow's own.
   membership is the precondition for any of them.**
 
 - ~~**Exchange gain or loss.**~~ — **Resolved by [M-06](M-06-settings.md) d59, d60, d61 and
-  d62, which own it.** The ledger is kept in the **home currency**; a foreign artifact
+  M-06 d62, which own it.** The ledger is kept in the **home currency**; a foreign artifact
   records the rate it used, on itself, which is d39's own stated mechanism and makes d33's
   unrecoverable past rate irrelevant. At payment the Manager **confirms what actually left
   the bank**, and the difference against what was booked posts to one reserved
   exchange-gain-or-loss account — recorded rather than derived. A bank fee is its own
-  document (d62), never a line on the supplier's Invoice. *What it cost:* d17's *nothing is
+  document (M-06 d62), never a line on the supplier's Invoice. *What it cost:* d17's *nothing is
   ever converted* falls for the journal line, [M-06](M-06-settings.md) d37's *never a stored
   amount* holds for display only, and [architecture](../architecture.md) A-47's exclusion of
   currency conversion from the rate rule is reopened. **A-36 and A-33a survive untouched.**
