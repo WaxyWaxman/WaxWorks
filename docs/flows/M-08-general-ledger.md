@@ -282,7 +282,7 @@ owned elsewhere and are the real dependencies; the rest are this flow's own.
   is decision 2's purpose, and how consolidation actually works stays deferred at
   [architecture](../architecture.md) §11 where it already was. A-72 keeps all three shapes
   open: an A-5 exception on `release_cache`'s footing, the reference model's transfer to a
-  main site, or a read principal that does not yet exist — **E-01 d8's multi-store
+  main site, or a read principal that does not yet exist — **E-01 d8's (since superseded by d25) multi-store
   membership is the precondition for any of them.**
 
 - ~~**Exchange gain or loss.**~~ — **Resolved by [M-06](M-06-settings.md) d59, d60, d61 and
