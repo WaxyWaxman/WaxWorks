@@ -113,6 +113,14 @@ This is distinct from a supplier **Invoice** ([E-02](E-02-receive-inventory.md))
 
 ---
 
+**From [E-05](E-05-sell-a-record.md) decision 38:**
+
+- **A Customer is detached from an Open Sale at the till; a Held Sale offers Cancel Hold instead.**
+  The global discount decision 6 pre-filled **stays on the lines** — a pre-filled value is the line's own, by
+  [E-05](E-05-sell-a-record.md) d13's snapshot — while decision 7's tax group **falls away**, tax being resolved
+  live against the store default when no Customer is attached. A hold is never detached: decision 19's *Waiting*
+  band is the only place a hold nobody has chased becomes visible, and an unattached hold would appear in none.
+
 ## Resolved decisions
 
 | # | Decision |
