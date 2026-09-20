@@ -485,8 +485,8 @@ function UserCard({
           {refusal && <div className="callout danger">{refusal}</div>}
           {!canCorrect && (
             <div className="callout small">
-              You may read this record and not change it — {withArticle(user.role)} is touched by an Owner
-              {user.role === "Employee" ? ", or by a Manager of their Stores" : ""} (M-04 d30).
+              You may read this record and not change it{canPin ? " — except the PIN, which a Manager sets for a Manager or Owner at their own Stores (M-04 d28)" : ""}. {withArticle(user.role)[0].toUpperCase() + withArticle(user.role).slice(1)} is otherwise touched by an Owner
+              {user.role === "Employee" ? ", or by a Manager of their Stores" : ""} (M-04 d30). The buttons stay live; the write path is what refuses.
             </div>
           )}
 
