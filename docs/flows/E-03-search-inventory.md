@@ -109,6 +109,18 @@ A scanned barcode short-circuits to resolution rather than keyword search: a man
 
 ## Open questions
 
+- **Cost is masked on this screen by an affordance no decision authorises.** The prototype hides the copies
+  table's cost behind a 🔓/🔒 control defaulting to hidden (`prototype/src/screens/Search.tsx:46`,
+  `prototype/src/components/FindSelection.tsx:90`), on the stated grounds that *a customer standing at the counter
+  can read this screen too* — but **no decision in this flow, in [E-04](E-04-manage-inventory.md) which owns the
+  copies table, in [M-06](M-06-settings.md), or in the [architecture](../architecture.md) says cost is ever
+  hidden**, and [M-04](M-04-manage-users.md) d2 makes anything off the manager-gated list plainly Employee-visible.
+  Three things need settling together: whether the masking is ratified at all; if so, whether it is per-screen
+  session state as built, a stored per-User or per-Store setting, or a gate; and what to do about
+  `prototype/src/screens/Receiving.tsx:803`, which hardcodes cost **shown** and wires the button to a no-op, so the
+  receiving desk carries a control that does nothing. Raised by [E-07](E-07-manage-customers.md) d25, which was
+  asked to follow this flow's precedent and found there was none. Nothing in `docs/qa/e2e-register.md` covers the
+  masking either way.
 - **Bin location.** Section tells you which part of the shop a Record lives in, but not where in the racks. Whether a finer-grained location is needed depends on shop size and is currently unanswered.
 - **Ranking within relevance.** **Partly answered** by decision 11: results band by stock state, and within a band sort by quantity on hand, then artist. What is still unspecified is ranking *inside* a band on a broad search — release year, provider-supplied popularity, and local sales velocity are all candidates. Note that popularity signals are provider-specific and may not survive the move off Discogs (decision 10).
 - ~~**Recency thresholds.**~~ — **Resolved by decision 16**: the buckets are ratified as drawn, and *never sold* appears once a held Record's oldest copy has been on hand past a store-configured threshold defaulting to **180 days**. What remains is [M-06](M-06-settings.md)'s job, not this flow's — the setting itself, and whether it should vary by Section rather than by store.
