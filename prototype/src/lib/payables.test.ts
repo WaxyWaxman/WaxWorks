@@ -10,6 +10,8 @@ import {
   isOverdue,
   settlementPlan,
   unclearRefusal,
+  unretireOnVoid,
+  retiredInBatch,
   type LedgerRow,
 } from "./payables";
 import { creditIsConsumed, invoiceIsFrozen } from "./totals";
@@ -511,5 +513,63 @@ describe("M-05 d51/d52 — aged payables, per Supplier, counted from the due dat
     const rows = [bill("A", 10, 15), credit("C1", 500)];
 
     expect(agedBuckets(rows).reduce((n, b) => n + b.total, 0)).toBe(10);
+  });
+});
+
+describe("M-05 d54 — a void un-retires the placeholders its batch disposed of", () => {
+  const entry = (over: Partial<PayableEntry> = {}): PayableEntry => ({
+    id: "ph-1",
+    supplierId: "sup",
+    type: "Claim",
+    reference: "CLM-1",
+    date: "2026-09-01",
+    subtotal: 0,
+    tax: 0,
+    freight: 0,
+    misc: 0,
+    createdBy: "MT",
+    createdAt: "2026-09-01 10:00:00",
+    log: [],
+    ...over,
+  });
+
+  const retired = (batchId: string) =>
+    entry({
+      clearedAt: "2026-09-16 10:00:00",
+      clearedBy: "MT",
+      clearedInBatchId: batchId,
+      log: [{ at: "2026-09-16 10:00:00", text: "Retired in a settlement by MT" }],
+    });
+
+  it("returns the placeholder to outstanding — every mark of the disposal comes off", () => {
+    const out = unretireOnVoid(retired("bat-1"), "bat-1", "2026-09-19 09:00:00", "MT");
+    expect(out.clearedInBatchId).toBeUndefined();
+    expect(out.clearedAt).toBeUndefined();
+    expect(out.clearedBy).toBeUndefined();
+  });
+
+  it("keeps the retirement in the log — the disposal happened, and history says so", () => {
+    const out = unretireOnVoid(retired("bat-1"), "bat-1", "2026-09-19 09:00:00", "MT");
+    expect(out.log.map((l) => l.text)).toEqual([
+      "Retired in a settlement by MT",
+      "Un-retired by the void of this settlement by MT (d54)",
+    ]);
+  });
+
+  it("leaves a placeholder another batch retired alone — the void is whole, not global", () => {
+    const other = retired("bat-2");
+    expect(unretireOnVoid(other, "bat-1", "2026-09-19 09:00:00", "MT")).toBe(other);
+  });
+
+  it("leaves a Manager's d15 clearing alone — no clearedInBatchId, so not this act's to reverse", () => {
+    // The discriminator d39 needs. An un-clear reverses this one; a void must not.
+    const byHand = entry({ clearedAt: "2026-09-16 10:00:00", clearedBy: "MT" });
+    expect(unretireOnVoid(byHand, "bat-1", "2026-09-19 09:00:00", "MT")).toBe(byHand);
+    expect(retiredInBatch(byHand, "bat-1")).toBe(false);
+  });
+
+  it("leaves an untouched row alone", () => {
+    const live = entry();
+    expect(unretireOnVoid(live, "bat-1", "2026-09-19 09:00:00", "MT")).toBe(live);
   });
 });
