@@ -1,6 +1,6 @@
 # <ID> — <Short verb-led title>
 
-**Actor:** Employee | Manager
+**Actor:** Employee | Manager | Owner | System Administrator
 **Status:** Stub — awaiting flow
 **Related:** [<ID> <title>](<file>.md)
 

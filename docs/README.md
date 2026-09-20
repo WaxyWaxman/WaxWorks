@@ -38,7 +38,7 @@ Point-of-sale and inventory management for independent vinyl record stores.
 
 ## Conventions
 
-**Flow IDs are stable.** `E-` for employee jobs, `M-` for manager jobs. Once assigned, an ID doesn't change — decisions and cross-references point at them (e.g. "E-02 decision 14").
+**Flow IDs are stable.** `E-` for Employee jobs, `M-` for Manager jobs, `O-` for Owner jobs, `S-` for System Administrator jobs. Once assigned, an ID doesn't change — decisions and cross-references point at them (e.g. "E-02 decision 14").
 
 **One file per flow.** Keeps parallel editing conflict-free and keeps the PRD readable as a spine rather than a monolith.
 
