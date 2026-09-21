@@ -1,6 +1,7 @@
 # Wax Works — the build workflow
 
 **Status:** Ratified 2026-09-17 (files for work orders; a path hook on the developer subagent; developer as both skill and subagent)
+**Amended:** 2026-09-21 — a blocking finding whose remedy is not code is **`discharged`** by a human naming what discharged it, rather than having no terminal state at all. Surfaced by M0 finding 28, which can never be marked `fixed` (§2, §4)
 **Owners:** sr-talbot, WaxyWaxman
 
 How a `Specified` flow becomes reliable code once we are past the prototype. It
@@ -57,7 +58,7 @@ Created by `/work-order <ID> <track>` from the spec, **before any code**.
 | **Checklist** | coordinator, derived | One row per live decision the flow and its *Inherited from other flows* section bind to this track, plus every A-n that constrains it (A-4 definer functions, A-5 tenancy, A-15/A-47 money, A-28 flags, …). Each row: the decision → the evidence required — `unit`, `integration`, or `manual` with the reason a test cannot hold it |
 | **Register rows** | coordinator | The [register](../qa/e2e-register.md) rows this order must make automatable |
 | **Evidence** | developer | Per checklist row, exactly one of: **`Done`** — test name, `file:line`, and the run output quoted; **`Deferred`** — why, who owns it, and where it is recorded (a `Blocked` register row, or an open question); **`Blocked`** — the open question, routed to the flow that owns it; **`N/A`** — why this decision does not bind this track. **A blank cell fails the gate** |
-| **Findings** | reviewers | Per finding: the decision cited, `file:line`, severity; the developer marks each `fixed` or `disputed`, never deletes one |
+| **Findings** | reviewers | Per finding: the decision cited, `file:line`, severity; the developer marks each **`fixed`** or **`disputed`**. A **human** may mark a blocking finding **`discharged`** — its remedy is not code — in the Verdict, **naming what discharged it**: a ratified decision, a merged pull request, or a recorded open question with an owner. As with a `Deferred` Evidence cell, **that record must exist**. Nothing here is ever deleted |
 | **Verdict** | coordinator | `Accepted` or `Returned`, and the **Needs a human** list |
 
 A human approves the Checklist before development starts. **That approval is the
@@ -83,7 +84,10 @@ you can see in the diff, not a developer omission you cannot.
    as input to this pass; that job never blocks on its own.
 4. **`/code-review`** — quality only.
 5. **The developer fixes**; reviewers re-check the findings only, not the whole
-   order.
+   order. A finding the developer cannot fix is marked `disputed` with its
+   question, which makes it a **Needs a human** item; a *blocking* one then
+   ends `fixed` or `discharged` and never stays `disputed`, because a
+   `disputed` blocking finding is what an order cannot be accepted over.
 6. **A human merges.** Agents open pull requests; they never merge one.
 7. When both tracks' orders for a milestone are `Accepted`, the coordinator writes
    the row in [`status.md`](status.md) — the pull requests and the contract
@@ -107,6 +111,7 @@ order's Verdict.
 | Open question | either owner | A step whose outcome the spec does not state — the order's row is `Blocked` until answered |
 | Merge | either owner | The pull request, with the order's Verdict `Accepted` |
 | A-n ratification | either owner | Anything `/architecture` drafted while the order ran |
+| Discharge a blocking finding | either owner | That a `blocks` finding whose remedy is **not code** is answered by a record rather than a fix — naming that record in the Verdict. An agent never writes `discharged`; `disputed` alone never satisfies acceptance |
 
 ---
 
