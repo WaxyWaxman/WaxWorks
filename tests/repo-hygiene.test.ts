@@ -22,7 +22,12 @@ describe("A-31 — the agent configuration is version-controlled", () => {
     try {
       execSync(`git check-ignore -q "${path}"`, { cwd: root });
       return true;
-    } catch {
+    } catch (e) {
+      // check-ignore exits 1 for "not ignored" and 128 when it could not answer.
+      // Conflating them would make the .env.example assertion — which expects
+      // false — pass in a tree where git cannot run at all.
+      const status = (e as { status?: number }).status;
+      if (status !== 1) throw new Error(`git check-ignore could not answer for ${path} (exit ${status})`);
       return false;
     }
   };

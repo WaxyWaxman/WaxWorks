@@ -6,7 +6,7 @@ import { FUNCTIONS } from "../packages/contracts/src/functions";
 import * as contracts from "../packages/contracts/src/index";
 import { createFakeClient } from "../packages/contracts/src/fake";
 import { createSupabaseWaxClient } from "../packages/contracts/src/supabase";
-import { contract, header, managerHeader } from "../packages/contracts/src/wrapper";
+import { contract, header, isCorrelated, managerHeader } from "../packages/contracts/src/wrapper";
 import type { WaxClient } from "../packages/contracts/src/client";
 
 const root = join(__dirname, "..");
@@ -69,10 +69,12 @@ describe("A-99 — the M0 contracts skeleton is every §6 function's name, argum
     // contract nobody approved (Finding 21).
     const listed = new Set(FUNCTIONS.map((f) => `${f.domain}/${f.name}.ts`));
     const infra = new Set(["client.ts", "wrapper.ts", "functions.ts", "index.ts", "supabase.ts"]);
-    const files = execSync('git ls-files -z -- "packages/contracts/src"', { cwd: root })
-      .toString()
-      .split("\0")
-      .filter(Boolean)
+    // Tracked AND untracked, as the A-98 test below does: an uncommitted contract
+    // file is exactly the case this guard exists to catch, and it is the case a
+    // developer hits first.
+    const ls = (args: string) =>
+      execSync(`git ls-files -z ${args} -- "packages/contracts/src"`, { cwd: root }).toString().split("\0").filter(Boolean);
+    const files = [...ls(""), ...ls("--others --exclude-standard")]
       .map((f) => f.replace("packages/contracts/src/", ""))
       .filter((f) => !infra.has(f) && !f.startsWith("fake/"));
     expect(files.filter((f) => !listed.has(f)), "files no §6 entry names").toEqual([]);
@@ -167,6 +169,19 @@ describe("A-94 — p_request_id is minted by the wrapper; it correlates and neve
       p_request_id: planted,
     } as never);
     expect(seen[0]!.p_request_id).not.toBe(planted);
+  });
+
+  it("every non-pure §6 function is correlated and every pure helper is not", () => {
+    // The mapping itself, not a synthetic probe: this is what breaks silently if
+    // the M1 contract pull request changes an S function's argument list.
+    for (const f of FUNCTIONS) {
+      expect(isCorrelated(f.name), `${f.name} (${f.kind || "any actor"})`).toBe(f.kind !== "pure");
+    }
+    expect(FUNCTIONS.filter((f) => f.kind === "pure").length, "pure helpers exist to make this meaningful").toBeGreaterThan(0);
+  });
+
+  it("a name the committed list does not know mints one — a stray argument fails loudly", () => {
+    expect(isCorrelated("not_a_function")).toBe(true);
   });
 
   it("a pure helper is not given one — it has no header to carry it (§6)", async () => {

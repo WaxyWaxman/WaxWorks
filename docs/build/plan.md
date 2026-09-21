@@ -44,8 +44,8 @@ worked: 18 `fixed`, 9 `disputed`, one (26) partly each. The order is still
 | [#172](https://github.com/WaxyWaxman/WaxWorks/pull/172), [#175](https://github.com/WaxyWaxman/WaxWorks/pull/175) | merged | [`orders/M0-foundation.md`](orders/M0-foundation.md) drafted, then approved by sr-talbot — rows 11, 12 struck, row 17 (Sentry) added |
 | [#176](https://github.com/WaxyWaxman/WaxWorks/pull/176) | merged | **M0 built**: pnpm workspace, `apps/web` scaffold with §7's route groups, 49 prototype tokens in Tailwind's theme, app-shell service worker, Sentry from the environment, `packages/contracts` (86 §6 functions as stubs), `packages/db-types`, local Supabase with the first migration and two pgTAP suites, `build-check.yml`, `e2e/` with zero specs. **Merged before the verdict** — see §4 |
 | [#177](https://github.com/WaxyWaxman/WaxWorks/pull/177) | merged | The three reviewers' 28 findings on the order; Supabase CLI pinned in CI |
-| [#178](https://github.com/WaxyWaxman/WaxWorks/pull/178) | merged 2026-09-20 22:34Z | A-104 (the owner's ceiling), A-105 (functions in `app`, tables in `public`, `app` exposed), A-91 amended (sign-up off) |
-| [#179](https://github.com/WaxyWaxman/WaxWorks/pull/179) | merged 2026-09-20 22:35Z | This file |
+| [#178](https://github.com/WaxyWaxman/WaxWorks/pull/178) | merged 2026-09-21 02:34Z | A-104 (the owner's ceiling), A-105 (functions in `app`, tables in `public`, `app` exposed), A-91 amended (sign-up off) |
+| [#179](https://github.com/WaxyWaxman/WaxWorks/pull/179) | merged 2026-09-21 02:35Z | This file |
 | the M0 fix pull request | **open** | §3 step 1 below: the correcting migration, two new pgTAP suites, the contracts and `config.toml` fixes, and every Finding marked |
 
 **What the fix pull request carries.** A correcting migration
@@ -129,7 +129,7 @@ fix pull request is open.
 | **Supabase account** on a tier with branching (A-100) | sr-talbot | M0 row 13 (`Deferred`): a Supabase branch per pull request, the environment variables on Vercel, the first preview against a database. Until then previews run the shell against nothing |
 | **Three production dashboard settings** the repository cannot assert: preview protection on (verified 2026-09-20), sign-up off, `app` in the exposed schemas | sr-talbot, with the account | Recorded in `architecture.md` §11 and conventions §2.1; re-verified at M6 |
 | **A-96** — the `staging` branch and the CI security review | sr-talbot, WaxyWaxman | Whether `build-check.yml`'s `staging` trigger and `security-review.yml` stay. A-100 already says the branch deploys as a preview, not a fourth environment |
-| **M0's verdict** | either owner | #176 merged before gates 3–5 ran; the order cannot be `Accepted` until step 3 above |
+| **M0's verdict** | either owner | #176 merged before gates 3–5 ran; the order cannot be `Accepted` until §3 step 2 above |
 | **Sentry** auth token (for source maps) and allowed-domains (for the public browser DSN) | sr-talbot | Neither is decided; `@sentry/cli`'s build is denied until the token is |
 
 ---

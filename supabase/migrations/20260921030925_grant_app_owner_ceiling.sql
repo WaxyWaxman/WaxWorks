@@ -30,6 +30,13 @@
 -- Consequence accepted (A-104): the ceiling is all of one Organization's rows for any
 -- Organization — which is what it was under `postgres`. The gain over `postgres` is the
 -- platform surface, not the tenant boundary; that remains A-40's in-function assertion.
+--
+-- Precondition, named because A-101 makes this line permanent: `alter role …
+-- bypassrls` requires the migration runner to hold the attribute it is granting.
+-- Supabase's `postgres` is `rolsuper = f` with `rolbypassrls = t, rolcreaterole
+-- = t`, and PostgreSQL 16+ lets such a role grant an attribute it holds. On 15
+-- or earlier the same statement needs a superuser and raises 42501. `[db]
+-- major_version = 17` in config.toml is therefore load-bearing for this file.
 alter role waxworks_app bypassrls;
 
 -- (2) `anon` holds no usage on `app`.
