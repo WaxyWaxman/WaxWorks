@@ -36,6 +36,18 @@ describe("A-102 — pnpm workspaces, no monorepo task runner, tsc and ESLint per
     expect(pkg.packageManager).toMatch(/^pnpm@/);
   });
 
+  it("every workspace member answers typecheck — --if-present must skip nothing", () => {
+    // A-102 is `tsc --noEmit` PER MEMBER. The root script uses --if-present, so a
+    // member with no script is silently skipped rather than failing: e2e/ was
+    // typechecked by nothing (Finding 16).
+    const members = ["apps/web", "packages/contracts", "packages/db-types", "e2e"];
+    for (const m of members) {
+      const pkg = JSON.parse(read(`${m}/package.json`));
+      expect(pkg.scripts?.typecheck, `${m} typecheck`).toBeTruthy();
+      expect(pkg.scripts.typecheck, `${m} runs tsc --noEmit`).toMatch(/tsc\s+--noEmit/);
+    }
+  });
+
   it("the lockfile is committed", () => {
     expect(existsSync(join(root, "pnpm-lock.yaml"))).toBe(true);
   });

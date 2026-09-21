@@ -6,11 +6,16 @@ import { ContractError, NotImplementedError, type WaxClient } from "./client";
 export const header = z.object({
   p_actor_user_id: z.string().uuid(),
   p_actor_initials: z.string().min(1),
-  /** Minted by the wrapper; correlates, never authorises (A-94). */
-  p_request_id: z.string().uuid(),
   /** Store session only; null on a personal or sysadmin session (A-94). */
   p_terminal_id: z.string().uuid().nullable(),
 });
+
+// A-94: p_request_id "correlates, never authorises", and the wrapper mints it —
+// so it is NOT in the header above. A caller cannot supply one, cannot reuse one
+// across two calls, and cannot make two requests look like one in the audit
+// record. The database signature keeps the argument; only the input schema loses
+// it. A pure helper has no header and is given none (§6).
+const CORRELATED = "p_actor_user_id";
 
 /** Manager-only (M) and Owner-only (O) functions take the PIN on a store session (§6, A-89). */
 export const managerHeader = header.extend({
@@ -28,7 +33,9 @@ export function contract<I extends z.ZodTypeAny, O extends z.ZodTypeAny>(fn: str
   return async (client, raw) => {
     const parsed = input.safeParse(raw);
     if (!parsed.success) throw new ContractError(fn, "invalid_input", "input does not match the contract", parsed.error.issues);
-    const result = await client.rpc(fn, parsed.data as Record<string, unknown>);
+    const args = { ...(parsed.data as Record<string, unknown>) };
+    if (CORRELATED in args) args.p_request_id = crypto.randomUUID();
+    const result = await client.rpc(fn, args);
     const out = output.safeParse(result);
     if (!out.success) throw new ContractError(fn, "invalid_output", "the function returned a shape the contract does not describe", out.error.issues);
     return out.data;
