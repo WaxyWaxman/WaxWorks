@@ -78,9 +78,9 @@ you can see in the diff, not a developer omission you cannot.
 3. **`architect`** — the diff against A-4, A-5, A-15/A-47, A-28/A-28a: RLS on
    every table, no client writes, integer money, a flag written on every path
    with an actor, manager-only still gated. A security finding blocks. On a pull
-   request into `staging`, the CI security review's inline comments (A-96) are
-   carried into the order's Findings table first, as input to this pass; that
-   job never blocks on its own.
+   request into `staging`, the CI security review's inline comments
+   (A-96, not yet ratified) are carried into the order's Findings table first,
+   as input to this pass; that job never blocks on its own.
 4. **`/code-review`** — quality only.
 5. **The developer fixes**; reviewers re-check the findings only, not the whole
    order.
