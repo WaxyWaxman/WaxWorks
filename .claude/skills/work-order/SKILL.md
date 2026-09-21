@@ -83,13 +83,28 @@ Run after the developer reports done, **before** any reviewer is invoked:
    report into any reviewer's prompt.**
 4. Findings land in the order's Findings table. Route each to the developer; a
    `disputed` finding is a **Needs a human** item, not an argument to settle here.
+   A **blocking** one cannot stay `disputed` — at accept it is `fixed` or
+   `discharged`, and `discharged` is a human's, in the Verdict, with its record named.
 
 ## `/work-order accept <order>` or `return <order>`
 
 `Accepted` requires: every Checklist row accounted for, every blocking finding
-`fixed`, the suites green in the reviewer's own run, and `check_docs.py` clean.
-Anything less is `Returned`, with the rows and findings that caused it listed in
-the Verdict.
+`fixed` **or `discharged`**, the suites green in the reviewer's own run, and
+`check_docs.py` clean. Anything less is `Returned`, with the rows and findings
+that caused it listed in the Verdict.
+
+**`discharged` is for a blocking finding whose remedy is not code** — a process
+fact already true and irreversible, or a hazard answered by a recorded decision.
+Only a human writes it, only in the Verdict, and it **names what discharged it**:
+a ratified decision, a merged pull request, or a recorded open question with an
+owner. As with a `Deferred` Evidence cell, that record must exist and is checked.
+**`disputed` alone never satisfies acceptance** — a disputed blocking finding
+must become `fixed` or `discharged`, which forces a person to either fix it or
+write down what makes it safe.
+
+Return rather than discharge when the remedy *is* code and simply has not been
+written. Discharge is not a way past work; it is the terminal state for work that
+does not exist.
 
 On `Accepted`:
 
@@ -110,3 +125,5 @@ On `Accepted`:
 - Do not accept an order whose tests you have not seen run by a reviewer.
 - Do not resolve an open question so the order can close. Record it; the row is
   `Blocked`.
+- Do not write `discharged` on a finding. That mark is a human's, and an agent
+  that writes it has decided the thing the mark exists to make a person decide.
