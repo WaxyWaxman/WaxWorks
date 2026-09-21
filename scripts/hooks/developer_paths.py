@@ -42,6 +42,7 @@ PROTECTED = (
     "docs/build/workflow.md",
     "docs/build/status.md",
     "docs/build/conventions.md",
+    "docs/build/plan.md",
     "packages/contracts/",
     "e2e/",
     ".claude/",
