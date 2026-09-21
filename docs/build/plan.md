@@ -130,7 +130,7 @@ fix pull request is open.
 | **Three production dashboard settings** the repository cannot assert: preview protection on (verified 2026-09-20), sign-up off, `app` in the exposed schemas | sr-talbot, with the account | Recorded in `architecture.md` §11 and conventions §2.1; re-verified at M6 |
 | **A-96** — the `staging` branch and the CI security review | sr-talbot, WaxyWaxman | Whether `build-check.yml`'s `staging` trigger and `security-review.yml` stay. A-100 already says the branch deploys as a preview, not a fourth environment |
 | **M0's verdict** | either owner | #176 merged before gates 3–5 ran; the order cannot be `Accepted` until §3 step 2 above |
-| **Sentry** auth token (for source maps) and allowed-domains (for the public browser DSN) | sr-talbot | Neither is decided; `@sentry/cli`'s build is denied until the token is |
+| **Sentry** auth token (for source maps) and allowed-domains (for the public browser DSN) | sr-talbot | Neither is decided; `@sentry/cli`'s build is denied until the token is. **And under A-106 no DSN is set in any environment until the allowlist `beforeSend` ships — M1's first task** |
 
 ---
 
