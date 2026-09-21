@@ -72,8 +72,10 @@ jobs:
       - uses: actions/setup-node@v4
         with: { node-version: "${{ env.NODE_VERSION }}", cache: pnpm }
       - run: pnpm install --frozen-lockfile
+      # Pinned to the version db-types was generated with: the diff step below
+      # compares generator output, so CI and the developer must run the same CLI.
       - uses: supabase/setup-cli@v1
-        with: { version: latest }
+        with: { version: 2.117.0 }
       # The database and API only — the same exclusion a developer uses locally (A-10).
       - name: Start local Supabase (migrations + seed = db reset from a clean checkout)
         run: supabase start -x studio,imgproxy,inbucket,edge-runtime,logflare,vector,realtime,storage-api,mailpit,supavisor
