@@ -73,6 +73,12 @@ already places them; a file that fits nowhere is a question for `/architecture`.
 | **Preview** — one Vercel preview deployment per pull request, **access-protected** | a Supabase branch created for the pull request and destroyed with it | `seed.sql` and nothing else — **never** a restore, dump or anonymised copy of production | its own service-role key and its own PIN pepper (Supabase Vault, A-89) |
 | **Production** — one Vercel deployment | one Supabase project, the only place a shop's data exists | the shop's; **never seeded** (A-101) | service-role key in the server-runtime environment only |
 
+Three platform settings the repository cannot assert, verified by a human at M0
+and re-verified in M6: Vercel preview protection on (A-100); the production
+Supabase project's public sign-up **off** (A-91) and its exposed schemas
+including `app` (A-105). `config.toml` fixes the latter two for local and every
+branch.
+
 There is no staging environment; the `staging` branch A-96 proposes deploys as
 a preview like any other (A-100). The **anon key** ships in the client bundle and nothing
 follows from holding it (RLS on every read, A-4 on every write). The
@@ -96,7 +102,10 @@ A-97 jobs are keyless.
   schema (A-101).
 - One migration per coherent group of Checklist rows — a table with its policies,
   a function with its grants — so a reviewer reads one file against the rows it
-  serves (A-101).
+  serves (A-101). **Tables and functions never share a migration:** a function
+  migration opens with `set role waxworks_app;` (A-104), and DDL under that role
+  would make the table `waxworks_app`'s too. **Tables live in `public`, functions
+  in `app`, and nothing but functions is ever created in `app`** (A-105).
 - **The seed exercises the write surface:** `supabase/seed.sql` calls definer
   functions (A-4) rather than inserting rows, so it is the first integration test
   of every function it touches. **Two exceptions, each commented with the
@@ -152,13 +161,17 @@ function shares, from §3 and §6:
 | Voids | appended reversing rows; a record is deleted only where nothing cites it and no money moved | A-54, A-70 |
 | `search_path` | `set search_path = ''`, every table, type, function and operator schema-qualified — `pg_temp` is otherwise searched first | A-103 |
 | Grants | `revoke execute … from public; grant execute … to authenticated` in the same migration; an **S** function grants to the `sysadmin` role instead | A-103, A-90 |
-| Owner | the dedicated non-superuser role that owns the `app` schema — never `postgres` | A-103 |
+| Owner | `waxworks_app`: the dedicated non-superuser role that owns the `app` schema — never `postgres`. It holds `bypassrls` and DML on every product table, granted in each table's migration; nothing outside the product schemas | A-103, A-104 |
+| Ownership by construction | every function migration opens with `set role waxworks_app;` — no per-function `alter … owner to` line; a suite-wide pgTAP assertion holds that every function in `app` is owned by `waxworks_app`, and another that `app` holds functions only | A-104, A-105 |
+| Reachability | the real client calls `supabase.schema("app").rpc(...)`; `config.toml` `[api].schemas` exposes `app` | A-105 |
 | Correlation | `p_request_id` on every function; `p_terminal_id` on a store session, verified against `auth.store_id()`; both stamped with `principal` on every row and log entry the function writes | A-94 |
 | Assertion order | tenant, then principal and actor, then the terminal, then **M**/**O** PIN resolution, then the body | A-103 |
 
-**The header every function starts from (A-103):**
+**The header every function starts from (A-103, A-104):**
 
 ```sql
+set role waxworks_app;   -- A-104: the whole migration runs as the owner; functions only in this file
+
 create or replace function app.<name>(
   p_actor_user_id  uuid,
   p_actor_initials text,
@@ -193,7 +206,13 @@ $$;
 
 revoke execute on function app.<name>(...) from public;   -- A-103, A-90
 grant  execute on function app.<name>(...) to authenticated;
+
+reset role;
 ```
+
+Two suite-wide pgTAP assertions (A-104, A-105) run in every `supabase test db`:
+every function in schema `app` is owned by `waxworks_app`, and schema `app`
+contains functions only. `anon` holds no `usage` on `app` (A-104).
 
 A pgTAP smoke call per function is part of the suite, because a forgotten
 qualification under an empty `search_path` fails at runtime, not at creation
@@ -308,7 +327,7 @@ more than this unless a row sends you further:
 
 ## 8. The decisions this document rests on
 
-Ratified 2026-09-20. Cite the A-n, not this section.
+Ratified 2026-09-20 and 2026-09-21. Cite the A-n, not this section.
 
 | A-n | Settles |
 |---|---|
@@ -319,9 +338,12 @@ Ratified 2026-09-20. Cite the A-n, not this section.
 | A-101 | Migration naming and immutability; the seed through definer functions with two named exceptions |
 | A-102 | pnpm workspaces, no task runner, `tsc` and ESLint |
 | A-103 | The definer-function header: `search_path = ''`, grants, owner, assertion order |
+| A-104 | The owner's ceiling: `bypassrls`, per-table DML, `set role` opener, no `anon` usage on `app`, the ownership assertion |
+| A-105 | Functions in `app`, tables in `public`; `app` exposed to PostgREST and holding functions only |
+| A-91 (amended) | Public sign-up off in every environment |
 
-Two things the conventions could not settle stay open in
-[architecture](../architecture.md) §11: an enforcement mechanism for A-91's key
-rule, and the preview access protection, which is a Vercel setting the repository
-cannot assert. A-96's proposed `staging` branch, if ratified, deploys as a preview
+Still open in [architecture](../architecture.md) §11: an enforcement mechanism
+for A-91's key rule, and the three platform settings §2.1 names — preview
+protection, production sign-up off, `app` exposed — which the repository cannot
+assert and a human verifies. A-96's proposed `staging` branch, if ratified, deploys as a preview
 like any other and production is cut from it (A-100).
