@@ -1,0 +1,15 @@
+{
+  "name": "@waxworks/e2e",
+  "private": true,
+  "description": "The end-to-end suite (A-85). One directory per flow, one spec per register row, written by /qa automate \u2014 never by a developer.",
+  "scripts": {
+    "test": "playwright test --pass-with-no-tests",
+    "test:list": "playwright test --list --pass-with-no-tests",
+    "install-browsers": "playwright install --with-deps chromium"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.63.0",
+    "@types/node": "^24.0.0",
+    "typescript": "^5.9.3"
+  }
+}

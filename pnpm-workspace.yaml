@@ -1,0 +1,15 @@
+# The workspace (A-102). prototype/ is deliberately absent: it is harvested and
+# archived (architecture §7) and keeps its own package-lock.json.
+packages:
+  - "apps/*"
+  - "packages/*"
+  - e2e
+
+# Native build scripts pnpm may run. Approving a build is a repository decision:
+# written here and reviewed, never clicked through `pnpm approve-builds`.
+allowBuilds:
+  # eslint-config-next's import-resolver binding.
+  unrs-resolver: true
+  # Downloads a binary used only for source-map upload, which needs an auth token
+  # no decision provides. Denied until one does.
+  "@sentry/cli": false

@@ -2,6 +2,20 @@
 node_modules/
 dist/
 .vite/
+.next/
+*.tsbuildinfo
+next-env.d.ts
+
+# Local environments and platform state (A-100: secrets live in the platform, never in a file)
+.env*.local
+.vercel
+supabase/.branches
+supabase/.temp
+
+# Test output
+test-results
+playwright-report
+coverage/
 
 # Local Claude Code state. The SHARED agent configuration is tracked on purpose --
 # skills, subagents, settings.json and launch.json travel with the repo so every
@@ -24,3 +38,4 @@ Thumbs.db
 # .html is a ~3 MB build artifact with the editor baked in; it is published as
 # an Artifact, not reviewed as a diff.
 /wax-works-*.html
+index.ts.tmp
