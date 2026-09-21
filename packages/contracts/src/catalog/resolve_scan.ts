@@ -6,7 +6,8 @@ import { z } from "zod";
 import { header, stub } from "../wrapper";
 
 export const ResolveScanInput = header.extend({
-  // The function's own arguments land in the contract pull request that opens its milestone (A-99).
+  /** §6 scan resolution: `resolve_scan(p_code)` — the scanned code, branched on by prefix and shape. */
+  p_code: z.string(),
 });
 export type ResolveScanInput = z.infer<typeof ResolveScanInput>;
 

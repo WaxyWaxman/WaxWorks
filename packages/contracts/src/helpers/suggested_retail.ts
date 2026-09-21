@@ -11,7 +11,8 @@ export const SuggestedRetailInput = z.object({
 });
 export type SuggestedRetailInput = z.infer<typeof SuggestedRetailInput>;
 
-export const SuggestedRetailOutput = z.unknown();
+// §6 line 462: suggested_retail(...) → minor — minor units are bigint, as list_minor is.
+export const SuggestedRetailOutput = z.bigint();
 export type SuggestedRetailOutput = z.infer<typeof SuggestedRetailOutput>;
 
 export const suggested_retail = stub("suggested_retail", SuggestedRetailInput, SuggestedRetailOutput);

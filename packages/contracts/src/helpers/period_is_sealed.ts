@@ -10,7 +10,8 @@ export const PeriodIsSealedInput = z.object({
 });
 export type PeriodIsSealedInput = z.infer<typeof PeriodIsSealedInput>;
 
-export const PeriodIsSealedOutput = z.unknown();
+// §6 line 468: period_is_sealed(p_business_date) → boolean.
+export const PeriodIsSealedOutput = z.boolean();
 export type PeriodIsSealedOutput = z.infer<typeof PeriodIsSealedOutput>;
 
 export const period_is_sealed = stub("period_is_sealed", PeriodIsSealedInput, PeriodIsSealedOutput);
