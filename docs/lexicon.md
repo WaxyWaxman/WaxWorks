@@ -1,7 +1,7 @@
 # Wax Works — Lexicon
 
 **Status:** Draft
-**Last updated:** 2026-09-16
+**Last updated:** 2026-09-20
 
 The controlled vocabulary for Wax Works. When a term below has a **canonical** form, use
 exactly that form in the PRD, flow documents, reference material, commit messages, issue
@@ -28,6 +28,8 @@ Sourced from [`PRD.md`](PRD.md), the [`flows/`](flows/) documents, and
 | **payment processing** | The **excluded** capability: integrating a third-party payment processing system — Square, Stripe, or equivalent — to capture card data, authorize or settle a card transaction, or move money (NG-4, E-02 decision 26). Distinguish sharply from **recording** a payment, which is in scope everywhere. | using "payments are out of scope" as shorthand — payment *recording* and accounts payable are both in scope; only processor integration is not |
 | **domain log** | A log **inside the schema** — a `log` column on an artifact (`users`, `stores`, `organizations`, `records`, `purchase_order_lines`, the Supplier card) or a log table (`settings_log`, `sale_log`, `drawer_opens`, `inventory_movements`, `review_flags`, the void, seal, unseal, filing and issuance rows) — appended inside the definer function that writes the act, carrying actor, authorizer, timestamp and, where the field moves money or identity, the values before and after. **The audit record**: every *who did this, when, and what did it used to be* is answered here and nowhere else ([architecture](architecture.md) A-92). Lives as long as its record (A-95). | "audit log" unqualified, "the logs" (which reads as operational) |
 | **operational log** | What the running system emits **outside the schema**: application, Route Handler, Server Action and Cron logs to Vercel, Postgres logs to Supabase, error events to Sentry. Read by System Administrators through the platforms' consoles, outside A-90's grant; carries identity data and correlation only, **never store data** (A-93); never the audit record; lives as long as the platform keeps it ([architecture](architecture.md) A-92, A-95). | "the logs" as if it could answer an audit question, "telemetry", "observability" as a synonym for either kind |
+| **`staging` (the branch)** | The long-lived git branch after `main` that a pull request targets to trigger the model-backed CI security review, and the first ref a deployment is ever cut from ([architecture](architecture.md) A-96, not yet ratified). Written in code font and, where a sentence could read either way, spelled out as "the `staging` branch" — this project already has an unrelated **staging card** (below), and the two must never be left to context alone. | "staging" bare in a sentence that could also mean the staging card; "the staging environment" (no environment is named or decided — A-96 settles only where CI's one secret lives) |
+| **staging card** | [E-02](flows/E-02-receive-inventory.md)'s receiving-screen control: where a resolved scan takes its list price, discount, sell price, grade and quantity, with a live margin, before becoming an invoice line. A screen element, unrelated to the `staging` branch above — do not shorten either to bare "staging" in a sentence discussing both, and never in the security-review scan instructions, which a model reads literally. | "staging area", "staging" alone once the branch exists in the same document |
 
 ---
 
