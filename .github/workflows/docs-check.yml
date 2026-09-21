@@ -5,6 +5,9 @@ name: docs-check
 # /spec-audit, which a human runs locally before opening the PR. The one
 # model-backed check in CI is security-review.yml, on pull requests into staging
 # (A-96); it is advisory and reads the only secret CI holds.
+#
+# A-97's six CI jobs: this file is jobs 1 and 2 (check_docs, check_coverage);
+# build-check.yml is jobs 3–6 (typecheck, lint, vitest, pgTAP).
 
 on:
   # No paths filter: a change under .claude/ can break a cross-link too, and the
@@ -26,3 +29,23 @@ jobs:
         run: python scripts/check_docs.py
       - name: Decision-to-test coverage (report; the build gate is --order, run per work order)
         run: python scripts/check_coverage.py
+      # Gate 1's --order run (workflow §3, A-97): every work order this pull request
+      # touches that is Approved, In review or Accepted must have every Checklist
+      # row accounted for. A Drafted order is skipped by the script itself.
+      - name: Decision-to-test coverage — the build gate, per work order touched
+        if: github.event_name == 'pull_request'
+        run: |
+          set -e
+          git fetch --no-tags --depth=1 origin "${{ github.base_ref }}"
+          changed=$(git diff --name-only "origin/${{ github.base_ref }}"...HEAD -- 'docs/build/orders/*.md' || true)
+          if [ -z "$changed" ]; then echo "no work order touched"; exit 0; fi
+          status=0
+          for f in $changed; do
+            [ -f "$f" ] || continue
+            if grep -qE '^\*\*Status:\*\* *(Approved|In review|Accepted)' "$f"; then
+              echo "== $f"; python scripts/check_coverage.py --order "$f" || status=1
+            else
+              echo "== $f: not Approved / In review / Accepted — not gated yet"
+            fi
+          done
+          exit $status

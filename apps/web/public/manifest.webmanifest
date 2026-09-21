@@ -1,0 +1,13 @@
+{
+  "name": "Wax Works",
+  "short_name": "Wax Works",
+  "description": "Point of sale and inventory for independent record stores.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#f1f1ef",
+  "theme_color": "#111111",
+  "icons": [
+    { "src": "/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }
+  ]
+}

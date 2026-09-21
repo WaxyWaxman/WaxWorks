@@ -1,0 +1,61 @@
+/*
+ * Wax Works design tokens — Tailwind theme variables (A-9).
+ * Values are the prototype's, verbatim (prototype/src/styles/tokens.css,
+ * direction SIGNAL, 2026-09-10). Names carry a `ww-` segment so they sit beside
+ * shadcn/ui's theme without collision; the rename is design/tokens.ts and the
+ * test in tests/design-tokens.test.ts keeps the two files equal.
+ *
+ * Edit the prototype's file and mirror it here — never the other way round,
+ * until prototype/ is archived and this becomes the source.
+ */
+@theme {
+  --color-ww-bg: #f1f1ef;
+  --color-ww-surface: #ffffff;
+  --color-ww-surface-2: #f7f7f5;
+  --color-ww-ink: #111111;
+  --color-ww-ink-soft: #55554f;
+  --color-ww-ink-faint: #8a8a84;
+  --color-ww-border: #e4e4e0;
+  --color-ww-border-strong: #ccccc7;
+  --color-ww-accent: #d64500;
+  --color-ww-accent-ink: #ffffff;
+  --color-ww-accent-soft: #fff4ee;
+  --color-ww-accent-dark: #a83700;
+  --color-ww-ok: #1f6b3f;
+  --color-ww-ok-soft: #eaf3ed;
+  --color-ww-warn: #8a6a1a;
+  --color-ww-warn-soft: #fbf4e4;
+  --color-ww-danger: #c0392b;
+  --color-ww-danger-soft: #fdf3f1;
+  --color-ww-stock-here: #1f6b3f;
+  --color-ww-stock-here-soft: #eaf3ed;
+  --color-ww-stock-coming: #8a6a1a;
+  --color-ww-stock-coming-soft: #fbf4e4;
+  --color-ww-stock-before: #6b6b64;
+  --color-ww-stock-before-soft: #f0f0ed;
+  --color-ww-stock-never: #b4b4ae;
+  --color-ww-stock-never-soft: #f7f7f5;
+  --font-ww-sans: "Archivo", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Helvetica, sans-serif;
+  --font-ww-narrow: "Archivo Narrow", "Archivo", ui-sans-serif, system-ui, sans-serif;
+  --font-ww-mono: ui-monospace, "SF Mono", "Cascadia Mono", "Roboto Mono", Menlo, Consolas, monospace;
+  --text-ww-xs: 11px;
+  --text-ww-sm: 12.5px;
+  --text-ww-base: 14px;
+  --text-ww-md: 16px;
+  --text-ww-lg: 20px;
+  --text-ww-xl: 27px;
+  --leading-ww: 1.45;
+  --spacing-ww-1: 4px;
+  --spacing-ww-2: 8px;
+  --spacing-ww-3: 12px;
+  --spacing-ww-4: 16px;
+  --spacing-ww-5: 24px;
+  --spacing-ww-6: 32px;
+  --spacing-ww-7: 48px;
+  --radius-ww: 2px;
+  --radius-ww-sm: 2px;
+  --radius-ww-lg: 3px;
+  --shadow-ww-1: none;
+  --shadow-ww-2: 0 8px 24px rgba(17, 17, 17, 0.12);
+  --container-ww-measure: 82ch;
+}

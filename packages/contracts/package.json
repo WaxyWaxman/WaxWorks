@@ -1,0 +1,31 @@
+{
+  "name": "@waxworks/contracts",
+  "version": "0.0.0",
+  "private": true,
+  "description": "The interface between the database and the screens (architecture §7, A-98, A-99). Changed only by a contract pull request both humans review.",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./fake": "./src/fake/index.ts",
+    "./supabase": "./src/supabase.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint src",
+    "test": "vitest run --passWithNoTests"
+  },
+  "dependencies": {
+    "zod": "^4.6.5"
+  },
+  "peerDependencies": {
+    "@supabase/supabase-js": "^2.116.0"
+  },
+  "devDependencies": {
+    "@supabase/supabase-js": "^2.116.0",
+    "@types/node": "^24.0.0",
+    "eslint": "^9.39.5",
+    "typescript": "^5.9.3",
+    "typescript-eslint": "^8.70.0",
+    "vitest": "^5.0.1"
+  }
+}

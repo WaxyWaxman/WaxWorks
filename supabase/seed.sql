@@ -1,0 +1,33 @@
+-- Wax Works — the seed (architecture §7; A-101).
+--
+-- RULES (A-101, ratified 2026-09-20)
+--
+--   1. The seed exercises the write surface. Every row reaches the database
+--      through a definer function (A-4) — never an `insert` where a function
+--      exists — so this file is the first integration test of every function
+--      it touches. A function that cannot seed its own artifact has a gap.
+--
+--   2. Two exceptions, each marked in place with a comment naming the function
+--      it stands in for:
+--        - BOOTSTRAP: the first Organization and its first Owner, which
+--          `organization_create` (S) writes in production. There is no sysadmin
+--          principal inside `db reset`, so the seed writes them directly.
+--        - The AUTH HALF of anything A-91 covers — the store account, an invite,
+--          a reset — is an admin API call the seed cannot make. A seeded store
+--          account and a seeded invited Owner have `auth_user_id` null.
+--
+--   3. Claims per block. Before each block the seed sets the claims the
+--      functions read — auth.org_id(), auth.store_id(), auth.principal() — so
+--      it runs as a session the functions accept. This is the one place the
+--      claim shape is exercised without Supabase Auth; a change to A-87's
+--      access-token hook breaks the seed first.
+--
+--   4. Refusal. The seed refuses to run when auth.org_id() resolves to an
+--      Organization that already exists. It never runs against production: a
+--      seeded PIN is a known credential (A-100, A-101).
+--
+-- M0: nothing to seed. No table exists yet; the first blocks arrive with M1's
+-- D order (Organizations, Stores, Users, store_assignments, user_pins, the
+-- configuration tables A-53 places there). This file runs to completion so
+-- `supabase db reset` is green from the first migration.
+select 1 as seed_m0_nothing_to_seed;

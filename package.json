@@ -1,0 +1,22 @@
+{
+  "name": "waxworks",
+  "private": true,
+  "packageManager": "pnpm@11.0.9",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "typecheck": "pnpm -r --if-present run typecheck",
+    "lint": "pnpm -r --if-present run lint",
+    "test": "pnpm -r --filter !@waxworks/e2e --if-present run test && vitest run --root . --config vitest.repo.config.ts",
+    "test:repo": "vitest run --root . --config vitest.repo.config.ts",
+    "check:docs": "python scripts/check_docs.py",
+    "check:coverage": "python scripts/check_coverage.py",
+    "e2e": "pnpm --filter @waxworks/e2e run test"
+  },
+  "devDependencies": {
+    "typescript": "^5.9.3",
+    "vitest": "^5.0.1",
+    "@types/node": "^24.0.0"
+  }
+}
