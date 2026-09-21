@@ -170,3 +170,45 @@ marks each `fixed` or `disputed`; nothing here is deleted._
 - **The `staging` branch** — A-96 (not yet ratified) puts the CI security review on pull requests into `staging`. This order opens its pull request into `main`, as every order does under the [workflow](../workflow.md). If A-96 is ratified before this order merges, whether M0 creates the branch is a question for its owners, not this order.
 - **Row 13** — **there is no Supabase account yet**; sr-talbot will create it later, on a tier with branching (A-100 records it as paid). The developer builds every other row — local Supabase in Docker (row 2), pgTAP in CI (row 5) and `db-types` generation (row 6) need no account — and ends row 13 **`Deferred`, owner sr-talbot**, recorded here. On `accept` the coordinator turns that deferral into an open question in `architecture.md` §11 so it cannot be dropped; the Vercel preview for this order's pull request runs against the fake until the account exists.
 - **Sentry** — row 17, added at approval.
+
+---
+
+_Below: everything the `/work-order check` round added, collected here rather
+than left in the Findings table. Every `disputed` finding carries a question and
+every one of those questions is in this list._
+
+**Must be discharged by an owner before or at accept**
+
+- **Amend Checklist row 7** (finding 36). It requires the argument list to carry `p_request_id`; A-94, §3 and now **A-108** put the minting in the wrapper, and `tests/contracts.test.ts` asserts the field is *absent* from the input schema. The code is right and the row is wrong, but a row is fixed at approval and only an owner amends it. Recorded in `architecture.md` §11 so it is not lost if this order closes first.
+- **Confirm that A-106 closes finding 29**, the blocking one. The architect's remedy was *a recorded precondition, not a code change*; **A-106 was ratified 2026-09-21 and is on `main`**, and row 13's Note now carries it. No code changed at M0 and none was required.
+- **Finding 28 cannot ever be marked `fixed`** — #176 merged before its verdict and nothing undoes that. If *every blocking finding `fixed`* is read literally this order can never be accepted, which is a defect in the phrase as applied to a process finding rather than a reason to return.
+
+**Decisions this order produced, now ratified 2026-09-21**
+
+- **A-106** — no Sentry DSN in any environment until the event payload is built by an allowlist. The act it gates is this order's row 13.
+- **A-107** — the grant rule held in two places: a list-free suite-wide pgTAP assertion, plus each function's own grants in the per-function smoke test. From finding 32.
+- **A-108** — the wrapper mints before it validates, on every call, and sends only where A-94 wants the argument; `ContractError` carries `request_id`. From finding 31. **This creates work that does not exist yet:** the wrapper still mints *after* validating, so the code and A-108 disagree until M1 lands the change and its `invalid_input` test.
+
+**Routed to the M1 contract pull request** — both owners review it (§7, workflow §4)
+
+- **Findings 6 and 24** — `actor_resolve`, `manager_authorize_pin`, `terminal_register` and the **S** functions cannot take the uniform header; the two predicates; the nine `settings_*` groups. A-99 puts the argument list at M0 and the schemas at the milestone, and the two halves are in tension (finding 33).
+- **Finding 38** — this order changed the shared `header` every one of the 86 functions extends. M0's Scope grants it the lane, but **a change to `header` is a contract change in substance** and should be read as one.
+- **Finding 34** — `service_role` holds no `usage` on `app`, and A-91's Auth write-back function is *callable by the service role alone*. Neither A-103's grant rule nor A-104's usage list provides for it. **Not specified**; it bites at the migration that creates that function.
+
+**Routed elsewhere, with an owner**
+
+| Item | Owner |
+|---|---|
+| **Finding 10** — how a bigint minor unit crosses PostgREST under A-47's prohibition on a JS `number` carrying money. Unspecified, and now enforced at runtime by the six output schemas, so it will fail loudly at M3's contract pull request rather than silently | `/architecture`, by M3 |
+| **Finding 23** — A-97 says the six CI jobs *run, in order*; four have no `needs:` and run in parallel, named in order. Sequencing or listing | `/architecture` |
+| **Finding 35** — A-102's *per member* is satisfied for `typecheck` and not for `lint`: `e2e` and `packages/db-types` answer no lint script and `--if-present` skips them. A reading question, not a defect | `/architecture` |
+| **Finding 26, third part** — `tests/**`, eleven files and 332 assertions including every security assertion in this review, is typechecked and linted by nothing. Larger than a manifest edit | either owner |
+| **Finding 27** — register drift: `docs/qa/e2e-register.md:66` says `playwright.config.ts` has a `webServer` that starts the target; it does not, and A-85 does not require one | `/qa` |
+| **Finding 17** — row 15 names `playwright test --list` exiting 0; it exits 1, and the Evidence substitutes `test:list` with `--pass-with-no-tests`. Whether the substitution satisfies the row | either owner |
+| **Finding 25** — row 17's wording calls the DSN *a server-runtime variable*; A-92 puts Sentry in the till's browser, which needs `NEXT_PUBLIC_SENTRY_DSN`. The code follows A-92, the row's wording does not | either owner |
+| **Finding 11** — A-96 is cited without its *not yet ratified* qualifier, and `build-check.yml` triggers on a `staging` branch that exists only in unratified A-96. Actions pinned to mutable tags | sr-talbot, WaxyWaxman |
+| **Sentry's allowed-domains** for the public browser DSN, and the **auth token** for source maps — raised by findings 7, 8 and 25; recorded nowhere. `@sentry/cli`'s build stays denied until the token is decided | sr-talbot |
+
+**Recorded as a suspicion, not a finding** — whether an `authorization` header ever reaches the application's own server, given `@supabase/ssr` keeps the session in cookies and `requestDataIntegration` already drops `cookie` when `sendDefaultPii` is false. Unverified. A-106 does not rest on it.
+
+**Independence note.** This session was both the developer on the fix pull request and the coordinator writing this Verdict. It is therefore **not** the independent check CLAUDE.md asks for — that was `qa-reviewer`, `architect` and `/code-review`, whose findings are rows 29–39 above and whose suite runs are their own, not this session's.
