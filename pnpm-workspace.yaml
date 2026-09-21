@@ -4,6 +4,9 @@ packages:
   - "apps/*"
   - "packages/*"
   - e2e
+  # Repository-level checks. A member so that A-102's per-member typecheck and
+  # lint reach them; it runs no suite of its own (M0 finding 26).
+  - tests
 
 # Native build scripts pnpm may run. Approving a build is a repository decision:
 # written here and reviewed, never clicked through `pnpm approve-builds`.

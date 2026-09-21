@@ -63,6 +63,7 @@ already places them; a file that fits nowhere is a question for `/architecture`.
 | `supabase/seed.sql` | one Organization, one Store, one Owner, the configuration tables (§7 lists the contents) | D |
 | `supabase/tests/` | pgTAP | D |
 | `e2e/` | the end-to-end suite, own `package.json` (A-85) | QA |
+| `tests/` | repository-level checks — the work-order rows no other member owns. A workspace member so that per-member typecheck and lint reach it; **no `test` script**, because the suites run once from the root (A-102 amendment) | whoever writes the row's evidence |
 | `prototype/` | harvested for UI copy and layout, then archived (§7) | nobody, past M0 |
 
 ### 2.1 Environments and secrets (A-100)
