@@ -63,7 +63,7 @@ already places them; a file that fits nowhere is a question for `/architecture`.
 | `supabase/seed.sql` | one Organization, one Store, one Owner, the configuration tables (§7 lists the contents) | D |
 | `supabase/tests/` | pgTAP | D |
 | `e2e/` | the end-to-end suite, own `package.json` (A-85) | QA |
-| `tests/` | repository-level checks — the work-order rows no other member owns. A workspace member so that per-member typecheck and lint reach it; **no `test` script**, because the suites run once from the root (A-102 amendment) | whoever writes the row's evidence |
+| `tests/` | repository-level checks — the work-order rows no other member owns. A workspace member so that per-member typecheck and lint reach it; **no `test` script**, because the suites run once from the root (A-102, amended 2026-09-21) | whoever writes the row's evidence |
 | `prototype/` | harvested for UI copy and layout, then archived (§7) | nobody, past M0 |
 
 ### 2.1 Environments and secrets (A-100)
@@ -359,7 +359,7 @@ Ratified 2026-09-20 and 2026-09-21. Cite the A-n, not this section.
 | A-99 | The M0 skeleton: signatures and `not_implemented` stubs; schemas per milestone |
 | A-100 | Local, preview, production; a Supabase branch per pull request; no staging environment; no shop data outside production |
 | A-101 | Migration naming and immutability; the seed through definer functions with two named exceptions |
-| A-102 | pnpm workspaces, no task runner, `tsc` and ESLint |
+| A-102 (amended) | pnpm workspaces, no task runner, `tsc` and ESLint **per member for both** — every member answers `typecheck` and `lint`, and no TypeScript file sits outside a member, which makes `tests/` the fifth |
 | A-103 | The definer-function header: `search_path = ''`, grants, owner, assertion order |
 | A-104 | The owner's ceiling: `bypassrls`, per-table DML, `set role` opener, no `anon` usage on `app`, the ownership assertion |
 | A-105 | Functions in `app`, tables in `public`; `app` exposed to PostgREST and holding functions only |
