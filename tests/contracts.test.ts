@@ -24,7 +24,7 @@ describe("A-99 — the M0 contracts skeleton is every §6 function's name, argum
   });
 
   it.each(FUNCTIONS.map((f) => [f.name, f] as const))("%s throws not_implemented through the fake client", async (name) => {
-    const wrapper = (contracts as Record<string, (c: unknown, i: unknown) => Promise<unknown>>)[name]!;
+    const wrapper = (contracts as unknown as Record<string, (c: unknown, i: unknown) => Promise<unknown>>)[name]!;
     await expect(wrapper(createFakeClient(), {})).rejects.toMatchObject({ code: "not_implemented", fn: name });
   });
 
@@ -81,7 +81,7 @@ describe("A-99 — the M0 contracts skeleton is every §6 function's name, argum
   });
 
   it("pure helpers take their §6 arguments and no actor", () => {
-    const shape = (n: string) => Object.keys((contracts as Record<string, { shape: Record<string, unknown> }>)[`${pascal(n)}Input`]!.shape);
+    const shape = (n: string) => Object.keys((contracts as unknown as Record<string, { shape: Record<string, unknown> }>)[`${pascal(n)}Input`]!.shape);
     expect(shape("round_to_ending")).toEqual(["minor", "ending_minor"]);
     expect(shape("suggested_retail")).toEqual(["list_minor", "margin_ppm"]);
     expect(shape("tax_rate_at")).toEqual(["rate_ppm", "pending_rate_ppm", "pending_from", "at"]);
@@ -117,7 +117,7 @@ describe("A-98 — a contract is one file per function: Zod schemas and one wrap
 
   it("every wrapper has the one signature: (client, input) => Promise<output>", () => {
     for (const f of FUNCTIONS) {
-      const w = (contracts as Record<string, (...a: unknown[]) => unknown>)[f.name]!;
+      const w = (contracts as unknown as Record<string, (...a: unknown[]) => unknown>)[f.name]!;
       expect(w.length, `${f.name} arity`).toBe(2);
     }
   });

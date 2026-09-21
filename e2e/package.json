@@ -4,6 +4,7 @@
   "description": "The end-to-end suite (A-85). One directory per flow, one spec per register row, written by /qa automate — never by a developer.",
   "scripts": {
     "typecheck": "tsc --noEmit",
+    "lint": "eslint .",
     "test": "playwright test --pass-with-no-tests",
     "test:list": "playwright test --list --pass-with-no-tests",
     "install-browsers": "playwright install --with-deps chromium"
@@ -11,6 +12,8 @@
   "devDependencies": {
     "@playwright/test": "^1.63.0",
     "@types/node": "^24.0.0",
-    "typescript": "^5.9.3"
+    "eslint": "^9.39.5",
+    "typescript": "^5.9.3",
+    "typescript-eslint": "^8.70.0"
   }
 }
