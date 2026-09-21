@@ -79,6 +79,15 @@ Supabase project's public sign-up **off** (A-91) and its exposed schemas
 including `app` (A-105). `config.toml` fixes the latter two for local and every
 branch.
 
+**A fourth platform act is gated on code rather than verified (A-106): no
+environment is given a Sentry DSN until the outgoing event is built by an
+allowlist** — an explicit `integrations` list replacing the SDK's defaults, and
+a `beforeSend` that constructs the event from a named set of fields and drops
+everything else. The SDK's default integrations are error paths, so
+`tracesSampleRate` does not gate them, and the absence of a DSN is currently the
+only control. The allowlist **takes `request_id` and drops `ContractError.details`**,
+which are fields of the same object (A-108).
+
 There is no staging environment; the `staging` branch A-96 proposes deploys as
 a preview like any other (A-100). The **anon key** ships in the client bundle and nothing
 follows from holding it (RLS on every read, A-4 on every write). The
@@ -210,13 +219,25 @@ grant  execute on function app.<name>(...) to authenticated;
 reset role;
 ```
 
-Two suite-wide pgTAP assertions (A-104, A-105) run in every `supabase test db`:
-every function in schema `app` is owned by `waxworks_app`, and schema `app`
-contains functions only. `anon` holds no `usage` on `app` (A-104).
+Three suite-wide pgTAP assertions (A-104, A-105, A-107) run in every
+`supabase test db`: every function in schema `app` is owned by `waxworks_app`;
+schema `app` contains functions only; and **no function in `app` grants
+`execute` to `public` or to `anon`**. `anon` holds no `usage` on `app` (A-104).
+
+The third carries no list and is never edited: Postgres grants `execute` to
+`public` by default, so a forgotten `revoke` shows up as a `public` grant, and
+the assertion strengthens with every function added. **There is no
+by-construction alternative** — unlike ownership, which A-104's `set role`
+opener fixes, `alter default privileges` was tested and has no effect here, so
+the `revoke`/`grant` pair stays a discipline and this assertion is its only
+check (A-107).
 
 A pgTAP smoke call per function is part of the suite, because a forgotten
 qualification under an empty `search_path` fails at runtime, not at creation
-(A-103, A-97).
+(A-103, A-97). **That smoke call also asserts the function's own grants** —
+including, for an **S** function, that `execute` is granted to `sysadmin` and
+not to `authenticated`. The knowledge rides with the function rather than in a
+central list that would be a second copy of §6 (A-107).
 
 The **pure helpers** (`round_to_ending`, `suggested_retail`, `tax_rate_at`,
 `upc_a_check_digit`) take every input as an argument and read no table, so their
@@ -281,7 +302,8 @@ is a pull request both humans review (§7, workflow §4).
 | Question | Answer |
 |---|---|
 | Schema library | Zod, one library for both tracks (A-98) |
-| Wrapper signature | `<fn>(client: WaxClient, input: <Fn>Input): Promise<<Fn>Output>` — parse input, call, parse output, throw a typed error carrying the database `errcode` and message (A-98) |
+| Wrapper signature | `<fn>(client: WaxClient, input: <Fn>Input): Promise<<Fn>Output>` — parse input, call, parse output, throw a typed error carrying the database `errcode` and message (A-98). The error also carries `request_id` (A-108) |
+| Correlation | The wrapper mints `p_request_id` **before it validates**, and for **every** call including a pure helper and a stub, so every `ContractError` carries one; it is **sent** to the database only where A-94 wants the argument. A caller never supplies it (A-94, A-108) |
 | Fake registration and switch | by construction at the composition root; `WaxClient` has two implementations, `supabase-js` `rpc` and the fake on a separate entry point; never an environment variable (A-98) |
 | Validation in the wrapper | ergonomics only — the function is the enforcement point and asserts everything again (A-4, A-48, A-98) |
 | What lands at M0 | every §6 function's signature and a stub wrapper throwing `not_implemented`; schemas and the fake's behaviour arrive in the contract pull request that opens each milestone (A-99) |
@@ -341,6 +363,9 @@ Ratified 2026-09-20 and 2026-09-21. Cite the A-n, not this section.
 | A-104 | The owner's ceiling: `bypassrls`, per-table DML, `set role` opener, no `anon` usage on `app`, the ownership assertion |
 | A-105 | Functions in `app`, tables in `public`; `app` exposed to PostgREST and holding functions only |
 | A-91 (amended) | Public sign-up off in every environment |
+| A-106 | No Sentry DSN in any environment until the event payload is built by an allowlist |
+| A-107 | The grant rule held in two places: a list-free suite-wide assertion, and each function's own grants in its smoke test |
+| A-108 | The wrapper mints before it validates and on every call; `ContractError` carries `request_id` |
 
 Still open in [architecture](../architecture.md) §11: an enforcement mechanism
 for A-91's key rule, and the three platform settings §2.1 names — preview
