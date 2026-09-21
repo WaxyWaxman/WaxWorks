@@ -22,6 +22,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with: { fetch-depth: 0 } # the per-order gate diffs against the base branch
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
@@ -35,10 +36,14 @@ jobs:
       - name: Decision-to-test coverage — the build gate, per work order touched
         if: github.event_name == 'pull_request'
         run: |
-          set -e
-          git fetch --no-tags --depth=1 origin "${{ github.base_ref }}"
-          changed=$(git diff --name-only "origin/${{ github.base_ref }}"...HEAD -- 'docs/build/orders/*.md' || true)
-          if [ -z "$changed" ]; then echo "no work order touched"; exit 0; fi
+          set -euo pipefail
+          # A failure to compute the diff must FAIL, never read as "nothing touched":
+          # the first run of this step passed green on a shallow clone with no merge base.
+          git fetch --no-tags origin "${{ github.base_ref }}"
+          base=$(git merge-base "origin/${{ github.base_ref }}" HEAD)
+          changed=$(git diff --name-only "$base" HEAD -- 'docs/build/orders/*.md')
+          echo "work orders touched: ${changed:-none}"
+          if [ -z "$changed" ]; then exit 0; fi
           status=0
           for f in $changed; do
             [ -f "$f" ] || continue
