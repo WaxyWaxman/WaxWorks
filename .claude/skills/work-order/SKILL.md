@@ -95,9 +95,13 @@ that caused it listed in the Verdict.
 
 **`discharged` is for a blocking finding whose remedy is not code** — a process
 fact already true and irreversible, or a hazard answered by a recorded decision.
-Only a human writes it, only in the Verdict, and it **names what discharged it**:
+Only a human writes it, and it goes **in two places, both required**: appended to
+the finding's own cell, so the Findings table reads correctly without the Verdict
+beside it; and as an entry in the **Verdict** that **names what discharged it** —
 a ratified decision, a merged pull request, or a recorded open question with an
-owner. As with a `Deferred` Evidence cell, that record must exist and is checked.
+owner — and who signed. As with a `Deferred` Evidence cell, that record must
+exist. **Read it before citing it:** a record that exists but describes something
+other than what was ratified discharges nothing.
 **`disputed` alone never satisfies acceptance** — a disputed blocking finding
 must become `fixed` or `discharged`, which forces a person to either fix it or
 write down what makes it safe.

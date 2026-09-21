@@ -58,7 +58,7 @@ Created by `/work-order <ID> <track>` from the spec, **before any code**.
 | **Checklist** | coordinator, derived | One row per live decision the flow and its *Inherited from other flows* section bind to this track, plus every A-n that constrains it (A-4 definer functions, A-5 tenancy, A-15/A-47 money, A-28 flags, …). Each row: the decision → the evidence required — `unit`, `integration`, or `manual` with the reason a test cannot hold it |
 | **Register rows** | coordinator | The [register](../qa/e2e-register.md) rows this order must make automatable |
 | **Evidence** | developer | Per checklist row, exactly one of: **`Done`** — test name, `file:line`, and the run output quoted; **`Deferred`** — why, who owns it, and where it is recorded (a `Blocked` register row, or an open question); **`Blocked`** — the open question, routed to the flow that owns it; **`N/A`** — why this decision does not bind this track. **A blank cell fails the gate** |
-| **Findings** | reviewers | Per finding: the decision cited, `file:line`, severity; the developer marks each **`fixed`** or **`disputed`**. A **human** may mark a blocking finding **`discharged`** — its remedy is not code — in the Verdict, **naming what discharged it**: a ratified decision, a merged pull request, or a recorded open question with an owner. As with a `Deferred` Evidence cell, **that record must exist**. Nothing here is ever deleted |
+| **Findings** | reviewers | Per finding: the decision cited, `file:line`, severity; the developer marks each **`fixed`** or **`disputed`**. A **human** may mark a blocking finding **`discharged`** — its remedy is not code — **in two places, both required**: `discharged` appended to the finding's own cell, so the table still reads correctly on its own, **and** an entry in the **Verdict** naming what discharged it — a ratified decision, a merged pull request, or a recorded open question with an owner — and who signed it. The cell keeps the table honest; the Verdict is where a person puts their name to it. As with a `Deferred` Evidence cell, **that record must exist, and is read before it is cited**. Nothing here is ever deleted |
 | **Verdict** | coordinator | `Accepted` or `Returned`, and the **Needs a human** list |
 
 A human approves the Checklist before development starts. **That approval is the
@@ -111,7 +111,7 @@ order's Verdict.
 | Open question | either owner | A step whose outcome the spec does not state — the order's row is `Blocked` until answered |
 | Merge | either owner | The pull request, with the order's Verdict `Accepted` |
 | A-n ratification | either owner | Anything `/architecture` drafted while the order ran |
-| Discharge a blocking finding | either owner | That a `blocks` finding whose remedy is **not code** is answered by a record rather than a fix — naming that record in the Verdict. An agent never writes `discharged`; `disputed` alone never satisfies acceptance |
+| Discharge a blocking finding | either owner | That a `blocks` finding whose remedy is **not code** is answered by a record rather than a fix — appending the mark to the finding's cell **and** naming that record in the Verdict, with their name. An agent never writes `discharged`; `disputed` alone never satisfies acceptance |
 
 ---
 
