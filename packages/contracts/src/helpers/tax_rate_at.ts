@@ -13,7 +13,8 @@ export const TaxRateAtInput = z.object({
 });
 export type TaxRateAtInput = z.infer<typeof TaxRateAtInput>;
 
-export const TaxRateAtOutput = z.unknown();
+// §6 line 463: tax_rate_at(...) → ppm — integer parts per million (A-47).
+export const TaxRateAtOutput = z.number().int();
 export type TaxRateAtOutput = z.infer<typeof TaxRateAtOutput>;
 
 export const tax_rate_at = stub("tax_rate_at", TaxRateAtInput, TaxRateAtOutput);

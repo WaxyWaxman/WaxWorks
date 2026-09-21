@@ -10,7 +10,8 @@ export const InvoiceIsPaidInput = z.object({
 });
 export type InvoiceIsPaidInput = z.infer<typeof InvoiceIsPaidInput>;
 
-export const InvoiceIsPaidOutput = z.unknown();
+// §6 line 466: invoice_is_paid(invoice_id) → boolean.
+export const InvoiceIsPaidOutput = z.boolean();
 export type InvoiceIsPaidOutput = z.infer<typeof InvoiceIsPaidOutput>;
 
 export const invoice_is_paid = stub("invoice_is_paid", InvoiceIsPaidInput, InvoiceIsPaidOutput);

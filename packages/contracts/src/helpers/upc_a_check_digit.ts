@@ -10,7 +10,8 @@ export const UpcACheckDigitInput = z.object({
 });
 export type UpcACheckDigitInput = z.infer<typeof UpcACheckDigitInput>;
 
-export const UpcACheckDigitOutput = z.unknown();
+// §6 line 464: upc_a_check_digit(text) → text.
+export const UpcACheckDigitOutput = z.string();
 export type UpcACheckDigitOutput = z.infer<typeof UpcACheckDigitOutput>;
 
 export const upc_a_check_digit = stub("upc_a_check_digit", UpcACheckDigitInput, UpcACheckDigitOutput);

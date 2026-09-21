@@ -10,7 +10,13 @@ enabled = true
 port = 54321
 # Schemas to expose in your API. Tables, views and stored procedures in this schema will get API
 # endpoints. `public` and `graphql_public` schemas are included by default.
-schemas = ["public", "graphql_public"]
+# A-105: `app` holds every SECURITY DEFINER function and nothing else, and is
+# exposed so supabase-js `.schema("app").rpc(...)` resolves. Tables and views
+# stay in `public` under §5's two policy shapes — a relation in `app` would be
+# reachable by PostgREST with only its grants for protection, which a pgTAP
+# assertion refuses. The hosted project's API settings must expose `app` too
+# (architecture §11) — this file fixes it for local and for every branch.
+schemas = ["public", "graphql_public", "app"]
 # Extra schemas to add to the search_path of every request.
 extra_search_path = ["public", "extensions"]
 # The maximum number of rows returns from a view, table, or stored procedure. Limits payload size
@@ -172,7 +178,12 @@ enable_refresh_token_rotation = true
 # Requires enable_refresh_token_rotation = true.
 refresh_token_reuse_interval = 10
 # Allow/disallow new user signups to your project.
-enable_signup = true
+# A-91 (amended 2026-09-21): public sign-up is OFF in every environment. A-91's
+# four Auth-identity paths are the whole set; sign-up would be a fifth, built
+# into every Supabase branch provisioned from this file. Invites through the
+# admin API are unaffected. The production dashboard's switch is a human's
+# (architecture §11).
+enable_signup = false
 # Allow/disallow anonymous sign-ins to your project.
 enable_anonymous_sign_ins = false
 # Allow/disallow testing manual linking of accounts
@@ -217,7 +228,8 @@ web3 = 30
 
 [auth.email]
 # Allow/disallow new user signups via email to your project.
-enable_signup = true
+# Off with [auth].enable_signup, for A-91's reason (S-01 d2: no public sign-up).
+enable_signup = false
 # If enabled, a user will be required to confirm any email change on both the old, and new email
 # addresses. If disabled, only the new email is required to confirm.
 double_confirm_changes = true

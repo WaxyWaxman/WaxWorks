@@ -6,8 +6,12 @@ dist/
 *.tsbuildinfo
 next-env.d.ts
 
-# Local environments and platform state (A-100: secrets live in the platform, never in a file)
-.env*.local
+# Local environments and platform state (A-100: secrets live in the platform, never in a file).
+# Every .env, at any depth, not only *.local: a root .env, .env.development or
+# e2e/.env was committable under the narrower pattern (Finding 9). .env.example
+# is the one exception, so the variable NAMES stay reviewable with no values.
+.env*
+!.env.example
 .vercel
 supabase/.branches
 supabase/.temp

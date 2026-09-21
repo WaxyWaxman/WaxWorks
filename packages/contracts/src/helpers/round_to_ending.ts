@@ -11,7 +11,8 @@ export const RoundToEndingInput = z.object({
 });
 export type RoundToEndingInput = z.infer<typeof RoundToEndingInput>;
 
-export const RoundToEndingOutput = z.unknown();
+// §6 line 461: round_to_ending(...) → bigint.
+export const RoundToEndingOutput = z.bigint();
 export type RoundToEndingOutput = z.infer<typeof RoundToEndingOutput>;
 
 export const round_to_ending = stub("round_to_ending", RoundToEndingInput, RoundToEndingOutput);

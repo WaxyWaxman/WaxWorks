@@ -1,7 +1,7 @@
 // Repository-level checks. These hold the M0 foundation order's rows that no
 // workspace member owns: they read the tree, not a module.
 import { describe, expect, it } from "vitest";
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 
 const root = join(__dirname, "..");
@@ -34,6 +34,29 @@ describe("A-102 — pnpm workspaces, no monorepo task runner, tsc and ESLint per
       expect(pkg.scripts[s]).toMatch(/pnpm\s+(-r|--recursive|--filter)/);
     }
     expect(pkg.packageManager).toMatch(/^pnpm@/);
+  });
+
+  it("every workspace member answers typecheck — --if-present must skip nothing", () => {
+    // A-102 is `tsc --noEmit` PER MEMBER. The root script uses --if-present, so a
+    // member with no script is silently skipped rather than failing: e2e/ was
+    // typechecked by nothing (Finding 16).
+    // Derived from the workspace, not hand-listed: a hard-coded list lets the
+    // guarantee lapse silently the day a fifth member is added.
+    const patterns = read("pnpm-workspace.yaml")
+      .split("\n")
+      .filter((l) => /^\s*-\s/.test(l))
+      .map((l) => l.replace(/^\s*-\s*/, "").replace(/["']/g, "").trim());
+    const members = patterns.flatMap((pat) =>
+      pat.endsWith("/*")
+        ? readdirSync(join(root, pat.slice(0, -2))).map((d) => `${pat.slice(0, -2)}/${d}`)
+        : [pat],
+    ).filter((m) => existsSync(join(root, m, "package.json")));
+    expect(members.length, "the workspace has members to check").toBeGreaterThan(3);
+    for (const m of members) {
+      const pkg = JSON.parse(read(`${m}/package.json`));
+      expect(pkg.scripts?.typecheck, `${m} typecheck`).toBeTruthy();
+      expect(pkg.scripts.typecheck, `${m} runs tsc --noEmit`).toMatch(/tsc\s+--noEmit/);
+    }
   });
 
   it("the lockfile is committed", () => {
