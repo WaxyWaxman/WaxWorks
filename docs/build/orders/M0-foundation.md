@@ -2,8 +2,8 @@
 
 **Flow:** none — M0 is the one order with no flow ([work-order skill](../../../.claude/skills/work-order/SKILL.md) §draft, step 1)
 **Milestone / track:** M0 / joint — no track; the lane hook enforces none
-**Status:** Drafted
-**Approved by:** _human, date_
+**Status:** Approved
+**Approved by:** sr-talbot, 2026-09-20 — rows 11 and 12 struck, row 17 added at approval
 **Pull request:** _once opened_
 **Register rows:** none — the register holds whole-flow scenarios and M0 delivers no flow; `/qa ready M0` is not a question this order answers
 
@@ -60,25 +60,26 @@ developer writes the smallest test that does hold it.
 | 8 | A-2 — _"Next.js App Router on Vercel. Till screens are client components; back-office screens are server-rendered."_ | `apps/web/` scaffolded as Next.js App Router with §7's seven route groups present as empty segments — `(till)`, `(back)`, `print`, `api/cron`, `(auth)`, `(org)`, `(admin)` — and nothing in them but a placeholder page, so that M1 U adds screens to a tree that already has the shape §7 fixes | unit — a test that the seven route-group directories exist under `apps/web/app/` |
 | 9 | A-9 — _"Tailwind + shadcn/ui. The prototype's design tokens map onto Tailwind theme variables."_ | Tailwind and shadcn/ui installed in `apps/web`; the prototype's design tokens mapped into the Tailwind theme once, here, so every later screen consumes them by name. The token source is `prototype/`'s stylesheet, harvested (§7) | integration — `pnpm typecheck` and `pnpm lint` green with the theme in place; a unit test that the theme file defines every token name the prototype's stylesheet defines |
 | 10 | A-1 — _"Online-only in v1. No offline queue. The PWA caches the app shell; writes fail visibly rather than queuing."_ | The PWA manifest §8 names, and a service worker that caches the **app shell only** — no write is queued, no request is replayed. Nothing else about offline is built | unit — a test that the service worker's cache list contains no route under `api/` and registers no background-sync handler |
-| 11 | A-8 — _"No local print agent in v1. Barcode labels and the letter-size finalize summary use browser printing (`window.print()` with `@page` rules)."_ | The `app/print/` route group exists (row 8) and carries one `@page` stylesheet, empty of content, so M3 U's label stylesheet has a home. **Doubt stated:** this may be nothing more than row 8 already delivers; the human strikes it at approval if so | N/A — or unit, a test that `app/print/` carries a stylesheet with an `@page` rule, if kept |
-| 12 | A-7 — _"A `jobs` table drained by Vercel Cron."_ | `app/api/cron/` exists (row 8) and `vercel.json` declares one cron schedule pointing at it, handler returning 204 with no work — the `jobs` table itself is M5's. **Doubt stated:** the schedule could equally land at M5 with the table; the human decides whether an empty drain belongs here | N/A — or integration, the cron route returning 204 on the preview deployment, if kept |
+| 11 | ~~A-8 — _"No local print agent in v1. Barcode labels and the letter-size finalize summary use browser printing (`window.print()` with `@page` rules)."_ | The `app/print/` route group exists (row 8) and carries one `@page` stylesheet, empty of content, so M3 U's label stylesheet has a home. **Doubt stated:** this may be nothing more than row 8 already delivers; the human strikes it at approval if so | N/A — or unit, a test that `app/print/` carries a stylesheet with an `@page` rule, if kept~~ **Struck at approval by sr-talbot, 2026-09-20** — row 8 already creates the route group; the stylesheet lands with M3 U, the schedule with M5 D |
+| 12 | ~~A-7 — _"A `jobs` table drained by Vercel Cron."_ | `app/api/cron/` exists (row 8) and `vercel.json` declares one cron schedule pointing at it, handler returning 204 with no work — the `jobs` table itself is M5's. **Doubt stated:** the schedule could equally land at M5 with the table; the human decides whether an empty drain belongs here | N/A — or integration, the cron route returning 204 on the preview deployment, if kept~~ **Struck at approval by sr-talbot, 2026-09-20** — row 8 already creates the route group; the stylesheet lands with M3 U, the schedule with M5 D |
 | 13 | A-100 — _"Three environments and no others: local, preview, production. A preview deployment runs against a per-branch ephemeral Supabase branch seeded from `seed.sql`, never against production and never against a copy of it."_ | Vercel project linked with a **preview deployment per pull request**, each against a **Supabase branch** created for that pull request; the anon key and URL wired per environment; the service-role key set **only** as a server-runtime variable on preview and production and present in no file. This order's own pull request is the first preview | integration — the preview URL for this pull request, its Supabase branch name, and a `curl` of a page quoted; a unit test that no file in the repository contains `SUPABASE_SERVICE_ROLE` outside `.env.example` as a name with no value, and that no `NEXT_PUBLIC_*` name contains `SERVICE` or `SECRET` |
 | 14 | A-100 — _"…the preview URL is access-protected, because an unprotected one is an unauthenticated application against a real database on the public internet."_ | Preview deployment protection enabled on the Vercel project. A setting, not code (§11 line 855); the repository cannot assert it | manual — cannot be held by a test in the tree, so the row ends **`N/A`** with the Vercel setting's name and who enabled it recorded in the Note, and the verifying human named in **Needs a human** |
 | 15 | A-85 — _"The end-to-end suite is a top-level `e2e/` directory, outside both apps."_ | `e2e/` exists as a workspace member (A-102) with its own `package.json` depending on `@playwright/test`, a `playwright.config.ts` reading `PLAYWRIGHT_BASE_URL`, an empty `fixtures/`, and **no spec** — the specs are QA's, written by `/qa automate`; no Playwright job in CI (A-97) | integration — `pnpm --filter e2e exec playwright test --list` exits 0 listing zero tests, quoted |
 | 16 | A-31 — _"The agent configuration is version-controlled."_ | `.claude/launch.json` gains an `apps/web` dev-server entry beside the prototype's, so `/qa walk` and `preview_start` can target the product; `.gitignore` covers `node_modules`, `.next`, `supabase/.branches`, `.vercel`, `.env*.local`, `test-results`, `playwright-report` | unit — a test that `.gitignore` contains each of those names; `launch.json` entry present |
+| 17 | A-92 — _"Operational logs are the platform's, sit outside A-90's grant and so outside the product's read boundary, are read by System Administrators only through the platforms' own consoles, and are never the audit record."_ Error events go to Sentry (§1). | §8's M0 U cell names Sentry; A-92 is the decision that says what it is. At M0 the SDK is installed in `apps/web` with a **DSN per environment as a server-runtime variable** (A-100's secrets rule), initialised, and **emitting nothing** — no function exists to raise a system flag and a refusal is not an error event (§6). What an event may carry (A-93, A-94) binds the first function at M1, not this order | unit — a test that no repository file contains a Sentry DSN value (the `https://…@…ingest…` shape) and that the Sentry config reads its DSN from the environment; integration — `pnpm typecheck` green with the SDK in place |
 
-Sentry, which §8's U cell names, is **not a row**: no A-n decides how Sentry is
-configured and A-92 to A-95 (logging) speak to what it may carry, not to its
-installation. Wiring the SDK with a DSN per environment is part of row 8's
-scaffold and row 13's environment variables; the content rules bind the first
-function that writes an event, at M1. If the human wants it as its own row, it is
-added at approval, citing A-92.
+Sentry is row 17, added at approval and citing A-92, which is the decision that
+says what Sentry is. Its content rules (A-93, A-94) bind the first function that
+writes an event, at M1, not this order.
 
 ## Evidence
 
 _Written by the developer. One row per Checklist row, in the same order. Every
 cell is exactly one of `Done`, `Deferred`, `Blocked`, `N/A` — a blank cell fails
 `check_coverage.py`._
+
+_Rows 11 and 12 were struck at approval and still count as Checklist rows for
+the gate; each ends `N/A — struck at approval by sr-talbot, 2026-09-20`._
 
 | # | State | Test (name and `file:line`) | Run output | Note |
 |---|---|---|---|---|
@@ -98,6 +99,7 @@ cell is exactly one of `Done`, `Deferred`, `Blocked`, `N/A` — a blank cell fai
 | 14 | | | | |
 | 15 | | | | |
 | 16 | | | | |
+| 17 | | | | |
 
 ## Findings
 
@@ -114,8 +116,8 @@ marks each `fixed` or `disputed`; nothing here is deleted._
 
 ### Needs a human
 
-- **Row 14** — the Vercel preview protection setting: who enabled it and when. The repository cannot verify it; §11 line 855 says it is re-verified at M6.
-- **Rows 11 and 12** — strike or keep at approval. Both are scaffolding that a later milestone could equally lay down; they are listed so the choice is visible.
+- **Row 14** — preview deployment protection was **enabled by sr-talbot on 2026-09-20**, before approval. The row ends `N/A` recording that; the repository cannot verify it, and §11 line 855 says it is re-verified at M6.
+- **Rows 11 and 12** — struck at approval by sr-talbot, 2026-09-20. Row 8's route groups are the scaffolding; the stylesheet is M3 U's and the cron schedule M5 D's.
 - **The `staging` branch** — A-96 (not yet ratified) puts the CI security review on pull requests into `staging`. This order opens its pull request into `main`, as every order does under the [workflow](../workflow.md). If A-96 is ratified before this order merges, whether M0 creates the branch is a question for its owners, not this order.
-- **Supabase plan tier** — row 13 requires branching, which A-100 records as a paid feature. The account must be on a tier that has it before the developer reaches row 13.
-- **Sentry** — see the note under the Checklist; add a row citing A-92 at approval if wanted.
+- **Row 13** — **there is no Supabase account yet**; sr-talbot will create it later, on a tier with branching (A-100 records it as paid). The developer builds every other row — local Supabase in Docker (row 2), pgTAP in CI (row 5) and `db-types` generation (row 6) need no account — and ends row 13 **`Deferred`, owner sr-talbot**, recorded here. On `accept` the coordinator turns that deferral into an open question in `architecture.md` §11 so it cannot be dropped; the Vercel preview for this order's pull request runs against the fake until the account exists.
+- **Sentry** — row 17, added at approval.
