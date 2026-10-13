@@ -51,6 +51,10 @@
 - **An Owner on a personal session picks any active Store and may switch; a Manager only one they are assigned to** (E-01 d27). Whether a Manager may *read* a sister Store without assignment is an open question this flow owns (below).
 - **Owners and Managers use a one-time code or a passkey as a second factor** (E-01 d28).
 
+**From [architecture](../architecture.md):**
+
+- **What ships at M1** (A-111, 2026-10-13). O-01 d2's **Create Store** ships at M1; the Store list, the Organization's details and its log (d4, d5) stay post-v1. The store account reset (d3) was already M1's. The reason is real shop data in production before v1 (A-109), which has no other governed way in.
+
 ---
 
 ## Resolved decisions

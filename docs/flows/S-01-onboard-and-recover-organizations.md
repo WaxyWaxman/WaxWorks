@@ -43,6 +43,10 @@
 
 - **A System Administrator signs in with a passkey** (E-01 d28).
 
+**From [architecture](../architecture.md):**
+
+- **What ships at M1** (A-111, 2026-10-13). S-01's **Create Organization** (d2, d5) ships at M1; the identity lists and change log (d1) and the recovery acts (d3) stay post-v1. The reason is real shop data in production before v1 (A-109), which has no other governed way in.
+
 ---
 
 ## Resolved decisions
