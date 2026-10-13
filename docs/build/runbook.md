@@ -18,6 +18,7 @@ Postgres 17, free plan), and one Vercel project, `pressers/wax-works`, serving
 
 | Step | Decision | Done by | Date | Evidence |
 |---|---|---|---|---|
+| Domain `waxworks.store` bought in the Pressers Vercel team; DNS on Vercel. **Auto-renew was off at purchase** — expires 2027-10-13; renewal quoted at $44 | A-116 | sr-talbot | 2026-10-13 | Vercel domains list |
 | Production project created; the integration's Sep 20 project and its 17 variables removed | A-109 | sr-talbot | 2026-10-13 | M0 order, row 13 Evidence |
 | M0's two migrations applied (`supabase db push`, no seed) | A-101, A-109 | sr-talbot | 2026-10-13 | `supabase migration list`: both Local and Remote |
 | Public sign-up off | A-91 | sr-talbot | 2026-10-13 | dashboard; not readable from the repository |
@@ -31,8 +32,9 @@ In order where order matters. Tick by moving the row to §1.
 
 | Step | Decision | When | Notes |
 |---|---|---|---|
-| **Sending domain** bought and verified in Resend | A-116 | before anything below that sends email | Open question, sr-talbot (`architecture.md` §11) |
-| Custom SMTP: Supabase's Resend integration, sending from that domain | A-116 | after the domain | Supabase's default email reaches only the project's own team |
+| `mail.waxworks.store` added and verified in Resend (MX, SPF and DKIM records in Vercel DNS) | A-116 | before anything below that sends email | Use a Resend API key with **sending access** only |
+| Auto-renew turned on for `waxworks.store` | A-116 | before 2027-10-13 | A lapsed domain stops every invite and reset |
+| Custom SMTP: Supabase's Resend integration, sender `no-reply@mail.waxworks.store`, name "Wax Works"; tested with an invite to a team member's own address | A-116 | after the domain verifies | Supabase's default email reaches only the project's own team |
 | Site URL `https://wax-works.vercel.app`; redirect URLs that origin only | A-116 | any time | Previews hold no database (A-109) |
 | Access-token lifetime confirmed at 3600 s | A-116 | any time | Supabase's default |
 | Access-token hook enabled | A-87, A-116 | after the M1 migration that creates the hook | Without it every write is refused (A-40) |
