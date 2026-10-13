@@ -77,7 +77,9 @@ already places them; a file that fits nowhere is a question for `/architecture`.
 Three platform settings the repository cannot assert, verified by a human at M0
 and re-verified in M6: Vercel preview protection on (A-100); the production
 Supabase project's public sign-up **off** (A-91) and its exposed schemas
-including `app` (A-105). `config.toml` fixes the latter two for local and every
+including `app` (A-105); and the Vercel project's Framework Preset **Next.js**
+with Root Directory **`apps/web`** (M0 finding 40 — blank until 2026-10-13, so every
+deployment until then was empty). `config.toml` fixes the Supabase two for local and every
 branch. **While previews run against no database (A-109), a pull request's
 database work is verified locally and in CI only** — `supabase db reset` and
 `supabase test db` — and production's dashboard is the first hosted Supabase

@@ -41,7 +41,12 @@ created through Vercel's integration, with seventeen of its variables in the
 Vercel project's Preview and Production scopes. All were removed and production
 was recreated as `udrtvdlmoaqsgzxobwwq`; the keys are now the publishable and
 secret keys, named `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` and
-`SUPABASE_SECRET_KEY` (A-109).
+`SUPABASE_SECRET_KEY` (A-109). **Production now serves the app**
+(`https://wax-works.vercel.app/` → `200`) — for the first time: until 2026-10-13
+the Vercel project's Framework Preset and Root Directory were blank and every
+deployment, preview and production, was empty (M0 finding 40). Production's two
+migrations are applied; row 13's observations are in the order, awaiting a
+reviewer.
 
 Every flow is `Specified`. **A-1 to A-109 are ratified except A-96** (WaxyWaxman's
 `staging` branch and CI security review, still *recommended, not yet ratified* —
