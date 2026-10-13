@@ -49,7 +49,7 @@ orders exist.
 until the upgrade due by M6 (A-109 as amended). It cannot enter yet: the
 [runbook](runbook.md) §2 lists what stands between — most of it waits on M1's
 migrations (the hook, `pin_pepper`, the System Administrators), plus passkeys for
-System Administrators (S-01 d6) and the first shop's settings values (A-112).
+System Administrators (S-01 d6). The first shop's settings values were answered on 2026-10-13 — Alberta, CAD, March 31, 80mm (A-112, §11).
 
 **The M1 plan-check (2026-10-13)** found the record could support neither the M1
 contract pull request nor real data at the end of M1. A-110 to A-116 close the
@@ -126,8 +126,8 @@ Steps 1 and 2 can run side by side; 3 waits on both.
    - **`/flow-clarify M-04`** — whether a new Manager must have a PIN and an Employee
      an email; which Stores *touched* means for a person assigned to several; who
      logs a self-service reset (A-114).
-   - **The first shop's settings values** (A-112, §11 — sr-talbot): province,
-     currency, receipt width, fiscal year end.
+   - ~~**The first shop's settings values**~~ — answered 2026-10-13: Alberta, CAD,
+     fiscal year end March 31, 80mm, M-06's defaults otherwise (A-112, §11).
 2. **The Sentry allowlist** (A-106, *M1's first task*) as **its own joint order** — it
    sits in `apps/web`, U's lane, so it cannot ride in the contract pull request, and no
    flow order owns it. _Status: recommended, not yet ratified._ Sentry's allowed-domains
@@ -152,7 +152,6 @@ Steps 1 and 2 can run side by side; 3 waits on both.
 
 | Item | Who | Blocks |
 |---|---|---|
-| **The first shop's settings values** — province, currency, receipt width, fiscal year end (A-112) | sr-talbot | The M1 **D** order fixing `store_create`'s body |
 | **Flow answers for E-01 and M-04** (§3 step 1) | sr-talbot, WaxyWaxman | The M1 contract pull request and the E-01 orders |
 | **Passkeys for System Administrators** before the first real Organization (S-01 d6); Supabase's were beta on 2026-10-13 | sr-talbot | Real shop data |
 | **A-109 to A-116 ratified by sr-talbot alone** — jointly owned; merged through #187 and #190 | WaxyWaxman | Nothing, if the merge review was the second owner's assent; say so if it was not |

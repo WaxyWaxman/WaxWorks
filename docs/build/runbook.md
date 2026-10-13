@@ -44,7 +44,7 @@ In order where order matters. Tick by moving the row to §1.
 | Access-token hook enabled | A-87, A-116 | after the M1 migration that creates the hook | Without it every write is refused (A-40) |
 | `pin_pepper` created: `select vault.create_secret(encode(extensions.gen_random_bytes(32), 'hex'), 'pin_pepper');` | A-115 | after M1's migrations, before the first PIN | Record who and when — never the value |
 | Three System Administrators: an Auth user each, **each enrolling a passkey**, then a `system_administrators` row each — sr-talbot, gimpymatey, WaxyWaxman | A-110, S-01 d7 | after the M1 migration that creates the table | Each distinct from any Owner account they hold |
-| The first shop's settings values answered and in `store_create`'s body | A-112 | before the M1 **D** order fixes the body | Open question, sr-talbot (`architecture.md` §11) |
+| `store_create`'s body carries the first shop's values — Alberta, CAD, fiscal year end March 31, 80mm, M-06's defaults otherwise | A-112 | in the M1 **D** order (M1 tables), and M2's for the tax tables | Values answered 2026-10-13 (`architecture.md` §11) |
 | M1's migrations applied (`supabase db push`, no seed) | A-101, A-109 | when M1 merges | — |
 
 ## 3. Before M6
