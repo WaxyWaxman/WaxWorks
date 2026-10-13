@@ -1,7 +1,7 @@
 # Wax Works — the build plan
 
 **Maintained by:** the coordinator, at the end of every build session. Read first by whoever picks up next.
-**Last updated:** 2026-09-21, the M0 review session (#180 – #185)
+**Last updated:** 2026-10-11 — A-109 (free-plan Supabase); otherwise unchanged since the M0 review session (#180 – #186)
 
 The [workflow](workflow.md) says how an order moves; the [conventions](conventions.md)
 say what the code looks like; the [status table](status.md) says what has landed.
@@ -29,9 +29,26 @@ build: invented conventions, silent bugs, and context blown by reading everythin
 
 ---
 
-## 2. Where we are — 2026-09-21
+## 2. Where we are — 2026-10-11
 
-Every flow is `Specified`. **A-1 to A-108 are ratified except A-96** (WaxyWaxman's
+**2026-10-11: A-109 ratified** — there is no paid Supabase plan, so previews run
+against no database and the one Supabase project is production, on the free plan,
+migrated and never seeded. **Amended 2026-10-13:** real shop data may enter
+production on the free plan, with **no backup** until the upgrade, which is due by
+M6; a new row then restores A-100's per-pull-request branches. M0 Checklist row 13 is amended to match.
+**Correction to the record:** a Supabase project *had* existed since 2026-09-20,
+created through Vercel's integration, with seventeen of its variables in the
+Vercel project's Preview and Production scopes. All were removed and production
+was recreated as `udrtvdlmoaqsgzxobwwq`; the keys are now the publishable and
+secret keys, named `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` and
+`SUPABASE_SECRET_KEY` (A-109). **Production now serves the app**
+(`https://wax-works.vercel.app/` → `200`) — for the first time: until 2026-10-13
+the Vercel project's Framework Preset and Root Directory were blank and every
+deployment, preview and production, was empty (M0 finding 40). Production's two
+migrations are applied; row 13's observations are in the order, awaiting a
+reviewer.
+
+Every flow is `Specified`. **A-1 to A-109 are ratified except A-96** (WaxyWaxman's
 `staging` branch and CI security review, still *recommended, not yet ratified* —
 A-100's and A-85's mentions of it are references, not their own status). Zero flow
 orders exist.
@@ -72,7 +89,8 @@ and the Supabase CLI **2.117.0** on PATH: `pnpm install --frozen-lockfile`,
 `supabase db reset`, `supabase test db` (**19** assertions across four suites),
 `pnpm --filter @waxworks/db-types gen` with no diff, `pnpm --filter @waxworks/web build`.
 A Vercel project (`pressers/wax-works`) deploys an access-protected preview per
-pull request, against **no database**, because no Supabase account exists yet.
+pull request, against **no database** — which, under A-109, is now the design
+rather than a gap.
 
 **On the Supabase CLI version.** CI pins 2.117.0 and the `db-types` diff step
 compares generator output, so a developer on a different CLI — including
@@ -126,7 +144,7 @@ Nothing here starts until the step before it is merged.
 
 | Item | Who | Blocks |
 |---|---|---|
-| **Supabase account** on a tier with branching (A-100) | sr-talbot | M0 row 13 (`Deferred`): a Supabase branch per pull request, the environment variables on Vercel, the first preview against a database. Until then previews run the shell against nothing |
+| **Supabase account** on the free plan, one production project (A-109) | sr-talbot | M0 row 13 (`Deferred`): the production project linked and migrated, its variables in Vercel's Production scope, none in Preview. **The paid tier** is due by M6; until it, real data in production has no backup (A-109, amended 2026-10-13) |
 | **Three production dashboard settings** the repository cannot assert: preview protection on (verified 2026-09-20), sign-up off, `app` in the exposed schemas | sr-talbot, with the account | Recorded in `architecture.md` §11 and conventions §2.1; re-verified at M6 |
 | **A-96** — the `staging` branch and the CI security review | sr-talbot, WaxyWaxman | Whether `build-check.yml`'s `staging` trigger and `security-review.yml` stay. A-100 already says the branch deploys as a preview, not a fourth environment |
 | **Three jointly-owned documents amended without the second owner** — Checklist rows 7, 15 and 17 ([#183](https://github.com/WaxyWaxman/WaxWorks/pull/183)); [`workflow.md`](workflow.md) and the `work-order` skill ([#185](https://github.com/WaxyWaxman/WaxWorks/pull/185)). Each carries a note saying so. Approval is *the moment scope is fixed* and `workflow.md` names both owners, so this is sr-talbot's to see rather than to be told. | sr-talbot |
