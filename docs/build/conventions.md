@@ -80,7 +80,9 @@ Supabase project's public sign-up **off** (A-91) and its exposed schemas
 including `app` (A-105); and the Vercel project's Framework Preset **Next.js**
 with Root Directory **`apps/web`** (M0 finding 40 — blank until 2026-10-13, so every
 deployment until then was empty). `config.toml` fixes the Supabase two for local and every
-branch. **While previews run against no database (A-109), a pull request's
+branch. **A-116 adds production's Auth settings** — the access-token hook on, Site
+URL and redirect URLs, custom SMTP on Resend, a one-hour token — and every
+hand-made production act is recorded in [`runbook.md`](runbook.md). **While previews run against no database (A-109), a pull request's
 database work is verified locally and in CI only** — `supabase db reset` and
 `supabase test db` — and production's dashboard is the first hosted Supabase
 the application meets, so a human checks it against `config.toml`.
