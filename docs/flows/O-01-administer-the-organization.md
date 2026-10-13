@@ -54,6 +54,7 @@
 **From [architecture](../architecture.md):**
 
 - **What ships at M1** (A-111, 2026-10-13). O-01 d2's **Create Store** ships at M1; the Store list, the Organization's details and its log (d4, d5) stay post-v1. The store account reset (d3) was already M1's. The reason is real shop data in production before v1 (A-109), which has no other governed way in.
+- **A new Store's defaults are written by `store_create`** (A-112, 2026-10-13), from values in its body chosen to fit the first real shop; d2's *M-06's defaults* means those. Until M-06's screens land, nothing changes them.
 
 ---
 
