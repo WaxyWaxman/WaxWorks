@@ -18,6 +18,7 @@ Postgres 17, free plan), and one Vercel project, `pressers/wax-works`, serving
 
 | Step | Decision | Done by | Date | Evidence |
 |---|---|---|---|---|
+| Site URL `https://wax-works.vercel.app`; redirect URLs `https://wax-works.vercel.app/**` only, `localhost` removed | A-116 | sr-talbot | 2026-10-13 | second test invite's `redirect_to` = `https://wax-works.vercel.app`; both test users deleted |
 | `mail.waxworks.store` verified in Resend — DKIM TXT `resend._domainkey.mail`, MX and SPF under `send.mail`; DMARC `p=none` at `_dmarc.waxworks.store` | A-116 | sr-talbot | 2026-10-13 | Resend: verified; public DNS checked |
 | Custom SMTP on: Supabase's Resend integration, sender `mail.waxworks.store` | A-116 | sr-talbot | 2026-10-13 | test invite to sr-talbot's own address **arrived — in the spam folder** (new domain; default one-line template; link to `supabase.co`) |
 | Domain `waxworks.store` bought in the Pressers Vercel team; DNS on Vercel. **Auto-renew was off at purchase** — expires 2027-10-13; renewal quoted at $44 | A-116 | sr-talbot | 2026-10-13 | Vercel domains list |
@@ -37,7 +38,6 @@ In order where order matters. Tick by moving the row to §1.
 | Auto-renew turned on for `waxworks.store` | A-116 | before 2027-10-13 | A lapsed domain stops every invite and reset |
 | Invite and reset templates given a real body (Authentication → Emails → Templates) | A-116 | before the first real Owner is invited | The default one-line template reads as phishing |
 | Auth links point at the product's own origin (`{{ .SiteURL }}/auth/confirm?token_hash=…`), not `supabase.co` | A-116 | with M1's accept-invite route (E-01 order) | Sender and link domains then match |
-| Site URL `https://wax-works.vercel.app`; redirect URLs that origin only | A-116 | any time | Previews hold no database (A-109) |
 | Access-token lifetime confirmed at 3600 s | A-116 | any time | Supabase's default |
 | Access-token hook enabled | A-87, A-116 | after the M1 migration that creates the hook | Without it every write is refused (A-40) |
 | `pin_pepper` created: `select vault.create_secret(encode(extensions.gen_random_bytes(32), 'hex'), 'pin_pepper');` | A-115 | after M1's migrations, before the first PIN | Record who and when — never the value |
