@@ -38,6 +38,7 @@
 - **An Organization always has at least one active Owner; recovery of one that has lost its last Owner is a System Administrator's act** (M-04 d26).
 - **Owners may hold no Store assignment** (M-04 d27) — which is what lets an Organization be created before its first Store.
 - **Passwords are set by their holder through an emailed link; a System Administrator may trigger a reset for an Owner** (M-04 d29).
+- **A sole Owner who loses their passkey has only a System Administrator to ask** (M-04 d38, 2026-10-13): decision 3's `owner_reset_request` is the whole of their recovery.
 
 **From [E-01](E-01-authenticate.md):**
 
