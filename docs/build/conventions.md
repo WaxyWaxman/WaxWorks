@@ -208,13 +208,13 @@ declare
   v_manager_id uuid;                        -- M / O only; resolved, never an argument
 begin
   if v_org_id is null then
-    raise exception 'no tenant' using errcode = '28000';                       -- A-40, A-90
+    raise exception 'no_tenant' using errcode = '28000';                       -- A-40, A-90
   end if;
   if auth.principal() = 'person' and p_actor_user_id is distinct from auth.user_id() then
-    raise exception 'actor is not the session holder' using errcode = '28000'; -- §6
+    raise exception 'actor_mismatch' using errcode = '28000'; -- §6
   end if;
   if auth.principal() = 'store' and not app.terminal_belongs_to(p_terminal_id, v_store_id) then
-    raise exception 'terminal is not this Store''s' using errcode = '28000';     -- A-94
+    raise exception 'terminal_mismatch' using errcode = '28000';     -- A-94
   end if;
   -- M / O: v_manager_id := app.manager_authorize_pin(p_manager_pin);          -- §6, A-89
   -- O:     assert that person is an Owner, and refuse by name                 -- §6
@@ -317,6 +317,26 @@ is a pull request both humans review (§7, workflow §4).
 | Validation in the wrapper | ergonomics only — the function is the enforcement point and asserts everything again (A-4, A-48, A-98) |
 | What lands at M0 | every §6 function's signature and a stub wrapper throwing `not_implemented`; schemas and the fake's behaviour arrive in the contract pull request that opens each milestone (A-99) |
 | How `packages/db-types` is regenerated and by whom | D, with `supabase gen types typescript --local`, in the same pull request as the migration; CI re-runs it and fails on a diff (A-98) |
+| How the fake knows who is signed in | `createFakeClient({ session })`, where `session` has §5.4's claim shape — `principal`, `org_id`, `store_id`, `user_id`, `terminal_id` — and `withSession(session)` returns a client for another principal over the **same** in-memory state, so a test states every principal it acts as. The fake reads the session where the database reads the JWT (A-87), and asserts what the function would. _Decided 2026-10-13 by sr-talbot (M1 contracts order, row 29)._ |
+| How a refusal is told apart | One SQLSTATE and one stable **message key** per kind of refusal, raised by the function and mimicked by the fake; `ContractError` carries both. Screens branch on the key, never on human text. See the table below. _The shape decided 2026-10-13 by sr-talbot (M1 contracts order, row 30); the code values are proposed and confirmed in the M1 contract pull request's review._ |
+| What never reaches a definer function | A credential. The store account's password goes from the Owner's form to the Server Action's Auth call (A-91) and is never an argument of `store_create` or `store_account_reset`, which take the store account's **email**; a PIN is an argument only where a function verifies it (A-89), and never appears in a refusal (A-93). _Decided 2026-10-13 by sr-talbot (M1 contracts order, row 18)._ |
+
+**Refusals (M1 contracts order, row 30).** Raised as `raise exception '<key>' using errcode = '<SQLSTATE>'`, with any structured detail in `detail`; the human sentence is the screen's, chosen from the key.
+
+| Kind | SQLSTATE | Message key | Detail |
+|---|---|---|---|
+| No tenant; actor is not the session holder; terminal is not this Store's (A-40, §6, A-94) | `28000` | `no_tenant`, `actor_mismatch`, `terminal_mismatch` | — |
+| Wrong principal or role — not a Manager, not an Owner, not a System Administrator (A-90, M-04 d30) | `42501` | `role_refused` | the role required |
+| Wrong PIN (E-01 d26) | `28P01` | `pin_refused` | — names nobody |
+| PIN line closed (E-01 d31) | `WX429` | `pin_line_closed` | `reopens_at` |
+| Clash — initials or PIN already held at this Store (M-04 d27, d32) | `23505` | `initials_clash`, `pin_clash` | the holder's name for initials; nothing for a PIN |
+| Not found, or not visible to this principal | `P0002` | `not_found` | — |
+| The Owner floor (M-04 d26) | `23514` | `owner_floor` | — |
+| Required field for this role missing — a Manager's PIN or email (M-04 d35, d33) | `23502` | `pin_required`, `email_required`, `initials_required` | — |
+| Wrong state for the act — re-sending to someone already enrolled, recovering while an Owner exists (M-04 d38, A-90) | `55000` | `invalid_state` | what state |
+| PIN pepper missing (A-115) | `XX000` | `pin_pepper_missing` | — |
+
+_Status: the keys and the kinds decided; the SQLSTATE values recommended, not yet ratified — confirmed in the M1 contract pull request._ `WX` is a class Postgres does not use, reserved here for refusals with no standard code.
 
 ---
 
