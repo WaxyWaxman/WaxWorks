@@ -254,10 +254,15 @@ otp_expiry = 3600
 # admin_email = "admin@email.com"
 # sender_name = "Admin"
 
-# Uncomment to customize email template
-# [auth.email.template.invite]
-# subject = "You have been invited"
-# content_path = "./supabase/templates/invite.html"
+# Auth email templates (A-116). Production's copies live in the dashboard and must
+# match these files; change both in the same pull request (docs/build/runbook.md).
+[auth.email.template.invite]
+subject = "WaxWorks - Let's get you set-up"
+content_path = "./supabase/templates/invite.html"
+
+[auth.email.template.recovery]
+subject = "WaxWorks - Let's get you back in"
+content_path = "./supabase/templates/recovery.html"
 
 # Uncomment to customize notification email template
 # [auth.email.notification.password_changed]

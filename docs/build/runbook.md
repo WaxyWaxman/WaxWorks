@@ -18,6 +18,11 @@ Postgres 17, free plan), and one Vercel project, `pressers/wax-works`, serving
 
 | Step | Decision | Done by | Date | Evidence |
 |---|---|---|---|---|
+| Invite and reset templates given a real body in the dashboard — subjects *WaxWorks - Let's get you set-up* and *WaxWorks - Let's get you back in*. **The dashboard copies must match `supabase/templates/invite.html` and `recovery.html`** (loaded by `config.toml` for local and CI); change both in the same pull request | A-116 | sr-talbot | 2026-10-13 | text pasted from the dashboard into the repository files |
+| Site URL `https://wax-works.vercel.app`; redirect URLs `https://wax-works.vercel.app/**` only, `localhost` removed | A-116 | sr-talbot | 2026-10-13 | second test invite's `redirect_to` = `https://wax-works.vercel.app`; both test users deleted |
+| `mail.waxworks.store` verified in Resend — DKIM TXT `resend._domainkey.mail`, MX and SPF under `send.mail`; DMARC `p=none` at `_dmarc.waxworks.store` | A-116 | sr-talbot | 2026-10-13 | Resend: verified; public DNS checked |
+| Custom SMTP on: Supabase's Resend integration, sender `mail.waxworks.store` | A-116 | sr-talbot | 2026-10-13 | test invite to sr-talbot's own address **arrived — in the spam folder** (new domain; default one-line template; link to `supabase.co`) |
+| Domain `waxworks.store` bought in the Pressers Vercel team; DNS on Vercel. **Auto-renew was off at purchase** — expires 2027-10-13; renewal quoted at $44 | A-116 | sr-talbot | 2026-10-13 | Vercel domains list |
 | Production project created; the integration's Sep 20 project and its 17 variables removed | A-109 | sr-talbot | 2026-10-13 | M0 order, row 13 Evidence |
 | M0's two migrations applied (`supabase db push`, no seed) | A-101, A-109 | sr-talbot | 2026-10-13 | `supabase migration list`: both Local and Remote |
 | Public sign-up off | A-91 | sr-talbot | 2026-10-13 | dashboard; not readable from the repository |
@@ -31,9 +36,8 @@ In order where order matters. Tick by moving the row to §1.
 
 | Step | Decision | When | Notes |
 |---|---|---|---|
-| **Sending domain** bought and verified in Resend | A-116 | before anything below that sends email | Open question, sr-talbot (`architecture.md` §11) |
-| Custom SMTP: Supabase's Resend integration, sending from that domain | A-116 | after the domain | Supabase's default email reaches only the project's own team |
-| Site URL `https://wax-works.vercel.app`; redirect URLs that origin only | A-116 | any time | Previews hold no database (A-109) |
+| Auto-renew turned on for `waxworks.store` | A-116 | before 2027-10-13 | A lapsed domain stops every invite and reset |
+| Auth links point at the product's own origin (`{{ .SiteURL }}/auth/confirm?token_hash=…`), not `supabase.co` | A-116 | with M1's accept-invite route (E-01 order) | Sender and link domains then match |
 | Access-token lifetime confirmed at 3600 s | A-116 | any time | Supabase's default |
 | Access-token hook enabled | A-87, A-116 | after the M1 migration that creates the hook | Without it every write is refused (A-40) |
 | `pin_pepper` created: `select vault.create_secret(encode(extensions.gen_random_bytes(32), 'hex'), 'pin_pepper');` | A-115 | after M1's migrations, before the first PIN | Record who and when — never the value |
