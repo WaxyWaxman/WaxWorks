@@ -82,6 +82,8 @@ The shape decision 18 was built to protect held: actions are still attributed to
 - ~~**A Store always has at least one active Manager** ([M-04](M-04-manage-users.md) d14), so there is always somebody who can authorize a manager-only action at a terminal.~~ — **superseded by [M-04](M-04-manage-users.md) d26:** the floor is the Organization's — at least one active **Owner** — and a Store may have no Manager assigned. On such a Store's store session nobody's PIN opens the manager-only line; an Owner does that work on a personal session, or assigns themselves and uses their own PIN.
 - **PINs are set by an Owner or a Manager; passwords by their holder through an emailed link** ([M-04](M-04-manage-users.md) d28, d29). This flow asks for them; it never sets them.
 - **What a Manager may administer is bounded to Employees at their own Stores** ([M-04](M-04-manage-users.md) d30). It matters here because the manager-only line is the same line for a Manager and an Owner; what differs is what is offered once across it.
+- **Every Manager and Owner who holds a Store holds a PIN** (M-04 d35, 2026-10-13), so decision 26's manager-only line always has someone to resolve to; an Owner sets theirs at first assignment.
+- **No self-service recovery from the sign-in screen** (M-04 d38): a lost passkey is re-enrolled through an Owner, or a System Administrator for a sole Owner. The sign-in screen offers no *forgot* link.
 
 **From [M-06](M-06-settings.md):**
 
