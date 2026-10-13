@@ -80,7 +80,9 @@ Supabase project's public sign-up **off** (A-91) and its exposed schemas
 including `app` (A-105); and the Vercel project's Framework Preset **Next.js**
 with Root Directory **`apps/web`** (M0 finding 40 — blank until 2026-10-13, so every
 deployment until then was empty). `config.toml` fixes the Supabase two for local and every
-branch. **While previews run against no database (A-109), a pull request's
+branch. **A-116 adds production's Auth settings** — the access-token hook on, Site
+URL and redirect URLs, custom SMTP on Resend, a one-hour token — and every
+hand-made production act is recorded in [`runbook.md`](runbook.md). **While previews run against no database (A-109), a pull request's
 database work is verified locally and in CI only** — `supabase db reset` and
 `supabase test db` — and production's dashboard is the first hosted Supabase
 the application meets, so a human checks it against `config.toml`.
@@ -166,7 +168,8 @@ function shares, from §3 and §6:
 | Actor arguments | `p_actor_user_id` **and** `p_actor_initials`; on a personal session the function asserts the actor **is** `auth.user_id()` | §6 |
 | Manager-only (**M**) on a store session | takes `p_manager_pin`, resolves it to the one active Manager or Owner assigned to `auth.store_id()` in the same transaction, refuses otherwise; `p_manager_user_id` is what it resolves to, never an input | §6 |
 | Owner-only (**O**) | as **M**, then asks whether that person is an Owner and refuses by name | §6 |
-| Sysadmin (**S**) | asserts `auth.principal() = 'sysadmin'`; every other function refuses a null `auth.org_id()` | A-90 |
+| Sysadmin (**S**) | asserts `auth.principal() = 'sysadmin'` **and** an active `system_administrators` row for `p_actor_user_id = auth.uid()`; takes no initials, terminal or PIN; every other function refuses a null `auth.org_id()` | A-90, A-110, A-113 |
+| Header exceptions | exactly five: `actor_resolve`, `manager_authorize_pin`, `terminal_register`, every **S** function, and A-91's Auth write-back — each still takes `p_request_id`; see A-113 for what each takes instead. A sixth is a decision, not a convenience | A-113 |
 | Tenancy | re-asserts `auth.org_id()` / `auth.store_id()` and the principal inside the function, not only via RLS | A-40 |
 | Both names recorded | the actor's and, where one authorized, the Manager's | A-28a, A-55, A-89 |
 | Flags, not gates | an action worth a second look proceeds and writes a `review_flags` row with an attributable actor **in the same transaction** | A-28 |
