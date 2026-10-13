@@ -33,9 +33,9 @@ build: invented conventions, silent bugs, and context blown by reading everythin
 
 **2026-10-11: A-109 ratified** — there is no paid Supabase plan, so previews run
 against no database and the one Supabase project is production, on the free plan,
-migrated and never seeded. The paid tier is due before the first shop's data reaches
-production (at the latest M6's pilot), and a new row then restores A-100's
-per-pull-request branches. M0 Checklist row 13 is amended to match.
+migrated and never seeded. **Amended 2026-10-13:** real shop data may enter
+production on the free plan, with **no backup** until the upgrade, which is due by
+M6; a new row then restores A-100's per-pull-request branches. M0 Checklist row 13 is amended to match.
 **Correction to the record:** a Supabase project *had* existed since 2026-09-20,
 created through Vercel's integration, with seventeen of its variables in the
 Vercel project's Preview and Production scopes. All were removed and production
@@ -144,7 +144,7 @@ Nothing here starts until the step before it is merged.
 
 | Item | Who | Blocks |
 |---|---|---|
-| **Supabase account** on the free plan, one production project (A-109) | sr-talbot | M0 row 13 (`Deferred`): the production project linked and migrated, its variables in Vercel's Production scope, none in Preview. **The paid tier** is due before the first shop's data reaches production |
+| **Supabase account** on the free plan, one production project (A-109) | sr-talbot | M0 row 13 (`Deferred`): the production project linked and migrated, its variables in Vercel's Production scope, none in Preview. **The paid tier** is due by M6; until it, real data in production has no backup (A-109, amended 2026-10-13) |
 | **Three production dashboard settings** the repository cannot assert: preview protection on (verified 2026-09-20), sign-up off, `app` in the exposed schemas | sr-talbot, with the account | Recorded in `architecture.md` §11 and conventions §2.1; re-verified at M6 |
 | **A-96** — the `staging` branch and the CI security review | sr-talbot, WaxyWaxman | Whether `build-check.yml`'s `staging` trigger and `security-review.yml` stay. A-100 already says the branch deploys as a preview, not a fourth environment |
 | **Three jointly-owned documents amended without the second owner** — Checklist rows 7, 15 and 17 ([#183](https://github.com/WaxyWaxman/WaxWorks/pull/183)); [`workflow.md`](workflow.md) and the `work-order` skill ([#185](https://github.com/WaxyWaxman/WaxWorks/pull/185)). Each carries a note saying so. Approval is *the moment scope is fixed* and `workflow.md` names both owners, so this is sr-talbot's to see rather than to be told. | sr-talbot |
