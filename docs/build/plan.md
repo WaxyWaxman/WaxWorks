@@ -1,7 +1,7 @@
 # Wax Works — the build plan
 
 **Maintained by:** the coordinator, at the end of every build session. Read first by whoever picks up next.
-**Last updated:** 2026-10-11 — A-109 (free-plan Supabase); otherwise unchanged since the M0 review session (#180 – #186)
+**Last updated:** 2026-10-13 — M0 Accepted (#188); A-109 (#187); A-110 to A-116, the runbook and the Auth templates (#190)
 
 The [workflow](workflow.md) says how an order moves; the [conventions](conventions.md)
 say what the code looks like; the [status table](status.md) says what has landed.
@@ -21,7 +21,7 @@ build: invented conventions, silent bugs, and context blown by reading everythin
 |---|---|---|
 | 1 | **M0 as a work order**, cited to A-n only, run interactively by a human | The first order sets the pattern for every later one; the joint skeleton writes `packages/contracts/` and `.github/`, which the `developer` subagent's hook refuses |
 | 2 | **M0's review findings fixed and the order `Accepted`** before any M1 order is drafted | An M1 order builds on the contracts skeleton and the owner role; both are wrong today in ways the findings name |
-| 3 | **M1 opens with E-01 alone** — `E-01-D-M1` and `E-01-U-M1`, two developers, to `Accepted` — then M-04, then O-01 d3 | E-01 is the thin vertical slice that proves the whole loop (order → developer → CI → reviewers → merge → `/qa ready`) before a second flow depends on it |
+| 3 | **M1 opens with E-01 alone** — `E-01-D-M1` and `E-01-U-M1`, two developers, to `Accepted` — then M-04, then O-01 d3. *Since A-111 (2026-10-13), M1 also carries S-01's Create Organization and O-01 d2's Create Store* | E-01 is the thin vertical slice that proves the whole loop (order → developer → CI → reviewers → merge → `/qa ready`) before a second flow depends on it |
 | 4 | **Each milestone opens with a contract pull request** both humans review: the schemas and the fake's behaviour for that milestone's functions (A-99) | The signatures exist since M0; the schemas are written against the specification that ships with the milestone, not guessed earlier |
 | 5 | **Never two orders on one flow in one track.** One developer worktree per order, fresh context each time | The unit of work is already small; the failure is two agents editing one lane |
 | 6 | `resolve_scan` and `review_flags` land early behind their contracts (§8's dependency note) | M3 and M4 both need them |
@@ -29,33 +29,35 @@ build: invented conventions, silent bugs, and context blown by reading everythin
 
 ---
 
-## 2. Where we are — 2026-10-11
+## 2. Where we are — 2026-10-13
 
-**2026-10-11: A-109 ratified** — there is no paid Supabase plan, so previews run
-against no database and the one Supabase project is production, on the free plan,
-migrated and never seeded. **Amended 2026-10-13:** real shop data may enter
-production on the free plan, with **no backup** until the upgrade, which is due by
-M6; a new row then restores A-100's per-pull-request branches. M0 Checklist row 13 is amended to match.
-**Correction to the record:** a Supabase project *had* existed since 2026-09-20,
-created through Vercel's integration, with seventeen of its variables in the
-Vercel project's Preview and Production scopes. All were removed and production
-was recreated as `udrtvdlmoaqsgzxobwwq`; the keys are now the publishable and
-secret keys, named `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` and
-`SUPABASE_SECRET_KEY` (A-109). **Production now serves the app**
-(`https://wax-works.vercel.app/` → `200`) — for the first time: until 2026-10-13
-the Vercel project's Framework Preset and Root Directory were blank and every
-deployment, preview and production, was empty (M0 finding 40). Production's two
-migrations are applied; row 13's observations are in the order, awaiting a
-reviewer.
-
-Every flow is `Specified`. **A-1 to A-109 are ratified except A-96** (WaxyWaxman's
-`staging` branch and CI security review, still *recommended, not yet ratified* —
-A-100's and A-85's mentions of it are references, not their own status). Zero flow
+**M0 is `Accepted`** ([#188](https://github.com/WaxyWaxman/WaxWorks/pull/188), sr-talbot, 2026-10-13): findings 28 and 29
+`discharged`, Checklist 17/17 with row 13 `Deferred`. Its row is in [status.md](status.md).
+Every flow is `Specified`. **A-1 to A-116 are ratified except A-96** (the `staging`
+branch and CI security review, still *recommended, not yet ratified*). Zero flow
 orders exist.
 
-**M0 is built and merged, and its 39 findings are worked.** The order is still
-`In review`: **the Verdict is blank, and closing it needs two marks and a word,
-all three a human's** — see §3 step 1.
+**Production exists and serves the app** — on free plans throughout (A-109):
+
+| Piece | State | Record |
+|---|---|---|
+| Supabase | `udrtvdlmoaqsgzxobwwq`, `ca-central-1`, Postgres 17, free plan, in the Vercel-managed organization; M0's two migrations, never seeded; sign-up off, `app` exposed | A-109, [runbook](runbook.md) |
+| Vercel | `https://wax-works.vercel.app` → `200`; three Production-only variables (`NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`, `SUPABASE_SECRET_KEY`); previews hold no database. Every deployment before 2026-10-13 was empty (M0 finding 40) | A-109, M0 finding 40 |
+| Auth email | `waxworks.store` (Vercel; expires 2027-10-13, **auto-renew off**); Resend verified on `mail.waxworks.store`; Supabase custom SMTP; Site URL production; invite and recovery templates in `supabase/templates/`. The first test invite landed in spam | A-116, runbook |
+
+**Real shop data may enter production before the paid plan**, with **no backup**
+until the upgrade due by M6 (A-109 as amended). It cannot enter yet: the
+[runbook](runbook.md) §2 lists what stands between — most of it waits on M1's
+migrations (the hook, `pin_pepper`, the System Administrators), plus passkeys for
+System Administrators (S-01 d6) and the first shop's settings values (A-112).
+
+**The M1 plan-check (2026-10-13)** found the record could support neither the M1
+contract pull request nor real data at the end of M1. A-110 to A-116 close the
+structural part: System Administrators from a table (A-110), Create Organization
+and Create Store at M1 (A-111), `store_create` writing the first shop's defaults
+(A-112), five header exceptions (A-113), `auth_user_link` as the service role's one
+function and the Owner's reset and re-send at M1 (A-114), the pepper (A-115), and
+production Auth (A-116). What remains is in the flows — §3 step 1.
 
 | PR | Landed | What it did |
 |---|---|---|
@@ -70,6 +72,11 @@ all three a human's** — see §3 step 1.
 | [#183](https://github.com/WaxyWaxman/WaxWorks/pull/183) | merged | **Checklist rows 7, 15 and 17 amended** by the owner, struck in place — findings 36, 17, 25 |
 | [#184](https://github.com/WaxyWaxman/WaxWorks/pull/184) | merged | **The A-102 amendment ratified** — *per member* reaches ESLint, and no TypeScript file sits outside a member |
 | [#185](https://github.com/WaxyWaxman/WaxWorks/pull/185) | merged | **`discharged`** — a third terminal state for a blocking finding whose remedy is not code, with its naming requirement. Amends [`workflow.md`](workflow.md) §2, §3, §4 and the `work-order` skill |
+| [#186](https://github.com/WaxyWaxman/WaxWorks/pull/186) | merged | This file to the M0 review's end, and two fixes found preparing the verdict |
+| [#187](https://github.com/WaxyWaxman/WaxWorks/pull/187) | merged | **A-109** — free-plan Supabase, previews against no database; the key rename; M0 row 13 amended; **finding 40**; amended to allow real data before the upgrade |
+| [#188](https://github.com/WaxyWaxman/WaxWorks/pull/188) | merged | **M0 `Accepted`** — findings 28 and 29 `discharged` |
+| [#189](https://github.com/WaxyWaxman/WaxWorks/pull/189) | merged **into #187's branch, not `main`** | A-110 to A-116 — stacked on #187, which merged first; none of it reached `main` |
+| [#190](https://github.com/WaxyWaxman/WaxWorks/pull/190) | merged | #189's content onto `main`, with the four commits that missed it: the sending domain, two runbook updates, the Auth templates |
 
 **Three things the review changed that outlive M0.** The **`discharged`** state
 (#185), because *every blocking finding `fixed`* had no exit for a finding that
@@ -85,7 +92,7 @@ error paths no sample rate gates.
 and the Supabase CLI **2.117.0** on PATH: `pnpm install --frozen-lockfile`,
 `pnpm typecheck` and `pnpm lint` (**five members each** — `apps/web`,
 `packages/contracts`, `packages/db-types`, `e2e`, `tests`), `pnpm test`
-(**333** repository assertions), `supabase start -x studio,imgproxy,inbucket,edge-runtime,logflare,vector,realtime,storage-api,mailpit,supavisor`,
+(**334** repository assertions), `supabase start -x studio,imgproxy,inbucket,edge-runtime,logflare,vector,realtime,storage-api,mailpit,supavisor`,
 `supabase db reset`, `supabase test db` (**19** assertions across four suites),
 `pnpm --filter @waxworks/db-types gen` with no diff, `pnpm --filter @waxworks/web build`.
 A Vercel project (`pressers/wax-works`) deploys an access-protected preview per
@@ -97,6 +104,8 @@ compares generator output, so a developer on a different CLI — including
 scoop's `supabase-beta` — sees that step go red with nothing changed. Install
 the `supabase` package, not `supabase-beta`.
 
+**Do not stack pull requests.** #189 targeted #187's branch; when #187 merged first, #189 merged into that branch and `main` never saw it until #190. A pull request targets `main`, or is retargeted to `main` before anyone merges it.
+
 **Work A-108 created that does not exist yet:** the wrapper still mints
 `p_request_id` *after* validating, and `ContractError` does not carry it. The
 decision and the code disagree until M1's contract pull request lands the change
@@ -106,37 +115,36 @@ and its `invalid_input` test.
 
 ## 3. Next steps, in order
 
-Nothing here starts until the step before it is merged.
+Steps 1 and 2 can run side by side; 3 waits on both.
 
-1. **Close M0 — two marks and a word, all three a human's.** Under #185's
-   `discharged` state: **finding 28** naming #180, #182, #183 and the correcting
-   migration under A-101; **finding 29** naming A-106. Then the **Verdict**:
-   every Checklist row is accounted for (17/17), the suites were green in the
-   reviewers' own runs, `check_docs` is clean, and with those two marks the
-   blocking findings are answered. Then the coordinator writes M0's row in
-   [status.md](status.md). **An agent writes neither the marks nor the verdict**
-   ([workflow](workflow.md) §4).
-   *Not blocking:* finding 23 (A-97's *runs, in order* against four parallel
-   jobs) routes to `/architecture`, and finding 27 (register drift on
-   `playwright.config.ts`) to `/qa`. Both are observations.
-2. **The M1 contract pull request** (A-99), reviewed by **both** owners: input
-   and output schemas and the fake's behaviour for §6's Identity set, plus the
-   three header questions the review left open (findings 6 and 24 —
-   `actor_resolve`, `manager_authorize_pin`, `terminal_register` and the **S**
-   functions cannot take the uniform header; the two predicates; the nine
-   `settings_*` groups). It also carries **A-108's wrapper change** and **finding
-   34** (`service_role` has no `usage` on `app`, which A-91's Auth write-back
-   function will need). `/plan-check` first if any answer touches a recorded
-   decision. Finding 10 — how a bigint minor unit crosses PostgREST under
-   A-47 — does not block M1 but must be settled before M3's contract pull
-   request, where the six output schemas will refuse a JSON number.
-3. **`/work-order E-01 D`** and **`/work-order E-01 U`**. A human approves each.
-   Dispatch the `developer` subagent per order, in its own worktree, with the
-   order's path and nothing else. **A-107's grant assertion lands with M1's first
-   function migration**, beside A-104's ownership assertion.
-4. **`/qa ready M1`** when both are `Accepted` and merged, then `/qa automate`
-   per E-01 register row. The first spec `/qa automate` writes is also when
-   `--pass-with-no-tests` comes out of `e2e`'s `test:list` (Checklist row 15).
+1. **Close the flow questions M1 depends on** — each needs the owners' answers:
+   - **`/flow-clarify E-01`** — PIN attempt throttling (§11; §10 says *before the
+     pilot*, and real PINs now come sooner); whether `manager_authorize_pin` may be
+     called on its own (A-113 left it to E-01); a store account second factor; how an
+     invited Owner holds a personal session **before any Store exists** (A-111); and
+     the accept-invite route, with Auth links on the product's own origin (runbook).
+   - **`/flow-clarify M-04`** — whether a new Manager must have a PIN and an Employee
+     an email; which Stores *touched* means for a person assigned to several; who
+     logs a self-service reset (A-114).
+   - **The first shop's settings values** (A-112, §11 — sr-talbot): province,
+     currency, receipt width, fiscal year end.
+2. **The Sentry allowlist** (A-106, *M1's first task*) as **its own joint order** — it
+   sits in `apps/web`, U's lane, so it cannot ride in the contract pull request, and no
+   flow order owns it. _Status: recommended, not yet ratified._ Sentry's allowed-domains
+   and auth token (§4) gate setting a DSN, not building the allowlist.
+3. **The M1 contract pull request** (A-99), reviewed by **both** owners: schemas and the
+   fake for §6's Identity set **as A-113 and A-114 now shape it** — the five header
+   exceptions and `tests/contracts.test.ts`'s list of them; `auth_user_link`;
+   `user_reset_request` and `user_invite_resend`; **A-108's wrapper change** and its
+   `invalid_input` test; the predicates' `pure` label corrected. **No `settings_*`
+   function ships at M1** (A-112). Finding 10 (bigint across PostgREST) is M3's.
+4. **Work orders**, a human approving each, one `developer` per order in its own
+   worktree: **E-01 D and U** first; then M-04; then O-01 (d2 Create Store, d3 reset)
+   and S-01 (Create Organization) under A-111. A-107's grant assertion lands with
+   M1's first function migration.
+5. **`/qa ready M1`** when both tracks are `Accepted` and merged; then `/qa automate`
+   per row, which also takes `--pass-with-no-tests` out of `e2e` (M0 row 15). Then the
+   [runbook](runbook.md) §2 steps, and the first real Organization.
 
 ---
 
@@ -144,12 +152,16 @@ Nothing here starts until the step before it is merged.
 
 | Item | Who | Blocks |
 |---|---|---|
-| **Supabase account** on the free plan, one production project (A-109) | sr-talbot | M0 row 13 (`Deferred`): the production project linked and migrated, its variables in Vercel's Production scope, none in Preview. **The paid tier** is due by M6; until it, real data in production has no backup (A-109, amended 2026-10-13) |
-| **Three production dashboard settings** the repository cannot assert: preview protection on (verified 2026-09-20), sign-up off, `app` in the exposed schemas | sr-talbot, with the account | Recorded in `architecture.md` §11 and conventions §2.1; re-verified at M6 |
-| **A-96** — the `staging` branch and the CI security review | sr-talbot, WaxyWaxman | Whether `build-check.yml`'s `staging` trigger and `security-review.yml` stay. A-100 already says the branch deploys as a preview, not a fourth environment |
-| **Three jointly-owned documents amended without the second owner** — Checklist rows 7, 15 and 17 ([#183](https://github.com/WaxyWaxman/WaxWorks/pull/183)); [`workflow.md`](workflow.md) and the `work-order` skill ([#185](https://github.com/WaxyWaxman/WaxWorks/pull/185)). Each carries a note saying so. Approval is *the moment scope is fixed* and `workflow.md` names both owners, so this is sr-talbot's to see rather than to be told. | sr-talbot |
-| **M0's verdict** | either owner | #176 merged before gates 3–5 ran; the order cannot be `Accepted` until §3 step 2 above |
-| **Sentry** auth token (for source maps) and allowed-domains (for the public browser DSN) | sr-talbot | Neither is decided; `@sentry/cli`'s build is denied until the token is. **And under A-106 no DSN is set in any environment until the allowlist `beforeSend` ships — M1's first task** |
+| **The first shop's settings values** — province, currency, receipt width, fiscal year end (A-112) | sr-talbot | The M1 **D** order fixing `store_create`'s body |
+| **Flow answers for E-01 and M-04** (§3 step 1) | sr-talbot, WaxyWaxman | The M1 contract pull request and the E-01 orders |
+| **Passkeys for System Administrators** before the first real Organization (S-01 d6); Supabase's were beta on 2026-10-13 | sr-talbot | Real shop data |
+| **A-109 to A-116 ratified by sr-talbot alone** — jointly owned; merged through #187 and #190 | WaxyWaxman | Nothing, if the merge review was the second owner's assent; say so if it was not |
+| **Auto-renew on `waxworks.store`** — off at purchase, deferred by sr-talbot 2026-10-13 | sr-talbot | Every invite and reset after 2027-10-13 |
+| **Auth email lands in spam** — a new domain, and links on `supabase.co` until M1's accept-invite route | sr-talbot | Nothing; tell an invited Owner to check spam meanwhile |
+| **The paid Supabase plan** — due by M6; until then real data has no backup (A-109) | sr-talbot | M6's backup restore verification |
+| **A-96** — the `staging` branch and the CI security review | sr-talbot, WaxyWaxman | Whether `build-check.yml`'s `staging` trigger and `security-review.yml` stay |
+| **Sentry** auth token (for source maps) and allowed-domains (for the public browser DSN) | sr-talbot | Setting a DSN; `@sentry/cli`'s build. Under A-106 no DSN is set until the allowlist ships |
+| **M0 row 13's observations** (2026-10-13) — recorded by the coordinator and never checked by a reviewer; the row stays `Deferred` in an `Accepted` order | either owner | Nothing now; re-verified with the platform settings at M6 |
 
 ---
 
