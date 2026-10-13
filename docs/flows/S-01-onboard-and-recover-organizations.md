@@ -42,8 +42,8 @@
 **From [E-01](E-01-authenticate.md):**
 
 - **A System Administrator signs in with a passkey** (E-01 d28).
-- **The first Owner's invitation enrols a passkey, or an SMS phone, not a password** (E-01 d33, 2026-10-13); `owner_reset_request` sends a re-enrolment link.
-- **The invited first Owner accepts on a Wax Works page, creates a passkey or verifies a phone, and lands on Create Store** (E-01 d35, d36, 2026-10-13); a dead link is re-sent rather than recovered.
+- **The first Owner's invitation enrols a passkey, not a password** (E-01 d33, 2026-10-13); `owner_reset_request` sends a re-enrolment link.
+- **The invited first Owner accepts on a Wax Works page, creates a passkey, and lands on Create Store** (E-01 d35, d36, 2026-10-13); a dead link is re-sent rather than recovered.
 
 **From [architecture](../architecture.md):**
 

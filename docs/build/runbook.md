@@ -38,7 +38,6 @@ In order where order matters. Tick by moving the row to §1.
 | Step | Decision | When | Notes |
 |---|---|---|---|
 | Auto-renew turned on for `waxworks.store` | A-116 | before 2027-10-13 | A lapsed domain stops every invite and reset |
-| SMS provider account (e.g. Twilio) connected in Supabase Auth → Phone, for the SMS fallback | E-01 d33 | before the first Manager who cannot create a passkey | Paid per message; the provider's credentials go in the dashboard only |
 | **Invite and recovery templates reworded** — *create your passkey*, not *choose your own password*; dashboard and `supabase/templates/` together | E-01 d33 | before the first real Owner is invited | The current text promises a password that no longer exists |
 | Auth links point at the product's own origin (`{{ .SiteURL }}/auth/confirm?token_hash=…`), not `supabase.co` | A-116 | with M1's accept-invite route (E-01 order) | Sender and link domains then match |
 | Access-token lifetime confirmed at 3600 s | A-116 | any time | Supabase's default |
