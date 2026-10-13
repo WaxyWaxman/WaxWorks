@@ -2,8 +2,8 @@
 
 **Flow:** none — the contract pull request that opens M1 (A-99); its flows are [E-01](../../flows/E-01-authenticate.md), [M-04](../../flows/M-04-manage-users.md), [O-01](../../flows/O-01-administer-the-organization.md) and [S-01](../../flows/S-01-onboard-and-recover-organizations.md)
 **Milestone / track:** M1 / joint — no track; `packages/contracts` is neither D's nor U's (conventions §5)
-**Status:** Drafted
-**Approved by:** _human, date_ — **both** owners review the pull request (workflow §4: *a change to `packages/contracts`*)
+**Status:** Approved
+**Approved by:** sr-talbot, 2026-10-13 — instructed in session after reading the Checklist on #195; recorded by the coordinator. The Checklist is fixed as merged in [#195](https://github.com/WaxyWaxman/WaxWorks/pull/195). **Both** owners review the pull request (workflow §4: *a change to `packages/contracts`*)
 **Pull request:** _once opened_
 **Register rows:** none made automatable by this order alone — it is the interface the M1 **D** and **U** orders build against. It *consumes* the M1 rows: E-01-T1–T4, T8–T22; M-04-T7–T9, T11–T19; O-01-T1, T3, T5; S-01-T1–T3
 
