@@ -124,6 +124,7 @@ The in-place mechanism survives for the manager-only table (decision 9). On a st
 **From [architecture](../architecture.md):**
 
 - **A ReviewFlag may be raised by the system, not only by an Employee** ([architecture](../architecture.md) A-68). `actor_user_id` is **nullable** and a null actor means the system raised it — so the review queue this flow owns now renders rows with **no actor to name**, the first being `journal_imbalance` ([M-07](M-07-chart-of-accounts.md) d10). Decision 17 is unchanged: acknowledging stays manager-only and a flag is still never deleted. What changes is that the queue stops meaning *what the staff did* and starts meaning *what wants a look*, and an acknowledgement can mean *I have seen this bug*.
+- **An Owner's reset and re-sent invite are functions of their own, at M1** (A-114, 2026-10-13): `user_reset_request` **O** (decision 29) and `user_invite_resend` **O** (decision 33), each with a button on the person's row, because real shop data reaches production at the end of M1 and a lost first invite must be fixable in the product.
 
 ---
 
@@ -169,6 +170,8 @@ The in-place mechanism survives for the manager-only table (decision 9). On a st
 ---
 
 ## Open questions
+
+- **Who logs a self-service reset?** Decision 29 lets a person trigger their own reset from the sign-in screen and says *the log records that a link was sent*. That person is not signed in, so no definer function runs and nothing writes the log entry ([architecture](../architecture.md) A-114). Either the Server Action calls a function under the service role for this one case, or the self-service reset goes unlogged and decision 29 says so. _Open — raised 2026-10-13._
 
 - ~~**Is there a tier above Manager?**~~ — ~~**Resolved: no.**~~ **Re-resolved: yes — the Owner (decision 25).** Decisions 11 and 14 answered it with rules for a single Store; the Organization model reopened it and decision 25 answers it with a role, decision 26 moving the floor up to that role. The [lexicon](../lexicon.md)'s *Manager* entry is updated again to match.
 - ~~**Credentials** — **deferred to a later version**, not open.~~ — **Resolved** by [E-01](E-01-authenticate.md) d24–d30 and decisions 28, 29 here: PIN and invite; E-01 d30 discharges the checklist this flow was on.
