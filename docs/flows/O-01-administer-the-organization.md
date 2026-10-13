@@ -50,6 +50,7 @@
 - **A terminal signs in with the store account and holds a store session that never lapses; rotating the password signs every terminal out** (E-01 d24).
 - **An Owner on a personal session picks any active Store and may switch; a Manager only one they are assigned to** (E-01 d27). Whether a Manager may *read* a sister Store without assignment is an open question this flow owns (below).
 - **Owners and Managers use a one-time code or a passkey as a second factor** (E-01 d28).
+- **An Owner with no Store lands on Create Store** at their first sign-in (E-01 d36, 2026-10-13), with nothing Store-scoped reachable until it exists; the Store they create becomes their pick.
 
 **From [architecture](../architecture.md):**
 
