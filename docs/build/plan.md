@@ -1,7 +1,7 @@
 # Wax Works — the build plan
 
 **Maintained by:** the coordinator, at the end of every build session. Read first by whoever picks up next.
-**Last updated:** 2026-10-13 — M0 Accepted (#188); A-109 (#187); A-110 to A-116, the runbook and the Auth templates (#190)
+**Last updated:** 2026-10-13, end of session — through #195; the M1 contracts order approved
 
 The [workflow](workflow.md) says how an order moves; the [conventions](conventions.md)
 say what the code looks like; the [status table](status.md) says what has landed.
@@ -34,8 +34,19 @@ build: invented conventions, silent bugs, and context blown by reading everythin
 **M0 is `Accepted`** ([#188](https://github.com/WaxyWaxman/WaxWorks/pull/188), sr-talbot, 2026-10-13): findings 28 and 29
 `discharged`, Checklist 17/17 with row 13 `Deferred`. Its row is in [status.md](status.md).
 Every flow is `Specified`. **A-1 to A-116 are ratified except A-96** (the `staging`
-branch and CI security review, still *recommended, not yet ratified*). Zero flow
+branch and CI security review, still *recommended, not yet ratified*). **One M1
+order exists:** [`orders/M1-contracts.md`](orders/M1-contracts.md), **Approved** by
+sr-talbot on 2026-10-13 — the joint order for M1's contract pull request. Zero flow
 orders exist.
+
+**The flow questions M1 depended on are answered** (#192, #194): PIN throttling per
+Store (E-01 d31–d32); **passkey-only sign-in** for Managers and Owners, no password, no
+fallback (E-01 d33); no store-account second factor (d34); accepting an invitation
+and the Owner with no Store (d35–d36); System Administrators on passkeys now (S-01 d7);
+PIN required, Employee email optional, the wide Manager scope, no self-service passkey
+recovery (M-04 d35–d38). The first shop's settings are Alberta, CAD, March 31, 80mm
+(#193). Conventions §5 now says how the fake knows its session and how refusals are
+told apart (#195).
 
 **Production exists and serves the app** — on free plans throughout (A-109):
 
@@ -115,36 +126,26 @@ and its `invalid_input` test.
 
 ## 3. Next steps, in order
 
-Steps 1 and 2 can run side by side; 3 waits on both.
-
-1. **Close the flow questions M1 depends on** — each needs the owners' answers:
-   - **`/flow-clarify E-01`** — PIN attempt throttling (§11; §10 says *before the
-     pilot*, and real PINs now come sooner); whether `manager_authorize_pin` may be
-     called on its own (A-113 left it to E-01); a store account second factor; how an
-     invited Owner holds a personal session **before any Store exists** (A-111); and
-     the accept-invite route, with Auth links on the product's own origin (runbook).
-   - **`/flow-clarify M-04`** — whether a new Manager must have a PIN and an Employee
-     an email; which Stores *touched* means for a person assigned to several; who
-     logs a self-service reset (A-114).
-   - ~~**The first shop's settings values**~~ — answered 2026-10-13: Alberta, CAD,
-     fiscal year end March 31, 80mm, M-06's defaults otherwise (A-112, §11).
-2. **The Sentry allowlist** (A-106, *M1's first task*) as **its own joint order** — it
-   sits in `apps/web`, U's lane, so it cannot ride in the contract pull request, and no
-   flow order owns it. _Status: recommended, not yet ratified._ Sentry's allowed-domains
-   and auth token (§4) gate setting a DSN, not building the allowlist.
-3. **The M1 contract pull request** (A-99), reviewed by **both** owners: schemas and the
-   fake for §6's Identity set **as A-113 and A-114 now shape it** — the five header
-   exceptions and `tests/contracts.test.ts`'s list of them; `auth_user_link`;
-   `user_reset_request` and `user_invite_resend`; **A-108's wrapper change** and its
-   `invalid_input` test; the predicates' `pure` label corrected. **No `settings_*`
-   function ships at M1** (A-112). Finding 10 (bigint across PostgREST) is M3's.
-4. **Work orders**, a human approving each, one `developer` per order in its own
-   worktree: **E-01 D and U** first; then M-04; then O-01 (d2 Create Store, d3 reset)
-   and S-01 (Create Organization) under A-111. A-107's grant assertion lands with
-   M1's first function migration.
-5. **`/qa ready M1`** when both tracks are `Accepted` and merged; then `/qa automate`
+1. **Build the M1 contract pull request** — `/develop docs/build/orders/M1-contracts.md`,
+   interactively, in a **new session** a human runs (the session that wrote the order
+   should not build it; the `developer` subagent's hook refuses `packages/contracts/`).
+   Test-first; the Evidence is the developer's. Then `/work-order check`, the three
+   reviewers, and **both owners** review the pull request (workflow §4). The SQLSTATE
+   values in conventions §5's refusal table are confirmed in that review.
+2. **In parallel, optional: the Sentry allowlist** (A-106, *M1's first task*) as its own
+   joint order — _Status: recommended, not yet ratified._ It sits in `apps/web`, so it
+   cannot ride in the contract pull request.
+3. **`/work-order E-01 D` and `/work-order E-01 U`** once the contract pull request is
+   merged; a human approves each; one `developer` per order in its own worktree. Then
+   M-04; then O-01 (d2 Create Store, d3 reset) and S-01 (Create Organization) under
+   A-111. A-107's grant assertion lands with M1's first function migration.
+4. **`/qa ready M1`** when both tracks are `Accepted` and merged; then `/qa automate`
    per row, which also takes `--pass-with-no-tests` out of `e2e` (M0 row 15). Then the
    [runbook](runbook.md) §2 steps, and the first real Organization.
+
+**For `/architecture`, before they bite:** `drawer_opens` has no §6 writer though M1
+builds the table; the predicates' `pure` label against A-113's *five exceptions and no
+others* (before M3); finding 10, bigint minor units across PostgREST (before M3).
 
 ---
 
@@ -152,9 +153,9 @@ Steps 1 and 2 can run side by side; 3 waits on both.
 
 | Item | Who | Blocks |
 |---|---|---|
-| **Flow answers for E-01 and M-04** (§3 step 1) | sr-talbot, WaxyWaxman | The M1 contract pull request and the E-01 orders |
-| **Passkeys for System Administrators** before the first real Organization (S-01 d6); Supabase's were beta on 2026-10-13 | sr-talbot | Real shop data |
-| **A-109 to A-116 ratified by sr-talbot alone** — jointly owned; merged through #187 and #190 | WaxyWaxman | Nothing, if the merge review was the second owner's assent; say so if it was not |
+| **Run `/develop` on the M1 contracts order** in a new session (§3 step 1) | sr-talbot or WaxyWaxman | Every M1 flow order |
+| **Reword the invite and recovery emails** — *create your passkey*, no password, no self-service reset; dashboard and `supabase/templates/` together (runbook) | sr-talbot | The first real Owner's invite |
+| **A-109 to A-116, E-01 d31–d36, M-04 d35–d38, S-01 d7 and conventions §5's answers decided by sr-talbot alone** — jointly owned; merged through #187–#195 | WaxyWaxman | Nothing, if the merge review was the second owner's assent; say so if it was not |
 | **Auto-renew on `waxworks.store`** — off at purchase, deferred by sr-talbot 2026-10-13 | sr-talbot | Every invite and reset after 2027-10-13 |
 | **Auth email lands in spam** — a new domain, and links on `supabase.co` until M1's accept-invite route | sr-talbot | Nothing; tell an invited Owner to check spam meanwhile |
 | **The paid Supabase plan** — due by M6; until then real data has no backup (A-109) | sr-talbot | M6's backup restore verification |

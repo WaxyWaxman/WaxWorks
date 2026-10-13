@@ -44,10 +44,18 @@ jobs:
           changed=$(git diff --name-only "$base" HEAD -- 'docs/build/orders/*.md')
           echo "work orders touched: ${changed:-none}"
           if [ -z "$changed" ]; then exit 0; fi
+          # An Approved order has no Evidence until /develop fills it, so the pull
+          # request that approves it (docs only) cannot pass the gate by design. An
+          # Approved order is gated when the pull request also changes code — the
+          # developer's — and always once it is In review or Accepted. `.github/` is
+          # in neither track's lane (workflow §1), so a CI change is not code here.
+          code=$(git diff --name-only "$base" HEAD -- . ':(exclude)docs/**' ':(exclude).github/**')
           status=0
           for f in $changed; do
             [ -f "$f" ] || continue
-            if grep -qE '^\*\*Status:\*\* *(Approved|In review|Accepted)' "$f"; then
+            if grep -qE '^\*\*Status:\*\* *Approved' "$f" && [ -z "$code" ]; then
+              echo "== $f: Approved, and this pull request changes no code — not gated yet"
+            elif grep -qE '^\*\*Status:\*\* *(Approved|In review|Accepted)' "$f"; then
               echo "== $f"; python scripts/check_coverage.py --order "$f" || status=1
             else
               echo "== $f: not Approved / In review / Accepted — not gated yet"
