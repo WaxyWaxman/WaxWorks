@@ -185,7 +185,9 @@ describe("E-01 d31 — five wrong PINs within fifteen minutes, across the Store'
       { store_id: w.A.store_id, terminal_id: w.t1, at: T0.toISOString(), staff_user_id: w.yn.user_id },
       { store_id: w.A.store_id, terminal_id: w.t1, at: T0.toISOString(), staff_user_id: w.yn.user_id },
     ]);
-    const all = JSON.stringify(w.root.inspect());
+    // Ids are random hex and can contain any four digits, so they are struck
+    // before looking for a PIN: what is left is every value the fake stored.
+    const all = JSON.stringify(w.root.inspect()).replace(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/g, "<id>");
     for (const pin of wrong) expect(all).not.toContain(pin);
   });
 });
@@ -497,7 +499,9 @@ describe("A-93 — nothing this order adds puts a PIN in an error", () => {
     const w = await world();
     const err = await failed(c.user_set_pin(w.owner, { ...w.asOwner, p_user_id: w.jm.user_id, p_pin: "78a6" }));
     expect(err.code).toBe("invalid_input");
-    expect(JSON.stringify({ ...err, message: err.message, stack: err.stack })).not.toContain("78a6");
+    // request_id is a uuid, which may itself contain "78a6".
+    const { request_id: _id, ...rest } = { ...err, message: err.message, stack: err.stack };
+    expect(JSON.stringify(rest)).not.toContain("78a6");
   });
 });
 
