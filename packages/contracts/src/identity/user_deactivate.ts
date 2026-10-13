@@ -1,16 +1,17 @@
-// user_deactivate — §6 Identity — M, O for a Manager or Owner
-// Manager-only (M): p_manager_pin on a store session (§6, A-89).
-// M0 skeleton (A-99): signature and a stub that throws not_implemented. The
-// schemas' bodies and the fake's behaviour are the milestone's contract PR.
+// user_deactivate — §6 Identity — M, O for a Manager or Owner (M-04 d30)
+// Removes access at the write path at once (M-04 d15, d18) and releases the
+// initials (M-04 d16). A Manager deactivates an Employee who shares any one of
+// their Stores (M-04 d37). Refused where it would leave the Organization with no
+// active Owner (M-04 d26). Never a delete (M-04 d5).
 import { z } from "zod";
-import { managerHeader, stub } from "../wrapper";
+import { contract, managerHeader } from "../wrapper";
 
 export const UserDeactivateInput = managerHeader.extend({
-  // The function's own arguments land in the contract pull request that opens its milestone (A-99).
-});
+  p_user_id: z.string().uuid(),
+}).strict();
 export type UserDeactivateInput = z.infer<typeof UserDeactivateInput>;
 
-export const UserDeactivateOutput = z.unknown();
+export const UserDeactivateOutput = z.object({ user_id: z.string().uuid() });
 export type UserDeactivateOutput = z.infer<typeof UserDeactivateOutput>;
 
-export const user_deactivate = stub("user_deactivate", UserDeactivateInput, UserDeactivateOutput);
+export const user_deactivate = contract("user_deactivate", UserDeactivateInput, UserDeactivateOutput);

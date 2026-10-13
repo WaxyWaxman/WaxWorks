@@ -1,16 +1,20 @@
-// user_correct — §6 Identity
-// Manager-only (M): p_manager_pin on a store session (§6, A-89).
-// M0 skeleton (A-99): signature and a stub that throws not_implemented. The
-// schemas' bodies and the fake's behaviour are the milestone's contract PR.
+// user_correct — §6 Identity — M (M-04 d22, d30, d37)
+// Fixes a User's initials, display name or email; omitted fields are
+// unchanged. Initials are normalised and must stay unique at every Store the
+// person holds (M-04 d13, d20). A Manager corrects an Employee who shares any
+// one of their Stores (M-04 d37); a Manager or Owner is corrected by an Owner.
 import { z } from "zod";
-import { managerHeader, stub } from "../wrapper";
+import { contract, initials, managerHeader } from "../wrapper";
 
 export const UserCorrectInput = managerHeader.extend({
-  // The function's own arguments land in the contract pull request that opens its milestone (A-99).
-});
+  p_user_id: z.string().uuid(),
+  p_initials: initials.optional(),
+  p_display_name: z.string().trim().min(1).optional(),
+  p_email: z.string().email().nullable().optional(),
+}).strict();
 export type UserCorrectInput = z.infer<typeof UserCorrectInput>;
 
-export const UserCorrectOutput = z.unknown();
+export const UserCorrectOutput = z.object({ user_id: z.string().uuid() });
 export type UserCorrectOutput = z.infer<typeof UserCorrectOutput>;
 
-export const user_correct = stub("user_correct", UserCorrectInput, UserCorrectOutput);
+export const user_correct = contract("user_correct", UserCorrectInput, UserCorrectOutput);

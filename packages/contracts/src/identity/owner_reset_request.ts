@@ -1,16 +1,19 @@
-// owner_reset_request — §6 Identity; S-01 d2–d3
-// System Administrator's (S): asserts auth.principal() = 'sysadmin' (A-90).
-// M0 skeleton (A-99): signature and a stub that throws not_implemented. The
-// schemas' bodies and the fake's behaviour are the milestone's contract PR.
+// owner_reset_request — §6 Identity — S (A-90, A-113; S-01 d3; M-04 d38)
+// A System Administrator sends an Owner a re-enrolment link; logged on the
+// Organization, where its Owners read it (O-01 d5). Never the link (A-93).
 import { z } from "zod";
-import { header, stub } from "../wrapper";
+import { contract, sysadminHeader } from "../wrapper";
 
-export const OwnerResetRequestInput = header.extend({
-  // The function's own arguments land in the contract pull request that opens its milestone (A-99).
-});
+export const OwnerResetRequestInput = sysadminHeader.extend({
+  p_org_id: z.string().uuid(),
+  p_user_id: z.string().uuid(),
+}).strict();
 export type OwnerResetRequestInput = z.infer<typeof OwnerResetRequestInput>;
 
-export const OwnerResetRequestOutput = z.unknown();
+export const OwnerResetRequestOutput = z.object({
+  user_id: z.string().uuid(),
+  email: z.string().email(),
+});
 export type OwnerResetRequestOutput = z.infer<typeof OwnerResetRequestOutput>;
 
-export const owner_reset_request = stub("owner_reset_request", OwnerResetRequestInput, OwnerResetRequestOutput);
+export const owner_reset_request = contract("owner_reset_request", OwnerResetRequestInput, OwnerResetRequestOutput);

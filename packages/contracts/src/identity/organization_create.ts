@@ -1,16 +1,21 @@
-// organization_create — §6 Identity; S-01 d2–d3
-// System Administrator's (S): asserts auth.principal() = 'sysadmin' (A-90).
-// M0 skeleton (A-99): signature and a stub that throws not_implemented. The
-// schemas' bodies and the fake's behaviour are the milestone's contract PR.
+// organization_create — §6 Identity — S (A-90, A-110, A-113; S-01 d2, d5)
+// Writes an Organization and its first Owner — a name and an email, no
+// initials, no Store — and appends organizations.log with the System
+// Administrator's identity. The invite is A-91's, after it commits.
 import { z } from "zod";
-import { header, stub } from "../wrapper";
+import { contract, sysadminHeader } from "../wrapper";
 
-export const OrganizationCreateInput = header.extend({
-  // The function's own arguments land in the contract pull request that opens its milestone (A-99).
-});
+export const OrganizationCreateInput = sysadminHeader.extend({
+  p_name: z.string().trim().min(1),
+  p_owner_name: z.string().trim().min(1),
+  p_owner_email: z.string().email(),
+}).strict();
 export type OrganizationCreateInput = z.infer<typeof OrganizationCreateInput>;
 
-export const OrganizationCreateOutput = z.unknown();
+export const OrganizationCreateOutput = z.object({
+  org_id: z.string().uuid(),
+  owner_user_id: z.string().uuid(),
+});
 export type OrganizationCreateOutput = z.infer<typeof OrganizationCreateOutput>;
 
-export const organization_create = stub("organization_create", OrganizationCreateInput, OrganizationCreateOutput);
+export const organization_create = contract("organization_create", OrganizationCreateInput, OrganizationCreateOutput);

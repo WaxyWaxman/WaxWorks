@@ -1,16 +1,24 @@
-// user_change_role — §6 Identity
-// Owner-only (O): resolves as M, then asserts the person is an Owner (§6).
-// M0 skeleton (A-99): signature and a stub that throws not_implemented. The
-// schemas' bodies and the fake's behaviour are the milestone's contract PR.
+// user_change_role — §6 Identity — O wherever Manager or Owner is the role before or after (M-04 d30)
+// Refused where it would leave the Organization with no active Owner (M-04
+// d26). A promotion into Manager or Owner needs an email (M-04 d33) and, for
+// someone holding a Store with no PIN yet, a PIN (M-04 d35); it sends the
+// invite unless the person already holds a passkey (M-04 d33, A-114).
 import { z } from "zod";
-import { managerHeader, stub } from "../wrapper";
+import { contract, managerHeader, pin, role } from "../wrapper";
 
 export const UserChangeRoleInput = managerHeader.extend({
-  // The function's own arguments land in the contract pull request that opens its milestone (A-99).
-});
+  p_user_id: z.string().uuid(),
+  p_role: role,
+  /** Required on a promotion when the person has none on file (M-04 d33). */
+  p_email: z.string().email().nullable(),
+  p_pin: pin.nullable(),
+}).strict();
 export type UserChangeRoleInput = z.infer<typeof UserChangeRoleInput>;
 
-export const UserChangeRoleOutput = z.unknown();
+export const UserChangeRoleOutput = z.object({
+  user_id: z.string().uuid(),
+  invite: z.boolean(),
+});
 export type UserChangeRoleOutput = z.infer<typeof UserChangeRoleOutput>;
 
-export const user_change_role = stub("user_change_role", UserChangeRoleInput, UserChangeRoleOutput);
+export const user_change_role = contract("user_change_role", UserChangeRoleInput, UserChangeRoleOutput);

@@ -8,13 +8,15 @@
 // answers PGRST202, so the call is routed through `.schema("app")` here and
 // `app` is exposed there — the two halves of A-105 that must agree.
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { ContractError, type WaxClient } from "./client";
+import { RpcRefusal, type WaxClient } from "./client";
 
 export function createSupabaseWaxClient(supabase: SupabaseClient): WaxClient {
   return {
     async rpc(fn, args) {
       const { data, error } = await supabase.schema("app").rpc(fn, args);
-      if (error) throw new ContractError(fn, error.code ?? "rpc_error", error.message, error);
+      // A refusal is raised as `raise exception '<key>' using errcode, detail`
+      // (conventions §5): PostgREST returns them as code, message and details.
+      if (error) throw new RpcRefusal(fn, error.code ?? "rpc_error", error.message, error.details ?? undefined, error);
       return data;
     },
   };

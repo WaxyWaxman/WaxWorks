@@ -1,16 +1,19 @@
-// user_reactivate — §6 Identity — M, O for a Manager or Owner
-// Manager-only (M): p_manager_pin on a store session (§6, A-89).
-// M0 skeleton (A-99): signature and a stub that throws not_implemented. The
-// schemas' bodies and the fake's behaviour are the milestone's contract PR.
+// user_reactivate — §6 Identity — M, O for a Manager or Owner (M-04 d30)
+// Restores the original row (M-04 d19). Where the person's initials have been
+// reused at any of their Stores it refuses with initials_clash, and the screen
+// asks for new ones (p_initials). A Manager reactivates an Employee who shares
+// any one of their Stores (M-04 d37).
 import { z } from "zod";
-import { managerHeader, stub } from "../wrapper";
+import { contract, initials, managerHeader } from "../wrapper";
 
 export const UserReactivateInput = managerHeader.extend({
-  // The function's own arguments land in the contract pull request that opens its milestone (A-99).
-});
+  p_user_id: z.string().uuid(),
+  /** New initials, where theirs were reused while they were away (M-04 d19). */
+  p_initials: initials.nullable(),
+}).strict();
 export type UserReactivateInput = z.infer<typeof UserReactivateInput>;
 
-export const UserReactivateOutput = z.unknown();
+export const UserReactivateOutput = z.object({ user_id: z.string().uuid() });
 export type UserReactivateOutput = z.infer<typeof UserReactivateOutput>;
 
-export const user_reactivate = stub("user_reactivate", UserReactivateInput, UserReactivateOutput);
+export const user_reactivate = contract("user_reactivate", UserReactivateInput, UserReactivateOutput);

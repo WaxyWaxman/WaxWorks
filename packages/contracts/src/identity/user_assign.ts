@@ -1,16 +1,18 @@
-// user_assign — §6 Identity — M, O for a Manager or Owner
-// Manager-only (M): p_manager_pin on a store session (§6, A-89).
-// M0 skeleton (A-99): signature and a stub that throws not_implemented. The
-// schemas' bodies and the fake's behaviour are the milestone's contract PR.
+// user_assign — §6 Identity — M, O for a Manager or Owner (M-04 d30)
+// Adds a Store to a User's assignments (M-04 d27). Refuses a person with no
+// initials (M-04 d34) and a Manager or Owner with no PIN (M-04 d35); refuses an
+// initials clash naming the holder and a PIN clash naming nobody, logging the
+// latter (M-04 d32). A Manager assigns Employees to their own Stores only.
 import { z } from "zod";
-import { managerHeader, stub } from "../wrapper";
+import { contract, managerHeader } from "../wrapper";
 
 export const UserAssignInput = managerHeader.extend({
-  // The function's own arguments land in the contract pull request that opens its milestone (A-99).
-});
+  p_user_id: z.string().uuid(),
+  p_store_id: z.string().uuid(),
+}).strict();
 export type UserAssignInput = z.infer<typeof UserAssignInput>;
 
-export const UserAssignOutput = z.unknown();
+export const UserAssignOutput = z.object({ user_id: z.string().uuid() });
 export type UserAssignOutput = z.infer<typeof UserAssignOutput>;
 
-export const user_assign = stub("user_assign", UserAssignInput, UserAssignOutput);
+export const user_assign = contract("user_assign", UserAssignInput, UserAssignOutput);
