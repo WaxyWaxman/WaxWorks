@@ -18,6 +18,7 @@ Postgres 17, free plan), and one Vercel project, `pressers/wax-works`, serving
 
 | Step | Decision | Done by | Date | Evidence |
 |---|---|---|---|---|
+| Passkeys turned on for the project (Authentication) | E-01 d33, S-01 d7 | sr-talbot | 2026-10-13 | reported by sr-talbot in session; not checked from the repository |
 | Invite and reset templates given a real body in the dashboard — subjects *WaxWorks - Let's get you set-up* and *WaxWorks - Let's get you back in*. **The dashboard copies must match `supabase/templates/invite.html` and `recovery.html`** (loaded by `config.toml` for local and CI); change both in the same pull request | A-116 | sr-talbot | 2026-10-13 | text pasted from the dashboard into the repository files |
 | Site URL `https://wax-works.vercel.app`; redirect URLs `https://wax-works.vercel.app/**` only, `localhost` removed | A-116 | sr-talbot | 2026-10-13 | second test invite's `redirect_to` = `https://wax-works.vercel.app`; both test users deleted |
 | `mail.waxworks.store` verified in Resend — DKIM TXT `resend._domainkey.mail`, MX and SPF under `send.mail`; DMARC `p=none` at `_dmarc.waxworks.store` | A-116 | sr-talbot | 2026-10-13 | Resend: verified; public DNS checked |
@@ -37,12 +38,13 @@ In order where order matters. Tick by moving the row to §1.
 | Step | Decision | When | Notes |
 |---|---|---|---|
 | Auto-renew turned on for `waxworks.store` | A-116 | before 2027-10-13 | A lapsed domain stops every invite and reset |
+| SMS provider account (e.g. Twilio) connected in Supabase Auth → Phone, for the SMS fallback | E-01 d33 | before the first Manager who cannot create a passkey | Paid per message; the provider's credentials go in the dashboard only |
+| **Invite and recovery templates reworded** — *create your passkey*, not *choose your own password*; dashboard and `supabase/templates/` together | E-01 d33 | before the first real Owner is invited | The current text promises a password that no longer exists |
 | Auth links point at the product's own origin (`{{ .SiteURL }}/auth/confirm?token_hash=…`), not `supabase.co` | A-116 | with M1's accept-invite route (E-01 order) | Sender and link domains then match |
 | Access-token lifetime confirmed at 3600 s | A-116 | any time | Supabase's default |
 | Access-token hook enabled | A-87, A-116 | after the M1 migration that creates the hook | Without it every write is refused (A-40) |
 | `pin_pepper` created: `select vault.create_secret(encode(extensions.gen_random_bytes(32), 'hex'), 'pin_pepper');` | A-115 | after M1's migrations, before the first PIN | Record who and when — never the value |
-| Three System Administrators: an Auth user each, then a `system_administrators` row each — sr-talbot, gimpymatey, WaxyWaxman | A-110 | after the M1 migration that creates the table | Each distinct from any Owner account they hold |
-| Passkey sign-in for System Administrators | S-01 d6 | before the first real Organization | Supabase passkeys were beta on 2026-10-13 |
+| Three System Administrators: an Auth user each, **each enrolling a passkey**, then a `system_administrators` row each — sr-talbot, gimpymatey, WaxyWaxman | A-110, S-01 d7 | after the M1 migration that creates the table | Each distinct from any Owner account they hold |
 | The first shop's settings values answered and in `store_create`'s body | A-112 | before the M1 **D** order fixes the body | Open question, sr-talbot (`architecture.md` §11) |
 | M1's migrations applied (`supabase db push`, no seed) | A-101, A-109 | when M1 merges | — |
 
