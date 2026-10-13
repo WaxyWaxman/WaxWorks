@@ -9,7 +9,7 @@ register rows eligible for `Automated` ([workflow](workflow.md) §3 step 7).
 
 | Milestone | Track | Work orders | Landed in | Contract commit | Both landed |
 |---|---|---|---|---|---|
-| M0 Foundation | joint | — | | | |
+| M0 Foundation | joint | [M0-foundation](orders/M0-foundation.md) — `Accepted` 2026-10-13 | [#176](https://github.com/WaxyWaxman/WaxWorks/pull/176), [#177](https://github.com/WaxyWaxman/WaxWorks/pull/177), [#180](https://github.com/WaxyWaxman/WaxWorks/pull/180), [#182](https://github.com/WaxyWaxman/WaxWorks/pull/182); verdict [#188](https://github.com/WaxyWaxman/WaxWorks/pull/188) | `98d3efd` (#180) — the last change to `packages/contracts` | 2026-10-13 — one joint track; row 13 `Deferred` |
 | M1 Tenancy and identity | D | | | | |
 | M1 Tenancy and identity | U | | | | |
 | M2 Catalog and scan | D | | | | |
