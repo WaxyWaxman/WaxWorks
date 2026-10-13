@@ -72,7 +72,7 @@ already places them; a file that fits nowhere is a question for `/architecture`.
 |---|---|---|---|
 | **Local** | Supabase in Docker, `supabase db reset` (A-10) | `seed.sql` | the toolchain's fixed development keys — public by design, not secrets |
 | **Preview** — one Vercel preview deployment per pull request, **access-protected** | **none** while the account is on the free plan (A-109) — the app shell against nothing; ~~a Supabase branch created for the pull request and destroyed with it~~ returns when the account moves to a tier with branching | none — and **never** a restore, dump or anonymised copy of production | **no** Supabase variable in Vercel's Preview scope (A-109) |
-| **Production** — one Vercel deployment | one Supabase project, the only place a shop's data exists — **on the free plan until before the first shop's data** (A-109); migrations from `main` applied by a human with the CI-pinned CLI | the shop's; **never seeded** (A-101) | URL and anon key in Vercel's Production scope; service-role key in the server-runtime environment only |
+| **Production** — one Vercel deployment | one Supabase project, the only place a shop's data exists — **on the free plan until before the first shop's data** (A-109); migrations from `main` applied by a human with the CI-pinned CLI | the shop's; **never seeded** (A-101) | `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` in Vercel's Production scope; `SUPABASE_SECRET_KEY` — the service-role key (A-109) — in the server-runtime environment only, marked Sensitive. Nothing from Vercel's Supabase integration |
 
 Three platform settings the repository cannot assert, verified by a human at M0
 and re-verified in M6: Vercel preview protection on (A-100); the production
@@ -370,7 +370,7 @@ Ratified 2026-09-20, 2026-09-21 and 2026-10-11. Cite the A-n, not this section.
 | A-106 | No Sentry DSN in any environment until the event payload is built by an allowlist |
 | A-107 | The grant rule held in two places: a list-free suite-wide assertion, and each function's own grants in its smoke test |
 | A-108 | The wrapper mints before it validates and on every call; `ContractError` carries `request_id` |
-| A-109 | While on the free plan: previews against no database, production one free project, migrated and never seeded; the paid tier is due before shop data |
+| A-109 | While on the free plan: previews against no database, production one free project, migrated and never seeded; the paid tier is due before shop data. Keys are the publishable and secret keys; *service-role key* means `SUPABASE_SECRET_KEY` |
 
 Still open in [architecture](../architecture.md) §11: an enforcement mechanism
 for A-91's key rule, and the three platform settings §2.1 names — preview

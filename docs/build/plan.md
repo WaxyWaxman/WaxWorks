@@ -36,6 +36,12 @@ against no database and the one Supabase project is production, on the free plan
 migrated and never seeded. The paid tier is due before the first shop's data reaches
 production (at the latest M6's pilot), and a new row then restores A-100's
 per-pull-request branches. M0 Checklist row 13 is amended to match.
+**Correction to the record:** a Supabase project *had* existed since 2026-09-20,
+created through Vercel's integration, with seventeen of its variables in the
+Vercel project's Preview and Production scopes. All were removed and production
+was recreated as `udrtvdlmoaqsgzxobwwq`; the keys are now the publishable and
+secret keys, named `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` and
+`SUPABASE_SECRET_KEY` (A-109).
 
 Every flow is `Specified`. **A-1 to A-109 are ratified except A-96** (WaxyWaxman's
 `staging` branch and CI security review, still *recommended, not yet ratified* —

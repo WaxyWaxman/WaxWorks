@@ -22,18 +22,25 @@ const text = (f: string) => {
   }
 };
 
+// A-109: the service-role key is Supabase's secret key (`sb_secret_…`), named
+// SUPABASE_SECRET_KEY. The legacy SUPABASE_SERVICE_ROLE_* names stay covered.
 describe("A-100 — the service-role key is a server-runtime variable set in the platform and present in no file", () => {
-  it(".env.example names SUPABASE_SERVICE_ROLE_KEY with no value", () => {
-    expect(text(".env.example")).toMatch(/^SUPABASE_SERVICE_ROLE_KEY=\s*$/m);
+  it(".env.example names SUPABASE_SECRET_KEY with no value (A-109)", () => {
+    expect(text(".env.example")).toMatch(/^SUPABASE_SECRET_KEY=\s*$/m);
   });
 
   it("no file assigns a value to a service-role variable", () => {
-    const assigned = /SUPABASE_SERVICE_ROLE[A-Z_]*[ \t]*[=:][ \t]*["']?[A-Za-z0-9._-]{8,}/;
+    const assigned = /SUPABASE_(SERVICE_ROLE|SECRET)[A-Z_]*[ \t]*[=:][ \t]*["']?[A-Za-z0-9._-]{8,}/;
     expect(files().filter((f) => assigned.test(text(f)))).toEqual([]);
   });
 
+  it("no file holds a Supabase secret key (A-109)", () => {
+    const secret = /sb_secret_[A-Za-z0-9_-]{8,}/;
+    expect(files().filter((f) => secret.test(text(f)))).toEqual([]);
+  });
+
   it("no file reads the service-role key from process.env at M0 — A-91's four handlers are M1's", () => {
-    const reads = /process\.env\.SUPABASE_SERVICE_ROLE/;
+    const reads = /process\.env\.SUPABASE_(SERVICE_ROLE|SECRET)/;
     expect(files().filter((f) => reads.test(text(f)))).toEqual([]);
   });
 
