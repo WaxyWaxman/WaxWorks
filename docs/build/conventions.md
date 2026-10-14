@@ -101,7 +101,7 @@ a preview like any other (A-100). The **anon key** ships in the client bundle an
 follows from holding it (RLS on every read, A-4 on every write). The
 **service-role key** is a Vercel environment variable scoped to the server
 runtime, never prefixed `NEXT_PUBLIC_`, never in a repository file, never in
-`e2e/` (A-91, A-100). Only A-91's four Auth handlers read it. CI holds one secret, the `ANTHROPIC_API_KEY` read by
+`e2e/` (A-91, A-100). Only the Server Actions behind A-91's Auth acts (five since A-114) and A-117's passkey confirmation read it, and in the database it opens `app.auth_user_link` alone (A-114, A-118). CI holds one secret, the `ANTHROPIC_API_KEY` read by
 `security-review.yml` alone (A-96, not yet ratified); `docs-check` and the six
 A-97 jobs are keyless.
 
@@ -141,16 +141,25 @@ well (A-86). **Row-level security is on for every table**, in one of the two
 shapes the architecture gives in §5, quoted:
 
 ```sql
+-- Every table, first (A-118): Supabase grants all of these by default
+revoke all on <table> from anon, authenticated, service_role;
+grant select on <table> to authenticated;          -- only where a session reads it
+
 -- Organization-level
-create policy org_isolation on <table>
-  using      (org_id = auth.org_id() and auth.org_reachable())
-  with check (org_id = auth.org_id() and auth.org_reachable());
+create policy org_isolation on <table> for select
+  using (org_id = auth.org_id() and auth.org_reachable());
 
 -- Store-dimensioned
-create policy store_isolation on <table>
-  using      (org_id = auth.org_id() and store_id = auth.store_id() and auth.store_reachable())
-  with check (org_id = auth.org_id() and store_id = auth.store_id() and auth.store_reachable());
+create policy store_isolation on <table> for select
+  using (org_id = auth.org_id() and store_id = auth.store_id() and auth.store_reachable());
 ```
+
+**No client and no service role writes a table** (A-4, A-118). Supabase grants `anon`,
+`authenticated` and `service_role` every privilege on a new table in `public`, and
+`service_role` bypasses row-level security, so every table's migration **revokes** them
+before its policy, grants `select` to `authenticated` only where a session reads the
+table, and writes policies `for select` only. A table nobody reads — `user_pins`, `jobs`,
+`system_administrators` — is granted to nobody.
 
 The exceptions are named in §5 and nowhere else: `release_cache` (A-6), `jobs`,
 the `sysadmin` role's read on identity tables (A-90), `user_pins` with no client
@@ -228,10 +237,12 @@ grant  execute on function app.<name>(...) to authenticated;
 reset role;
 ```
 
-Three suite-wide pgTAP assertions (A-104, A-105, A-107) run in every
+Four suite-wide pgTAP assertions (A-104, A-105, A-107, A-118) run in every
 `supabase test db`: every function in schema `app` is owned by `waxworks_app`;
-schema `app` contains functions only; and **no function in `app` grants
-`execute` to `public` or to `anon`**. `anon` holds no `usage` on `app` (A-104).
+schema `app` contains functions only; **no function in `app` grants
+`execute` to `public` or to `anon`**; and **no table in `public` grants anything to
+`anon` or `service_role`, or anything but `select` to `authenticated`, and every
+policy there is `for select`**. `anon` holds no `usage` on `app` (A-104).
 
 The third carries no list and is never edited: Postgres grants `execute` to
 `public` by default, so a forgotten `revoke` shows up as a `public` grant, and
@@ -396,6 +407,7 @@ Ratified 2026-09-20, 2026-09-21 and 2026-10-11. Cite the A-n, not this section.
 | A-107 | The grant rule held in two places: a list-free suite-wide assertion, and each function's own grants in its smoke test |
 | A-108 | The wrapper mints before it validates and on every call; `ContractError` carries `request_id` |
 | A-109 | While on the free plan: previews against no database, production one free project, migrated and never seeded; real data may enter before the paid tier, which is due by M6 and until which nothing is backed up. Keys are the publishable and secret keys; *service-role key* means `SUPABASE_SECRET_KEY` |
+| A-118 | No product table grants anything to `anon` or `service_role`; `authenticated` holds `select` only where §5 gives a read; policies `for select`; a list-free pgTAP assertion |
 
 Still open in [architecture](../architecture.md) §11: an enforcement mechanism
 for A-91's key rule, and the three platform settings §2.1 names — preview
