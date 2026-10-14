@@ -1,7 +1,7 @@
 # Wax Works — the build plan
 
 **Maintained by:** the coordinator, at the end of every build session. Read first by whoever picks up next.
-**Last updated:** 2026-10-13, end of session — through #195; the M1 contracts order approved
+**Last updated:** 2026-10-13, WaxyWaxman's session — through #198; the M1 contracts order `Returned`
 
 The [workflow](workflow.md) says how an order moves; the [conventions](conventions.md)
 say what the code looks like; the [status table](status.md) says what has landed.
@@ -34,10 +34,14 @@ build: invented conventions, silent bugs, and context blown by reading everythin
 **M0 is `Accepted`** ([#188](https://github.com/WaxyWaxman/WaxWorks/pull/188), sr-talbot, 2026-10-13): findings 28 and 29
 `discharged`, Checklist 17/17 with row 13 `Deferred`. Its row is in [status.md](status.md).
 Every flow is `Specified`. **A-1 to A-116 are ratified except A-96** (the `staging`
-branch and CI security review, still *recommended, not yet ratified*). **One M1
-order exists:** [`orders/M1-contracts.md`](orders/M1-contracts.md), **Approved** by
-sr-talbot on 2026-10-13 — the joint order for M1's contract pull request. Zero flow
-orders exist.
+branch and CI security review, still *recommended, not yet ratified*). **One M1 order exists:** [`orders/M1-contracts.md`](orders/M1-contracts.md) —
+built and **merged as [#197](https://github.com/WaxyWaxman/WaxWorks/pull/197) before
+its review ran**, then reviewed after merge and **`Returned`** by WaxyWaxman on
+2026-10-13 for two blocking findings: the real client takes every Postgres error for a
+refusal (a real DETAIL can carry a PIN hash, A-93), and a demotion keeps a PIN that a
+re-promotion never re-checks (E-01 d26). **A-117 and A-118** landed after it
+([#198](https://github.com/WaxyWaxman/WaxWorks/pull/198)) and the merged contracts
+conflict with both (the order's findings 9 and 10). Zero flow orders exist.
 
 **The flow questions M1 depended on are answered** (#192, #194): PIN throttling per
 Store (E-01 d31–d32); **passkey-only sign-in** for Managers and Owners, no password, no
@@ -88,6 +92,8 @@ production Auth (A-116). What remains is in the flows — §3 step 1.
 | [#188](https://github.com/WaxyWaxman/WaxWorks/pull/188) | merged | **M0 `Accepted`** — findings 28 and 29 `discharged` |
 | [#189](https://github.com/WaxyWaxman/WaxWorks/pull/189) | merged **into #187's branch, not `main`** | A-110 to A-116 — stacked on #187, which merged first; none of it reached `main` |
 | [#190](https://github.com/WaxyWaxman/WaxWorks/pull/190) | merged | #189's content onto `main`, with the four commits that missed it: the sending domain, two runbook updates, the Auth templates |
+| [#197](https://github.com/WaxyWaxman/WaxWorks/pull/197) | merged **before its verdict** | The M1 contracts: the 20 Identity functions, the fake. Reviewed after merge; `Returned` 2026-10-13 |
+| [#198](https://github.com/WaxyWaxman/WaxWorks/pull/198) | merged | **A-117** (the enrolment session, `passkey_enrolled_at`) and **A-118** (default table grants revoked; `for select` policies; the pgTAP check); E-01 d37 |
 
 **Three things the review changed that outlive M0.** The **`discharged`** state
 (#185), because *every blocking finding `fixed`* had no exit for a finding that
@@ -126,20 +132,35 @@ and its `invalid_input` test.
 
 ## 3. Next steps, in order
 
-1. **Build the M1 contract pull request** — `/develop docs/build/orders/M1-contracts.md`,
-   interactively, in a **new session** a human runs (the session that wrote the order
-   should not build it; the `developer` subagent's hook refuses `packages/contracts/`).
-   Test-first; the Evidence is the developer's. Then `/work-order check`, the three
-   reviewers, and **both owners** review the pull request (workflow §4). The SQLSTATE
-   values in conventions §5's refusal table are confirmed in that review.
+1. **The M1 contracts follow-up pull request** — one joint contract pull request, branched
+   from `main`, `/develop docs/build/orders/M1-contracts.md` run interactively (the
+   `developer` subagent's hook refuses `packages/contracts/`). It fixes the order's
+   **blocking findings 1 and 2**, carries **A-117's and A-118's contract changes**
+   (findings 9 and 10: `p_kind = 'passkey'`, `passkey_enrolled_at` through
+   `auth_user_link`, an `enrolment` principal, `email` on `user_change_role` and
+   `owner_recover`), and findings 3–8 and 11 unless disputed. Then `/work-order check`
+   **before** merge — #197 merged first, as #176 did — and **both owners** review.
+   The SQLSTATE values go in with it once sr-talbot agrees to WaxyWaxman's proposal
+   (conventions §5, beside the table).
 2. **In parallel, optional: the Sentry allowlist** (A-106, *M1's first task*) as its own
    joint order — _Status: recommended, not yet ratified._ It sits in `apps/web`, so it
-   cannot ride in the contract pull request.
-3. **`/work-order E-01 D` and `/work-order E-01 U`** once the contract pull request is
-   merged; a human approves each; one `developer` per order in its own worktree. Then
-   M-04; then O-01 (d2 Create Store, d3 reset) and S-01 (Create Organization) under
-   A-111. A-107's grant assertion lands with M1's first function migration.
-4. **`/qa ready M1`** when both tracks are `Accepted` and merged; then `/qa automate`
+   cannot ride in the contract pull request. It must drop `detail` and `message` as well
+   as `details` (the M1 order's finding 5).
+3. **`/plan-check`, then `/architecture`, on what the M1 database order needs** — the
+   M1 order's Needs a human: a refusal that must leave a record when a `raise` rolls it
+   back (E-01 d31, M-04 d32); `manager_authorize_pin` and the open staff session (A-113
+   vs E-01 d31); `drawer_opens` with no writer; whether `auth_user_link` may relink.
+   The smaller ones go to `/flow-clarify`: M-04 (a Manager's reach at Set PIN; acts on a
+   deactivated person; reactivation and a taken PIN; Manager → Owner invites), E-01 (the
+   PIN lockout's edges), O-01 (the Store ID sequence).
+4. **`/work-order E-01 D` and `/work-order E-01 U`** once step 1 is merged; a human
+   approves each; one `developer` per order in its own worktree. Then M-04; then O-01
+   (d2 Create Store, d3 reset) and S-01 (Create Organization) under A-111. The E-01
+   **D** order carries A-118's revokes and pgTAP check, A-117's hook change and
+   `passkey_enrolled_at`, a test that a **refreshed** passkey session keeps `passkey` in
+   its `amr` (only first sign-ins were observed), and A-107's grant assertion with the
+   first function migration.
+5. **`/qa ready M1`** when both tracks are `Accepted` and merged; then `/qa automate`
    per row, which also takes `--pass-with-no-tests` out of `e2e` (M0 row 15). Then the
    [runbook](runbook.md) §2 steps, and the first real Organization.
 
@@ -153,7 +174,8 @@ others* (before M3); finding 10, bigint minor units across PostgREST (before M3)
 
 | Item | Who | Blocks |
 |---|---|---|
-| **Run `/develop` on the M1 contracts order** in a new session (§3 step 1) | sr-talbot or WaxyWaxman | Every M1 flow order |
+| **Run `/develop` on the M1 contracts follow-up** (§3 step 1) | sr-talbot or WaxyWaxman | Every M1 flow order |
+| **The SQLSTATE values** — WaxyWaxman's proposal beside conventions §5's table (two codes change to `WX404`, `WX409`) | sr-talbot | The follow-up's `REFUSALS` table |
 | **Reword the invite and recovery emails** — *create your passkey*, no password, no self-service reset; dashboard and `supabase/templates/` together (runbook) | sr-talbot | The first real Owner's invite |
 | **A-109 to A-116, E-01 d31–d36, M-04 d35–d38, S-01 d7 and conventions §5's answers decided by sr-talbot alone** — jointly owned; merged through #187–#195 | WaxyWaxman | Nothing, if the merge review was the second owner's assent; say so if it was not |
 | **Auto-renew on `waxworks.store`** — off at purchase, deferred by sr-talbot 2026-10-13 | sr-talbot | Every invite and reset after 2027-10-13 |

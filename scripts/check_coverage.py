@@ -203,8 +203,9 @@ def check_order(path: str) -> int:
     by_flow, by_arch = coverage_index(test_files())
 
     status = STATUS_RE.search(text)
-    if not status or "Approved" not in status.group(1) and "In review" not in status.group(1) and "Accepted" not in status.group(1):
-        errors.append("order is not Approved / In review / Accepted -- its checklist is not a fixed scope")
+    # Returned keeps the approved Checklist: the order goes back to the developer, its scope unchanged.
+    if not status or not any(s in status.group(1) for s in ("Approved", "In review", "Accepted", "Returned")):
+        errors.append("order is not Approved / In review / Accepted / Returned -- its checklist is not a fixed scope")
 
     checklist = {r[0]: r for r in table_rows(section(text, "Checklist")) if r and r[0].isdigit()}
     evidence = {r[0]: r for r in table_rows(section(text, "Evidence")) if r and r[0].isdigit()}
