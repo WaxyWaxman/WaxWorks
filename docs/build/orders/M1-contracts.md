@@ -201,3 +201,15 @@ _Raised by the follow-up, 2026-10-13:_
 - **A demotion to Employee clears the PIN** (finding 2) — **decided by GimpyMatey, 2026-10-13**, from M-04 d28's *"Employees have no PIN"*; it is not yet a row in M-04's table. Jointly owned: sr-talbot's assent, then `/flow-clarify M-04` records it.
 - **`auth_user_link`'s passkey refusal** — a row not linked to `p_auth_user_id` refuses `invalid_state` / `auth_user_mismatch`, a placeholder key. Joins *Refusal keys the table has no kind for*.
 - **Conventions §5, *How the fake knows who is signed in*** (finding 11) — the row names five fields; the fake's session also carries `auth_uid`, and `principal` takes `service` (the Postgres role, not a hook claim) and `enrolment` (A-117). The coordinator's edit, with the SQLSTATE item.
+
+_Raised by the second review round, 2026-10-13 (qa-reviewer, architect, against `a8fe4a7`; **no blocking finding**; the reviewers' run: `pnpm test` → `Tests  510 passed (510)`, typecheck and lint every member `Done`, `check_coverage` 0 errors, `check_docs` 0 errors):_
+
+- **The personal session's ignored arguments** (finding 6) — the fake now refuses non-null `p_actor_initials` there, but conventions §3.3's header template, which **D** copies, asserts only the actor id; and a non-null `p_manager_pin` or a stray `p_terminal_id` is still ignored (A-87: *"no initials, no PIN"*). Owner: `/architecture` (conventions §3.3), before the M1 **D** order.
+- **The `principal` column on rows written under `service_role`** — the fake stamps `service`; the database's `auth.principal()` reads no hook claim there, and A-94 names three values. Owner: A-94 / conventions §5, with finding 11.
+- **A System Administrator's passkey enrolment** — A-117 and S-01 d7 give them an enrolment session, but the passkey kind looks only in `users`. Where is it recorded? Owner: A-117 / S-01.
+- **A deactivated person recorded as enrolled** — the passkey kind does not check `active`. Owner: E-01 / A-117.
+- **A failure's error class** — every failure is `rpc_failed`; the real SQLSTATE lives only in `details`, which A-106 drops, so an error event loses the class A-93 permits. Proposed: a checked `pg_code` field named in A-106's allowlist. _Status: recommended, not yet ratified._ Owner: A-106's order.
+- **Whole-error logging before A-106 ships** — a failure's `details` still holds the raw PostgREST error, DETAIL included; safe only while nothing serialises a whole `ContractError`. Owner: A-106's order.
+- **`invite` true ⇒ `email` non-null** is not encoded in `user_change_role`'s or `owner_recover`'s output schema, so a **D** body returning `invite: true, email: null` passes. Next contract change.
+- **Regression guards** — no test for a prototype-name message (`constructor`) or an undefined `code` at `isRefusal`; the code handles both. Next contract change.
+- **Finding 3's refused clash at reactivation is not logged**, where M-04 d32 logs Set PIN's and Assign's. With the M-04 reactivation question.
