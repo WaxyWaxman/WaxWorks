@@ -9,6 +9,21 @@ import { createSupabaseWaxClient } from "../packages/contracts/src/supabase";
 import { contract, header, isCorrelated, managerHeader } from "../packages/contracts/src/wrapper";
 import type { WaxClient } from "../packages/contracts/src/client";
 
+// M1's Identity set (M1 contracts order, row 1; A-114 adds the last three).
+const M1 = new Set([
+  "terminal_register", "actor_resolve", "manager_authorize_pin", "session_select_store", "user_add", "user_change_role",
+  "user_deactivate", "user_reactivate", "user_assign", "user_unassign", "user_correct", "user_set_pin", "store_create",
+  "store_account_reset", "organization_create", "owner_recover", "owner_reset_request", "user_reset_request",
+  "user_invite_resend", "auth_user_link",
+]);
+
+// A-113: the uniform header has five named exceptions, and no others — three
+// functions by name, every S function, and A-91's Auth write-back. A sixth is a
+// decision, not a convenience: this set is the test's, not the package's, so
+// adding one is a reviewed edit here.
+const S_FUNCTIONS = FUNCTIONS.filter((f) => f.kind === "S").map((f) => f.name);
+const HEADER_EXCEPTIONS = new Set(["actor_resolve", "manager_authorize_pin", "terminal_register", ...S_FUNCTIONS, "auth_user_link"]);
+
 const root = join(__dirname, "..");
 const read = (p: string) => readFileSync(join(root, p), "utf8");
 
@@ -23,12 +38,13 @@ describe("A-99 — the M0 contracts skeleton is every §6 function's name, argum
     expect(typeof (contracts as Record<string, unknown>)[name], `export ${name}`).toBe("function");
   });
 
-  it.each(FUNCTIONS.map((f) => [f.name, f] as const))("%s throws not_implemented through the fake client", async (name) => {
+  it.each(FUNCTIONS.filter((f) => !M1.has(f.name)).map((f) => [f.name, f] as const))("%s, outside M1's Identity set, still throws not_implemented through the fake client", async (name) => {
     const wrapper = (contracts as unknown as Record<string, (c: unknown, i: unknown) => Promise<unknown>>)[name]!;
     await expect(wrapper(createFakeClient(), {})).rejects.toMatchObject({ code: "not_implemented", fn: name });
+    expect((wrapper as unknown as { isStub: boolean }).isStub, `${name} is a stub`).toBe(true);
   });
 
-  it.each(FUNCTIONS.filter((f) => f.kind !== "pure").map((f) => [f.name, f] as const))(
+  it.each(FUNCTIONS.filter((f) => f.kind !== "pure" && !HEADER_EXCEPTIONS.has(f.name)).map((f) => [f.name, f] as const))(
     "%s's input carries the A-103 header arguments",
     (name, f) => {
       const schema = (contracts as Record<string, unknown>)[`${pascal(name)}Input`] as { shape: Record<string, unknown> };
@@ -41,6 +57,17 @@ describe("A-99 — the M0 contracts skeleton is every §6 function's name, argum
       expect("p_manager_pin" in schema.shape, `${name}.p_manager_pin`).toBe(f.kind === "M" || f.kind === "O");
     },
   );
+
+  it("the 20 Identity entries of M1 are contracts, not stubs (A-99)", () => {
+    expect(M1.size).toBe(20);
+    for (const name of M1) {
+      const w = (contracts as Record<string, unknown>)[name] as { isStub?: boolean } | undefined;
+      expect(w, `export ${name}`).toBeTruthy();
+      expect(w!.isStub, `${name} is a contract`).toBe(false);
+      expect(FUNCTIONS.find((f) => f.name === name)?.domain, `${name} in the committed list`).toBe("identity");
+    }
+    expect(FUNCTIONS.filter((f) => f.domain === "identity").map((f) => f.name).sort()).toEqual([...M1].sort());
+  });
 
   it("resolve_scan carries §6's p_code beside the header", () => {
     expect("p_code" in contracts.ResolveScanInput.shape, "resolve_scan.p_code").toBe(true);
@@ -113,6 +140,12 @@ describe("A-98 — a contract is one file per function: Zod schemas and one wrap
     // Statements only — the file's comment says the fake is absent, which is the point.
     const code = read("packages/contracts/src/index.ts").replace(/\/\/.*$/gm, "");
     expect(code).not.toMatch(/fake/);
+  });
+
+  it.each(FUNCTIONS.map((f) => [f.name, f] as const))("%s's file exports exactly its input schema, output schema and wrapper", async (name, f) => {
+    const mod = (await import(`../packages/contracts/src/${f.domain}/${name}.ts`)) as Record<string, unknown>;
+    // Types erase, so the runtime exports are the three values A-98 names.
+    expect(Object.keys(mod).sort()).toEqual([name, `${pascal(name)}Input`, `${pascal(name)}Output`].sort());
   });
 
   it("every wrapper has the one signature: (client, input) => Promise<output>", () => {
@@ -215,5 +248,81 @@ describe("A-105 — the real client calls supabase.schema(\"app\").rpc, because 
     };
     const client = createSupabaseWaxClient(supabase as never);
     await expect(client.rpc("probe", {})).rejects.toMatchObject({ fn: "probe", code: "PGRST202" });
+  });
+});
+
+describe("A-113 — the uniform header has five named exceptions, and no others", () => {
+  const shapeOf = (name: string) =>
+    (contracts as unknown as Record<string, { shape: Record<string, unknown> }>)[`${pascal(name)}Input`]!.shape;
+  const hasFullHeader = (name: string) =>
+    ["p_actor_user_id", "p_actor_initials", "p_terminal_id"].every((k) => k in shapeOf(name));
+
+  it("the non-pure functions without the full header are exactly the five exceptions", () => {
+    const without = FUNCTIONS.filter((f) => f.kind !== "pure" && !hasFullHeader(f.name)).map((f) => f.name).sort();
+    expect(without).toEqual([...HEADER_EXCEPTIONS].sort());
+    expect([...S_FUNCTIONS].sort()).toEqual(["organization_create", "owner_recover", "owner_reset_request"]);
+  });
+
+  it("actor_resolve takes p_initials and p_terminal_id and no actor arguments", () => {
+    expect(Object.keys(shapeOf("actor_resolve")).sort()).toEqual(["p_initials", "p_terminal_id"]);
+  });
+
+  it("manager_authorize_pin takes p_pin and p_terminal_id", () => {
+    expect(Object.keys(shapeOf("manager_authorize_pin")).sort()).toEqual(["p_pin", "p_terminal_id"]);
+  });
+
+  it("terminal_register takes p_actor_initials and no p_terminal_id, resolving the initials itself", () => {
+    const keys = Object.keys(shapeOf("terminal_register"));
+    expect(keys).toContain("p_actor_initials");
+    for (const k of ["p_terminal_id", "p_actor_user_id", "p_manager_pin"]) expect(keys, k).not.toContain(k);
+  });
+
+  it.each(S_FUNCTIONS.map((n) => [n] as const))("S function %s takes p_actor_user_id and no initials, terminal or PIN", (name) => {
+    const keys = Object.keys(shapeOf(name));
+    expect(keys).toContain("p_actor_user_id");
+    for (const k of ["p_actor_initials", "p_terminal_id", "p_manager_pin"]) expect(keys, k).not.toContain(k);
+  });
+
+  it("auth_user_link takes the row it completes and the new Auth user id only (A-114)", () => {
+    expect(Object.keys(shapeOf("auth_user_link")).sort()).toEqual(["p_auth_user_id", "p_kind", "p_row_id"]);
+  });
+
+  it("every exception is still correlated (A-94)", () => {
+    for (const name of HEADER_EXCEPTIONS) expect(isCorrelated(name), name).toBe(true);
+  });
+});
+
+describe("A-103 — the remaining Identity functions start from the one header; M and O ones take the PIN", () => {
+  const rest = FUNCTIONS.filter((f) => f.domain === "identity" && !HEADER_EXCEPTIONS.has(f.name));
+
+  it("there are thirteen of them", () => {
+    // The order's row 6 says 15: it counts the three S functions as one exception
+    // where A-113 lists them by kind. 20 − (3 named + 3 S + auth_user_link) = 13.
+    expect(rest.map((f) => f.name).sort()).toEqual([
+      "session_select_store", "store_account_reset", "store_create", "user_add", "user_assign", "user_change_role",
+      "user_correct", "user_deactivate", "user_invite_resend", "user_reactivate", "user_reset_request", "user_set_pin", "user_unassign",
+    ]);
+  });
+
+  it.each(rest.map((f) => [f.name, f] as const))("%s extends header, or managerHeader if M or O", (name, f) => {
+    const shape = (contracts as unknown as Record<string, { shape: Record<string, unknown> }>)[`${pascal(name)}Input`]!.shape;
+    const base: Record<string, unknown> = f.kind === "M" || f.kind === "O" ? managerHeader.shape : header.shape;
+    for (const [k, v] of Object.entries(base)) expect(shape[k], `${name}.${k} is the shared header's`).toBe(v);
+    expect("p_manager_pin" in shape, `${name}.p_manager_pin`).toBe(f.kind === "M" || f.kind === "O");
+  });
+});
+
+describe("A-114 — auth_user_link, user_reset_request and user_invite_resend join the committed list", () => {
+  it("with their kinds: O, O, and the service role's own", () => {
+    const kinds = Object.fromEntries(FUNCTIONS.filter((f) => ["user_reset_request", "user_invite_resend", "auth_user_link"].includes(f.name)).map((f) => [f.name, f.kind]));
+    expect(kinds).toEqual({ user_reset_request: "O", user_invite_resend: "O", auth_user_link: "service" });
+  });
+
+  it("no input schema in the Identity set accepts p_request_id, and every one is correlated (A-94)", () => {
+    for (const name of M1) {
+      const schema = (contracts as unknown as Record<string, { shape: Record<string, unknown> }>)[`${pascal(name)}Input`]!;
+      expect("p_request_id" in schema.shape, name).toBe(false);
+      expect(isCorrelated(name), name).toBe(true);
+    }
   });
 });

@@ -1,16 +1,25 @@
-// owner_recover — §6 Identity; S-01 d2–d3
-// System Administrator's (S): asserts auth.principal() = 'sysadmin' (A-90).
-// M0 skeleton (A-99): signature and a stub that throws not_implemented. The
-// schemas' bodies and the fake's behaviour are the milestone's contract PR.
+// owner_recover — §6 Identity — S (A-90, A-113; S-01 d3)
+// For an Organization with no active Owner: reactivate a deactivated Owner
+// (p_user_id) or write a new Owner and invite them (p_owner_name and
+// p_owner_email). Refused while an active Owner exists (A-90).
 import { z } from "zod";
-import { header, stub } from "../wrapper";
+import { contract, sysadminHeader } from "../wrapper";
 
-export const OwnerRecoverInput = header.extend({
-  // The function's own arguments land in the contract pull request that opens its milestone (A-99).
-});
+export const OwnerRecoverInput = sysadminHeader.extend({
+  p_org_id: z.string().uuid(),
+  p_user_id: z.string().uuid().nullable(),
+  p_owner_name: z.string().trim().min(1).nullable(),
+  p_owner_email: z.string().email().nullable(),
+}).strict().refine(
+  (v) => (v.p_user_id === null) === (v.p_owner_name !== null && v.p_owner_email !== null),
+  { error: "either a deactivated Owner to reactivate, or a new Owner's name and email" },
+);
 export type OwnerRecoverInput = z.infer<typeof OwnerRecoverInput>;
 
-export const OwnerRecoverOutput = z.unknown();
+export const OwnerRecoverOutput = z.object({
+  user_id: z.string().uuid(),
+  invite: z.boolean(),
+});
 export type OwnerRecoverOutput = z.infer<typeof OwnerRecoverOutput>;
 
-export const owner_recover = stub("owner_recover", OwnerRecoverInput, OwnerRecoverOutput);
+export const owner_recover = contract("owner_recover", OwnerRecoverInput, OwnerRecoverOutput);
