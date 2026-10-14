@@ -124,6 +124,7 @@ The in-place mechanism survives for the manager-only table (decision 9). On a st
 
 **From [architecture](../architecture.md):**
 
+- **Decision 32's log of a refused PIN clash survives the refusal** (A-119, 2026-10-13): at Set PIN, Assign and a promotion the function writes the log row and **returns** the refusal rather than raising it, so the log commits; a clash at Add stays raised and unlogged, as d32's note says.
 - **A ReviewFlag may be raised by the system, not only by an Employee** ([architecture](../architecture.md) A-68). `actor_user_id` is **nullable** and a null actor means the system raised it — so the review queue this flow owns now renders rows with **no actor to name**, the first being `journal_imbalance` ([M-07](M-07-chart-of-accounts.md) d10). Decision 17 is unchanged: acknowledging stays manager-only and a flag is still never deleted. What changes is that the queue stops meaning *what the staff did* and starts meaning *what wants a look*, and an acknowledgement can mean *I have seen this bug*.
 - **An Owner's reset and re-sent invite are functions of their own, at M1** (A-114, 2026-10-13): `user_reset_request` **O** (decision 29) and `user_invite_resend` **O** (decision 33), each with a button on the person's row, because real shop data reaches production at the end of M1 and a lost first invite must be fixable in the product.
 

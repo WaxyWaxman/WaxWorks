@@ -87,6 +87,8 @@ The shape decision 18 was built to protect held: actions are still attributed to
 
 **From [architecture](../architecture.md):**
 
+- **Decision 31's record and flag survive the refusal** (A-119, 2026-10-13): the PIN resolution writes the refused PIN's row — and at the fifth, the flag — then **returns** the refusal rather than raising it, so the transaction commits them and nothing else.
+- **The pad records the staff session** (A-120, 2026-10-13): `manager_authorize_pin` takes the staff session's actor, null when none is open, verified when given and recorded on a refused PIN's row — decision 31's *whose staff session was open*.
 - **The link's session is an enrolment session** (A-117, 2026-10-13): a token without a passkey reaches nothing, the server confirms the new passkey with Supabase, and `users.passkey_enrolled_at` records that the person has enrolled — which is what lets an Owner's *Re-send invite* refuse someone who already accepted.
 
 **From [M-06](M-06-settings.md):**
