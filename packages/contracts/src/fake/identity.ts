@@ -50,7 +50,9 @@ class Ctx {
     const id = this.args.p_actor_user_id as string;
     const u = this.tx.users.find((x) => x.user_id === id && x.org_id === org && x.active);
     if (s.principal === "person") {
-      if (id !== s.user_id || !u || u.role === "employee") this.refuse("actor_mismatch");
+      // A-113: an actor argument is verified or absent. The session holder is the
+      // actor here, so initials are never read — and so must not be given.
+      if (id !== s.user_id || !u || u.role === "employee" || this.args.p_actor_initials != null) this.refuse("actor_mismatch");
       return u;
     }
     if (s.principal === "store") {
@@ -106,13 +108,13 @@ class Ctx {
       u.org_id === this.s!.org_id && u.active && u.role !== "employee" && u.store_ids.includes(store_id) && this.tx.pins.get(u.user_id) === pin);
     if (holder) return holder;
 
-    st.pinRefusals.push({ store_id, terminal_id: terminal, at: this.at, staff_user_id });
+    st.pinRefusals.push({ store_id, terminal_id: terminal, at: this.at, staff_user_id, request_id: this.request_id, principal: this.s!.principal });
     line.window = [...line.window.filter((x) => x > t - FIFTEEN_MINUTES), t];
     if (line.window.length >= 5) {
       // Placeholder, not specified: closure consumes the count, and attempts while closed are not counted.
       line.closed_until = t + FIFTEEN_MINUTES;
       line.window = [];
-      st.flags.push({ kind: "pin_line_closed", store_id, terminal_id: terminal, actor_user_id: staff_user_id, at: this.at, request_id: this.request_id });
+      st.flags.push({ kind: "pin_line_closed", store_id, terminal_id: terminal, actor_user_id: staff_user_id, at: this.at, request_id: this.request_id, principal: this.s!.principal });
     }
     return this.refuse("pin_refused");
   }
@@ -277,7 +279,7 @@ export const identityHandlers: Record<string, Handler> = {
     }
     const user: UserRow = {
       user_id: uid(), org_id: org, display_name: x.args.p_display_name as string, initials, role, email,
-      active: true, store_ids: [...stores], selected_store_id: null, auth_user_id: null, enrolled: false,
+      active: true, store_ids: [...stores], selected_store_id: null, auth_user_id: null, passkey_enrolled_at: null,
     };
     x.tx.users.push(user);
     if (pin) x.tx.pins.set(user.user_id, pin);
@@ -294,8 +296,11 @@ export const identityHandlers: Record<string, Handler> = {
     const u = x.user(x.args.p_user_id as string, org);
     const to = x.args.p_role as Role;
     const from = u.role;
-    if (to === from) return { user_id: u.user_id, invite: false };
+    if (to === from) return { user_id: u.user_id, invite: false, email: null };
     if (from === "owner" && u.active && x.activeOwners(org).length === 1) x.refuse("owner_floor");
+    // M-04 d27: an Employee or a Manager holds at least one Store — an Owner may
+    // hold none, so a demotion is the third door to that state. The key is a placeholder (invalid_state).
+    if (to !== "owner" && u.store_ids.length === 0) x.refuse("invalid_state", "no_store");
     const email = (x.args.p_email as string | null) ?? u.email;
     const pin = x.args.p_pin as string | null;
     if (to !== "employee") {
@@ -304,14 +309,19 @@ export const identityHandlers: Record<string, Handler> = {
       if (!holdsPin && pin === null && (to === "manager" || u.store_ids.length > 0)) x.refuse("pin_required");
       if (pin !== null) for (const st of u.store_ids) x.pinClash(st, pin, u.user_id, who);
     }
-    const invite = to !== "employee" && from === "employee" && !u.enrolled;
+    // A-117: a promotion's invite only while passkey_enrolled_at is null.
+    const invite = to !== "employee" && from === "employee" && u.passkey_enrolled_at === null;
     const before = { role: from };
     u.role = to;
     u.email = email;
     if (pin !== null && to !== "employee") { x.tx.pins.set(u.user_id, pin); x.log("users.log", u.user_id, "pin_set", who); }
+    // M-04 d28: Employees have no PIN — a demotion clears it, so a promotion back
+    // sets a fresh one, which is clash-checked (finding 2; GimpyMatey, 2026-10-13).
+    if (to === "employee" && x.tx.pins.delete(u.user_id)) x.log("users.log", u.user_id, "pin_cleared", who);
     x.log("users.log", u.user_id, "role_changed", who, { before, after: { role: to } });
     if (invite) x.log("users.log", u.user_id, "invite_sent", who);
-    return { user_id: u.user_id, invite };
+    // A-118: the Server Action sends the invite to the address returned here.
+    return { user_id: u.user_id, invite, email: invite ? email : null };
   }),
 
   user_deactivate: handle((x) => {
@@ -331,6 +341,11 @@ export const identityHandlers: Record<string, Handler> = {
     x.subjectInReach(who.by, u, "shares");
     const initials = norm(x.args.p_initials as string | null) ?? u.initials;
     if (initials) for (const st of u.store_ids) x.initialsClash(st, initials, u.user_id);
+    // E-01 d26: the PIN stays unique at the Store. Placeholder, not specified —
+    // M-04 d19 covers initials only; refusing is the one reading that breaks no
+    // decided rule (finding 3).
+    const pin = x.tx.pins.get(u.user_id);
+    if (u.role !== "employee" && pin) for (const st of u.store_ids) x.pinClash(st, pin, u.user_id, null);
     const before = { active: u.active, initials: u.initials };
     u.active = true;
     u.initials = initials;
@@ -451,7 +466,7 @@ export const identityHandlers: Record<string, Handler> = {
     x.tx.orgs.push({ org_id, name: x.args.p_name as string });
     const owner: UserRow = {
       user_id: uid(), org_id, display_name: x.args.p_owner_name as string, initials: null, role: "owner",
-      email: x.args.p_owner_email as string, active: true, store_ids: [], selected_store_id: null, auth_user_id: null, enrolled: false,
+      email: x.args.p_owner_email as string, active: true, store_ids: [], selected_store_id: null, auth_user_id: null, passkey_enrolled_at: null,
     };
     x.tx.users.push(owner);
     x.tx.log.push(x.row("organizations.log", org_id, "organization_created", sys, null, null, { after: { name: x.args.p_name, owner_user_id: owner.user_id } }));
@@ -470,17 +485,18 @@ export const identityHandlers: Record<string, Handler> = {
       owner = x.user(id, org.org_id);
       if (owner.role !== "owner") x.refuse("not_found");
       owner.active = true;
-      invite = !owner.enrolled;
+      invite = owner.passkey_enrolled_at === null;
     } else {
       owner = {
         user_id: uid(), org_id: org.org_id, display_name: x.args.p_owner_name as string, initials: null, role: "owner",
-        email: x.args.p_owner_email as string, active: true, store_ids: [], selected_store_id: null, auth_user_id: null, enrolled: false,
+        email: x.args.p_owner_email as string, active: true, store_ids: [], selected_store_id: null, auth_user_id: null, passkey_enrolled_at: null,
       };
       x.tx.users.push(owner);
       invite = true;
     }
     x.tx.log.push(x.row("organizations.log", org.org_id, id ? "owner_reactivated" : "owner_invited", sys, null, null, { after: { user_id: owner.user_id } }));
-    return { user_id: owner.user_id, invite };
+    // A-118: the address the Server Action sends the invite to.
+    return { user_id: owner.user_id, invite, email: invite ? owner.email : null };
   }),
 
   owner_reset_request: handle((x) => {
@@ -497,9 +513,18 @@ export const identityHandlers: Record<string, Handler> = {
   auth_user_link: handle((x) => {
     // A-113, A-114: in place of tenant and actor, the caller is the service role.
     if (x.s?.principal !== "service") x.refuse("role_refused", "service");
-    const kind = x.args.p_kind as "user" | "store";
+    const kind = x.args.p_kind as "user" | "store" | "passkey";
     const id = x.args.p_row_id as string;
     const auth = x.args.p_auth_user_id as string;
+    if (kind === "passkey") {
+      // A-117: the row's Auth user IS p_auth_user_id; passkey_enrolled_at set where
+      // null; every enrolment logged, never a credential (A-93). The refusal key is a placeholder (invalid_state).
+      const u = x.tx.users.find((r) => r.user_id === id) ?? x.refuse("not_found");
+      if (u.auth_user_id !== auth) x.refuse("invalid_state", "auth_user_mismatch");
+      u.passkey_enrolled_at ??= x.at;
+      x.tx.log.push(x.row("users.log", id, "passkey_enrolled", null, null, null));
+      return { kind, row_id: id };
+    }
     const target = kind === "user"
       ? x.tx.users.find((u) => u.user_id === id)
       : x.tx.stores.find((s) => s.store_id === id);
@@ -516,7 +541,8 @@ function linkSent(x: Ctx, action: "reset_link_sent" | "invite_sent") {
   const u = x.user(x.args.p_user_id as string, who.by.org_id);
   // A-114: to a Manager or Owner. The key is a placeholder (invalid_state).
   if (u.role === "employee" || !u.email) x.refuse("invalid_state", "employee");
-  if (action === "invite_sent" && u.enrolled) x.refuse("invalid_state", "enrolled");
+  // A-117: Re-send invite is for someone who never accepted.
+  if (action === "invite_sent" && u.passkey_enrolled_at !== null) x.refuse("invalid_state", "enrolled");
   x.log("users.log", u.user_id, action, who);
   return { user_id: u.user_id, email: u.email };
 }

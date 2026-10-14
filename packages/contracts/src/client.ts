@@ -33,6 +33,18 @@ export const REFUSALS = {
 export type RefusalKey = keyof typeof REFUSALS;
 
 /**
+ * A designed refusal is told apart from a real Postgres error by the pair: the
+ * message is a key of the table AND the code is that key's. A genuine 23505 or
+ * 23502 shares a refusal's code but not its message; a refusal raised without
+ * `using errcode` shares the key but answers P0001. Either is a failure, so a
+ * real error's message and DETAIL never pose as a refusal's (A-93; M1 contracts
+ * order, finding 1).
+ */
+export function isRefusal(key: string, code: string | undefined): key is RefusalKey {
+  return Object.hasOwn(REFUSALS, key) && REFUSALS[key as RefusalKey] === code;
+}
+
+/**
  * What a WaxClient throws when the database (or the fake) refuses or fails: the
  * errcode, the message — a refusal key for a refusal — and its `detail`. The
  * wrapper turns it into a ContractError carrying the call's request_id.
@@ -50,6 +62,18 @@ export class RpcRefusal extends Error {
   }
 }
 
+/**
+ * What the real WaxClient throws for an error that is not a refusal: the raw
+ * PostgREST error, which the wrapper keeps in `details` only — never as a key,
+ * a message or a detail.
+ */
+export class RpcFailure extends Error {
+  constructor(readonly fn: string, readonly error: unknown) {
+    super(`${fn}: the call did not complete`);
+    this.name = "RpcFailure";
+  }
+}
+
 export interface ContractErrorInit {
   /** The database's errcode, or one of ours: invalid_input, invalid_output, not_implemented, rpc_failed. */
   code: string;
@@ -58,7 +82,12 @@ export interface ContractErrorInit {
   /** Minted by the wrapper for every call before it validates (A-108). */
   request_id: string;
   message?: string;
-  /** The refusal's structured detail — a reopening time, a holder's name, a role required. */
+  /**
+   * The refusal's structured detail — a reopening time, a holder's name, a role
+   * required. A holder's name is identity data, so A-106's allowlist drops it,
+   * and `message`, along with `details`: an error event is built from `fn`,
+   * `key`, `code` and `request_id` (A-93, A-108; M1 contracts order, finding 5).
+   */
   detail?: string | undefined;
   /** Raw diagnostics: Zod issues or the PostgREST error. A-106's allowlist drops this field (A-108). */
   details?: unknown;
