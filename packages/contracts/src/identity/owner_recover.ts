@@ -18,7 +18,10 @@ export type OwnerRecoverInput = z.infer<typeof OwnerRecoverInput>;
 
 export const OwnerRecoverOutput = z.object({
   user_id: z.string().uuid(),
+  /** True for a new Owner, or a reactivated one who never enrolled a passkey (A-117). */
   invite: z.boolean(),
+  /** Where the Server Action sends the invite; null when `invite` is false (A-118). */
+  email: z.string().email().nullable(),
 });
 export type OwnerRecoverOutput = z.infer<typeof OwnerRecoverOutput>;
 

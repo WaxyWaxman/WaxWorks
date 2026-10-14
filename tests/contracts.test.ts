@@ -7,7 +7,7 @@ import * as contracts from "../packages/contracts/src/index";
 import { createFakeClient } from "../packages/contracts/src/fake";
 import { createSupabaseWaxClient } from "../packages/contracts/src/supabase";
 import { contract, header, isCorrelated, managerHeader } from "../packages/contracts/src/wrapper";
-import type { WaxClient } from "../packages/contracts/src/client";
+import { RpcFailure, RpcRefusal, type WaxClient } from "../packages/contracts/src/client";
 
 // M1's Identity set (M1 contracts order, row 1; A-114 adds the last three).
 const M1 = new Set([
@@ -242,12 +242,16 @@ describe("A-105 — the real client calls supabase.schema(\"app\").rpc, because 
     expect(schemas).toEqual(["app"]);
   });
 
-  it("a PostgREST error still surfaces as a typed ContractError", async () => {
+  it("a PostgREST error that is not a refusal surfaces as a failure carrying the raw error, never as a refusal (M1 review finding 1)", async () => {
+    const pgrst = { code: "PGRST202", message: "not found" };
     const supabase = {
-      schema: () => ({ async rpc() { return { data: null, error: { code: "PGRST202", message: "not found" } }; } }),
+      schema: () => ({ async rpc() { return { data: null, error: pgrst }; } }),
     };
     const client = createSupabaseWaxClient(supabase as never);
-    await expect(client.rpc("probe", {})).rejects.toMatchObject({ fn: "probe", code: "PGRST202" });
+    const err = await client.rpc("probe", {}).then(() => null, (e: unknown) => e);
+    expect(err).toBeInstanceOf(RpcFailure);
+    expect(err).not.toBeInstanceOf(RpcRefusal);
+    expect(err).toMatchObject({ fn: "probe", error: pgrst });
   });
 });
 

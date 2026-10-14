@@ -40,8 +40,11 @@ export interface UserRow {
   store_ids: string[];
   selected_store_id: string | null;
   auth_user_id: string | null;
-  /** Holds a passkey (E-01 d33). Set only by FakeClient.enrolPasskey. */
-  enrolled: boolean;
+  /**
+   * users.passkey_enrolled_at (A-117): has enrolled at least once — not holds a
+   * passkey now. Set only by auth_user_link's passkey kind, where it is null.
+   */
+  passkey_enrolled_at: string | null;
 }
 
 export interface TerminalRow { terminal_id: string; store_id: string; name: string; registered_by_user_id: string }
@@ -64,9 +67,11 @@ export interface LogRow {
   after?: unknown;
 }
 
-export interface FlagRow { kind: "pin_line_closed"; store_id: string; terminal_id: string; actor_user_id: string | null; at: string; request_id: string | null }
+/** A-28's review flag; A-94's request id, terminal and principal, as every row a function writes. */
+export interface FlagRow { kind: "pin_line_closed"; store_id: string; terminal_id: string; actor_user_id: string | null; at: string; request_id: string | null; principal: FakeSession["principal"] | null }
 
-export interface PinRefusalRow { store_id: string; terminal_id: string; at: string; staff_user_id: string | null }
+/** E-01 d31's record of a refused PIN — never the digits — with A-94's correlation. */
+export interface PinRefusalRow { store_id: string; terminal_id: string; at: string; staff_user_id: string | null; request_id: string | null; principal: FakeSession["principal"] | null }
 
 export interface FakeState {
   tx: {
