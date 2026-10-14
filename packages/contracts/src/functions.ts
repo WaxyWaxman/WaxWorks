@@ -1,11 +1,13 @@
 // Every database function docs/architecture.md §6 names, read on 2026-09-20
-// (lines 451–486), with the §6 domain that places it and its kind:
+// (lines 451–486), and again on 2026-10-13 for A-114's three additions, with
+// the §6 domain that places it and its kind:
 //   ""     any actor          "M" manager-only       "O" Owner-only
 //   "S"    System Administrator's                    "pure" no actor — takes values
+//   "service"  the service role's alone — A-91's Auth write-back (A-114)
 // This is the M0 skeleton's index (A-99). A reviewer checks it against §6; a
 // name here §6 lacks is a contract nobody approved. The settings_* rows are a
 // DERIVATION of "settings_* per configuration group" — see their source column.
-export type Kind = "" | "M" | "O" | "S" | "pure";
+export type Kind = "" | "M" | "O" | "S" | "service" | "pure";
 export type Domain =
   | "helpers" | "identity" | "catalog" | "receiving" | "selling" | "stock"
   | "close" | "ledger" | "governance" | "settings" | "payables" | "claims";
@@ -38,8 +40,11 @@ export const FUNCTIONS: readonly FunctionEntry[] = [
   { domain: "identity", name: "user_unassign", kind: "M", source: "§6 Identity — M, O for a Manager or Owner" },
   { domain: "identity", name: "user_correct", kind: "M", source: "§6 Identity" },
   { domain: "identity", name: "user_set_pin", kind: "M", source: "§6 Identity; M-04 d28, d30" },
+  { domain: "identity", name: "user_reset_request", kind: "O", source: "§6 Identity; A-114, M-04 d29, d38" },
+  { domain: "identity", name: "user_invite_resend", kind: "O", source: "§6 Identity; A-114, M-04 d33" },
   { domain: "identity", name: "store_create", kind: "O", source: "§6 Identity; M-06 d70, O-01 d2–d3" },
   { domain: "identity", name: "store_account_reset", kind: "O", source: "§6 Identity; M-06 d70, O-01 d3" },
+  { domain: "identity", name: "auth_user_link", kind: "service", source: "§6 Identity; A-91, A-113, A-114" },
   { domain: "identity", name: "organization_create", kind: "S", source: "§6 Identity; S-01 d2–d3" },
   { domain: "identity", name: "owner_recover", kind: "S", source: "§6 Identity; S-01 d2–d3" },
   { domain: "identity", name: "owner_reset_request", kind: "S", source: "§6 Identity; S-01 d2–d3" },
