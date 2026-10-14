@@ -1,7 +1,7 @@
 # Wax Works — the build plan
 
 **Maintained by:** the coordinator, at the end of every build session. Read first by whoever picks up next.
-**Last updated:** 2026-10-13, WaxyWaxman's session — through #198; the M1 contracts order `Returned`
+**Last updated:** 2026-10-13, GimpyMatey's session — through #198; the M1 contracts order `Returned`
 
 The [workflow](workflow.md) says how an order moves; the [conventions](conventions.md)
 say what the code looks like; the [status table](status.md) says what has landed.
@@ -36,7 +36,7 @@ build: invented conventions, silent bugs, and context blown by reading everythin
 Every flow is `Specified`. **A-1 to A-116 are ratified except A-96** (the `staging`
 branch and CI security review, still *recommended, not yet ratified*). **One M1 order exists:** [`orders/M1-contracts.md`](orders/M1-contracts.md) —
 built and **merged as [#197](https://github.com/WaxyWaxman/WaxWorks/pull/197) before
-its review ran**, then reviewed after merge and **`Returned`** by WaxyWaxman on
+its review ran**, then reviewed after merge and **`Returned`** by GimpyMatey on
 2026-10-13 for two blocking findings: the real client takes every Postgres error for a
 refusal (a real DETAIL can carry a PIN hash, A-93), and a demotion keeps a PIN that a
 re-promotion never re-checks (E-01 d26). **A-117 and A-118** landed after it
@@ -140,7 +140,7 @@ and its `invalid_input` test.
    `auth_user_link`, an `enrolment` principal, `email` on `user_change_role` and
    `owner_recover`), and findings 3–8 and 11 unless disputed. Then `/work-order check`
    **before** merge — #197 merged first, as #176 did — and **both owners** review.
-   The SQLSTATE values go in with it once sr-talbot agrees to WaxyWaxman's proposal
+   The SQLSTATE values go in with it once sr-talbot agrees to GimpyMatey's proposal
    (conventions §5, beside the table).
 2. **In parallel, optional: the Sentry allowlist** (A-106, *M1's first task*) as its own
    joint order — _Status: recommended, not yet ratified._ It sits in `apps/web`, so it
@@ -174,10 +174,10 @@ others* (before M3); finding 10, bigint minor units across PostgREST (before M3)
 
 | Item | Who | Blocks |
 |---|---|---|
-| **Run `/develop` on the M1 contracts follow-up** (§3 step 1) | sr-talbot or WaxyWaxman | Every M1 flow order |
-| **The SQLSTATE values** — WaxyWaxman's proposal beside conventions §5's table (two codes change to `WX404`, `WX409`) | sr-talbot | The follow-up's `REFUSALS` table |
+| **Run `/develop` on the M1 contracts follow-up** (§3 step 1) | sr-talbot or GimpyMatey | Every M1 flow order |
+| **The SQLSTATE values** — GimpyMatey's proposal beside conventions §5's table (two codes change to `WX404`, `WX409`) | sr-talbot | The follow-up's `REFUSALS` table |
 | **Reword the invite and recovery emails** — *create your passkey*, no password, no self-service reset; dashboard and `supabase/templates/` together (runbook) | sr-talbot | The first real Owner's invite |
-| **A-109 to A-116, E-01 d31–d36, M-04 d35–d38, S-01 d7 and conventions §5's answers decided by sr-talbot alone** — jointly owned; merged through #187–#195 | WaxyWaxman | Nothing, if the merge review was the second owner's assent; say so if it was not |
+| **A-109 to A-116, E-01 d31–d36, M-04 d35–d38, S-01 d7 and conventions §5's answers decided by sr-talbot alone** — jointly owned; merged through #187–#195 | ~~WaxyWaxman~~ **Assented by GimpyMatey, 2026-10-13** — in session, after reading each decision's row; also covers A-117, A-118 and E-01 d37 (#198) | Nothing |
 | **Auto-renew on `waxworks.store`** — off at purchase, deferred by sr-talbot 2026-10-13 | sr-talbot | Every invite and reset after 2027-10-13 |
 | **Auth email lands in spam** — a new domain, and links on `supabase.co` until M1's accept-invite route | sr-talbot | Nothing; tell an invited Owner to check spam meanwhile |
 | **The paid Supabase plan** — due by M6; until then real data has no backup (A-109) | sr-talbot | M6's backup restore verification |

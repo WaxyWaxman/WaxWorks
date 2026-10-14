@@ -349,7 +349,7 @@ is a pull request both humans review (§7, workflow §4).
 
 _Status: the keys and the kinds decided; the SQLSTATE values recommended, not yet ratified — confirmed in the M1 contract pull request._ `WX` is a class Postgres does not use, reserved here for refusals with no standard code.
 
-_Proposed 2026-10-13 by WaxyWaxman, from the M1 contracts review ([order](orders/M1-contracts.md), Needs a human); Status: recommended, not yet ratified — the table above stays as it is until sr-talbot agrees._ Keep every value except two: `not_found` `P0002` → `WX404` and `invalid_state` `55000` → `WX409`, since PostgREST answers both with HTTP 500 and a refusal is a designed outcome (A-92). `23505`, `23514` and `23502` hold only once the client takes an error as a refusal when its message is a key here **and** its code is that key's (the order's finding 1). PostgREST answers a `WX` class with 400; nothing branches on HTTP status.
+_Proposed 2026-10-13 by GimpyMatey, from the M1 contracts review ([order](orders/M1-contracts.md), Needs a human); Status: recommended, not yet ratified — the table above stays as it is until sr-talbot agrees._ Keep every value except two: `not_found` `P0002` → `WX404` and `invalid_state` `55000` → `WX409`, since PostgREST answers both with HTTP 500 and a refusal is a designed outcome (A-92). `23505`, `23514` and `23502` hold only once the client takes an error as a refusal when its message is a key here **and** its code is that key's (the order's finding 1). PostgREST answers a `WX` class with 400; nothing branches on HTTP status.
 
 ---
 

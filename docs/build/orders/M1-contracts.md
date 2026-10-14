@@ -141,14 +141,14 @@ _Written by reviewers (`qa-reviewer`, `architect`, `/code-review`), 2026-10-13, 
 
 ## Verdict
 
-**Returned** — WaxyWaxman, 2026-10-13. *Entered on WaxyWaxman's instruction by the coordinator: the judgement is WaxyWaxman's, the typing is not (workflow §4).*
+**Returned** — GimpyMatey, 2026-10-13. *Entered on GimpyMatey's instruction by the coordinator: the judgement is GimpyMatey's, the typing is not (workflow §4).*
 
 - **Checklist:** 30 of 30 rows accounted for, every one `Done`, the suites green in the reviewers' own run (Findings, above).
 - **Returned for two blocking findings whose remedy is code not yet written** — so neither can be `discharged`:
   - **Finding 1** — the real client surfaces every Postgres error as a refusal, and a real DETAIL can carry a PIN's keyed hash (A-93).
   - **Finding 2** — a demotion keeps the PIN, letting two Managers at one Store hold one PIN (E-01 d26).
 - **#197 merged before this verdict**, as M0's #176 did (M0 finding 28). The code is on `main`; the fixes land in a follow-up joint contract pull request, branched from `main`, built interactively with `/develop` against this order, and reviewed by both owners (workflow §4).
-- **That pull request also carries findings 9 and 10** — A-117's and A-118's contract changes — by WaxyWaxman's choice on 2026-10-13: one contract pull request rather than two, since both touch `packages/contracts` and both owners review either. Findings 3–8 and 11 go with it unless the developer disputes one.
+- **That pull request also carries findings 9 and 10** — A-117's and A-118's contract changes — by GimpyMatey's choice on 2026-10-13: one contract pull request rather than two, since both touch `packages/contracts` and both owners review either. Findings 3–8 and 11 go with it unless the developer disputes one.
 - **Not filled in [status.md](../status.md):** its M1 rows are **D** and **U** and are written when those tracks' orders are `Accepted` and merged; the contract commit they record is the one the follow-up lands, not `f41fe08`.
 
 ### Needs a human
@@ -187,7 +187,7 @@ _Raised while developing, 2026-10-13:_
 
 _Raised by the review, 2026-10-13:_
 
-- **The SQLSTATE values (Checklist row 30) — proposed by WaxyWaxman, 2026-10-13, from the architect's review; _Status: recommended, not yet ratified_ until sr-talbot agrees.** Keep `28000`, `42501`, `28P01`, `WX429`, `XX000`; keep `23505`, `23514`, `23502` **only with finding 1's fix**, which is what stops a real constraint violation passing as a refusal; change `not_found` `P0002` → **`WX404`** and `invalid_state` `55000` → **`WX409`**, because PostgREST answers both as HTTP 500 and A-92 holds a refusal to be a designed outcome, not an error event. Record beside `WX429` that PostgREST answers a `WX` class with **400** and nothing branches on HTTP status. *The reviewer gave PostgREST's status mapping from memory; check it against the version in use before ratifying.* Written beside conventions §5's table; the table itself and `REFUSALS` change in the follow-up pull request once ratified, since `tests/contracts-m1.test.ts:540` holds them equal.
+- **The SQLSTATE values (Checklist row 30) — proposed by GimpyMatey, 2026-10-13, from the architect's review; _Status: recommended, not yet ratified_ until sr-talbot agrees.** Keep `28000`, `42501`, `28P01`, `WX429`, `XX000`; keep `23505`, `23514`, `23502` **only with finding 1's fix**, which is what stops a real constraint violation passing as a refusal; change `not_found` `P0002` → **`WX404`** and `invalid_state` `55000` → **`WX409`**, because PostgREST answers both as HTTP 500 and A-92 holds a refusal to be a designed outcome, not an error event. Record beside `WX429` that PostgREST answers a `WX` class with **400** and nothing branches on HTTP status. *The reviewer gave PostgREST's status mapping from memory; check it against the version in use before ratifying.* Written beside conventions §5's table; the table itself and `REFUSALS` change in the follow-up pull request once ratified, since `tests/contracts-m1.test.ts:540` holds them equal.
 - **Can `auth_user_link` replace an existing link?** For the `user` and `store` kinds it overwrites `auth_user_id` unconditionally (`fake/identity.ts:507`, reproduced), so a replayed Server Action could repoint an Owner's row at another Auth user. A-113's *"the row it completes"* suggests once only; no decision says. Owner: `/architecture` (A-114).
 - **Acts on a deactivated person.** `user_change_role` (a promotion returns `invite: true`), `user_reset_request` and `user_invite_resend` are accepted for a deactivated Manager or Owner (`fake/identity.ts:294`, `:514–521`, reproduced). Not specified. Open against **M-04**.
 - **Reactivation and a PIN taken meanwhile** (finding 3) — M-04 d19 covers initials only. Open against **M-04**.
