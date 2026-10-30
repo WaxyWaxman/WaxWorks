@@ -2,9 +2,9 @@
 
 **Flow:** none — a follow-up contract pull request for [M-04](../../flows/M-04-manage-users.md) d46 and d47
 **Milestone / track:** M1 / joint — no track; `packages/contracts` is neither D's nor U's (conventions §5)
-**Status:** In review
+**Status:** Accepted
 **Approved by:** sr-talbot, 2026-10-29 — in session, after reading the Checklist; **both** owners review the pull request (workflow §4: *a change to `packages/contracts`*)
-**Pull request:** _once opened_
+**Pull request:** [#208](https://github.com/WaxyWaxman/WaxWorks/pull/208) — merged `19a49ed` after its review
 **Register rows:** none made automatable by this order alone. It changes the fake the M1 **U** order builds against, after [M1-contracts-2](M1-contracts-2.md) (`Accepted`).
 
 ## Scope
@@ -59,7 +59,12 @@ _`/code-review`, 2026-10-29, against #208 at `83bc615`: nothing blocking; its ot
 
 ## Verdict
 
-**Accepted** | **Returned** — _coordinator, date_
+**Accepted** — sr-talbot, 2026-10-29. *Entered on sr-talbot's instruction in session ("accepted") by the coordinator: the judgement is sr-talbot's, the typing is not (workflow §4).*
+
+- **Checklist:** 2 of 2 rows accounted for, both `Done` (`check_coverage.py --order` → 0 errors).
+- **No blocking finding** from qa-reviewer, architect or `/code-review`; the reviewers' own run green (Findings, above). Findings 1–3 were fixed in the pull request **before** it merged, the first contract pull request this milestone whose review landed with it.
+- **The contract commit** the M1 **D** and **U** orders build against is **`19a49ed`** (#208).
+- **No `Deferred` row.** Needs a human, below, carries what goes to the M1 D order's Checklist, conventions §5, M-04 and `/qa`.
 
 ### Needs a human
 
