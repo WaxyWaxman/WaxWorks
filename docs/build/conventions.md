@@ -341,15 +341,15 @@ is a pull request both humans review (§7, workflow §4).
 | Wrong PIN (E-01 d26) | `28P01` | `pin_refused` | — names nobody |
 | PIN line closed (E-01 d31) | `WX429` | `pin_line_closed` | `reopens_at` |
 | Clash — initials or PIN already held at this Store (M-04 d27, d32) | `23505` | `initials_clash`, `pin_clash` | the holder's name for initials; nothing for a PIN |
-| Not found, or not visible to this principal | `P0002` | `not_found` | — |
+| Not found, or not visible to this principal | `WX404` | `not_found` | — |
 | The Owner floor (M-04 d26) | `23514` | `owner_floor` | — |
 | Required field for this role missing — a Manager's PIN or email (M-04 d35, d33) | `23502` | `pin_required`, `email_required`, `initials_required` | — |
-| Wrong state for the act — re-sending to someone already enrolled, recovering while an Owner exists (M-04 d38, A-90) | `55000` | `invalid_state` | what state |
+| Wrong state for the act — re-sending to someone already enrolled, recovering while an Owner exists (M-04 d38, A-90) | `WX409` | `invalid_state` | what state |
 | PIN pepper missing (A-115) | `XX000` | `pin_pepper_missing` | — |
 
-_Status: the keys and the kinds decided; the SQLSTATE values recommended, not yet ratified — confirmed in the M1 contract pull request._ `WX` is a class Postgres does not use, reserved here for refusals with no standard code.
+_Status: the keys, the kinds and the SQLSTATE values decided — the values ratified 2026-10-29 by sr-talbot, on GimpyMatey's proposal below._ `WX` is a class Postgres does not use, reserved here for refusals with no standard code. **PostgREST answers a refusal by its code's class** (its error reference, v12 and *latest*, read 2026-10-29): `28*` → 403, `42501` → 401 or 403, `23505` → 409, and every other code here — `23502`, `23514`, the `WX` class — falls to *other*, 400; `P0*` and `55*` would have been 500, which is why `not_found` and `invalid_state` moved. Nothing branches on HTTP status. Re-check the mapping against production's PostgREST version once.
 
-_Proposed 2026-10-13 by GimpyMatey, from the M1 contracts review ([order](orders/M1-contracts.md), Needs a human); Status: recommended, not yet ratified — the table above stays as it is until sr-talbot agrees._ Keep every value except two: `not_found` `P0002` → `WX404` and `invalid_state` `55000` → `WX409`, since PostgREST answers both with HTTP 500 and a refusal is a designed outcome (A-92). `23505`, `23514` and `23502` hold only once the client takes an error as a refusal when its message is a key here **and** its code is that key's (the order's finding 1). PostgREST answers a `WX` class with 400; nothing branches on HTTP status.
+_Proposed 2026-10-13 by GimpyMatey, from the M1 contracts review ([order](orders/M1-contracts.md), Needs a human); **ratified 2026-10-29 by sr-talbot** — the table above now carries it._ Keep every value except two: `not_found` `P0002` → `WX404` and `invalid_state` `55000` → `WX409`, since PostgREST answers both with HTTP 500 and a refusal is a designed outcome (A-92). `23505`, `23514` and `23502` hold only once the client takes an error as a refusal when its message is a key here **and** its code is that key's (the order's finding 1). PostgREST answers a `WX` class with 400; nothing branches on HTTP status.
 
 ---
 

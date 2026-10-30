@@ -8,6 +8,7 @@ import { join } from "node:path";
 import * as c from "../packages/contracts/src/index";
 import { ContractError, REFUSALS, RpcRefusal, type RefusalKey, type WaxClient } from "../packages/contracts/src/client";
 import { createFakeClient, type FakeClient, type FakeSession } from "../packages/contracts/src/fake";
+import { createSupabaseWaxClient } from "../packages/contracts/src/supabase";
 
 const SYSADMIN = "5a5a5a5a-0000-4000-8000-000000000001";
 const T0 = new Date("2026-10-13T10:00:00.000Z");
@@ -73,6 +74,19 @@ async function world() {
   return { root, clock, org, ownerId, owner, asOwner, A, B, jm, yn, storeA, storeB, t1: t1.terminal_id, t2: t2.terminal_id, tB: tB.terminal_id, atA };
 }
 
+const serviceSession: FakeSession = { principal: "service", org_id: null, store_id: null, user_id: null, terminal_id: null };
+
+/**
+ * A person completing their invitation (A-117): the Server Action links the
+ * Auth user to the users row, then records the passkey through auth_user_link.
+ */
+async function enrol(root: FakeClient, user_id: string, auth_user_id: string = crypto.randomUUID()) {
+  const service = root.withSession(serviceSession);
+  await c.auth_user_link(service, { p_kind: "user", p_row_id: user_id, p_auth_user_id: auth_user_id });
+  await c.auth_user_link(service, { p_kind: "passkey", p_row_id: user_id, p_auth_user_id: auth_user_id });
+  return auth_user_id;
+}
+
 const employee = (p_display_name: string, p_initials: string, stores: string[], p_email: string | null = null) =>
   ({ p_display_name, p_initials, p_role: "employee" as const, p_email, p_store_ids: stores, p_pin: null });
 
@@ -92,12 +106,12 @@ describe("A-108 — the wrapper mints the correlation id before it validates, fo
   it("a refusal carries the very id that was sent as p_request_id", async () => {
     const sent: Record<string, unknown>[] = [];
     const client: WaxClient = {
-      async rpc(fn, args) { sent.push(args); throw new RpcRefusal(fn, "P0002", "not_found"); },
+      async rpc(fn, args) { sent.push(args); throw new RpcRefusal(fn, "WX404", "not_found"); },
     };
     const err = await failed(c.actor_resolve(client, { p_initials: "YN", p_terminal_id: "00000000-0000-4000-8000-000000000009" }));
     expect(sent[0]!.p_request_id).toMatch(UUID);
     expect(err.request_id).toBe(sent[0]!.p_request_id);
-    expect(err).toMatchObject({ key: "not_found", code: "P0002" });
+    expect(err).toMatchObject({ key: "not_found", code: "WX404" });
   });
 
   it("a failure that is not a refusal still surfaces as a ContractError with the id", async () => {
@@ -181,10 +195,9 @@ describe("E-01 d31 — five wrong PINs within fifteen minutes, across the Store'
       await refused(c.user_add(w.storeA, { ...w.atA(w.t1, pin), ...employee("K. Park", "KP", [w.A.store_id]) }), "pin_refused");
     }
     const records = w.root.inspect().pinRefusals;
-    expect(records).toEqual([
-      { store_id: w.A.store_id, terminal_id: w.t1, at: T0.toISOString(), staff_user_id: w.yn.user_id },
-      { store_id: w.A.store_id, terminal_id: w.t1, at: T0.toISOString(), staff_user_id: w.yn.user_id },
-    ]);
+    // request_id and principal: A-94's correlation, added by the review's finding 7.
+    const row = { store_id: w.A.store_id, terminal_id: w.t1, at: T0.toISOString(), staff_user_id: w.yn.user_id, request_id: expect.stringMatching(UUID), principal: "store" };
+    expect(records).toEqual([row, row]);
     // Ids are random hex and can contain any four digits, so they are struck
     // before looking for a PIN: what is left is every value the fake stored.
     const all = JSON.stringify(w.root.inspect()).replace(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/g, "<id>");
@@ -307,7 +320,7 @@ describe("M-04 d35 — every Manager and Owner who holds a Store holds a PIN", (
     await refused(c.user_add(w.owner, { ...w.asOwner, p_display_name: "K. Moreau", p_initials: "KM", p_role: "manager", p_email: "km@example.test", p_store_ids: [w.A.store_id], p_pin: null }), "pin_required");
     // Promote an Employee to Manager without one.
     await refused(c.user_change_role(w.owner, { ...w.asOwner, p_user_id: w.yn.user_id, p_role: "manager", p_email: "yn@example.test", p_pin: null }), "pin_required");
-    await expect(c.user_change_role(w.owner, { ...w.asOwner, p_user_id: w.yn.user_id, p_role: "manager", p_email: "yn@example.test", p_pin: "4444" })).resolves.toEqual({ user_id: w.yn.user_id, invite: true });
+    await expect(c.user_change_role(w.owner, { ...w.asOwner, p_user_id: w.yn.user_id, p_role: "manager", p_email: "yn@example.test", p_pin: "4444" })).resolves.toEqual({ user_id: w.yn.user_id, invite: true, email: "yn@example.test" });
     // Clear a Manager's PIN.
     await refused(c.user_set_pin(w.owner, { ...w.asOwner, p_user_id: w.jm.user_id, p_pin: null }), "pin_required");
     // Assign an Owner with initials and no PIN; give the PIN, then assign.
@@ -325,7 +338,7 @@ describe("M-04 d36 — an Employee's email is optional; M-04 d33 — a promotion
     const some = await c.user_add(w.owner, { ...w.asOwner, ...employee("L. Park", "LP", [w.A.store_id], "lp@example.test") });
     expect([none.invite, some.invite]).toEqual([false, false]);
     await refused(c.user_change_role(w.owner, { ...w.asOwner, p_user_id: none.user_id, p_role: "manager", p_email: null, p_pin: "4444" }), "email_required");
-    await expect(c.user_change_role(w.owner, { ...w.asOwner, p_user_id: some.user_id, p_role: "manager", p_email: null, p_pin: "4444" })).resolves.toEqual({ user_id: some.user_id, invite: true });
+    await expect(c.user_change_role(w.owner, { ...w.asOwner, p_user_id: some.user_id, p_role: "manager", p_email: null, p_pin: "4444" })).resolves.toEqual({ user_id: some.user_id, invite: true, email: "lp@example.test" });
   });
 
   it("a Manager or Owner is added with an email or not at all", async () => {
@@ -333,11 +346,12 @@ describe("M-04 d36 — an Employee's email is optional; M-04 d33 — a promotion
     await refused(c.user_add(w.owner, { ...w.asOwner, p_display_name: "K. Moreau", p_initials: "KM", p_role: "manager", p_email: null, p_store_ids: [w.A.store_id], p_pin: "3333" }), "email_required");
   });
 
-  it("a person promoted back who already holds a passkey is not invited again", async () => {
+  it("a person promoted back who has enrolled a passkey is not invited again (A-117: only while passkey_enrolled_at is null)", async () => {
     const w = await world();
     await c.user_change_role(w.owner, { ...w.asOwner, p_user_id: w.jm.user_id, p_role: "employee", p_email: null, p_pin: null });
-    w.root.enrolPasskey(w.jm.user_id);
-    await expect(c.user_change_role(w.owner, { ...w.asOwner, p_user_id: w.jm.user_id, p_role: "manager", p_email: null, p_pin: null })).resolves.toEqual({ user_id: w.jm.user_id, invite: false });
+    await enrol(w.root, w.jm.user_id);
+    // The demotion cleared the PIN (finding 2), so the promotion sets a new one.
+    await expect(c.user_change_role(w.owner, { ...w.asOwner, p_user_id: w.jm.user_id, p_role: "manager", p_email: null, p_pin: "6666" })).resolves.toEqual({ user_id: w.jm.user_id, invite: false, email: null });
   });
 });
 
@@ -424,7 +438,7 @@ describe("M-04 d38 — a lost passkey is re-enrolled by an Owner (user_reset_req
     await refused(c.user_reset_request(w.storeA, { ...w.atA(w.t1, "2222"), p_user_id: w.jm.user_id }), "role_refused");
     await refused(c.user_invite_resend(w.storeA, { ...w.atA(w.t1, "2222"), p_user_id: w.jm.user_id }), "role_refused");
     await expect(c.user_invite_resend(w.owner, { ...w.asOwner, p_user_id: w.jm.user_id })).resolves.toEqual({ user_id: w.jm.user_id, email: "jm@example.test" });
-    w.root.enrolPasskey(w.jm.user_id);
+    await enrol(w.root, w.jm.user_id);
     await refused(c.user_invite_resend(w.owner, { ...w.asOwner, p_user_id: w.jm.user_id }), "invalid_state");
     await expect(c.user_reset_request(w.owner, { ...w.asOwner, p_user_id: w.jm.user_id })).resolves.toEqual({ user_id: w.jm.user_id, email: "jm@example.test" });
     // Logged as sent, never the link (M-04 d29, A-93).
@@ -489,9 +503,12 @@ describe("A-93 — nothing this order adds puts a PIN in an error", () => {
   it("a refused user_set_pin's error, serialised, contains no digit of the PIN", async () => {
     const w = await world();
     const err = await refused(c.user_set_pin(w.owner, { ...w.asOwner, p_user_id: w.jm.user_id, p_pin: "1111" }), "pin_clash");
-    // The stack is left out: its line numbers are digits that are not the PIN.
-    const { request_id, ...rest } = { ...err, message: err.message };
+    // Left out, as carrying digits that are not the PIN: the stack's line numbers,
+    // the request_id (a uuid) and the SQLSTATE (finding 8 — `23505` happened to
+    // hold no 1, so the check passed by coincidence of the code chosen).
+    const { request_id, code, ...rest } = { ...err, message: err.message };
     expect(request_id).toMatch(UUID);
+    expect(code).toBe(REFUSALS.pin_clash);
     expect(JSON.stringify(rest)).not.toMatch(/1/);
   });
 
@@ -539,7 +556,10 @@ describe("conventions §5 (M1 contracts order row 29) — createFakeClient({ ses
 describe("conventions §5 (M1 contracts order row 30) — one SQLSTATE and one message key per kind of refusal, as the table says", () => {
   it("REFUSALS is exactly conventions §5's table", () => {
     const text = readFileSync(join(__dirname, "../docs/build/conventions.md"), "utf8");
-    const table = text.split("**Refusals (M1 contracts order, row 30).**")[1]!.split("\n\n")[1]!;
+    // The first table after the heading, wherever it sits: prose may come between them (#201 adds some).
+    const section = text.split("**Refusals (M1 contracts order, row 30).**")[1]!;
+    const table = section.slice(section.indexOf("\n| Kind |") + 1).split("\n\n")[0]!;
+    expect(table.startsWith("| Kind |"), "conventions §5's refusal table was found").toBe(true);
     const fromDoc: Record<string, string> = {};
     for (const line of table.split("\n").slice(2)) {
       const cells = line.split("|").map((s) => s.trim());
@@ -547,6 +567,136 @@ describe("conventions §5 (M1 contracts order row 30) — one SQLSTATE and one m
       for (const key of cells[3]!.match(/`([a-z_]+)`/g) ?? []) fromDoc[key.replace(/`/g, "")] = code;
     }
     expect(REFUSALS).toEqual(fromDoc);
+  });
+});
+
+// ── The M1 contracts review (orders/M1-contracts.md, Findings) ───────────────
+
+/** A supabase-js double whose rpc answers this PostgREST error. */
+const postgrestError = (error: { code: string; message: string; details?: string | null }) =>
+  createSupabaseWaxClient({ schema: () => ({ async rpc() { return { data: null, error }; } }) } as never);
+
+const anyCaller = { p_actor_user_id: "00000000-0000-4000-8000-000000000001", p_actor_initials: null, p_terminal_id: null, p_manager_pin: null };
+
+describe("A-93, conventions §5 — the real client takes an error for a refusal only when its key and SQLSTATE agree (finding 1)", () => {
+  it("a genuine not-null violation is rpc_failed, and its DETAIL reaches neither key, message nor detail", async () => {
+    const client = postgrestError({ code: "23502", message: "null value in column \"org_id\" of relation \"user_pins\" violates not-null constraint", details: "Failing row contains (9d1f, null, $argon2id$1111)." });
+    const err = await failed(c.user_set_pin(client, { ...anyCaller, p_user_id: "00000000-0000-4000-8000-000000000002", p_pin: "1111" }));
+    expect({ code: err.code, key: err.key, detail: err.detail }).toEqual({ code: "rpc_failed", key: "rpc_failed", detail: undefined });
+    const { details: _raw, ...carried } = { ...err, message: err.message };
+    expect(JSON.stringify(carried)).not.toMatch(/Failing row|user_pins|argon2/);
+  });
+
+  it("a refusal raised as the table says is a refusal, with its detail", async () => {
+    const client = postgrestError({ code: "23505", message: "initials_clash", details: "E. Okafor" });
+    const err = await refused(c.user_set_pin(client, { ...anyCaller, p_user_id: "00000000-0000-4000-8000-000000000002", p_pin: "1111" }), "initials_clash");
+    expect(err.detail).toBe("E. Okafor");
+  });
+
+  it("a key raised with the wrong SQLSTATE — a forgotten `using errcode` answers P0001 — is rpc_failed, not a refusal", async () => {
+    const client = postgrestError({ code: "P0001", message: "pin_clash" });
+    const err = await failed(c.user_set_pin(client, { ...anyCaller, p_user_id: "00000000-0000-4000-8000-000000000002", p_pin: "1111" }));
+    expect(err.code).toBe("rpc_failed");
+  });
+});
+
+describe("E-01 d26, M-04 d28 — a demotion to Employee clears the PIN, so a promotion back sets a new one, clash-checked (finding 2)", () => {
+  it("JM demoted, KM given 2222 at A, JM promoted back: no PIN refused, 2222 a clash, a fresh one accepted — and 2222 still names KM", async () => {
+    const w = await world();
+    await c.user_change_role(w.owner, { ...w.asOwner, p_user_id: w.jm.user_id, p_role: "employee", p_email: null, p_pin: null });
+    expect(w.root.inspect().log.filter((l) => l.subject_id === w.jm.user_id && l.action === "pin_cleared")).toHaveLength(1);
+    const km = await c.user_add(w.owner, { ...w.asOwner, p_display_name: "K. Moreau", p_initials: "KM", p_role: "manager", p_email: "km@example.test", p_store_ids: [w.A.store_id], p_pin: "2222" });
+    const back = { ...w.asOwner, p_user_id: w.jm.user_id, p_role: "manager" as const, p_email: null };
+    await refused(c.user_change_role(w.owner, { ...back, p_pin: null }), "pin_required");
+    await refused(c.user_change_role(w.owner, { ...back, p_pin: "2222" }), "pin_clash");
+    await expect(c.user_change_role(w.owner, { ...back, p_pin: "6666" })).resolves.toMatchObject({ user_id: w.jm.user_id });
+    await expect(c.manager_authorize_pin(w.storeA, { p_pin: "2222", p_terminal_id: w.t1 })).resolves.toMatchObject({ user_id: km.user_id });
+  });
+});
+
+describe("E-01 d26 — reactivation refuses a PIN another Manager took meanwhile (finding 3; the remedy is a placeholder, M-04 d19 covers initials only)", () => {
+  it("JM deactivated, KM given 2222 at A, JM's reactivation refused as a PIN clash", async () => {
+    const w = await world();
+    await c.user_deactivate(w.owner, { ...w.asOwner, p_user_id: w.jm.user_id });
+    await c.user_add(w.owner, { ...w.asOwner, p_display_name: "K. Moreau", p_initials: "KM", p_role: "manager", p_email: "km@example.test", p_store_ids: [w.A.store_id], p_pin: "2222" });
+    await refused(c.user_reactivate(w.owner, { ...w.asOwner, p_user_id: w.jm.user_id, p_initials: null }), "pin_clash");
+  });
+});
+
+describe("M-04 d27 — an Employee or a Manager holds at least one Store, so a demotion of an Owner holding none is refused (finding 4)", () => {
+  it("an Owner with no Store can be demoted to neither Manager nor Employee", async () => {
+    const w = await world();
+    const ao = await c.user_add(w.owner, { ...w.asOwner, p_display_name: "A. Okoye", p_initials: "AO", p_role: "owner", p_email: "ao@example.test", p_store_ids: [], p_pin: null });
+    await c.user_set_pin(w.owner, { ...w.asOwner, p_user_id: ao.user_id, p_pin: "5555" });
+    for (const to of ["manager", "employee"] as const) {
+      const err = await refused(c.user_change_role(w.owner, { ...w.asOwner, p_user_id: ao.user_id, p_role: to, p_email: null, p_pin: null }), "invalid_state");
+      expect(err.detail).toBe("no_store");
+    }
+  });
+});
+
+describe("A-113 — an actor argument is verified or absent: a personal session refuses non-null p_actor_initials (finding 6)", () => {
+  it("the Owner's call with initials on a personal session is refused", async () => {
+    const w = await world();
+    await refused(c.user_add(w.owner, { ...w.asOwner, p_actor_initials: "MC", ...employee("K. Park", "KP", [w.A.store_id]) }), "actor_mismatch");
+  });
+});
+
+describe("A-94 — the refused PIN's record and the flag carry the request id and the principal (finding 7)", () => {
+  it("five refusals: each refusal row and the closing flag are correlated and attributed to the store session", async () => {
+    const w = await world();
+    for (let i = 0; i < 5; i++) await refused(c.user_add(w.storeA, { ...w.atA(w.t1, "9999"), ...employee(`K. Park ${i}`, `K${i}`, [w.A.store_id]) }), "pin_refused");
+    const s = w.root.inspect();
+    expect(s.pinRefusals).toHaveLength(5);
+    for (const r of s.pinRefusals) expect(r).toMatchObject({ principal: "store", request_id: expect.stringMatching(UUID) });
+    expect(s.flags).toHaveLength(1);
+    expect(s.flags[0]).toMatchObject({ principal: "store", request_id: expect.stringMatching(UUID) });
+  });
+});
+
+describe("A-117 — a passkey enrolment is recorded through auth_user_link, and users.passkey_enrolled_at says a person has enrolled (finding 9)", () => {
+  it("the passkey kind asserts the row's Auth user, sets passkey_enrolled_at once, and logs each enrolment", async () => {
+    const w = await world();
+    const service = w.root.withSession(serviceSession);
+    const auth = crypto.randomUUID();
+    // Not linked yet: there is no Auth user to compare against.
+    await refused(c.auth_user_link(service, { p_kind: "passkey", p_row_id: w.jm.user_id, p_auth_user_id: auth }), "invalid_state");
+    await c.auth_user_link(service, { p_kind: "user", p_row_id: w.jm.user_id, p_auth_user_id: auth });
+    await refused(c.auth_user_link(service, { p_kind: "passkey", p_row_id: w.jm.user_id, p_auth_user_id: crypto.randomUUID() }), "invalid_state");
+    await expect(c.auth_user_link(service, { p_kind: "passkey", p_row_id: w.jm.user_id, p_auth_user_id: auth })).resolves.toEqual({ kind: "passkey", row_id: w.jm.user_id });
+    const first = w.root.inspect().users.find((u) => u.user_id === w.jm.user_id)!.passkey_enrolled_at;
+    expect(first).toBe(T0.toISOString());
+    w.clock.advance(60);
+    await c.auth_user_link(service, { p_kind: "passkey", p_row_id: w.jm.user_id, p_auth_user_id: auth });
+    // "has enrolled at least once": the first enrolment's time stands.
+    expect(w.root.inspect().users.find((u) => u.user_id === w.jm.user_id)!.passkey_enrolled_at).toBe(first);
+    expect(w.root.inspect().log.filter((l) => l.subject_id === w.jm.user_id && l.action === "passkey_enrolled")).toHaveLength(2);
+  });
+
+  it("the fake has no test-only enrolment hook: enrolment goes through the write surface", async () => {
+    const w = await world();
+    expect("enrolPasskey" in w.root).toBe(false);
+  });
+
+  it("an enrolment session reaches no function: no tenant for the Organization's, no role for an S function or the service role's", async () => {
+    const w = await world();
+    const enrolling = w.root.withSession({ principal: "enrolment", org_id: null, store_id: null, user_id: w.jm.user_id, terminal_id: null });
+    await refused(c.user_add(enrolling, { ...w.asOwner, ...employee("K. Park", "KP", [w.A.store_id]) }), "no_tenant");
+    await refused(c.owner_reset_request(enrolling, { p_actor_user_id: SYSADMIN, p_org_id: w.org.org_id, p_user_id: w.ownerId }), "role_refused");
+    await refused(c.auth_user_link(enrolling, { p_kind: "passkey", p_row_id: w.jm.user_id, p_auth_user_id: crypto.randomUUID() }), "role_refused");
+  });
+});
+
+describe("A-118 — a Server Action takes the invite's address from the function's return, never from a table (finding 10)", () => {
+  it("a promotion with the email already on file returns it; a demotion returns none", async () => {
+    const w = await world();
+    const lp = await c.user_add(w.owner, { ...w.asOwner, ...employee("L. Park", "LP", [w.A.store_id], "lp@example.test") });
+    await expect(c.user_change_role(w.owner, { ...w.asOwner, p_user_id: lp.user_id, p_role: "manager", p_email: null, p_pin: "4444" })).resolves.toEqual({ user_id: lp.user_id, invite: true, email: "lp@example.test" });
+    await expect(c.user_change_role(w.owner, { ...w.asOwner, p_user_id: lp.user_id, p_role: "employee", p_email: null, p_pin: null })).resolves.toEqual({ user_id: lp.user_id, invite: false, email: null });
+  });
+
+  it("owner_recover's output carries the email too (its success paths cannot be built through the write surface — order Evidence row 25)", () => {
+    expect(Object.keys(c.OwnerRecoverOutput.shape).sort()).toEqual(["email", "invite", "user_id"]);
   });
 });
 

@@ -17,7 +17,13 @@ export type { FakeSnapshot } from "./state";
 
 /** §5.4's claim shape, which the fake reads where the database reads the JWT (A-87). */
 export interface FakeSession {
-  principal: "store" | "person" | "sysadmin" | "service";
+  /**
+   * `enrolment` is A-117's: a person signed in by an invitation or re-enrolment
+   * link, with a null org_id and store_id, so it reaches no function. `service`
+   * stands for the Postgres role service_role, which A-113 has auth_user_link
+   * assert — it is not a claim the access-token hook mints.
+   */
+  principal: "store" | "person" | "sysadmin" | "service" | "enrolment";
   org_id: string | null;
   store_id: string | null;
   /** users.id on a personal session; null otherwise. */
@@ -44,12 +50,6 @@ export interface FakeClient extends WaxClient {
   withSession(session: FakeSession | null): FakeClient;
   /** A copy of what the fake holds, for a test to assert on. No PIN is in it (A-93). */
   inspect(): FakeSnapshot;
-  /**
-   * Stands in for the person completing their invitation with a passkey
-   * (E-01 d35). The database's means of knowing it is not yet decided — see the
-   * M1 contracts order's Needs a human.
-   */
-  enrolPasskey(user_id: string): void;
 }
 
 const handlers: Record<string, Handler> = { ...identityHandlers };
@@ -65,11 +65,6 @@ function bind(state: FakeState, now: () => Date, session: FakeSession | null): F
     session,
     withSession: (next) => bind(state, now, next),
     inspect: () => snapshot(state),
-    enrolPasskey(user_id) {
-      const u = state.tx.users.find((x) => x.user_id === user_id);
-      if (!u) throw new Error(`no user ${user_id}`);
-      u.enrolled = true;
-    },
     async rpc(fn, args) {
       const handler = handlers[fn];
       if (!handler) throw new RpcRefusal(fn, "not_implemented", "not_implemented");
