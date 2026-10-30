@@ -51,6 +51,11 @@ _Written by reviewers (`qa-reviewer`, `architect`), 2026-10-29, against `contrac
 | 8 | qa-reviewer | M-04 d47 | — | Not specified: what the screen does when a resubmitted PIN is refused `pin_not_needed` because the clash went away between the prompt and the resubmit | open question | M-04 (Needs a human) |
 | 9 | qa-reviewer | register | `docs/qa/e2e-register.md` | No row asserts M-04 d40, d44, d46 or d47; M-04-T3 (d19) still holds | non-blocking | `/qa register M-04` |
 | 10 | architect | M-04 d35, d47 | `fake/identity.ts:375` | A Manager with no PIN — a state d35 forbids but the fake does not rule out — would reactivate with none, any `p_pin` refused as not needed. Should be unreachable; untested | observation | |
+| 11 | `/code-review` | — | `fake/identity.ts:317` | The Owner floor's `u.active &&` is dead since d46's check precedes it (finding 5's second half, as cleanup) | observation (cleanup) | |
+| 12 | `/code-review` | M-04 d47 | `fake/identity.ts:381` | `before.active` in reactivation's log is always `false` now; written as data, it reads as though a reactivation could start active | observation (cleanup) | |
+| 13 | `/code-review` | — | `fake/identity.ts:385` | Setting a PIN and logging `pin_set` is still written out in three handlers (the M1-contracts-2 order's finding 14) | observation (cleanup) | |
+
+_`/code-review`, 2026-10-29, against #208 at `83bc615`: nothing blocking; its other four findings are 10 (the PIN-less Manager), 5 (the same-role call), 7 (Set PIN on a deactivated person) and 6 (the `invalid_state` details)._
 
 ## Verdict
 
