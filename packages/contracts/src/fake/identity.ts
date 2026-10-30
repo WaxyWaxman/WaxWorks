@@ -303,6 +303,8 @@ export const identityHandlers: Record<string, Handler> = {
     if (to !== "owner" && u.store_ids.length === 0) x.refuse("invalid_state", "no_store");
     const email = (x.args.p_email as string | null) ?? u.email;
     const pin = x.args.p_pin as string | null;
+    // Employees have no PIN (M-04 d28): refused as user_add refuses it. The key is a placeholder (invalid_state).
+    if (to === "employee" && pin !== null) x.refuse("invalid_state", "employee_has_no_pin");
     if (to !== "employee") {
       if (!email) x.refuse("email_required");
       const holdsPin = x.tx.pins.has(u.user_id);
@@ -311,15 +313,20 @@ export const identityHandlers: Record<string, Handler> = {
     }
     // A-117: a promotion's invite only while passkey_enrolled_at is null.
     const invite = to !== "employee" && from === "employee" && u.passkey_enrolled_at === null;
-    const before = { role: from };
+    // M-04 d33's log names the address: a changed email is logged before and after,
+    // and the invite row names where it went (identity data, A-93).
+    const emailChanged = email !== u.email;
+    const before = emailChanged ? { role: from, email: u.email } : { role: from };
+    const after = emailChanged ? { role: to, email } : { role: to };
     u.role = to;
     u.email = email;
     if (pin !== null && to !== "employee") { x.tx.pins.set(u.user_id, pin); x.log("users.log", u.user_id, "pin_set", who); }
-    // M-04 d28: Employees have no PIN — a demotion clears it, so a promotion back
-    // sets a fresh one, which is clash-checked (finding 2; GimpyMatey, 2026-10-13).
+    // A demotion clears the PIN, so a promotion back sets a fresh one, clash-checked
+    // (finding 2). Decided by sr-talbot 2026-10-29 from M-04 d28's "Employees have
+    // no PIN"; not yet an M-04 row — /flow-clarify M-04 records it.
     if (to === "employee" && x.tx.pins.delete(u.user_id)) x.log("users.log", u.user_id, "pin_cleared", who);
-    x.log("users.log", u.user_id, "role_changed", who, { before, after: { role: to } });
-    if (invite) x.log("users.log", u.user_id, "invite_sent", who);
+    x.log("users.log", u.user_id, "role_changed", who, { before, after });
+    if (invite) x.log("users.log", u.user_id, "invite_sent", who, { after: { email } });
     // A-118: the Server Action sends the invite to the address returned here.
     return { user_id: u.user_id, invite, email: invite ? email : null };
   }),
@@ -345,7 +352,8 @@ export const identityHandlers: Record<string, Handler> = {
     // M-04 d19 covers initials only; refusing is the one reading that breaks no
     // decided rule (finding 3).
     const pin = x.tx.pins.get(u.user_id);
-    if (u.role !== "employee" && pin) for (const st of u.store_ids) x.pinClash(st, pin, u.user_id, null);
+    // Logged as every refused PIN clash on an existing row is (M-04 d32).
+    if (u.role !== "employee" && pin) for (const st of u.store_ids) x.pinClash(st, pin, u.user_id, who);
     const before = { active: u.active, initials: u.initials };
     u.active = true;
     u.initials = initials;

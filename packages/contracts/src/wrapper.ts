@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { ContractError, NotImplementedError, RpcRefusal, type WaxClient } from "./client";
+import { ContractError, NotImplementedError, RpcFailure, RpcRefusal, type WaxClient } from "./client";
 import { FUNCTIONS } from "./functions";
 
 /** Four digits, exactly (A-89, E-01 d26). Never echoed: a refusal names no PIN (A-93). */
@@ -93,7 +93,10 @@ export function contract<I extends z.ZodTypeAny, O extends z.ZodTypeAny>(fn: str
       if (e instanceof RpcRefusal) {
         throw new ContractError(fn, { code: e.code, key: e.key, request_id, detail: e.detail, details: e.details });
       }
-      throw new ContractError(fn, { code: "rpc_failed", request_id, message: "the call did not complete", details: e });
+      // The key is always rpc_failed; the code keeps the failure's class where
+      // the client has one (PGRST301 is an expired session, M1 order finding 15).
+      const code = e instanceof RpcFailure && e.code ? e.code : "rpc_failed";
+      throw new ContractError(fn, { code, key: "rpc_failed", request_id, message: "the call did not complete", details: e });
     }
     const out = output.safeParse(result);
     if (!out.success) {

@@ -582,7 +582,8 @@ describe("A-93, conventions §5 — the real client takes an error for a refusal
   it("a genuine not-null violation is rpc_failed, and its DETAIL reaches neither key, message nor detail", async () => {
     const client = postgrestError({ code: "23502", message: "null value in column \"org_id\" of relation \"user_pins\" violates not-null constraint", details: "Failing row contains (9d1f, null, $argon2id$1111)." });
     const err = await failed(c.user_set_pin(client, { ...anyCaller, p_user_id: "00000000-0000-4000-8000-000000000002", p_pin: "1111" }));
-    expect({ code: err.code, key: err.key, detail: err.detail }).toEqual({ code: "rpc_failed", key: "rpc_failed", detail: undefined });
+    // The key says failure; the code keeps the class (A-93 permits it), never the text.
+    expect({ code: err.code, key: err.key, detail: err.detail }).toEqual({ code: "23502", key: "rpc_failed", detail: undefined });
     const { details: _raw, ...carried } = { ...err, message: err.message };
     expect(JSON.stringify(carried)).not.toMatch(/Failing row|user_pins|argon2/);
   });
@@ -596,11 +597,26 @@ describe("A-93, conventions §5 — the real client takes an error for a refusal
   it("a key raised with the wrong SQLSTATE — a forgotten `using errcode` answers P0001 — is rpc_failed, not a refusal", async () => {
     const client = postgrestError({ code: "P0001", message: "pin_clash" });
     const err = await failed(c.user_set_pin(client, { ...anyCaller, p_user_id: "00000000-0000-4000-8000-000000000002", p_pin: "1111" }));
-    expect(err.code).toBe("rpc_failed");
+    expect({ code: err.code, key: err.key }).toEqual({ code: "P0001", key: "rpc_failed" });
+  });
+
+  it("an expired session's PGRST301 is a failure whose code still says so (M1 order finding 15)", async () => {
+    const client = postgrestError({ code: "PGRST301", message: "JWT expired" });
+    const err = await failed(c.user_set_pin(client, { ...anyCaller, p_user_id: "00000000-0000-4000-8000-000000000002", p_pin: "1111" }));
+    expect({ code: err.code, key: err.key }).toEqual({ code: "PGRST301", key: "rpc_failed" });
+  });
+
+  it("M-04 d32 — a DETAIL on a refusal whose row names none is dropped: a pin_clash cannot name the holder (M1 order finding 17)", async () => {
+    const client = postgrestError({ code: "23505", message: "pin_clash", details: "J. Mbeki" });
+    const err = await refused(c.user_set_pin(client, { ...anyCaller, p_user_id: "00000000-0000-4000-8000-000000000002", p_pin: "1111" }), "pin_clash");
+    expect(err.detail).toBeUndefined();
+    expect(JSON.stringify({ ...err, message: err.message })).not.toContain("Mbeki");
   });
 });
 
-describe("E-01 d26, M-04 d28 — a demotion to Employee clears the PIN, so a promotion back sets a new one, clash-checked (finding 2)", () => {
+// The rule is sr-talbot's, 2026-10-29, from M-04's "Employees have no PIN"; it is
+// not yet an M-04 decision row, so this names E-01 d26 only (M1 order finding 23).
+describe("E-01 d26 — a demotion to Employee clears the PIN, so a promotion back sets a new one, clash-checked (finding 2)", () => {
   it("JM demoted, KM given 2222 at A, JM promoted back: no PIN refused, 2222 a clash, a fresh one accepted — and 2222 still names KM", async () => {
     const w = await world();
     await c.user_change_role(w.owner, { ...w.asOwner, p_user_id: w.jm.user_id, p_role: "employee", p_email: null, p_pin: null });
@@ -612,6 +628,13 @@ describe("E-01 d26, M-04 d28 — a demotion to Employee clears the PIN, so a pro
     await expect(c.user_change_role(w.owner, { ...back, p_pin: "6666" })).resolves.toMatchObject({ user_id: w.jm.user_id });
     await expect(c.manager_authorize_pin(w.storeA, { p_pin: "2222", p_terminal_id: w.t1 })).resolves.toMatchObject({ user_id: km.user_id });
   });
+
+  it("a demotion given a PIN is refused, as user_add refuses one for an Employee (M1 order finding 16)", async () => {
+    const w = await world();
+    const err = await refused(c.user_change_role(w.owner, { ...w.asOwner, p_user_id: w.jm.user_id, p_role: "employee", p_email: null, p_pin: "4321" }), "invalid_state");
+    expect(err.detail).toBe("employee_has_no_pin");
+    expect(w.root.inspect().users.find((u) => u.user_id === w.jm.user_id)!.role).toBe("manager");
+  });
 });
 
 describe("E-01 d26 — reactivation refuses a PIN another Manager took meanwhile (finding 3; the remedy is a placeholder, M-04 d19 covers initials only)", () => {
@@ -620,6 +643,8 @@ describe("E-01 d26 — reactivation refuses a PIN another Manager took meanwhile
     await c.user_deactivate(w.owner, { ...w.asOwner, p_user_id: w.jm.user_id });
     await c.user_add(w.owner, { ...w.asOwner, p_display_name: "K. Moreau", p_initials: "KM", p_role: "manager", p_email: "km@example.test", p_store_ids: [w.A.store_id], p_pin: "2222" });
     await refused(c.user_reactivate(w.owner, { ...w.asOwner, p_user_id: w.jm.user_id, p_initials: null }), "pin_clash");
+    // M-04 d32: the refused clash is logged, against JM, and survives the refusal (M1 order finding 19).
+    expect(w.root.inspect().log.filter((l) => l.subject_id === w.jm.user_id && l.action === "pin_clash_refused")).toHaveLength(1);
   });
 });
 
@@ -693,6 +718,17 @@ describe("A-118 — a Server Action takes the invite's address from the function
     const lp = await c.user_add(w.owner, { ...w.asOwner, ...employee("L. Park", "LP", [w.A.store_id], "lp@example.test") });
     await expect(c.user_change_role(w.owner, { ...w.asOwner, p_user_id: lp.user_id, p_role: "manager", p_email: null, p_pin: "4444" })).resolves.toEqual({ user_id: lp.user_id, invite: true, email: "lp@example.test" });
     await expect(c.user_change_role(w.owner, { ...w.asOwner, p_user_id: lp.user_id, p_role: "employee", p_email: null, p_pin: null })).resolves.toEqual({ user_id: lp.user_id, invite: false, email: null });
+  });
+
+  it("M-04 d33 — a promotion that changes the email logs it before and after, and the invite row names the address (M1 order finding 14)", async () => {
+    const w = await world();
+    const lp = await c.user_add(w.owner, { ...w.asOwner, ...employee("L. Park", "LP", [w.A.store_id], "lp@example.test") });
+    await c.user_change_role(w.owner, { ...w.asOwner, p_user_id: lp.user_id, p_role: "manager", p_email: "lp.new@example.test", p_pin: "4444" });
+    const log = w.root.inspect().log.filter((l) => l.subject_id === lp.user_id);
+    expect(log.find((l) => l.action === "role_changed")).toMatchObject({
+      before: { role: "employee", email: "lp@example.test" }, after: { role: "manager", email: "lp.new@example.test" },
+    });
+    expect(log.find((l) => l.action === "invite_sent")).toMatchObject({ after: { email: "lp.new@example.test" } });
   });
 
   it("owner_recover's output carries the email too (its success paths cannot be built through the write surface — order Evidence row 25)", () => {
