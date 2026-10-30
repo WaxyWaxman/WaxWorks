@@ -87,6 +87,9 @@ async function enrol(root: FakeClient, user_id: string, auth_user_id: string = c
   return auth_user_id;
 }
 
+/** No staff session open on the terminal: A-120's pair, null together. */
+const noStaff = { p_actor_user_id: null, p_actor_initials: null };
+
 const employee = (p_display_name: string, p_initials: string, stores: string[], p_email: string | null = null) =>
   ({ p_display_name, p_initials, p_role: "employee" as const, p_email, p_store_ids: stores, p_pin: null });
 
@@ -208,20 +211,20 @@ describe("E-01 d31 — five wrong PINs within fifteen minutes, across the Store'
 describe("E-01 d32 — the PIN pad checks a PIN by itself under decision 31's throttle", () => {
   it("manager_authorize_pin names the one holder at this Store, or refuses naming nobody", async () => {
     const w = await world();
-    await expect(c.manager_authorize_pin(w.storeA, { p_pin: "2222", p_terminal_id: w.t1 })).resolves.toEqual({ user_id: w.jm.user_id, display_name: "J. Mbeki", role: "manager" });
-    await refused(c.manager_authorize_pin(w.storeA, { p_pin: "4321", p_terminal_id: w.t1 }), "pin_refused");
+    await expect(c.manager_authorize_pin(w.storeA, { p_pin: "2222", p_terminal_id: w.t1, ...noStaff })).resolves.toEqual({ user_id: w.jm.user_id, display_name: "J. Mbeki", role: "manager" });
+    await refused(c.manager_authorize_pin(w.storeA, { p_pin: "4321", p_terminal_id: w.t1, ...noStaff }), "pin_refused");
   });
 
   it("three refusals at manager_authorize_pin and two at user_set_pin close the line", async () => {
     const w = await world();
-    for (const pin of ["9001", "9002", "9003"]) await refused(c.manager_authorize_pin(w.storeA, { p_pin: pin, p_terminal_id: w.t1 }), "pin_refused");
+    for (const pin of ["9001", "9002", "9003"]) await refused(c.manager_authorize_pin(w.storeA, { p_pin: pin, p_terminal_id: w.t1, ...noStaff }), "pin_refused");
     for (const pin of ["9004", "9005"]) await refused(c.user_set_pin(w.storeA, { ...w.atA(w.t2, pin), p_user_id: w.jm.user_id, p_pin: "2468" }), "pin_refused");
-    await refused(c.manager_authorize_pin(w.storeA, { p_pin: "2222", p_terminal_id: w.t1 }), "pin_line_closed");
+    await refused(c.manager_authorize_pin(w.storeA, { p_pin: "2222", p_terminal_id: w.t1, ...noStaff }), "pin_line_closed");
   });
 
   it("the pad checks on a store session only", async () => {
     const w = await world();
-    await refused(c.manager_authorize_pin(w.owner, { p_pin: "1111", p_terminal_id: w.t1 }), "role_refused");
+    await refused(c.manager_authorize_pin(w.owner, { p_pin: "1111", p_terminal_id: w.t1, ...noStaff }), "role_refused");
   });
 });
 
@@ -306,7 +309,7 @@ describe("M-04 d37 — a Manager may deactivate, reactivate or correct an Employ
     const asJm = w.atA(w.t1, "2222");
     await expect(c.user_correct(w.storeA, { ...asJm, p_user_id: w.yn.user_id, p_display_name: "Yuki Nakamura" })).resolves.toBeTruthy();
     await expect(c.user_deactivate(w.storeA, { ...{ ...asJm, p_actor_user_id: w.jm.user_id, p_actor_initials: "JM" }, p_user_id: w.yn.user_id })).resolves.toBeTruthy();
-    await expect(c.user_reactivate(w.storeA, { ...{ ...asJm, p_actor_user_id: w.jm.user_id, p_actor_initials: "JM" }, p_user_id: w.yn.user_id, p_initials: null })).resolves.toBeTruthy();
+    await expect(c.user_reactivate(w.storeA, { ...{ ...asJm, p_actor_user_id: w.jm.user_id, p_actor_initials: "JM" }, p_user_id: w.yn.user_id, p_initials: null, p_pin: null })).resolves.toBeTruthy();
     await refused(c.user_assign(w.storeA, { ...asJm, p_user_id: w.yn.user_id, p_store_id: C.store_id }), "role_refused");
     await refused(c.user_unassign(w.storeA, { ...asJm, p_user_id: w.yn.user_id, p_store_id: w.B.store_id }), "role_refused");
     await refused(c.user_deactivate(w.storeA, { ...asJm, p_user_id: eo.user_id }), "role_refused");
@@ -614,9 +617,7 @@ describe("A-93, conventions §5 — the real client takes an error for a refusal
   });
 });
 
-// The rule is sr-talbot's, 2026-10-29, from M-04's "Employees have no PIN"; it is
-// not yet an M-04 decision row, so this names E-01 d26 only (M1 order finding 23).
-describe("E-01 d26 — a demotion to Employee clears the PIN, so a promotion back sets a new one, clash-checked (finding 2)", () => {
+describe("M-04 d39, E-01 d26 — a demotion to Employee clears the PIN, so a promotion back sets a new one, clash-checked (finding 2)", () => {
   it("JM demoted, KM given 2222 at A, JM promoted back: no PIN refused, 2222 a clash, a fresh one accepted — and 2222 still names KM", async () => {
     const w = await world();
     await c.user_change_role(w.owner, { ...w.asOwner, p_user_id: w.jm.user_id, p_role: "employee", p_email: null, p_pin: null });
@@ -626,10 +627,10 @@ describe("E-01 d26 — a demotion to Employee clears the PIN, so a promotion bac
     await refused(c.user_change_role(w.owner, { ...back, p_pin: null }), "pin_required");
     await refused(c.user_change_role(w.owner, { ...back, p_pin: "2222" }), "pin_clash");
     await expect(c.user_change_role(w.owner, { ...back, p_pin: "6666" })).resolves.toMatchObject({ user_id: w.jm.user_id });
-    await expect(c.manager_authorize_pin(w.storeA, { p_pin: "2222", p_terminal_id: w.t1 })).resolves.toMatchObject({ user_id: km.user_id });
+    await expect(c.manager_authorize_pin(w.storeA, { p_pin: "2222", p_terminal_id: w.t1, ...noStaff })).resolves.toMatchObject({ user_id: km.user_id });
   });
 
-  it("a demotion given a PIN is refused, as user_add refuses one for an Employee (M1 order finding 16)", async () => {
+  it("M-04 d39 — a demotion given a PIN is refused, as user_add refuses one for an Employee", async () => {
     const w = await world();
     const err = await refused(c.user_change_role(w.owner, { ...w.asOwner, p_user_id: w.jm.user_id, p_role: "employee", p_email: null, p_pin: "4321" }), "invalid_state");
     expect(err.detail).toBe("employee_has_no_pin");
@@ -637,12 +638,12 @@ describe("E-01 d26 — a demotion to Employee clears the PIN, so a promotion bac
   });
 });
 
-describe("E-01 d26 — reactivation refuses a PIN another Manager took meanwhile (finding 3; the remedy is a placeholder, M-04 d19 covers initials only)", () => {
+describe("M-04 d40, E-01 d26 — reactivation without a new PIN refuses one another Manager took meanwhile (finding 3)", () => {
   it("JM deactivated, KM given 2222 at A, JM's reactivation refused as a PIN clash", async () => {
     const w = await world();
     await c.user_deactivate(w.owner, { ...w.asOwner, p_user_id: w.jm.user_id });
     await c.user_add(w.owner, { ...w.asOwner, p_display_name: "K. Moreau", p_initials: "KM", p_role: "manager", p_email: "km@example.test", p_store_ids: [w.A.store_id], p_pin: "2222" });
-    await refused(c.user_reactivate(w.owner, { ...w.asOwner, p_user_id: w.jm.user_id, p_initials: null }), "pin_clash");
+    await refused(c.user_reactivate(w.owner, { ...w.asOwner, p_user_id: w.jm.user_id, p_initials: null, p_pin: null }), "pin_clash");
     // M-04 d32: the refused clash is logged, against JM, and survives the refusal (M1 order finding 19).
     expect(w.root.inspect().log.filter((l) => l.subject_id === w.jm.user_id && l.action === "pin_clash_refused")).toHaveLength(1);
   });
@@ -720,7 +721,7 @@ describe("A-118 — a Server Action takes the invite's address from the function
     await expect(c.user_change_role(w.owner, { ...w.asOwner, p_user_id: lp.user_id, p_role: "employee", p_email: null, p_pin: null })).resolves.toEqual({ user_id: lp.user_id, invite: false, email: null });
   });
 
-  it("M-04 d33 — a promotion that changes the email logs it before and after, and the invite row names the address (M1 order finding 14)", async () => {
+  it("M-04 d42 — a promotion that changes the email logs it before and after, and the invite row names the address", async () => {
     const w = await world();
     const lp = await c.user_add(w.owner, { ...w.asOwner, ...employee("L. Park", "LP", [w.A.store_id], "lp@example.test") });
     await c.user_change_role(w.owner, { ...w.asOwner, p_user_id: lp.user_id, p_role: "manager", p_email: "lp.new@example.test", p_pin: "4444" });
@@ -739,3 +740,129 @@ describe("A-118 — a Server Action takes the invite's address from the function
 function pascal(s: string) {
   return s.replace(/(^|_)([a-z0-9])/g, (_, __, ch: string) => ch.toUpperCase());
 }
+
+// ── M1 contracts, second pull request (orders/M1-contracts-2.md) ─────────────
+
+describe("A-120 — manager_authorize_pin takes the staff session's actor beside the PIN; it attributes and never authorizes", () => {
+  it("a verified pair is recorded on a refused PIN's row", async () => {
+    const w = await world();
+    await refused(c.manager_authorize_pin(w.storeA, { p_pin: "4321", p_terminal_id: w.t1, p_actor_user_id: w.yn.user_id, p_actor_initials: "YN" }), "pin_refused");
+    expect(w.root.inspect().pinRefusals.at(-1)).toMatchObject({ terminal_id: w.t1, staff_user_id: w.yn.user_id });
+  });
+
+  it("no staff session open: both null, and the record says none", async () => {
+    const w = await world();
+    await refused(c.manager_authorize_pin(w.storeA, { p_pin: "4321", p_terminal_id: w.t1, ...noStaff }), "pin_refused");
+    expect(w.root.inspect().pinRefusals.at(-1)).toMatchObject({ staff_user_id: null });
+  });
+
+  it("a pair that does not verify is actor_mismatch before the PIN is checked, so it neither counts nor reaches the record", async () => {
+    const w = await world();
+    const eo = await c.user_add(w.owner, { ...w.asOwner, ...employee("E. Ouellet", "EO", [w.B.store_id]) });
+    for (let i = 0; i < 6; i++) {
+      await refused(c.manager_authorize_pin(w.storeA, { p_pin: "4321", p_terminal_id: w.t1, p_actor_user_id: eo.user_id, p_actor_initials: "EO" }), "actor_mismatch");
+    }
+    expect(w.root.inspect().pinRefusals).toHaveLength(0);
+    // The line is still open: six attempts that never reached the PIN closed nothing.
+    await expect(c.manager_authorize_pin(w.storeA, { p_pin: "2222", p_terminal_id: w.t1, ...noStaff })).resolves.toMatchObject({ user_id: w.jm.user_id });
+  });
+
+  it("one of the pair without the other is invalid_input", async () => {
+    const w = await world();
+    const err = await failed(c.manager_authorize_pin(w.storeA, { p_pin: "2222", p_terminal_id: w.t1, p_actor_user_id: w.yn.user_id, p_actor_initials: null }));
+    expect(err.code).toBe("invalid_input");
+  });
+
+  it("the PIN alone decides whom it names: the staff session's actor is not the result", async () => {
+    const w = await world();
+    await expect(c.manager_authorize_pin(w.storeA, { p_pin: "2222", p_terminal_id: w.t1, p_actor_user_id: w.yn.user_id, p_actor_initials: "YN" }))
+      .resolves.toEqual({ user_id: w.jm.user_id, display_name: "J. Mbeki", role: "manager" });
+  });
+});
+
+describe("M-04 d40 — reactivation prompts for a new PIN when a Manager's has been given to someone else at one of their Stores", () => {
+  async function jmAwayAndTaken() {
+    const w = await world();
+    await c.user_deactivate(w.owner, { ...w.asOwner, p_user_id: w.jm.user_id });
+    const km = await c.user_add(w.owner, { ...w.asOwner, p_display_name: "K. Moreau", p_initials: "KM", p_role: "manager", p_email: "km@example.test", p_store_ids: [w.A.store_id], p_pin: "2222" });
+    return { w, km };
+  }
+
+  it("no PIN given on a clash: refused unnamed, and logged (M-04 d32)", async () => {
+    const { w } = await jmAwayAndTaken();
+    const err = await refused(c.user_reactivate(w.owner, { ...w.asOwner, p_user_id: w.jm.user_id, p_initials: null, p_pin: null }), "pin_clash");
+    expect(err.detail).toBeUndefined();
+    expect(w.root.inspect().log.filter((l) => l.subject_id === w.jm.user_id && l.action === "pin_clash_refused")).toHaveLength(1);
+  });
+
+  it("a fresh PIN reactivates with it, in one act; the new PIN names JM and 2222 still names KM", async () => {
+    const { w, km } = await jmAwayAndTaken();
+    await expect(c.user_reactivate(w.owner, { ...w.asOwner, p_user_id: w.jm.user_id, p_initials: null, p_pin: "7777" })).resolves.toEqual({ user_id: w.jm.user_id });
+    await expect(c.manager_authorize_pin(w.storeA, { p_pin: "7777", p_terminal_id: w.t1, ...noStaff })).resolves.toMatchObject({ user_id: w.jm.user_id });
+    await expect(c.manager_authorize_pin(w.storeA, { p_pin: "2222", p_terminal_id: w.t1, ...noStaff })).resolves.toMatchObject({ user_id: km.user_id });
+    // Logged as changed, never as a value (M-04 d28).
+    const log = w.root.inspect().log.filter((l) => l.subject_id === w.jm.user_id);
+    expect(log.map((l) => l.action)).toEqual(expect.arrayContaining(["pin_set", "reactivated"]));
+    expect(JSON.stringify(log)).not.toContain("7777");
+  });
+
+  it("a new PIN that clashes too is refused", async () => {
+    const { w } = await jmAwayAndTaken();
+    await refused(c.user_reactivate(w.owner, { ...w.asOwner, p_user_id: w.jm.user_id, p_initials: null, p_pin: "2222" }), "pin_clash");
+  });
+
+  it("a PIN given for an Employee's reactivation is refused, as at Add (M-04 d28)", async () => {
+    const w = await world();
+    await c.user_deactivate(w.owner, { ...w.asOwner, p_user_id: w.yn.user_id });
+    const err = await refused(c.user_reactivate(w.owner, { ...w.asOwner, p_user_id: w.yn.user_id, p_initials: null, p_pin: "7777" }), "invalid_state");
+    expect(err.detail).toBe("employee_has_no_pin");
+  });
+});
+
+describe("M-04 d43 — any promotion into Manager or Owner invites someone who has never enrolled, Manager to Owner included", () => {
+  it("a never-enrolled Manager promoted to Owner is invited, with the address; an enrolled one is not", async () => {
+    const w = await world();
+    await expect(c.user_change_role(w.owner, { ...w.asOwner, p_user_id: w.jm.user_id, p_role: "owner", p_email: null, p_pin: null }))
+      .resolves.toEqual({ user_id: w.jm.user_id, invite: true, email: "jm@example.test" });
+    const km = await c.user_add(w.owner, { ...w.asOwner, p_display_name: "K. Moreau", p_initials: "KM", p_role: "manager", p_email: "km@example.test", p_store_ids: [w.A.store_id], p_pin: "3333" });
+    await enrol(w.root, km.user_id);
+    await expect(c.user_change_role(w.owner, { ...w.asOwner, p_user_id: km.user_id, p_role: "owner", p_email: null, p_pin: null }))
+      .resolves.toEqual({ user_id: km.user_id, invite: false, email: null });
+  });
+
+  it("a demotion never invites", async () => {
+    const w = await world();
+    await c.user_change_role(w.owner, { ...w.asOwner, p_user_id: w.jm.user_id, p_role: "owner", p_email: null, p_pin: null });
+    await expect(c.user_change_role(w.owner, { ...w.asOwner, p_user_id: w.jm.user_id, p_role: "manager", p_email: null, p_pin: null }))
+      .resolves.toMatchObject({ invite: false, email: null });
+  });
+});
+
+describe("M-04 d44 — a promotion, Send reset and Re-send invite are refused for a deactivated Manager or Owner; reactivate first", () => {
+  it("each of the three refused while JM is deactivated, and accepted after reactivation", async () => {
+    const w = await world();
+    await c.user_deactivate(w.owner, { ...w.asOwner, p_user_id: w.jm.user_id });
+    const acts = {
+      promote: () => c.user_change_role(w.owner, { ...w.asOwner, p_user_id: w.jm.user_id, p_role: "owner", p_email: null, p_pin: null }),
+      reset: () => c.user_reset_request(w.owner, { ...w.asOwner, p_user_id: w.jm.user_id }),
+      resend: () => c.user_invite_resend(w.owner, { ...w.asOwner, p_user_id: w.jm.user_id }),
+    };
+    for (const act of Object.values(acts)) {
+      const err = await refused(act(), "invalid_state");
+      expect(err.detail).toBe("inactive");
+    }
+    await c.user_reactivate(w.owner, { ...w.asOwner, p_user_id: w.jm.user_id, p_initials: null, p_pin: null });
+    for (const act of [acts.resend, acts.reset, acts.promote]) await expect(act()).resolves.toBeTruthy();
+  });
+});
+
+describe("M-04 d41 — a Manager may set the PIN of a Manager or Owner who shares any one of the Manager's Stores", () => {
+  it("JM (Manager at A) sets the PIN of an Owner at A and B, and is refused for an Owner at B only", async () => {
+    const w = await world();
+    const both = await c.user_add(w.owner, { ...w.asOwner, p_display_name: "A. Okoye", p_initials: "AO", p_role: "owner", p_email: "ao@example.test", p_store_ids: [w.A.store_id, w.B.store_id], p_pin: "5555" });
+    const bOnly = await c.user_add(w.owner, { ...w.asOwner, p_display_name: "B. Osei", p_initials: "BO", p_role: "owner", p_email: "bo@example.test", p_store_ids: [w.B.store_id], p_pin: "5656" });
+    await expect(c.user_set_pin(w.storeA, { ...w.atA(w.t1, "2222"), p_user_id: both.user_id, p_pin: "5757" })).resolves.toEqual({ user_id: both.user_id });
+    const err = await refused(c.user_set_pin(w.storeA, { ...w.atA(w.t1, "2222"), p_user_id: bOnly.user_id, p_pin: "5858" }), "role_refused");
+    expect(err.detail).toBe("owner");
+  });
+});

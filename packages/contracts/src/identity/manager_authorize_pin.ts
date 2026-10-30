@@ -4,12 +4,19 @@
 // naming nobody. A lookup that opens an area and authorizes no write — every
 // M / O function resolves the PIN again (E-01 d32). Its refusals count toward
 // the Store's limit of five in fifteen minutes (E-01 d31). Store session only.
+// A-120: it also takes the staff session's actor, null together when none is
+// open; verified when given, recorded on a refused PIN's row, and never what
+// the PIN resolves to — the PIN alone decides whom it names.
 import { z } from "zod";
-import { contract, pin, role } from "../wrapper";
+import { contract, initials, pin, role } from "../wrapper";
 
 export const ManagerAuthorizePinInput = z.strictObject({
   p_pin: pin,
   p_terminal_id: z.string().uuid(),
+  p_actor_user_id: z.string().uuid().nullable(),
+  p_actor_initials: initials.nullable(),
+}).refine((v) => (v.p_actor_user_id === null) === (v.p_actor_initials === null), {
+  error: "the staff session's actor and initials are given together, or neither (A-120)",
 });
 export type ManagerAuthorizePinInput = z.infer<typeof ManagerAuthorizePinInput>;
 
