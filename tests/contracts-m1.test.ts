@@ -866,3 +866,46 @@ describe("M-04 d41 — a Manager may set the PIN of a Manager or Owner who share
     expect(err.detail).toBe("owner");
   });
 });
+
+// ── The M1-contracts-2 review (orders/M1-contracts-2.md, Findings) ───────────
+
+describe("M-04 d40, M-04 d32 — a fresh PIN at reactivation that clashes too is refused unnamed, and logged", () => {
+  it("JM away, KM given 2222, JM reactivated with 2222: pin_clash, no name, one logged refusal", async () => {
+    const w = await world();
+    await c.user_deactivate(w.owner, { ...w.asOwner, p_user_id: w.jm.user_id });
+    await c.user_add(w.owner, { ...w.asOwner, p_display_name: "K. Moreau", p_initials: "KM", p_role: "manager", p_email: "km@example.test", p_store_ids: [w.A.store_id], p_pin: "2222" });
+    const err = await refused(c.user_reactivate(w.owner, { ...w.asOwner, p_user_id: w.jm.user_id, p_initials: null, p_pin: "2222" }), "pin_clash");
+    expect(JSON.stringify({ ...err, message: err.message })).not.toContain("Moreau");
+    expect(w.root.inspect().log.filter((l) => l.subject_id === w.jm.user_id && l.action === "pin_clash_refused")).toHaveLength(1);
+  });
+});
+
+describe("M-04 d43 — an Employee promoted straight to Owner is invited while never enrolled", () => {
+  it("YN, Employee, promoted to Owner with a PIN and an email: invited, to that address", async () => {
+    const w = await world();
+    await expect(c.user_change_role(w.owner, { ...w.asOwner, p_user_id: w.yn.user_id, p_role: "owner", p_email: "yn@example.test", p_pin: "4444" }))
+      .resolves.toEqual({ user_id: w.yn.user_id, invite: true, email: "yn@example.test" });
+  });
+});
+
+describe("M-04 d44 — Send reset and Re-send invite are refused for a deactivated Owner too", () => {
+  it("a second Owner, deactivated: both links refused as inactive", async () => {
+    const w = await world();
+    const ao = await c.user_add(w.owner, { ...w.asOwner, p_display_name: "A. Okoye", p_initials: null, p_role: "owner", p_email: "ao@example.test", p_store_ids: [], p_pin: null });
+    await c.user_deactivate(w.owner, { ...w.asOwner, p_user_id: ao.user_id });
+    for (const act of [c.user_reset_request, c.user_invite_resend]) {
+      const err = await refused(act(w.owner, { ...w.asOwner, p_user_id: ao.user_id }), "invalid_state");
+      expect(err.detail).toBe("inactive");
+    }
+  });
+});
+
+describe("A-120, E-01 d31 — five refusals at the pad with a verified pair close the line, and the flag names that staff session", () => {
+  it("the closing flag carries the Employee whose staff session was open", async () => {
+    const w = await world();
+    for (const pin of ["9001", "9002", "9003", "9004", "9005"]) {
+      await refused(c.manager_authorize_pin(w.storeA, { p_pin: pin, p_terminal_id: w.t1, p_actor_user_id: w.yn.user_id, p_actor_initials: "YN" }), "pin_refused");
+    }
+    expect(w.root.inspect().flags).toEqual([expect.objectContaining({ kind: "pin_line_closed", store_id: w.A.store_id, terminal_id: w.t1, actor_user_id: w.yn.user_id })]);
+  });
+});
