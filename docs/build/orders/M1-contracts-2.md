@@ -2,9 +2,9 @@
 
 **Flow:** none — a follow-up contract pull request for [M-04](../../flows/M-04-manage-users.md) d39–d44 and architecture A-120; the flows are [M-04](../../flows/M-04-manage-users.md) and [E-01](../../flows/E-01-authenticate.md)
 **Milestone / track:** M1 / joint — no track; `packages/contracts` is neither D's nor U's (conventions §5)
-**Status:** In review
+**Status:** Accepted
 **Approved by:** sr-talbot, 2026-10-30 — in session, after reading the Checklist; **both** owners review the pull request (workflow §4: *a change to `packages/contracts`*)
-**Pull request:** _once opened_
+**Pull request:** [#204](https://github.com/WaxyWaxman/WaxWorks/pull/204) — merged `f7401f6` before its review finished; the review's tests and findings in [#205](https://github.com/WaxyWaxman/WaxWorks/pull/205) (`fd2ea91`)
 **Register rows:** none made automatable by this order alone. It changes the contract the M1 **D** and **U** orders build against, after [M1-contracts](M1-contracts.md) (`Accepted`, contract commit `0ea11aa`).
 
 ## Scope
@@ -88,7 +88,14 @@ _`/code-review`, 2026-10-29, against #204 as merged (`f7401f6`): its other five 
 
 ## Verdict
 
-**Accepted** | **Returned** — _coordinator, date_
+**Accepted** — sr-talbot, 2026-10-29. *Entered on sr-talbot's instruction in session ("accepted") by the coordinator: the judgement is sr-talbot's, the typing is not (workflow §4).*
+
+- **Checklist:** 8 of 8 rows accounted for, every one `Done` (`check_coverage.py --order` → 0 errors).
+- **No blocking finding against this order**; the reviewers' own run green (Findings, above). The review's four missing tests landed in [#205](https://github.com/WaxyWaxman/WaxWorks/pull/205).
+- **#204 merged before this verdict** (`f7401f6`), the fourth time a contract pull request has; branch protection is the owners' call.
+- **Finding 1**, which blocked the M1 **D** order, is answered by **A-121** (ratified 2026-10-29): reactivation's PIN clash joins A-119's kept refusals.
+- **The contract commit** the M1 **D** and **U** orders build against is `main` at #205's merge (`fd2ea91`), with A-121 a documents-only change after it.
+- **No `Deferred` row.**
 
 ### Needs a human
 
@@ -96,6 +103,6 @@ _`/code-review`, 2026-10-29, against #204 as merged (`f7401f6`): its other five 
 
 _Raised by the review, 2026-10-29:_
 
-- **Before the M1 D order — `/architecture`:** add reactivation's PIN clash to A-119's refusals whose record is kept (finding 1). The architect's draft, _Status: recommended, not yet ratified_: *"Reactivation's PIN clash is a refusal the record must keep. A-119's list becomes: the PIN resolution, and the PIN-clash check at Set PIN, Assign, a promotion and a reactivation (`pin_clash`, M-04 d32, d40)"* — `user_reactivate` then returns `jsonb`, its clash check before any write; amends A-119, conventions §5 and §9's row.
+- ~~**Before the M1 D order — `/architecture`:** add reactivation's PIN clash to A-119's refusals whose record is kept (finding 1). The architect's draft, _Status: recommended, not yet ratified_: *"Reactivation's PIN clash is a refusal the record must keep. A-119's list becomes: the PIN resolution, and the PIN-clash check at Set PIN, Assign, a promotion and a reactivation (`pin_clash`, M-04 d32, d40)"* — `user_reactivate` then returns `jsonb`, its clash check before any write; amends A-119, conventions §5 and §9's row.~~ — **answered by A-121**, ratified 2026-10-29 by sr-talbot.
 - **`/flow-clarify M-04`:** does d44 refuse promoting a deactivated **Employee**, and may a deactivated person be demoted (finding 5)? May `p_pin` be given at reactivation when nothing clashes, and is reactivating an active person refused (finding 8)?
 - **`/qa register M-04`:** rows for d39–d45; A-120 added to E-01-T19's citations (finding 11).
