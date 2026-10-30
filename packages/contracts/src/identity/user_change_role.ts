@@ -4,7 +4,7 @@
 // someone holding a Store with no PIN yet, a PIN (M-04 d35); it sends the
 // invite only while the person has never enrolled a passkey — Manager to Owner
 // included (M-04 d33, d43; A-117) — and logs a changed email (M-04 d42). It is
-// refused for a deactivated person (M-04 d44). A demotion to Employee clears the
+// refused for a deactivated person, promotion or demotion (M-04 d44, d46). A demotion to Employee clears the
 // PIN and refuses one given (M-04 d39); none leaves an Employee or Manager with
 // no Store (M-04 d27).
 import { z } from "zod";

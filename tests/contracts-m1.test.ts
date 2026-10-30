@@ -909,3 +909,49 @@ describe("A-120, E-01 d31 — five refusals at the pad with a verified pair clos
     expect(w.root.inspect().flags).toEqual([expect.objectContaining({ kind: "pin_line_closed", store_id: w.A.store_id, terminal_id: w.t1, actor_user_id: w.yn.user_id })]);
   });
 });
+
+// ── M1 contracts, third pull request (orders/M1-contracts-3.md) ──────────────
+
+describe("M-04 d46 — no role change for a deactivated person, promotion or demotion, Employee included; reactivate first", () => {
+  it("a deactivated Manager's demotion and a deactivated Employee's promotion are refused, and accepted after reactivation", async () => {
+    const w = await world();
+    await c.user_deactivate(w.owner, { ...w.asOwner, p_user_id: w.jm.user_id });
+    await c.user_deactivate(w.owner, { ...w.asOwner, p_user_id: w.yn.user_id });
+    const demote = () => c.user_change_role(w.owner, { ...w.asOwner, p_user_id: w.jm.user_id, p_role: "employee", p_email: null, p_pin: null });
+    const promote = () => c.user_change_role(w.owner, { ...w.asOwner, p_user_id: w.yn.user_id, p_role: "manager", p_email: "yn@example.test", p_pin: "4444" });
+    for (const act of [demote, promote]) {
+      const err = await refused(act(), "invalid_state");
+      expect(err.detail).toBe("inactive");
+    }
+    expect(w.root.inspect().users.find((u) => u.user_id === w.jm.user_id)!.role).toBe("manager");
+    await c.user_reactivate(w.owner, { ...w.asOwner, p_user_id: w.jm.user_id, p_initials: null, p_pin: null });
+    await c.user_reactivate(w.owner, { ...w.asOwner, p_user_id: w.yn.user_id, p_initials: null, p_pin: null });
+    await expect(demote()).resolves.toMatchObject({ user_id: w.jm.user_id });
+    await expect(promote()).resolves.toMatchObject({ user_id: w.yn.user_id, invite: true });
+  });
+});
+
+describe("M-04 d47 — reactivation is refused for someone already active, and takes a new PIN only on decision 40's clash", () => {
+  it("reactivating an active Manager is refused, and writes no reactivation", async () => {
+    const w = await world();
+    const err = await refused(c.user_reactivate(w.owner, { ...w.asOwner, p_user_id: w.jm.user_id, p_initials: null, p_pin: null }), "invalid_state");
+    expect(err.detail).toBe("active");
+    expect(w.root.inspect().log.filter((l) => l.subject_id === w.jm.user_id && l.action === "reactivated")).toHaveLength(0);
+  });
+
+  it("a new PIN when nothing clashes is refused, and the old PIN stands; Set PIN is the way to change it", async () => {
+    const w = await world();
+    await c.user_deactivate(w.owner, { ...w.asOwner, p_user_id: w.jm.user_id });
+    const err = await refused(c.user_reactivate(w.owner, { ...w.asOwner, p_user_id: w.jm.user_id, p_initials: null, p_pin: "7777" }), "invalid_state");
+    expect(err.detail).toBe("pin_not_needed");
+    await c.user_reactivate(w.owner, { ...w.asOwner, p_user_id: w.jm.user_id, p_initials: null, p_pin: null });
+    await expect(c.manager_authorize_pin(w.storeA, { p_pin: "2222", p_terminal_id: w.t1, ...noStaff })).resolves.toMatchObject({ user_id: w.jm.user_id });
+  });
+
+  it("decision 40's clash still takes a fresh PIN", async () => {
+    const w = await world();
+    await c.user_deactivate(w.owner, { ...w.asOwner, p_user_id: w.jm.user_id });
+    await c.user_add(w.owner, { ...w.asOwner, p_display_name: "K. Moreau", p_initials: "KM", p_role: "manager", p_email: "km@example.test", p_store_ids: [w.A.store_id], p_pin: "2222" });
+    await expect(c.user_reactivate(w.owner, { ...w.asOwner, p_user_id: w.jm.user_id, p_initials: null, p_pin: "7777" })).resolves.toEqual({ user_id: w.jm.user_id });
+  });
+});

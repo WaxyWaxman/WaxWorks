@@ -166,10 +166,14 @@ class Ctx {
   }
 
   /** A PIN clash names nobody; at Set PIN, Assign or a promotion it is logged — actor, Store, time, no digits (M-04 d32). */
-  pinClash(store_id: string, pin: string, except: string | null, log: { by: UserRow; actor: UserRow; terminal: string | null } | null): void {
-    const clash = this.tx.users.some((u) =>
+  /** Whether another active Manager or Owner at this Store holds this PIN (E-01 d26). */
+  pinTaken(store_id: string, pin: string, except: string | null): boolean {
+    return this.tx.users.some((u) =>
       u.active && u.user_id !== except && u.role !== "employee" && u.store_ids.includes(store_id) && this.tx.pins.get(u.user_id) === pin);
-    if (!clash) return;
+  }
+
+  pinClash(store_id: string, pin: string, except: string | null, log: { by: UserRow; actor: UserRow; terminal: string | null } | null): void {
+    if (!this.pinTaken(store_id, pin, except)) return;
     if (log && except) {
       this.call.state.durableLog.push(this.row("users.log", except, "pin_clash_refused", log.actor.user_id, log.by.user_id, log.terminal, { store_id }));
     }
@@ -303,9 +307,10 @@ export const identityHandlers: Record<string, Handler> = {
     const from = u.role;
     if (to === from) return { user_id: u.user_id, invite: false, email: null };
     const promotion = RANK[to] > RANK[from];
-    // M-04 d44: a deactivated person is reactivated first. The key is the table's
+    // M-04 d44, d46: no role change — promotion or demotion, any role — for a
+    // deactivated person; reactivate first. The key is the table's
     // wrong-state-for-the-act (invalid_state).
-    if (promotion && !u.active) x.refuse("invalid_state", "inactive");
+    if (!u.active) x.refuse("invalid_state", "inactive");
     if (from === "owner" && u.active && x.activeOwners(org).length === 1) x.refuse("owner_floor");
     // M-04 d27: an Employee or a Manager holds at least one Store — an Owner may
     // hold none, so a demotion is the third door to that state. The key is a placeholder (invalid_state).
@@ -355,6 +360,8 @@ export const identityHandlers: Record<string, Handler> = {
     const who = x.authorize(false);
     const u = x.user(x.args.p_user_id as string, who.by.org_id);
     x.subjectInReach(who.by, u, "shares");
+    // M-04 d47: nothing to restore for someone already active.
+    if (u.active) x.refuse("invalid_state", "active");
     const initials = norm(x.args.p_initials as string | null) ?? u.initials;
     if (initials) for (const st of u.store_ids) x.initialsClash(st, initials, u.user_id);
     // M-04 d40: the PIN stays unique at the Store (E-01 d26). Without a new one, a
@@ -363,7 +370,10 @@ export const identityHandlers: Record<string, Handler> = {
     // screen asks for one; with one, it is clash-checked and set in the same act.
     const fresh = x.args.p_pin as string | null;
     if (u.role === "employee" && fresh !== null) x.refuse("invalid_state", "employee_has_no_pin");
-    const pin = fresh ?? x.tx.pins.get(u.user_id);
+    // M-04 d47: a new PIN only where the old one clashes; otherwise Set PIN changes it.
+    const old = x.tx.pins.get(u.user_id);
+    if (fresh !== null && !(old && u.store_ids.some((st) => x.pinTaken(st, old, u.user_id)))) x.refuse("invalid_state", "pin_not_needed");
+    const pin = fresh ?? old;
     if (u.role !== "employee" && pin) for (const st of u.store_ids) x.pinClash(st, pin, u.user_id, who);
     const before = { active: u.active, initials: u.initials };
     u.active = true;
