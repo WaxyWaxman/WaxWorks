@@ -32,13 +32,25 @@ _Developed interactively with `/develop` on 2026-10-29 (sr-talbot pairing). `M1`
 
 | # | State | Test (name and `file:line`) | Run output | Note |
 |---|---|---|---|---|
-| 1 | Done | `M1:915` describe *M-04 d46 — no role change for a deactivated person, promotion or demotion, Employee included; reactivate first* | `M-04 d46 —` describe: 1 passed, 0 failed | `fake/identity.ts`: `if (!u.active)` replaces d44's promotion-only check, after the same-role no-op |
+| 1 | Done | `M1:915` describe *M-04 d46 — no role change for a deactivated person, promotion or demotion, Employee included; reactivate first* | `M-04 d46 —` describe: 1 passed, 0 failed (at review; 2 after the review added the deactivated Owner's case) | `fake/identity.ts`: `if (!u.active)` replaces d44's promotion-only check, after the same-role no-op |
 | 2 | Done | `M1:934` describe *M-04 d47 — reactivation is refused for someone already active, and takes a new PIN only on decision 40's clash* (3 tests) | `M-04 d47 —` describe: 3 passed, 0 failed | Both refusals are raised before anything is written; `pinTaken` (a non-refusing check) now backs `pinClash` too |
 
 ## Findings
 
+_Written by reviewers (`qa-reviewer`, `architect`), 2026-10-29, against `contracts/m1-third`. **No blocking finding.** **The reviewers' run** (qa-reviewer): `pnpm test` → `Tests  535 passed (535)`; `pnpm typecheck`, `pnpm lint` → exit 0; `check_docs.py` → `0 error(s), 10 warning(s)`; `check_coverage.py --order` → `2/2 checklist rows accounted for; 0 error(s)`; the contract files, verbose → `Tests  470 passed (470)`, d46 1 and d47 3 passed. Not reproduced: the red-first run (it needs the implementation reverted). The architect's run: `-t "M-04 d4[67]"` → `4 passed`. **Both checked the PIN-oracle question and found none:** `pin_not_needed` is decided only from the person's **own old** PIN, before any `p_pin` is tested, so a caller cannot choose the digits tested; the one fact it returns unlogged — nobody holds this deactivated person's current PIN — is not a d32 probe._
+
 | # | Reviewer | Decision cited | `file:line` | Finding | Severity | Developer |
 |---|---|---|---|---|---|---|
+| 1 | qa-reviewer, architect | M-04 d46 (*"Employee, Manager or Owner"*) | `tests/contracts-m1.test.ts` (d46 describe) | A deactivated Owner's demotion is untested — the one case where the Owner floor used to interact with `active` | non-blocking | `fixed` — *a deactivated Owner's demotion is refused too* |
+| 2 | qa-reviewer | M-04 d46 | same | The test checked only the Manager's role after the refusals, not the Employee's, nor that nothing was logged | observation | `fixed` — both roles checked, and the log's length unchanged by the refusals |
+| 3 | qa-reviewer, architect | A-121 | `fake/identity.ts:168` | `pinClash`'s comment had come loose above `pinTaken`, and its list omitted reactivation | observation | `fixed` — moved, and reactivation added (A-121) |
+| 4 | architect | A-119, A-121 | `fake/identity.ts:362–377` | The fake's order is right — in reach, `active`, initials (raised), `employee_has_no_pin`, `pin_not_needed`, `pin_clash` (returned, logged), writes — but A-121 fixes only where the clash check sits. A database that ran `pin_clash` before `active` or `pin_not_needed` would write d32's clash log for an act d47 refuses outright | non-blocking — **a Checklist row for the M1 D order** | |
+| 5 | qa-reviewer, architect | M-04 d46; d26 | `fake/identity.ts:308–314` | A same-role call on a deactivated person returns success and writes nothing, before the `inactive` check — consistent with d46 (*"a promotion or a demotion"*), and the D order should write nothing too. The Owner floor's `u.active &&` can no longer be false there | observation | |
+| 6 | architect | conventions §5 (`invalid_state`: *what state*) | `fake/identity.ts:364, 375` | The `invalid_state` details — `inactive`, `active`, `pin_not_needed`, `employee_has_no_pin`, `no_store` — exist only in the fake and order prose. Screens will branch on them and **D** will copy them | non-blocking | conventions §5 (Needs a human) |
+| 7 | architect | M-04 d44, d47 | `fake/identity.ts:441–459` (unchanged) | Not specified: is Set PIN allowed on a **deactivated** Manager or Owner? It decides whether d47's *"two acts"* can run in either order | open question | M-04 (Needs a human) |
+| 8 | qa-reviewer | M-04 d47 | — | Not specified: what the screen does when a resubmitted PIN is refused `pin_not_needed` because the clash went away between the prompt and the resubmit | open question | M-04 (Needs a human) |
+| 9 | qa-reviewer | register | `docs/qa/e2e-register.md` | No row asserts M-04 d40, d44, d46 or d47; M-04-T3 (d19) still holds | non-blocking | `/qa register M-04` |
+| 10 | architect | M-04 d35, d47 | `fake/identity.ts:375` | A Manager with no PIN — a state d35 forbids but the fake does not rule out — would reactivate with none, any `p_pin` refused as not needed. Should be unreachable; untested | observation | |
 
 ## Verdict
 
@@ -47,3 +59,10 @@ _Developed interactively with `/develop` on 2026-10-29 (sr-talbot pairing). `M1`
 ### Needs a human
 
 - _None raised while drafting._
+
+_Raised by the review, 2026-10-29:_
+
+- **The M1 D order's Checklist:** assert `user_reactivate`'s full order of checks (finding 4), not only A-121's part of it; and write nothing on a same-role call (finding 5).
+- **Conventions §5:** list the `invalid_state` details screens may branch on, or say `detail` is advisory (finding 6).
+- **`/flow-clarify M-04`:** Set PIN on a deactivated person (7); the screen's answer to `pin_not_needed` after a clash disappears (8).
+- **`/qa register M-04`:** rows for d39–d47 (9).

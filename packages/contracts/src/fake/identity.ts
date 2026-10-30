@@ -165,13 +165,16 @@ class Ctx {
     if (holder) this.refuse("initials_clash", holder.display_name);
   }
 
-  /** A PIN clash names nobody; at Set PIN, Assign or a promotion it is logged — actor, Store, time, no digits (M-04 d32). */
   /** Whether another active Manager or Owner at this Store holds this PIN (E-01 d26). */
   pinTaken(store_id: string, pin: string, except: string | null): boolean {
     return this.tx.users.some((u) =>
       u.active && u.user_id !== except && u.role !== "employee" && u.store_ids.includes(store_id) && this.tx.pins.get(u.user_id) === pin);
   }
 
+  /**
+   * A PIN clash names nobody; at Set PIN, Assign, a promotion or a reactivation it
+   * is logged — actor, Store, time, no digits (M-04 d32, d40; A-119, A-121).
+   */
   pinClash(store_id: string, pin: string, except: string | null, log: { by: UserRow; actor: UserRow; terminal: string | null } | null): void {
     if (!this.pinTaken(store_id, pin, except)) return;
     if (log && except) {

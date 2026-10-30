@@ -919,15 +919,28 @@ describe("M-04 d46 — no role change for a deactivated person, promotion or dem
     await c.user_deactivate(w.owner, { ...w.asOwner, p_user_id: w.yn.user_id });
     const demote = () => c.user_change_role(w.owner, { ...w.asOwner, p_user_id: w.jm.user_id, p_role: "employee", p_email: null, p_pin: null });
     const promote = () => c.user_change_role(w.owner, { ...w.asOwner, p_user_id: w.yn.user_id, p_role: "manager", p_email: "yn@example.test", p_pin: "4444" });
+    const logBefore = w.root.inspect().log.length;
     for (const act of [demote, promote]) {
       const err = await refused(act(), "invalid_state");
       expect(err.detail).toBe("inactive");
     }
-    expect(w.root.inspect().users.find((u) => u.user_id === w.jm.user_id)!.role).toBe("manager");
+    const snap = w.root.inspect();
+    expect(snap.users.find((u) => u.user_id === w.jm.user_id)!.role).toBe("manager");
+    expect(snap.users.find((u) => u.user_id === w.yn.user_id)!.role).toBe("employee");
+    // The refusals wrote nothing: no role change, no invite.
+    expect(snap.log).toHaveLength(logBefore);
     await c.user_reactivate(w.owner, { ...w.asOwner, p_user_id: w.jm.user_id, p_initials: null, p_pin: null });
     await c.user_reactivate(w.owner, { ...w.asOwner, p_user_id: w.yn.user_id, p_initials: null, p_pin: null });
     await expect(demote()).resolves.toMatchObject({ user_id: w.jm.user_id });
     await expect(promote()).resolves.toMatchObject({ user_id: w.yn.user_id, invite: true });
+  });
+
+  it("a deactivated Owner's demotion is refused too (the review's finding 1)", async () => {
+    const w = await world();
+    const ao = await c.user_add(w.owner, { ...w.asOwner, p_display_name: "A. Okoye", p_initials: "AO", p_role: "owner", p_email: "ao@example.test", p_store_ids: [w.A.store_id], p_pin: "5555" });
+    await c.user_deactivate(w.owner, { ...w.asOwner, p_user_id: ao.user_id });
+    const err = await refused(c.user_change_role(w.owner, { ...w.asOwner, p_user_id: ao.user_id, p_role: "manager", p_email: null, p_pin: null }), "invalid_state");
+    expect(err.detail).toBe("inactive");
   });
 });
 
