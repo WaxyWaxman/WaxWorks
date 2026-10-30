@@ -248,7 +248,7 @@ _Raised by the third round, 2026-10-29/30:_
 
 - **Before the M1 D order:** finding 14 (a promotion's email logged, and the invite row naming the address — `/flow-clarify M-04`); finding 25 (pgTAP refusal tests assert SQLSTATE and key — a Checklist row).
 - **`/flow-clarify M-04`:** record *a demotion to Employee clears the PIN* (sr-talbot, 2026-10-29); then decide a demotion given a PIN (16), reactivation against a PIN taken meanwhile and whether `user_reactivate` takes `p_pin` (19, finding 3), Manager → Owner invites, acts on a deactivated person.
-- **The next contract pull request** (A-120's, after #201): `client.ts:13–15`'s stale status (21); the Evidence references (24); finding 17's Detail-column filter; finding 23's citation once M-04 has the row.
+- **The next contract pull request** (the one #201 proposes, after it merges): `client.ts:13–15`'s stale status (21); the Evidence references (24); finding 17's Detail-column filter; finding 23's citation once M-04 has the row.
 - **`/architecture`:** the architect's draft — _Status: recommended, not yet ratified_ — *a missing PIN pepper is a refusal to the screen and an error event to the platform* (finding 18, amending A-92 by one named key); and **does a demotion to Employee end the person's personal session?** (A-87 revokes on deactivation; M-04 says a role change takes effect on the next session; reads under a still-live personal session are not specified); and whether a demoted Employee's passkey enrolment, by a link sent before the demotion, is accepted.
 - **A-106's order:** the failure's error class, including an expired session (15).
 - **Production's PostgREST version** — check conventions §5's status mapping against it once (read from the docs, not a live run).
