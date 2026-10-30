@@ -10,9 +10,9 @@ export interface WaxClient {
 // One SQLSTATE and one stable message key per kind of refusal — conventions §5's
 // table (M1 contracts order, row 30), raised by the function as
 // `raise exception '<key>' using errcode = '<SQLSTATE>'` and mimicked by the fake.
-// Screens branch on the key, never on human text. The keys and kinds are
-// decided; the SQLSTATE values are recommended, not yet ratified — confirmed in
-// the M1 contract pull request's review.
+// Screens branch on the key, never on human text. The keys, kinds and SQLSTATE
+// values are decided — the values ratified 2026-10-29 by sr-talbot (conventions
+// §5's status line).
 export const REFUSALS = {
   no_tenant: "28000",
   actor_mismatch: "28000",
@@ -45,6 +45,13 @@ export function isRefusal(key: string, code: string | undefined): key is Refusal
 }
 
 /**
+ * The refusals whose row in conventions §5's table names a detail. Any other
+ * refusal's DETAIL is dropped by the real client, so a body that names a PIN's
+ * holder in `pin_clash` cannot reach the screen (M-04 d32, A-93).
+ */
+export const REFUSAL_DETAIL: ReadonlySet<RefusalKey> = new Set<RefusalKey>(["role_refused", "pin_line_closed", "initials_clash", "invalid_state"]);
+
+/**
  * What a WaxClient throws when the database (or the fake) refuses or fails: the
  * errcode, the message — a refusal key for a refusal — and its `detail`. The
  * wrapper turns it into a ContractError carrying the call's request_id.
@@ -65,10 +72,12 @@ export class RpcRefusal extends Error {
 /**
  * What the real WaxClient throws for an error that is not a refusal: the raw
  * PostgREST error, which the wrapper keeps in `details` only — never as a key,
- * a message or a detail.
+ * a message or a detail. Its `code` (a SQLSTATE or `PGRST…`) is the error
+ * class A-93 permits, kept so a screen can tell an expired session (PGRST301)
+ * from a fault.
  */
 export class RpcFailure extends Error {
-  constructor(readonly fn: string, readonly error: unknown) {
+  constructor(readonly fn: string, readonly error: unknown, readonly code?: string) {
     super(`${fn}: the call did not complete`);
     this.name = "RpcFailure";
   }

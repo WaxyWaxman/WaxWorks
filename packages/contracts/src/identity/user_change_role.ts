@@ -3,8 +3,10 @@
 // d26). A promotion into Manager or Owner needs an email (M-04 d33) and, for
 // someone holding a Store with no PIN yet, a PIN (M-04 d35); it sends the
 // invite only while the person has never enrolled a passkey (M-04 d33, A-117).
-// A demotion to Employee clears the PIN (M-04 d28), and none leaves an
-// Employee or Manager with no Store (M-04 d27).
+// A demotion to Employee clears the PIN — decided by sr-talbot 2026-10-29 from
+// M-04 d28's "Employees have no PIN", not yet an M-04 row (M1 contracts order,
+// finding 2) — and refuses one given; none leaves an Employee or Manager with no
+// Store (M-04 d27).
 import { z } from "zod";
 import { contract, managerHeader, pin, role } from "../wrapper";
 

@@ -8,7 +8,7 @@
 // answers PGRST202, so the call is routed through `.schema("app")` here and
 // `app` is exposed there — the two halves of A-105 that must agree.
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { RpcFailure, RpcRefusal, isRefusal, type WaxClient } from "./client";
+import { REFUSAL_DETAIL, RpcFailure, RpcRefusal, isRefusal, type WaxClient } from "./client";
 
 export function createSupabaseWaxClient(supabase: SupabaseClient): WaxClient {
   return {
@@ -19,8 +19,12 @@ export function createSupabaseWaxClient(supabase: SupabaseClient): WaxClient {
       // Anything else — a real constraint violation, a missing grant, PGRST202 —
       // is a failure, whatever its code (isRefusal).
       if (error) {
-        if (isRefusal(error.message, error.code)) throw new RpcRefusal(fn, error.code, error.message, error.details ?? undefined);
-        throw new RpcFailure(fn, error);
+        if (isRefusal(error.message, error.code)) {
+          // Only a key whose row names a detail carries one (conventions §5).
+          const detail = REFUSAL_DETAIL.has(error.message) ? (error.details ?? undefined) : undefined;
+          throw new RpcRefusal(fn, error.code, error.message, detail);
+        }
+        throw new RpcFailure(fn, error, error.code || undefined);
       }
       return data;
     },
