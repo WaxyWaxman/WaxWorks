@@ -3,7 +3,8 @@
 // reused at any of their Stores it refuses with initials_clash, and the screen
 // asks for new ones (p_initials). Likewise a Manager's or Owner's PIN given to
 // someone else at one of their Stores: it refuses pin_clash, unnamed and logged,
-// and the screen asks for a new one (p_pin, M-04 d40). A Manager reactivates an
+// and the screen asks for a new one (p_pin, M-04 d40) — only then (M-04 d47). It
+// is refused for someone already active (M-04 d47). A Manager reactivates an
 // Employee who shares any one of their Stores (M-04 d37).
 import { z } from "zod";
 import { contract, initials, managerHeader, pin } from "../wrapper";
