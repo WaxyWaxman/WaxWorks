@@ -80,6 +80,11 @@ _Written by reviewers (`qa-reviewer`, `architect`), 2026-10-29, against `contrac
 | 9 | architect | A-120 *Consequences accepted* | `fake/identity.ts:239` | A caller can attribute pad guesses to any colleague whose initials they know; `actor_mismatch` versus `pin_refused` confirms an (id, initials) pair, as `actor_resolve` already does. A-120 accepts the trust initials carry | observation | |
 | 10 | architect | — | the order's header; M-04 d39–d45 | Dated 2026-10-30, the UTC date; the local date of the session was 2026-10-29 | observation | the M-04 rows are merged; left as recorded |
 | 11 | qa-reviewer | register | `docs/qa/e2e-register.md` | M-04 has no rows for decisions 39–45; E-01-T19 (the pad naming the open staff session) should cite A-120; M-04-T3, T9, T16, T19 are extended by d39–d44 and not contradicted, so none goes `Stale` | non-blocking | `/qa register M-04` |
+| 12 | `/code-review` | A-98 (*the function is the enforcement point*); A-120 | `fake/identity.ts:239` | The fake reads a null `p_actor_user_id` as *no staff session* without checking `p_actor_initials`, so it leans on the wrapper's `refine` for A-120's *null together*. A **D** body copying it would not assert the rule the database must | non-blocking | |
+| 13 | `/code-review` | A-120 | `fake/state.ts:74` | Same reading question as 7, from the shape side: the refusal row the **D** track will copy has no column for the initials | observation | with 7 |
+| 14 | `/code-review` | — | `fake/identity.ts:372` and the two other PIN-setting handlers | Setting a PIN and logging `pin_set` is written out in `user_set_pin`, `user_change_role` and `user_reactivate`; one `Ctx` helper would keep the three logging alike | observation (cleanup) | |
+
+_`/code-review`, 2026-10-29, against #204 as merged (`f7401f6`): its other five findings are 1 (A-119), 5 and 8 (the unspecified d40/d44 readings — under CLAUDE.md's *do not invent requirements*), and 3–6 (the untested cases, fixed in this verdict's pull request)._
 
 ## Verdict
 
