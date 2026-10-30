@@ -22,12 +22,12 @@ export const REFUSALS = {
   pin_line_closed: "WX429",
   initials_clash: "23505",
   pin_clash: "23505",
-  not_found: "P0002",
+  not_found: "WX404",
   owner_floor: "23514",
   pin_required: "23502",
   email_required: "23502",
   initials_required: "23502",
-  invalid_state: "55000",
+  invalid_state: "WX409",
   pin_pepper_missing: "XX000",
 } as const;
 export type RefusalKey = keyof typeof REFUSALS;

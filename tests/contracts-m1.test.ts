@@ -106,12 +106,12 @@ describe("A-108 — the wrapper mints the correlation id before it validates, fo
   it("a refusal carries the very id that was sent as p_request_id", async () => {
     const sent: Record<string, unknown>[] = [];
     const client: WaxClient = {
-      async rpc(fn, args) { sent.push(args); throw new RpcRefusal(fn, "P0002", "not_found"); },
+      async rpc(fn, args) { sent.push(args); throw new RpcRefusal(fn, "WX404", "not_found"); },
     };
     const err = await failed(c.actor_resolve(client, { p_initials: "YN", p_terminal_id: "00000000-0000-4000-8000-000000000009" }));
     expect(sent[0]!.p_request_id).toMatch(UUID);
     expect(err.request_id).toBe(sent[0]!.p_request_id);
-    expect(err).toMatchObject({ key: "not_found", code: "P0002" });
+    expect(err).toMatchObject({ key: "not_found", code: "WX404" });
   });
 
   it("a failure that is not a refusal still surfaces as a ContractError with the id", async () => {
@@ -556,7 +556,10 @@ describe("conventions §5 (M1 contracts order row 29) — createFakeClient({ ses
 describe("conventions §5 (M1 contracts order row 30) — one SQLSTATE and one message key per kind of refusal, as the table says", () => {
   it("REFUSALS is exactly conventions §5's table", () => {
     const text = readFileSync(join(__dirname, "../docs/build/conventions.md"), "utf8");
-    const table = text.split("**Refusals (M1 contracts order, row 30).**")[1]!.split("\n\n")[1]!;
+    // The first table after the heading, wherever it sits: prose may come between them (#201 adds some).
+    const section = text.split("**Refusals (M1 contracts order, row 30).**")[1]!;
+    const table = section.slice(section.indexOf("\n| Kind |") + 1).split("\n\n")[0]!;
+    expect(table.startsWith("| Kind |"), "conventions §5's refusal table was found").toBe(true);
     const fromDoc: Record<string, string> = {};
     for (const line of table.split("\n").slice(2)) {
       const cells = line.split("|").map((s) => s.trim());
