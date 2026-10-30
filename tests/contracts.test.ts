@@ -258,8 +258,11 @@ describe("A-105 — the real client calls supabase.schema(\"app\").rpc, because 
 describe("A-113 — the uniform header has five named exceptions, and no others", () => {
   const shapeOf = (name: string) =>
     (contracts as unknown as Record<string, { shape: Record<string, unknown> }>)[`${pascal(name)}Input`]!.shape;
+  // The shared header's own field schemas, not just their names: since A-120,
+  // manager_authorize_pin names all three for an optional, attribution-only pair
+  // and stays an exception.
   const hasFullHeader = (name: string) =>
-    ["p_actor_user_id", "p_actor_initials", "p_terminal_id"].every((k) => k in shapeOf(name));
+    (["p_actor_user_id", "p_actor_initials", "p_terminal_id"] as const).every((k) => shapeOf(name)[k] === header.shape[k]);
 
   it("the non-pure functions without the full header are exactly the five exceptions", () => {
     const without = FUNCTIONS.filter((f) => f.kind !== "pure" && !hasFullHeader(f.name)).map((f) => f.name).sort();
@@ -271,8 +274,8 @@ describe("A-113 — the uniform header has five named exceptions, and no others"
     expect(Object.keys(shapeOf("actor_resolve")).sort()).toEqual(["p_initials", "p_terminal_id"]);
   });
 
-  it("manager_authorize_pin takes p_pin and p_terminal_id", () => {
-    expect(Object.keys(shapeOf("manager_authorize_pin")).sort()).toEqual(["p_pin", "p_terminal_id"]);
+  it("manager_authorize_pin takes p_pin, p_terminal_id and the staff session's actor pair (A-120)", () => {
+    expect(Object.keys(shapeOf("manager_authorize_pin")).sort()).toEqual(["p_actor_initials", "p_actor_user_id", "p_pin", "p_terminal_id"]);
   });
 
   it("terminal_register takes p_actor_initials and no p_terminal_id, resolving the initials itself", () => {

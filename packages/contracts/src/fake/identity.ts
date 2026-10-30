@@ -192,6 +192,9 @@ class Ctx {
   }
 }
 
+/** Promotion is upward in M-04 d25's strict supersets: Employee, Manager, Owner. */
+const RANK: Record<Role, number> = { employee: 0, manager: 1, owner: 2 };
+
 const norm = (initials: string | null | undefined) => (initials == null ? null : initials.trim().toUpperCase());
 
 const uid = () => crypto.randomUUID();
@@ -230,10 +233,12 @@ export const identityHandlers: Record<string, Handler> = {
 
   manager_authorize_pin: handle((x) => {
     storeSessionOnly(x);
+    // A-120: the staff session's actor, verified as the header verifies it —
+    // before the PIN, so a pair that does not verify neither counts nor is
+    // recorded. It attributes the attempt; the PIN alone decides whom it names.
+    const staff = x.args.p_actor_user_id == null ? null : x.actor().user_id;
     const terminal = x.terminal()!;
-    // A-113 gives this function no actor argument, so a refusal here records no
-    // staff session — E-01 d31 asks for one. Raised in the order's Needs a human.
-    return asPerson(x.pin(x.args.p_pin as string, terminal, null));
+    return asPerson(x.pin(x.args.p_pin as string, terminal, staff));
   }),
 
   session_select_store: handle((x) => {
@@ -297,6 +302,10 @@ export const identityHandlers: Record<string, Handler> = {
     const to = x.args.p_role as Role;
     const from = u.role;
     if (to === from) return { user_id: u.user_id, invite: false, email: null };
+    const promotion = RANK[to] > RANK[from];
+    // M-04 d44: a deactivated person is reactivated first. The key is the table's
+    // wrong-state-for-the-act (invalid_state).
+    if (promotion && !u.active) x.refuse("invalid_state", "inactive");
     if (from === "owner" && u.active && x.activeOwners(org).length === 1) x.refuse("owner_floor");
     // M-04 d27: an Employee or a Manager holds at least one Store — an Owner may
     // hold none, so a demotion is the third door to that state. The key is a placeholder (invalid_state).
@@ -311,19 +320,19 @@ export const identityHandlers: Record<string, Handler> = {
       if (!holdsPin && pin === null && (to === "manager" || u.store_ids.length > 0)) x.refuse("pin_required");
       if (pin !== null) for (const st of u.store_ids) x.pinClash(st, pin, u.user_id, who);
     }
-    // A-117: a promotion's invite only while passkey_enrolled_at is null.
-    const invite = to !== "employee" && from === "employee" && u.passkey_enrolled_at === null;
-    // M-04 d33's log names the address: a changed email is logged before and after,
-    // and the invite row names where it went (identity data, A-93).
+    // M-04 d43 (A-117): any promotion into Manager or Owner — Manager to Owner
+    // included — invites while the person has never enrolled a passkey.
+    const invite = promotion && u.passkey_enrolled_at === null;
+    // M-04 d42: a changed email is logged before and after, and the invite row
+    // names where it went (identity data, A-93).
     const emailChanged = email !== u.email;
     const before = emailChanged ? { role: from, email: u.email } : { role: from };
     const after = emailChanged ? { role: to, email } : { role: to };
     u.role = to;
     u.email = email;
     if (pin !== null && to !== "employee") { x.tx.pins.set(u.user_id, pin); x.log("users.log", u.user_id, "pin_set", who); }
-    // A demotion clears the PIN, so a promotion back sets a fresh one, clash-checked
-    // (finding 2). Decided by sr-talbot 2026-10-29 from M-04 d28's "Employees have
-    // no PIN"; not yet an M-04 row — /flow-clarify M-04 records it.
+    // M-04 d39: a demotion to Employee clears the PIN, so a promotion back sets a
+    // fresh one, clash-checked (E-01 d26).
     if (to === "employee" && x.tx.pins.delete(u.user_id)) x.log("users.log", u.user_id, "pin_cleared", who);
     x.log("users.log", u.user_id, "role_changed", who, { before, after });
     if (invite) x.log("users.log", u.user_id, "invite_sent", who, { after: { email } });
@@ -348,15 +357,19 @@ export const identityHandlers: Record<string, Handler> = {
     x.subjectInReach(who.by, u, "shares");
     const initials = norm(x.args.p_initials as string | null) ?? u.initials;
     if (initials) for (const st of u.store_ids) x.initialsClash(st, initials, u.user_id);
-    // E-01 d26: the PIN stays unique at the Store. Placeholder, not specified —
-    // M-04 d19 covers initials only; refusing is the one reading that breaks no
-    // decided rule (finding 3).
-    const pin = x.tx.pins.get(u.user_id);
-    // Logged as every refused PIN clash on an existing row is (M-04 d32).
+    // M-04 d40: the PIN stays unique at the Store (E-01 d26). Without a new one, a
+    // PIN given to someone else meanwhile refuses pin_clash — unnamed, and logged
+    // as every refused PIN clash on an existing row is (M-04 d32) — and the
+    // screen asks for one; with one, it is clash-checked and set in the same act.
+    const fresh = x.args.p_pin as string | null;
+    if (u.role === "employee" && fresh !== null) x.refuse("invalid_state", "employee_has_no_pin");
+    const pin = fresh ?? x.tx.pins.get(u.user_id);
     if (u.role !== "employee" && pin) for (const st of u.store_ids) x.pinClash(st, pin, u.user_id, who);
     const before = { active: u.active, initials: u.initials };
     u.active = true;
     u.initials = initials;
+    // Logged as changed, never as a value (M-04 d28).
+    if (fresh !== null) { x.tx.pins.set(u.user_id, fresh); x.log("users.log", u.user_id, "pin_set", who); }
     x.log("users.log", u.user_id, "reactivated", who, { before, after: { active: true, initials } });
     return { user_id: u.user_id };
   }),
@@ -420,9 +433,8 @@ export const identityHandlers: Record<string, Handler> = {
     const u = x.user(x.args.p_user_id as string, who.by.org_id);
     // M-04 d28: Employees have no PIN. The key is a placeholder (invalid_state).
     if (u.role === "employee") x.refuse("invalid_state", "employee_has_no_pin");
-    // Placeholder, not specified: "at their own Stores" (M-04 d28, A-89) is read
-    // here as sharing one Store; M-04 d37 settled the wide reading for
-    // deactivate, reactivate and correct only.
+    // M-04 d41: "at their own Stores" (M-04 d28) is one shared Store — a Manager
+    // may set the PIN of anyone who shares any one of theirs.
     if (who.by.role !== "owner" && !u.store_ids.some((st) => who.by.store_ids.includes(st))) x.refuse("role_refused", "owner");
     const pin = x.args.p_pin as string | null;
     if (pin === null) {
@@ -549,6 +561,8 @@ function linkSent(x: Ctx, action: "reset_link_sent" | "invite_sent") {
   const u = x.user(x.args.p_user_id as string, who.by.org_id);
   // A-114: to a Manager or Owner. The key is a placeholder (invalid_state).
   if (u.role === "employee" || !u.email) x.refuse("invalid_state", "employee");
+  // M-04 d44: no link reaches a deactivated person; reactivate first.
+  if (!u.active) x.refuse("invalid_state", "inactive");
   // A-117: Re-send invite is for someone who never accepted.
   if (action === "invite_sent" && u.passkey_enrolled_at !== null) x.refuse("invalid_state", "enrolled");
   x.log("users.log", u.user_id, action, who);
