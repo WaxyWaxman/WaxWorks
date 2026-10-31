@@ -51,6 +51,7 @@
 - **What ships at M1** (A-111, 2026-10-13). S-01's **Create Organization** (d2, d5) ships at M1; the identity lists and change log (d1) and the recovery acts (d3) stay post-v1. The reason is real shop data in production before v1 (A-109), which has no other governed way in.
 
 ---
+- **A System Administrator's enrolment window is closed by hand** (A-134, 2026-10-31): once the passkey decision 7 requires is enrolled, the project owner who opened the window clears `system_administrators.enrolment_open_until` and records it in the runbook entry that opened it.
 
 ## Resolved decisions
 
