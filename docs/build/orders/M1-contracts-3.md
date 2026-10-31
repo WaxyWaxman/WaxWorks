@@ -73,6 +73,6 @@ _`/code-review`, 2026-10-29, against #208 at `83bc615`: nothing blocking; its ot
 _Raised by the review, 2026-10-29:_
 
 - **The M1 D order's Checklist:** assert `user_reactivate`'s full order of checks (finding 4), not only A-121's part of it; and write nothing on a same-role call (finding 5).
-- **Conventions §5:** list the `invalid_state` details screens may branch on, or say `detail` is advisory (finding 6).
+- ~~**Conventions §5:** list the `invalid_state` details screens may branch on, or say `detail` is advisory (finding 6).~~ — **answered 2026-10-30 by sr-talbot:** a closed list of ten, in conventions §5.
 - **`/flow-clarify M-04`:** Set PIN on a deactivated person (7); the screen's answer to `pin_not_needed` after a clash disappears (8).
 - **`/qa register M-04`:** rows for d39–d47 (9).
