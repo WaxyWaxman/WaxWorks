@@ -40,18 +40,25 @@ describe("A-105 — functions live in app, tables in public; app is exposed to P
 });
 
 describe("A-91 (amended 2026-09-21) — public sign-up is off in every environment", () => {
-  it("no section of config.toml leaves a sign-up path open", () => {
+  it("no section of config.toml leaves a sign-up path open but the email provider's switch", () => {
     // A-91's four Auth-identity paths are the whole set; a fifth built into every
     // Supabase branch from this file is the finding. Invites via the admin API
-    // still work with sign-up off.
+    // still work with sign-up off. [auth.email] is the one exception, and it is
+    // not a sign-up path (A-91, amended 2026-10-31; the next test).
     const open = Object.entries(bySection)
       .flatMap(([name, lines]) => lines.filter((l) => /^enable_signup\s*=\s*true/.test(l)).map(() => name));
-    expect(open, "sections with enable_signup = true").toEqual([]);
+    expect(open, "sections with enable_signup = true").toEqual(["auth.email"]);
   });
 
-  it("the two sign-up switches are stated false rather than left to a default", () => {
-    expect(setting("auth", "enable_signup"), "[auth].enable_signup").toMatch(/=\s*false/);
-    expect(setting("auth.email", "enable_signup"), "[auth.email].enable_signup").toMatch(/=\s*false/);
+  it("A-91, amended 2026-10-31 — public sign-up is off globally, and the email provider is on for sign-in", () => {
+    expect(
+      setting("auth", "enable_signup"),
+      "[auth].enable_signup must be false: it is the global switch (GOTRUE_DISABLE_SIGNUP) that refuses every public sign-up (A-91)",
+    ).toMatch(/=\s*false/);
+    expect(
+      setting("auth.email", "enable_signup"),
+      "[auth.email].enable_signup must be true: the CLI maps it to GOTRUE_EXTERNAL_EMAIL_ENABLED, the email-login switch a store account's password sign-in needs (E-01 d24; A-91, amended 2026-10-31)",
+    ).toMatch(/=\s*true/);
   });
 
   it("anonymous sign-in stays off beside it (A-91)", () => {

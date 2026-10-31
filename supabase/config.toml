@@ -195,14 +195,20 @@ minimum_password_length = 6
 password_requirements = ""
 
 # Configure passkey sign-ins.
-# [auth.passkey]
-# enabled = false
+# E-01 d33, A-117: a Manager's or Owner's personal session opens with a passkey
+# alone. On locally for A-126's integration tests (tests/auth/), which drive a
+# ceremony through Chromium's virtual authenticator on a test-only page served
+# at http://localhost:3000. WebAuthn needs the page's host to be the rp_id, so
+# the origin is `localhost`, not 127.0.0.1. Production's passkey settings are the
+# dashboard's (runbook).
+[auth.passkey]
+enabled = true
 
 # Configure WebAuthn relying party settings (required when passkey is enabled).
-# [auth.webauthn]
-# rp_display_name = "Supabase"
-# rp_id = "localhost"
-# rp_origins = ["http://127.0.0.1:3000"]
+[auth.webauthn]
+rp_display_name = "Wax Works (local)"
+rp_id = "localhost"
+rp_origins = ["http://localhost:3000"]
 
 [auth.rate_limit]
 # Number of emails that can be sent per hour. Requires auth.email.smtp to be enabled.
@@ -227,9 +233,13 @@ web3 = 30
 # secret = ""
 
 [auth.email]
-# Allow/disallow new user signups via email to your project.
-# Off with [auth].enable_signup, for A-91's reason (S-01 d2: no public sign-up).
-enable_signup = false
+# A-91, amended 2026-10-31: despite its name, the CLI maps this to
+# GOTRUE_EXTERNAL_EMAIL_ENABLED — the email provider itself, sign-in included.
+# Off, a store account's email-and-password sign-in (E-01 d24) answers
+# "email_provider_disabled". It is ON for sign-in only: public sign-up stays off
+# through [auth].enable_signup = false (GOTRUE_DISABLE_SIGNUP), which
+# tests/auth proves by having /auth/v1/signup refused (S-01 d2: no public sign-up).
+enable_signup = true
 # If enabled, a user will be required to confirm any email change on both the old, and new email
 # addresses. If disabled, only the new email is required to confirm.
 double_confirm_changes = true
@@ -297,9 +307,13 @@ max_frequency = "5s"
 # uri = "pg-functions://postgres/auth/before-user-created-hook"
 
 # This hook runs before a token is issued and allows you to add additional claims based on the authentication method used.
-# [auth.hook.custom_access_token]
-# enabled = true
-# uri = "pg-functions://<database>/<schema>/<hook_name>"
+# A-87, A-125: the access-token hook sets the principal and its scope as claims.
+# It is authz.access_token_hook, a definer function in the unexposed `authz`
+# schema, executable by supabase_auth_admin alone. Production's hook is the
+# dashboard's setting (A-116, runbook) and must name the same function.
+[auth.hook.custom_access_token]
+enabled = true
+uri = "pg-functions://postgres/authz/access_token_hook"
 
 # Configure one of the supported SMS providers: `twilio`, `twilio_verify`, `messagebird`, `textlocal`, `vonage`.
 [auth.sms.twilio]

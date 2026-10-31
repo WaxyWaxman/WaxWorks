@@ -10,6 +10,7 @@
     "lint": "pnpm -r --if-present run lint",
     "test": "pnpm -r --filter !@waxworks/e2e --if-present run test && vitest run --root . --config vitest.repo.config.ts",
     "test:repo": "vitest run --root . --config vitest.repo.config.ts",
+    "test:auth": "vitest run --root . --config tests/auth/vitest.config.ts",
     "check:docs": "python scripts/check_docs.py",
     "check:coverage": "python scripts/check_coverage.py",
     "e2e": "pnpm --filter @waxworks/e2e run test"
