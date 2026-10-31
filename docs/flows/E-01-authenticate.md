@@ -95,6 +95,7 @@ The shape decision 18 was built to protect held: actions are still attributed to
 - **A store session comes only from a password sign-in** (A-130, 2026-10-31): the hook refuses a store account's token from any other method, so a magic link to the Store's mailbox cannot outlive the Owner's reset (decision 34).
 - **An enrolment session exists only inside an issued link's window** (A-131, 2026-10-31): a person may not request their own link and enrol a passkey with it; re-enrolment stays an Owner's act ([M-04](M-04-manage-users.md) d38).
 - **A PIN is never checked in a read-only transaction** (A-129, 2026-10-31): the pad and every PIN resolution refuse one first, so decision 31's throttle cannot be bypassed by a GET.
+- **A refusal's record survives the call** (A-133, 2026-10-31): PostgREST commits every read-write call and a client cannot ask for a rollback, so decision 31's record cannot be discarded by the caller.
 
 **From [M-06](M-06-settings.md):**
 
