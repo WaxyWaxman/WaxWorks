@@ -187,6 +187,52 @@ describe("A-129, A-119 — the PIN pad over HTTP", () => {
     console.log(`A-119 committed: ${JSON.stringify(rows[0])}`);
     expect(rows[0]).toEqual({ refusals: 6, closures: 1, flags: 1 });
   });
+
+  it("A-133 — a client asking PostgREST to roll back cannot discard a refusal's record: db-tx-end stays commit (finding 31)", async () => {
+    // The line A-119's test closed is reopened: this Organization's throttle state is cleared.
+    exec(`delete from public.pin_refusals where org_id = '${org.orgId}';`);
+    exec(`delete from public.review_flags where org_id = '${org.orgId}' and kind = 'pin_line_closed';`);
+    exec(`delete from public.pin_line_closures where org_id = '${org.orgId}';`);
+    const count = () =>
+      sql<{ n: number }>(`select count(*)::int as n from public.pin_refusals where org_id = '${org.orgId}'`)[0]?.n ?? -1;
+    const seen: string[] = [];
+    const variants: Array<[string, string]> = [
+      ["tx=rollback", "tx=rollback"],
+      ["max-affected=0, handling=strict", "max-affected=0, handling=strict"],
+    ];
+    const results: Record<string, { status: number; message: unknown; applied: string | null; added: number }> = {};
+    for (const [name, prefer] of variants) {
+      const before = count();
+      const r = await rest("/rpc/manager_authorize_pin", store, {
+        method: "POST", schema: "app", body: pinBody("8080"), headers: { Prefer: prefer },
+      });
+      const added = count() - before;
+      results[name] = { status: r.status, message: r.body.message ?? r.body.code, applied: r.preferenceApplied, added };
+      seen.push(`Prefer: ${prefer} -> ${r.status} ${JSON.stringify(r.body)} Preference-Applied: ${r.preferenceApplied} pin_refusals +${added}`);
+    }
+    console.log(`A-133 rollback requested:\n${seen.join("\n")}`);
+    // tx=rollback is ignored under db-tx-end = commit: refused, and the record committed.
+    expect(results["tx=rollback"]).toMatchObject({ status: 403, message: "pin_refused", added: 1 });
+    expect(results["tx=rollback"]!.applied ?? "").not.toContain("tx=rollback");
+    // PostgREST v16.2 answers max-affected with handling=strict on a scalar RPC 400
+    // PGRST128 and nothing is recorded (observed 2026-10-31). Whether the function
+    // ran and was rolled back is not visible from here; what must hold is that the
+    // answer is no oracle: a correct PIN under the same header gets the same answer
+    // and names nobody.
+    const strict = results["max-affected=0, handling=strict"]!;
+    if (strict.status === 403) {
+      expect(strict).toMatchObject({ message: "pin_refused", added: 1 });
+    } else {
+      expect(strict).toMatchObject({ status: 400, message: "Function must return SETOF or TABLE when max-affected preference is used with handling=strict", added: 0 });
+      const right = await rest("/rpc/manager_authorize_pin", store, {
+        method: "POST", schema: "app", body: pinBody("4321"), headers: { Prefer: "max-affected=0, handling=strict" },
+      });
+      console.log(`A-133 correct PIN under max-affected=0, handling=strict -> ${right.status} ${JSON.stringify(right.body)}`);
+      expect(right.status).toBe(400);
+      expect(right.body).toMatchObject({ code: "PGRST128" });
+      expect(JSON.stringify(right.body)).not.toContain(org.people.holder!.id);
+    }
+  });
 });
 
 describe("A-122 — a personal session belongs only to an active Manager or Owner", () => {

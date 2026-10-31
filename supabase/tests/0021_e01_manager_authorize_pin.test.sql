@@ -325,9 +325,17 @@ select is(
   5, 'E-01 d39 - the flag''s subject joins to exactly the five counted refusals that closed the line (E-01-T24)');
 
 -- ── While closed (E-01 d31, d38) ───────────────────────────────────────────
--- The closure as it stood when the line closed, to compare after the attempts.
+-- The closure is backdated by a known minute before the attempts (Finding 32):
+-- pgTAP runs this file in one transaction, so now() is fixed, and a closed
+-- attempt that rewrote the closure from now() would leave it equal to a copy
+-- taken at closing. Backdated, the line is still closed (reopens_at is fourteen
+-- minutes ahead), and any now()-based rewrite differs from the expected values.
+update public.pin_line_closures
+   set closed_at = closed_at - interval '1 minute', reopens_at = reopens_at - interval '1 minute';
 create temp table closure_before as
   select id, closed_at, reopens_at from public.pin_line_closures;
+select is((select reopens_at from closure_before), now() + interval '14 minutes',
+  'E-01 d38 - the closure is backdated a minute before the attempts while closed: reopens_at is now() + 14 minutes');
 select pg_temp.at_a1();
 select is(
   (select pg_temp.pin('1111', '00000000-0000-0000-0003-000000000002') - 'details'),
@@ -352,10 +360,15 @@ select is((select count(*)::int from public.pin_refusals r, public.pin_line_clos
 select is((select count(*)::int from public.pin_line_closures), 1,
   'E-01 d38 - attempts while closed do not start another closure');
 select is(
+  (select jsonb_build_object('closed_at', c.closed_at, 'reopens_at', c.reopens_at)
+     from public.pin_line_closures c),
+  jsonb_build_object('closed_at', now() - interval '1 minute', 'reopens_at', now() + interval '14 minutes'),
+  'E-01 d38 - attempts while closed do not move reopens_at: the closure keeps exactly its backdated times, not now()-based ones');
+select is(
   (select jsonb_build_object('closed_at', c.closed_at = b.closed_at, 'reopens_at', c.reopens_at = b.reopens_at)
      from public.pin_line_closures c join closure_before b on b.id = c.id),
   '{"closed_at": true, "reopens_at": true}'::jsonb,
-  'E-01 d38 - attempts while closed do not move reopens_at: the closure is unchanged, not merely fifteen minutes long');
+  'E-01 d38 - attempts while closed leave the closure as it stood before them');
 select is((select count(*)::int from public.review_flags), 1,
   'E-01 d38 - attempts while closed raise no further flag');
 
