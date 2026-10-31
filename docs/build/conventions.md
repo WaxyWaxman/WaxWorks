@@ -364,9 +364,11 @@ is a pull request both humans review (§7, workflow §4).
 | Wrong state for the act — re-sending to someone already enrolled, recovering while an Owner exists (M-04 d38, A-90) | `WX409` | `invalid_state` | what state — one value of the closed list below |
 | PIN pepper missing (A-115, A-127) | `XX000` | `pin_pepper_missing` | — |
 
+**`read_only` — decided 2026-10-31 by sr-talbot (A-129), not yet in the table above.** A function on A-119's list called in a read-only transaction (PostgREST runs GET and HEAD that way) raises `read_only` with SQLSTATE **`25006`**, before any PIN is read; PostgREST answers 405. It joins the table with `REFUSALS` in the next contract change, as below.
+
 **`invalid_input` raised by the database — decided 2026-10-31 by sr-talbot, not yet in the table above.** An argument the database itself rejects — A-120's actor pair given half null — is raised `invalid_input` with SQLSTATE **`22023`** (`invalid_parameter_value`, so PostgREST answers 400), and its detail names the argument. **D raises it so today.** It joins the table **together with** `REFUSALS` and `REFUSAL_DETAIL` in `packages/contracts/src/client.ts`, in the next contract change, because `tests/contracts-m1.test.ts` holds the table and `REFUSALS` equal; until then the real client reports it as `rpc_failed`, not a refusal.
 
-**`invalid_state`'s detail is a closed list** (eleven values since A-128 added `linked`). A screen may branch on the key **and** the detail; **D** raises exactly these values and its pgTAP refusal tests assert SQLSTATE, key and detail; a new state is a new row here first. _Decided 2026-10-30 by sr-talbot (M1-contracts-3 finding 6); the values are the fake's at `19a49ed`._
+**`invalid_state`'s detail is a closed list** (twelve values since A-128 added `linked` and A-132 `auth_user_in_use`). A screen may branch on the key **and** the detail; **D** raises exactly these values and its pgTAP refusal tests assert SQLSTATE, key and detail; a new state is a new row here first. _Decided 2026-10-30 by sr-talbot (M1-contracts-3 finding 6); the values are the fake's at `19a49ed`._
 
 | Detail | The state | Raised by | Decision |
 |---|---|---|---|
@@ -378,6 +380,7 @@ is a pull request both humans review (§7, workflow §4).
 | `last_store` | Unassigning an Employee's or Manager's last Store | `user_unassign` | M-04 d27 |
 | `active_owner` | Recovering an Organization that has an active Owner | `owner_recover` | A-90, M-04 d38 |
 | `linked` | Linking a row that is already linked to an Auth user | `auth_user_link` (`user`, `store` kinds) | A-128 |
+| `auth_user_in_use` | Linking an Auth user already linked to another `users`, `stores` or `system_administrators` row | `auth_user_link` | A-132 |
 | `auth_user_mismatch` | A passkey enrolment for a row not linked to that Auth user | `auth_user_link` (`p_kind = 'passkey'`) | A-117 |
 | `employee` | A link sent to an Employee | `user_reset_request`, `user_invite_resend` | A-114 |
 | `enrolled` | Re-sending an invite to someone already enrolled | `user_invite_resend` | A-114, A-117 |
