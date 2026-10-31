@@ -32,6 +32,7 @@ seventh job that lands with the first `/qa automate`, not at M0 (A-97).
 | Typecheck | `pnpm typecheck` — `tsc --noEmit` in each workspace member (A-102) | both |
 | Lint | `pnpm lint` — ESLint with `typescript-eslint` and `eslint-config-next` (A-102) | both |
 | Unit tests, screens | `pnpm test` — vitest in `apps/web/` (A-102; `.claude/skills/qa/SKILL.md` §Levels) | U |
+| Integration tests against local Auth | vitest for token claims and Playwright's Chromium virtual authenticator for passkeys, under `tests/auth/`, against `supabase start`; the command is set by the first order that writes them (A-126) | D |
 | Decision-to-test gate | `python scripts/check_coverage.py --order docs/build/orders/<order>.md` | both |
 | Document gate | `python scripts/check_docs.py` | both |
 | End-to-end | `npx playwright test` from `e2e/` (A-85) — QA's, not the developer's (workflow §1) | neither |
@@ -268,6 +269,14 @@ The **pure helpers** (`round_to_ending`, `suggested_retail`, `tax_rate_at`,
 tests are plain assertions — §6 calls them "the highest-value tests in the
 system". Test them from the flows' worked examples.
 
+**Four implementation choices, confirmed 2026-10-31 by sr-talbot** (from the E-01 D
+build): a definer function **returns `jsonb`**, matching its contract's output
+object and A-119's returned refusals; a **PIN is stored as the hex HMAC-SHA-256**
+of its digits, keyed with the pepper from `authz.pin_pepper()` (A-89, A-127); a
+returned refusal **sets the HTTP status by its code's class** (§5); and the six
+`authz` helpers read the JWT's claims through Supabase's **`auth.jwt()`**, not
+`request.jwt.claims` directly, so the record names one way of reading claims.
+
 ### 3.4 pgTAP tests
 
 - One file per function or table group under `supabase/tests/`, run by
@@ -351,9 +360,11 @@ is a pull request both humans review (§7, workflow §4).
 | The Owner floor (M-04 d26) | `23514` | `owner_floor` | — |
 | Required field for this role missing — a Manager's PIN or email (M-04 d35, d33) | `23502` | `pin_required`, `email_required`, `initials_required` | — |
 | Wrong state for the act — re-sending to someone already enrolled, recovering while an Owner exists (M-04 d38, A-90) | `WX409` | `invalid_state` | what state — one value of the closed list below |
-| PIN pepper missing (A-115) | `XX000` | `pin_pepper_missing` | — |
+| PIN pepper missing (A-115, A-127) | `XX000` | `pin_pepper_missing` | — |
 
-**`invalid_state`'s detail is a closed list.** A screen may branch on the key **and** the detail; **D** raises exactly these values and its pgTAP refusal tests assert SQLSTATE, key and detail; a new state is a new row here first. _Decided 2026-10-30 by sr-talbot (M1-contracts-3 finding 6); the values are the fake's at `19a49ed`._
+**`invalid_input` raised by the database — decided 2026-10-31 by sr-talbot, not yet in the table above.** An argument the database itself rejects — A-120's actor pair given half null — is raised `invalid_input` with SQLSTATE **`22023`** (`invalid_parameter_value`, so PostgREST answers 400), and its detail names the argument. **D raises it so today.** It joins the table **together with** `REFUSALS` and `REFUSAL_DETAIL` in `packages/contracts/src/client.ts`, in the next contract change, because `tests/contracts-m1.test.ts` holds the table and `REFUSALS` equal; until then the real client reports it as `rpc_failed`, not a refusal.
+
+**`invalid_state`'s detail is a closed list** (eleven values since A-128 added `linked`). A screen may branch on the key **and** the detail; **D** raises exactly these values and its pgTAP refusal tests assert SQLSTATE, key and detail; a new state is a new row here first. _Decided 2026-10-30 by sr-talbot (M1-contracts-3 finding 6); the values are the fake's at `19a49ed`._
 
 | Detail | The state | Raised by | Decision |
 |---|---|---|---|
@@ -364,6 +375,7 @@ is a pull request both humans review (§7, workflow §4).
 | `no_store` | An Employee or Manager with no Store, at Add or a demotion | `user_add`, `user_change_role` | M-04 d27 |
 | `last_store` | Unassigning an Employee's or Manager's last Store | `user_unassign` | M-04 d27 |
 | `active_owner` | Recovering an Organization that has an active Owner | `owner_recover` | A-90, M-04 d38 |
+| `linked` | Linking a row that is already linked to an Auth user | `auth_user_link` (`user`, `store` kinds) | A-128 |
 | `auth_user_mismatch` | A passkey enrolment for a row not linked to that Auth user | `auth_user_link` (`p_kind = 'passkey'`) | A-117 |
 | `employee` | A link sent to an Employee | `user_reset_request`, `user_invite_resend` | A-114 |
 | `enrolled` | Re-sending an invite to someone already enrolled | `user_invite_resend` | A-114, A-117 |
