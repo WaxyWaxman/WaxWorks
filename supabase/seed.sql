@@ -26,8 +26,14 @@
 --      Organization that already exists. It never runs against production: a
 --      seeded PIN is a known credential (A-100, A-101).
 --
--- M0: nothing to seed. No table exists yet; the first blocks arrive with M1's
--- D order (Organizations, Stores, Users, store_assignments, user_pins, the
--- configuration tables A-53 places there). This file runs to completion so
--- `supabase db reset` is green from the first migration.
-select 1 as seed_m0_nothing_to_seed;
+-- M1, E-01 D: fixtures only (the order's row 8, chosen at approval). Every
+-- writer of the identity tables is another order's (organization_create S-01,
+-- store_create O-01, user_add M-04), so no Organization, Store or User is
+-- seeded until those functions exist; pgTAP fixtures stand alone.
+
+-- BOOTSTRAP (A-115, A-101 as amended): the PIN pepper. Production's is created
+-- by hand, generated in the database and seen by nobody (runbook). This one is
+-- FIXED AND FABRICATED — public by construction, harmless wherever the seed runs,
+-- since no real PIN exists here, and production is never seeded.
+select vault.create_secret('waxworks-local-pin-pepper-fabricated-not-a-secret', 'pin_pepper')
+ where not exists (select 1 from vault.secrets where name = 'pin_pepper');
