@@ -1,7 +1,7 @@
 # Wax Works — the build plan
 
 **Maintained by:** the coordinator, at the end of every build session. Read first by whoever picks up next.
-**Last updated:** 2026-10-30, sr-talbot's session — through #210; the three M1 contract orders `Accepted`, contract commit `19a49ed`
+**Last updated:** 2026-10-31, sr-talbot's session — through #226; E-01 D built and corrected, its order `In review`; this file reshaped as the path to M4
 
 The [workflow](workflow.md) says how an order moves; the [conventions](conventions.md)
 say what the code looks like; the [status table](status.md) says what has landed.
@@ -29,196 +29,183 @@ build: invented conventions, silent bugs, and context blown by reading everythin
 
 ---
 
-## 2. Where we are — 2026-10-30
+## 2. Where we are — 2026-10-31
 
-**The M1 contracts are done, in three orders, all `Accepted`** (sr-talbot's verdicts):
+**E-01 D is on `main`, reviewed, and corrected; its order is `In review`, not yet
+`Accepted`.** Everything in the table landed this stretch; read the rows, not this list.
 
-| Order | Pull requests | Verdict | What it landed |
-|---|---|---|---|
-| [`M1-contracts`](orders/M1-contracts.md) | [#197](https://github.com/WaxyWaxman/WaxWorks/pull/197), follow-up [#200](https://github.com/WaxyWaxman/WaxWorks/pull/200); verdict [#202](https://github.com/WaxyWaxman/WaxWorks/pull/202) | `Returned` 2026-10-13 (GimpyMatey), then `Accepted` 2026-10-29/30 | The 20 Identity functions, the fake, A-108's wrapper; findings 1 and 2 fixed; A-117's and A-118's contract changes; the SQLSTATEs |
-| [`M1-contracts-2`](orders/M1-contracts-2.md) | [#204](https://github.com/WaxyWaxman/WaxWorks/pull/204), review [#205](https://github.com/WaxyWaxman/WaxWorks/pull/205); verdict [#206](https://github.com/WaxyWaxman/WaxWorks/pull/206) | `Accepted` 2026-10-29 | A-120's pad arguments; `user_reactivate`'s `p_pin`; the fake for M-04 d39–d44 |
-| [`M1-contracts-3`](orders/M1-contracts-3.md) | [#208](https://github.com/WaxyWaxman/WaxWorks/pull/208); verdict [#209](https://github.com/WaxyWaxman/WaxWorks/pull/209) | `Accepted` 2026-10-29 | The fake for M-04 d46 and d47 |
+| PR | What it did |
+|---|---|
+| [#211](https://github.com/WaxyWaxman/WaxWorks/pull/211) | This file through #210 |
+| [#212](https://github.com/WaxyWaxman/WaxWorks/pull/212) | **A-122** (a personal session belongs only to an active Manager or Owner); conventions §5's `invalid_state` details become a closed list |
+| [#213](https://github.com/WaxyWaxman/WaxWorks/pull/213) | Register rows M-04-T20–T28, E-01-T24; A-120 on E-01-T19 |
+| [#214](https://github.com/WaxyWaxman/WaxWorks/pull/214), [#217](https://github.com/WaxyWaxman/WaxWorks/pull/217) | [`E-01-D-M1`](orders/E-01-D-M1.md) drafted (38 rows: the tenancy foundation plus E-01's five functions), then `Approved` by sr-talbot — fixtures-only seed, relinking `Blocked` |
+| [#215](https://github.com/WaxyWaxman/WaxWorks/pull/215) | E-01 d38–d39: the throttle's edges; the closure flag is the system's, no actor |
+| [#216](https://github.com/WaxyWaxman/WaxWorks/pull/216) | **A-123** — `pin_refusals` and `pin_line_closures` as rows, a per-Store advisory lock |
+| [#218](https://github.com/WaxyWaxman/WaxWorks/pull/218) | **A-124** — the row-security helpers live in `authz`, not `auth` (a migration cannot create in `auth`) |
+| [#219](https://github.com/WaxyWaxman/WaxWorks/pull/219) | **A-125 to A-128** — the hook as a definer owned by `waxworks_app`, executable by `supabase_auth_admin` only; the `tests/auth` harness (vitest + Playwright, Chromium's virtual authenticator); the pepper read through `authz.pin_pepper()`; `principal = 'service'`, no relinking |
+| [#220](https://github.com/WaxyWaxman/WaxWorks/pull/220) | **A-91 amended** — email login on, sign-up off (the store account could not sign in otherwise); claims read from `request.jwt.claims`; A-125 clarified |
+| [#221](https://github.com/WaxyWaxman/WaxWorks/pull/221) | **E-01 D built** — 11 migrations, 9 pgTAP files, `tests/auth`, the hook wired in `config.toml`; CI runs `test:auth`. Merged **before its verdict, with red CI** (finding 29) |
+| [#222](https://github.com/WaxyWaxman/WaxWorks/pull/222) | The review's 29 findings. **Finding 1 blocked:** a PIN oracle over HTTP GET — PostgREST runs a GET RPC read-only, so a correct PIN named its holder and a wrong one's refusal never committed |
+| [#223](https://github.com/WaxyWaxman/WaxWorks/pull/223) | `main` green again: the Supabase CLI prints different JSON under an AI agent than in CI; the harness reads both |
+| [#224](https://github.com/WaxyWaxman/WaxWorks/pull/224) | **A-129 to A-132** — read-only refused before any PIN is read; a store session only from a password sign-in; an enrolment session only inside a 24-hour window a link-sending function opened; one Auth user, one row across the three tables. §10 gains the `PUT /auth/v1/user` risk |
+| [#225](https://github.com/WaxyWaxman/WaxWorks/pull/225) | **The corrections** — five new migrations (A-101: nothing merged is edited); 374 pgTAP assertions, 33 Auth integration tests. Merged before the re-review finished |
+| [#226](https://github.com/WaxyWaxman/WaxWorks/pull/226) | The re-review's findings 30–45. **Finding 1 is closed** (architect, qa-reviewer, `/code-review`). Finding 14 is **not fixed**; two draft decisions and five questions in Needs a human |
 
-**The contract commit the M1 D and U orders build against is `19a49ed`** (#208),
-plus the one-line M-04 d48 fake fix in §3 step 3. **#197, #200 and #204 merged
-before their review finished**; #208 was the first done in order. **No M1 D or U
-order exists yet**, and [status.md](status.md)'s M1 rows are empty.
+**What the E-01 D order still needs before `Accepted`** — all in its Findings table:
+finding 14 (a test that cannot catch the regression it names), finding 33 (no test
+holds A-132's lock), finding 30 (a System Administrator's enrolment window is never
+closed), finding 31 (production's PostgREST rollback setting, unrecorded). None is a
+schema change; 14 and 33 are tests, 30 and 31 are a decision and a runbook line each.
 
-**Decided in this stretch** — read the rows, not this list: **A-119** (a refusal whose
-record must be kept is returned, not raised), **A-120** (`manager_authorize_pin` takes
-the staff session's actor), **A-121** (reactivation's PIN clash joins A-119's list);
-**M-04 d39–d49** (PINs at demotion and reactivation, invites, deactivated people,
-Set PIN's scope, the freed-PIN prompt); the **SQLSTATEs** `not_found` = `WX404`,
-`invalid_state` = `WX409` (conventions §5). Every flow is `Specified`. **A-1 to A-121
-are ratified except A-96** (the `staging` branch and CI security review, still
-*recommended, not yet ratified*).
+**Production** is unchanged since 2026-10-13: M0's two migrations, never seeded, no
+hook, no pepper, no System Administrators. **M1's migrations have not been pushed**,
+and must not be until §4's *blocks deployment* rows are clear.
 
-**M0 is `Accepted`** ([#188](https://github.com/WaxyWaxman/WaxWorks/pull/188), sr-talbot, 2026-10-13): findings 28 and 29
-`discharged`, Checklist 17/17 with row 13 `Deferred`. Its row is in [status.md](status.md).
+**Decided this stretch and ratified by sr-talbot alone:** A-122 to A-132, E-01
+d38–d39, the `invalid_input` = `22023` and `read_only` = `25006` notes in conventions
+§5, the A-91 amendment. Joint assent is pending on all of them (§4).
 
-**The flow questions M1 depended on are answered** (#192, #194): PIN throttling per
-Store (E-01 d31–d32); **passkey-only sign-in** for Managers and Owners, no password, no
-fallback (E-01 d33); no store-account second factor (d34); accepting an invitation
-and the Owner with no Store (d35–d36); System Administrators on passkeys now (S-01 d7);
-PIN required, Employee email optional, the wide Manager scope, no self-service passkey
-recovery (M-04 d35–d38). The first shop's settings are Alberta, CAD, March 31, 80mm
-(#193). Conventions §5 now says how the fake knows its session and how refusals are
-told apart (#195).
+**What runs today**, from a clean clone (tooling in §5): `pnpm test` → 536;
+`supabase test db` → 374 across 14 files; `pnpm test:auth` → 33 (needs
+`supabase start` and Chromium via `playwright install`). **Run `test:auth` with the
+agent environment removed too** — `env -u CLAUDECODE -u AI_AGENT -u CLAUDE_CODE_ENTRYPOINT pnpm test:auth` —
+because the Supabase CLI's JSON differs under an agent and CI sees the second form;
+#221 went red on exactly that while three agent-run local passes were green.
 
-**Production exists and serves the app** — on free plans throughout (A-109):
+**Do not stack pull requests, and gate the push on the state.** #225 merged while
+the re-review ran; the commit pushed to it afterwards went nowhere (recovered as
+#226). `gh pr view N --json state -q .state && git push` prints `MERGED` and pushes
+anyway — use `[ "$(gh pr view N --json state -q .state)" = OPEN ] && git push`.
 
-| Piece | State | Record |
-|---|---|---|
-| Supabase | `udrtvdlmoaqsgzxobwwq`, `ca-central-1`, Postgres 17, free plan, in the Vercel-managed organization; M0's two migrations, never seeded; sign-up off, `app` exposed | A-109, [runbook](runbook.md) |
-| Vercel | `https://wax-works.vercel.app` → `200`; three Production-only variables (`NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`, `SUPABASE_SECRET_KEY`); previews hold no database. Every deployment before 2026-10-13 was empty (M0 finding 40) | A-109, M0 finding 40 |
-| Auth email | `waxworks.store` (Vercel; expires 2027-10-13, **auto-renew off**); Resend verified on `mail.waxworks.store`; Supabase custom SMTP; Site URL production; invite and recovery templates in `supabase/templates/`. The first test invite landed in spam | A-116, runbook |
-
-**Real shop data may enter production before the paid plan**, with **no backup**
-until the upgrade due by M6 (A-109 as amended). It cannot enter yet: the
-[runbook](runbook.md) §2 lists what stands between — most of it waits on M1's
-migrations (the hook, `pin_pepper`, the System Administrators), plus passkeys for
-System Administrators (S-01 d6). The first shop's settings values were answered on 2026-10-13 — Alberta, CAD, March 31, 80mm (A-112, §11).
-
-**The M1 plan-check (2026-10-13)** found the record could support neither the M1
-contract pull request nor real data at the end of M1. A-110 to A-116 close the
-structural part: System Administrators from a table (A-110), Create Organization
-and Create Store at M1 (A-111), `store_create` writing the first shop's defaults
-(A-112), five header exceptions (A-113), `auth_user_link` as the service role's one
-function and the Owner's reset and re-send at M1 (A-114), the pepper (A-115), and
-production Auth (A-116). What remains is in the flows — §3 step 1.
-
-| PR | Landed | What it did |
-|---|---|---|
-| [#168](https://github.com/WaxyWaxman/WaxWorks/pull/168), [#171](https://github.com/WaxyWaxman/WaxWorks/pull/171) | merged | [`conventions.md`](conventions.md) and the track-aware lane hook; A-97 to A-103 |
-| [#172](https://github.com/WaxyWaxman/WaxWorks/pull/172), [#175](https://github.com/WaxyWaxman/WaxWorks/pull/175) | merged | [`orders/M0-foundation.md`](orders/M0-foundation.md) drafted, then approved by sr-talbot |
-| [#176](https://github.com/WaxyWaxman/WaxWorks/pull/176) | merged | **M0 built** — and **merged before its verdict**, which is finding 28 and the reason §3 step 1 exists |
-| [#177](https://github.com/WaxyWaxman/WaxWorks/pull/177) | merged | The three reviewers' first 28 findings; Supabase CLI pinned in CI |
-| [#178](https://github.com/WaxyWaxman/WaxWorks/pull/178), [#179](https://github.com/WaxyWaxman/WaxWorks/pull/179) | merged | A-104, A-105, the A-91 amendment; this file |
-| [#180](https://github.com/WaxyWaxman/WaxWorks/pull/180) | merged | **The fix pull request** — the correcting migration (A-101), two pgTAP suites, `app` exposed, the wrapper minting `p_request_id`, `resolve_scan`'s `p_code`, the six §6 return shapes. 18 findings `fixed`, 9 `disputed`, 1 partly each |
-| [#181](https://github.com/WaxyWaxman/WaxWorks/pull/181) | merged | **A-106, A-107, A-108 ratified** — the Sentry allowlist precondition, the grant assertion, the wrapper's `request_id`. Propagated into `conventions.md`, the order and this file |
-| [#182](https://github.com/WaxyWaxman/WaxWorks/pull/182) | merged | The review's questions collected into the order's **Needs a human**; `architecture.md` §11 gains two open questions; **`tests/` becomes the fifth workspace member** and `e2e` and `db-types` gain lint |
-| [#183](https://github.com/WaxyWaxman/WaxWorks/pull/183) | merged | **Checklist rows 7, 15 and 17 amended** by the owner, struck in place — findings 36, 17, 25 |
-| [#184](https://github.com/WaxyWaxman/WaxWorks/pull/184) | merged | **The A-102 amendment ratified** — *per member* reaches ESLint, and no TypeScript file sits outside a member |
-| [#185](https://github.com/WaxyWaxman/WaxWorks/pull/185) | merged | **`discharged`** — a third terminal state for a blocking finding whose remedy is not code, with its naming requirement. Amends [`workflow.md`](workflow.md) §2, §3, §4 and the `work-order` skill |
-| [#186](https://github.com/WaxyWaxman/WaxWorks/pull/186) | merged | This file to the M0 review's end, and two fixes found preparing the verdict |
-| [#187](https://github.com/WaxyWaxman/WaxWorks/pull/187) | merged | **A-109** — free-plan Supabase, previews against no database; the key rename; M0 row 13 amended; **finding 40**; amended to allow real data before the upgrade |
-| [#188](https://github.com/WaxyWaxman/WaxWorks/pull/188) | merged | **M0 `Accepted`** — findings 28 and 29 `discharged` |
-| [#189](https://github.com/WaxyWaxman/WaxWorks/pull/189) | merged **into #187's branch, not `main`** | A-110 to A-116 — stacked on #187, which merged first; none of it reached `main` |
-| [#190](https://github.com/WaxyWaxman/WaxWorks/pull/190) | merged | #189's content onto `main`, with the four commits that missed it: the sending domain, two runbook updates, the Auth templates |
-| [#197](https://github.com/WaxyWaxman/WaxWorks/pull/197) | merged **before its verdict** | The M1 contracts: the 20 Identity functions, the fake. Reviewed after merge; `Returned` 2026-10-13 |
-| [#198](https://github.com/WaxyWaxman/WaxWorks/pull/198) | merged | **A-117** (the enrolment session, `passkey_enrolled_at`) and **A-118** (default table grants revoked; `for select` policies; the pgTAP check); E-01 d37 |
-| [#199](https://github.com/WaxyWaxman/WaxWorks/pull/199) | merged | The M1 contracts order `Returned` — the review's findings; this file through #198 |
-| [#200](https://github.com/WaxyWaxman/WaxWorks/pull/200) | merged **before its verdict** | The M1 contracts follow-up: findings 1 and 2, A-117's and A-118's contract changes |
-| [#201](https://github.com/WaxyWaxman/WaxWorks/pull/201) | merged | **A-119, A-120** |
-| [#202](https://github.com/WaxyWaxman/WaxWorks/pull/202) | merged | **M1-contracts `Accepted`**; the third round's code-review findings applied |
-| [#203](https://github.com/WaxyWaxman/WaxWorks/pull/203) | merged | M-04 d39–d45 |
-| [#204](https://github.com/WaxyWaxman/WaxWorks/pull/204), [#205](https://github.com/WaxyWaxman/WaxWorks/pull/205) | #204 merged **before its review finished** | The second contract pull request, and its review's tests and findings |
-| [#206](https://github.com/WaxyWaxman/WaxWorks/pull/206) | merged | **A-121**; **M1-contracts-2 `Accepted`** |
-| [#207](https://github.com/WaxyWaxman/WaxWorks/pull/207) | merged | M-04 d46–d47 |
-| [#208](https://github.com/WaxyWaxman/WaxWorks/pull/208), [#209](https://github.com/WaxyWaxman/WaxWorks/pull/209) | merged after its review | The third contract pull request (`19a49ed`); **M1-contracts-3 `Accepted`** |
-| [#210](https://github.com/WaxyWaxman/WaxWorks/pull/210) | merged | M-04 d48–d49 — d48 not yet in the fake (§3 step 3) |
-
-**Three things the review changed that outlive M0.** The **`discharged`** state
-(#185), because *every blocking finding `fixed`* had no exit for a finding that
-records something irreversible — M0 finding 28 could never have been marked
-`fixed`, and neither could any future order's. **`tests/` as a workspace member**
-(#182, #184), because 332 assertions including every security assertion in the
-review were compiled by nothing and linted by nothing; turning `tsc` on found
-three real type errors on the first run. And **A-106**, because removing one
-Sentry hook had closed one emission path of several, and the SDK's defaults are
-error paths no sample rate gates.
-
-**What runs today.** From a clean clone with Node 24, pnpm 11.0.9, Docker Desktop
-and the Supabase CLI **2.117.0** on PATH: `pnpm install --frozen-lockfile`,
-`pnpm typecheck` and `pnpm lint` (**five members each** — `apps/web`,
-`packages/contracts`, `packages/db-types`, `e2e`, `tests`), `pnpm test`
-(**535** repository tests at #208, per [M1-contracts-3](orders/M1-contracts-3.md)'s Evidence), `supabase start -x studio,imgproxy,inbucket,edge-runtime,logflare,vector,realtime,storage-api,mailpit,supavisor`,
-`supabase db reset`, `supabase test db` (**19** assertions across four suites),
-`pnpm --filter @waxworks/db-types gen` with no diff, `pnpm --filter @waxworks/web build`.
-A Vercel project (`pressers/wax-works`) deploys an access-protected preview per
-pull request, against **no database** — which, under A-109, is now the design
-rather than a gap.
-
-**On the Supabase CLI version.** CI pins 2.117.0 and the `db-types` diff step
-compares generator output, so a developer on a different CLI — including
-scoop's `supabase-beta` — sees that step go red with nothing changed. Install
-the `supabase` package, not `supabase-beta`.
-
-**Do not stack pull requests.** #189 targeted #187's branch; when #187 merged first, #189 merged into that branch and `main` never saw it until #190. A pull request targets `main`, or is retargeted to `main` before anyone merges it. Branch each from `origin/main`, and check a pull request is `OPEN` before every push.
-
-**Merge after the verdict.** Four contract pull requests (#176 at M0, #197, #200, #204) merged before `/work-order check` finished. Run the check and leave the merge to the owners; branch protection was suggested and is their call.
+**Merge after the verdict.** #221 and #225 join #176, #197, #200 and #204 — six
+pull requests merged before `/work-order check` finished. Branch protection remains
+the owners' call.
 
 ---
 
-## 3. Next steps, in order
+## 3. The path to M4
+
+**The aim:** reach M4 (the till) with real shop data in production as early as M1
+lets us, and hold everything that is not a schema shape or a deployment blocker for
+after live testing. §8 fixes what each milestone *contains*; this fixes the order
+and the cut. Where this file recommends narrowing a milestone, the narrowing is
+_Status: recommended, not yet ratified_ and goes through `/plan-check` before it
+binds anything — §8 is the record, not this.
+
+**The one rule that makes "quickly" safe:** a decision that changes a table's shape
+is made **before the migration that creates the table**, because A-101 forbids
+editing a merged migration and real data makes a reshaping migration expensive.
+A decision that changes only a screen, a refusal key, a test or a runbook line can
+wait. §4 sorts every open item on that line.
 
 Ask sr-talbot before each step that writes.
 
-1. **One `/architecture` session** for two items that shape the M1 **D** order:
-   - **Conventions §5's `invalid_state` details** — list the values screens branch on
-     (`inactive`, `active`, `pin_not_needed`, `employee_has_no_pin`, `no_store`,
-     `auth_user_mismatch`, `employee`, `enrolled`), or state that `detail` is advisory
-     ([M1-contracts-3](orders/M1-contracts-3.md) finding 6; [M1-contracts](orders/M1-contracts.md) Needs a human, *refusal keys the table has no kind for*).
-   - **M-04 d45's mechanism** — how a demotion to Employee ends a personal session:
-     revoke the refresh tokens, or the access-token hook refuses a personal session to an
-     Employee. Amends A-87.
-   - Also on the M1-contracts order's list for `/architecture`, not yet routed: a missing
-     PIN pepper as a refusal (finding 18, the architect's draft — _Status: recommended,
-     not yet ratified._); whether `auth_user_link` may relink; a demoted Employee's
-     enrolment by a link sent before the demotion; the personal session's ignored
-     arguments (conventions §3.3); `principal` under `service_role` (A-94).
-2. **`/qa register M-04`** — rows for d39–d49 (M1-contracts-2 finding 11, M1-contracts-3
-   finding 9); add A-120 to E-01-T19's citations.
-3. **The d48 fake fix** — `user_set_pin` refuses a deactivated person (M-04 d48; not in
-   `packages/contracts/src/fake/identity.ts` at `53dbf08`). A contract change both owners
-   review; folded into the next contract work rather than an order of its own.
-4. **Draft the onboarding orders** with `/work-order`, against `19a49ed` — sr-talbot asked
-   for the onboarding slice first, to reach production and start QA:
-   - **E-01 D and U** — store sign-in, initials, the PIN pad, personal passkey sign-in,
-     accept-invite and the enrolment session (A-117);
-   - **S-01** Create Organization;
-   - **O-01** Create Store and the store-account reset.
+### M1 — finish the onboarding slice (now)
 
-   **The E-01 D order's Checklist also carries:** A-118's revokes and its pgTAP check;
-   A-117's hook, and a test that a **refreshed** passkey session keeps `passkey` in `amr`;
-   A-107's grant assertion; A-119's and A-121's returned refusals, asserting
-   `user_reactivate`'s full order of checks (in reach, `active`, initials,
-   `employee_has_no_pin`, `pin_not_needed`, `pin_clash` — M1-contracts-3 finding 4);
-   pgTAP refusal tests asserting both SQLSTATE and key (M1-contracts finding 25);
-   nothing written on a same-role `user_change_role` (M1-contracts-3 finding 5).
-   **The U order carries M-04 d49's screen.** Each contract order's Needs a human feeds
-   these Checklists.
-5. **A `developer` per order**, each in its own worktree; `/work-order check`, then
-   `accept` — the owners merge after the verdict. Then **`/qa ready M1`**, `/qa automate`
-   per row (which also takes `--pass-with-no-tests` out of `e2e`, M0 row 15), and the
-   [runbook](runbook.md) §2 production steps.
+| # | Step | Gate | Notes |
+|---|---|---|---|
+| 1 | **Close E-01 D's review** — the developer fixes findings 14 and 33 (tests only); `/architecture` ratifies or rejects the two drafts (System Administrator window closed by hand; PostgREST `db-tx-end` stays `commit`, with a `Prefer: tx=rollback` test); `/work-order accept` | Verdict by an owner | Nothing here touches a table |
+| 2 | **One contract pull request**, both owners review: M-04 d48 in the fake; attempts while closed recorded (d38); the flag's null actor (d39); `linked` and `auth_user_in_use` in the fake; `invalid_input` and `read_only` into `REFUSALS`, `REFUSAL_DETAIL` and conventions §5's table (which `tests/contracts-m1.test.ts` holds equal); `authz.` names in the contracts' comments; the inactive-Store detail once §4 decides it | Merged after review | E-01 U branches on these keys; every M1 order cites the resulting commit |
+| 3 | **`M-04-D-M1`** — the Identity function set (`user_add`, `user_change_role`, `user_set_pin`, `user_reactivate`, …), **carrying A-129's guard on every PIN function and A-131's setters** on every link-sending function. Decide `drawer_opens`' writer and `organizations.org_id` (§4) **before drafting** — both are schema | Drafted, `Approved`, built, checked, `Accepted` | The order's Checklist names A-129 and A-131 by their rows |
+| 4 | **`S-01-D-M1`** (`organization_create`, System Administrator recovery acts) and **`O-01-D-M1`** (`store_create` with the first shop's values — A-112; the Owner's reset and re-send — A-114). Decide the Store ID sequence and where a System Administrator's passkey enrolment is recorded **before drafting** | As above | Both small; one developer each, in sequence, so neither edits the other's lane |
+| 5 | **`E-01-U-M1`**, then **`M-04-U-M1`** with Create Organization and Create Store screens (A-111) | As above | The accept-invite route moves Auth links onto the product's origin (runbook) |
+| 6 | **`/qa ready M1`**; `/qa automate` the rows that both tracks make automatable (E-01-T1, T10, T11, T13 at least — order finding 15 says the rest wait on M-04's half) | Both tracks in [status.md](status.md) | — |
+| 7 | **Production**: [runbook](runbook.md) §2 in order — templates, email switches, link lifetime, `supabase db push`, hook on, `pin_pepper`, three System Administrators with passkeys, the first Organization and Store through the product | Every §4 *blocks deployment* row clear | **Live testing starts here**, with the onboarding slice alone |
 
-**Still open against the flows**, from the contract orders' Needs a human: E-01 (the
-PIN throttle's edges), O-01 (the Store ID sequence), S-01 / A-117 (where a System
-Administrator's passkey enrolment is recorded).
+### M2 — catalog and scan
 
-**For `/architecture`, before they bite:** `drawer_opens` has no §6 writer though M1
-builds the table; the predicates' `pure` label against A-113's *five exceptions and no
-others* (before M3); finding 10, bigint minor units across PostgREST (before M3).
+Tables, `resolve_scan`, barcode minting, the MusicBrainz adapter, the configuration
+tables A-53 placed here, the starter chart (A-79). **Schema decisions due before the
+D order:** Records and genres — Organization or Store (§4); the `release_cache`
+shape stands (§11) unless an owner reopens it. **Candidate for after live testing**
+— _recommended, not yet ratified_: the coverage check against real shelf stock
+(§8 says *measured rather than assumed*; the trigger for switching providers can
+be read once real stock is scanned). E-03 search and E-04 titlecard are the U
+order; land `resolve_scan` first behind its contract — M3 and M4 both need it.
+
+### M3 — receiving
+
+PurchaseOrder and Invoice tables, the pricing helpers, `invoice_is_paid()` returning
+`false` (A-41), `journal_batches` and `journal_lines` with `invoice_finalize`
+writing its journal in the same transaction (A-67). **Schema decisions due before
+the D order:** `invoice_number` and `SH-YYMMDD-n` across Stores (§4); bigint minor
+units across PostgREST (M0 finding 10); the predicates' `pure` label against A-113.
+**Candidate for after live testing:** the label print stylesheet, which the
+receiving loop does not need to be exercised.
+
+### M4 — the till
+
+Sale functions, locking, counters, the sell screen, split tender, hold and re-open,
+returns with routing. **Schema decisions due before the D order:** gift card
+currency across Stores (A-51); whose void and which batch (§11). **Candidates for
+after live testing** — _recommended, not yet ratified_, via `/plan-check` against
+§8: gift cards, the customer ledger and E-07 as a whole, oversold items, the copy
+picker. Each is a table group or a screen that a one-shop pilot can run without,
+and each is cheaper to shape after a week of real sales than before.
+
+**What this path does not do:** M5's close and receipts, M6's hardening, M7 and
+M8. The cron drain's principal (§4) is therefore not on this path, but A-118 forces
+it before the receipt job, so it is decided during M4 rather than after.
 
 ---
 
-## 4. Waiting on a human
+## 4. Open decisions
 
-| Item | Who | Blocks |
+Three buckets. **Blocks deployment** means production cannot take real data
+until it is answered. **Schema** means a table's shape depends on it, so it is
+answered before the migration that creates or alters that table — the row names
+which. Everything else **waits for live testing** and is listed so it is not lost,
+not so it is worked now. Every row points at the record; nothing here is a decision.
+
+### Blocks deployment
+
+| Item | Record | Who | Due |
+|---|---|---|---|
+| **Who is the second owner?** CLAUDE.md names WaxyWaxman; assents and verdicts this month came from GimpyMatey. Until answered, every decision since A-119 is one owner's | this file | sr-talbot | Before any joint-review claim; before the contract pull request (step 2) |
+| **Joint assent on A-119 to A-132, E-01 d38–d39, M-04 d39–d49, the A-91 amendment** | `architecture.md` §2 rows; the flows | the second owner | Before `/qa ready M1` |
+| **Production's PostgREST `db-tx-end`** must be `commit` (no client override), or `Prefer: tx=rollback` reopens the PIN oracle A-129 closed. Unrecorded. Draft decision in [E-01-D-M1](orders/E-01-D-M1.md) Needs a human — _recommended, not yet ratified_ | order finding 31 | `/architecture`, then an owner reads the dashboard | Before `supabase db push` |
+| **A System Administrator's `enrolment_open_until` is never closed by enrolling** — whoever reads that mailbox can add a passkey that signs in as `sysadmin` for the rest of the window. Draft decision: cleared by hand, recorded in the runbook — _recommended, not yet ratified_ | order finding 30; A-131 | `/architecture` | Before the first System Administrator enrols |
+| **Runbook §2's hand steps**: invite and recovery templates reworded (they promise a password that no longer exists); email provider on and sign-up off; link lifetime ≤ 24 h; hook enabled; `pin_pepper` created; three System Administrators with passkeys; `store_create`'s body carries the first shop's values | [runbook](runbook.md) §2 | sr-talbot | In the runbook's order, after M1 merges |
+| **E-01 D `Accepted`** — findings 14 and 33 are tests, not code; the order cannot close with a `should` finding that says a decision is untested | [E-01-D-M1](orders/E-01-D-M1.md) | developer, then an owner's verdict | Before `/qa ready M1` |
+
+### Schema — decide before the migration that depends on it
+
+| Item | Record | Decides the shape of | Due before |
+|---|---|---|---|
+| **`organizations` has no `org_id`** — it uses `id` as its tenant, against A-86's *every table carries `org_id`*. Already on `main`; a later change is a correcting migration against live rows | order finding 20; A-86 | every Organization-dimensioned policy written from here on | `M-04-D-M1` |
+| **`drawer_opens` has no §6 writer**, though §8 builds the table at M1 | §11; M1-contracts Needs a human | whether the table lands at M1 or waits for M4's till | `M-04-D-M1` |
+| **The Store ID sequence** — *the next seven-digit value* (O-01 d2): where it starts, and global or per Organization; the fake starts at `1000001`, globally | [M1-contracts](orders/M1-contracts.md) Needs a human | `stores` and every `SH-…` identifier | `O-01-D-M1` |
+| **Where a System Administrator's passkey enrolment is recorded** — A-117 and S-01 d7 give them an enrolment session, but `auth_user_link`'s passkey kind looks only in `users` | [M1-contracts](orders/M1-contracts.md) Needs a human; A-117, A-131 | `system_administrators` | `S-01-D-M1` |
+| **Records, genres and the genre map — Organization or Store?** Blocked by `genres.section_id` and `product_tax_code_id` referencing per-Store rows | §11 (user model) | M2's catalog tables and their policies | `M2 D` |
+| **`invoice_number` and `SH-YYMMDD-n` collide across Stores** against one Organization-level Supplier — key gains `store_id`, or the minted value carries it | §11 (user model); A-17, A-22, A-32 | M3's Invoice tables | `M3 D` |
+| **Bigint minor units across PostgREST** — a `bigint` arrives in JSON as a string or loses precision | M0 finding 10 | every money column's wire type, from M3's first price | `M3 D` |
+| **The predicates' `pure` label against A-113's *five exceptions and no others*** | this file (2026-10-30) | the header of every M3 function | `M3 D` |
+| **Gift card currency across Stores** with different home currencies | §11; A-51, M-06 d34 | M4's gift card tables — if gift cards stay in M4 | `M4 D` |
+| **Whose void is it, and which batch** — A-19 attributes a tender to the lock holder; a void is a later act | §11; M-03 d26 | `sales` and the close's batch keys | `M4 D` |
+| **Under what principal the cron drain runs** — A-118 forces it before the receipt job: the service-role key reads no table, `jobs` included | §11; A-92, A-118 | `jobs` and its grants | `M5 D`, decided during M4 |
+| **One Auth user is one email**, so a person at two Organizations cannot be invited to the second (A-132's accepted consequence names System Administrators only) | order finding 44 | whether the uniqueness is per table or across them — a constraint already on `main` | `M-04-U-M1`, when the screen shows `auth_user_in_use` |
+
+### Waits for live testing
+
+| Item | Record | Why it can wait |
 |---|---|---|
-| **Who is the second owner?** CLAUDE.md names sr-talbot and WaxyWaxman; recent assents and verdicts came from GimpyMatey | sr-talbot | Treating any assent as joint |
-| **Joint assent on this stretch's decisions** — A-119 and A-120 ratified by GimpyMatey alone; A-121, M-04 d39–d49 and the SQLSTATEs by sr-talbot alone | the other owner, once confirmed | Nothing yet; the D order cites them |
-| **Approve each step in §3** before it writes | sr-talbot | Each step |
-| **Branch protection on `main`** — four contract pull requests merged before their verdict | the owners | Nothing; a process question (workflow §3) |
-| **Production's PostgREST version** — check conventions §5's status mapping against it once, from the docs | either owner | Nothing now |
-| **Reword the invite and recovery emails** — *create your passkey*, no password, no self-service reset; dashboard and `supabase/templates/` together (runbook) | sr-talbot | The first real Owner's invite |
-| **Auto-renew on `waxworks.store`** — off at purchase, deferred by sr-talbot 2026-10-13 | sr-talbot | Every invite and reset after 2027-10-13 |
-| **Auth email lands in spam** — a new domain, and links on `supabase.co` until M1's accept-invite route | sr-talbot | Nothing; tell an invited Owner to check spam meanwhile |
-| **The paid Supabase plan** — due by M6; until then real data has no backup (A-109) | sr-talbot | M6's backup restore verification |
-| **A-96** — the `staging` branch and the CI security review | the owners | Whether `build-check.yml`'s `staging` trigger and `security-review.yml` stay |
-| **Sentry** auth token (for source maps) and allowed-domains (for the public browser DSN) | sr-talbot | Setting a DSN; `@sentry/cli`'s build. Under A-106 no DSN is set until the allowlist ships |
-| **M0 row 13's observations** (2026-10-13) — recorded by the coordinator and never checked by a reviewer; the row stays `Deferred` in an `Accepted` order | either owner | Nothing now; re-verified with the platform settings at M6 |
+| **An inactive Store picked by an Owner** gets `role_refused` / `owner` — the wrong key; the closed list has no state detail for it | order finding 9; conventions §5 | A key in the contract, not a table; one pilot shop has no inactive Store |
+| **A PIN or initials held twice** raise raw `P0003` — failure, not a keyed refusal, and uncounted | order finding 34 | Unreachable while M-04's uniqueness holds |
+| **`no_principal` reused** for the A-130 and A-131 refusals — _recommended, not yet ratified_ | order finding 36 | A key; ratify in the contract pull request or later |
+| **conventions §5's `employee` row** does not list `auth_user_link` in *Raised by* | order finding 37 | A doc line |
+| **A missing PIN while the line is closed** — the code answers `pin_refused`, records nothing | E-01 d38 open question | Behaviour at an edge no screen reaches yet |
+| **The hook does not set `role` explicitly** on the store, person and enrolment paths | order findings 19, 38 | Defence in depth; `auth.users.role` is `authenticated` unless changed with the service key |
+| **`enrolment_open_until` unbounded; readable Org-wide by every store session; an open enrolment session outlives its window by up to an hour** | order findings 39, 45 | Observations against a one-shop pilot |
+| **`print_strict_params`** would put a PIN in a `P0003` detail if ever turned on | order finding 40 | Off by default; a one-line guard whenever the function is next touched |
+| **A-129's guard is inline** — M-04 D copies it; a shared `authz` assertion and a suite-wide check would hold it as A-107 holds grants | order finding 41 | Do it in `M-04-D-M1`, where the second copy appears |
+| **A personal session on a device holding a store session** | E-01 d27, A-88 | Practice, not code, until observed |
+| **How an Owner reads every Store's rows on the Organization screen** | O-01 d4–d5; A-86, A-95 | The screen is post-v1 (A-111 leaves only Create Store at M1) |
+| **How a migration-time write is attributed** | §11; A-53 | Production is never seeded (A-109); the first Organization comes through `organization_create` — likely moot, to be confirmed, not assumed |
+| **Operator alerting and health**; **the paid Supabase plan and backups**; **A-96's `staging` branch**; **Sentry's allowlist and DSN**; **A-91's key-rule CI job** | §11; A-109; A-96; A-106 | M6 hardening's list |
+| **The `release_cache` shape**; **a date-range report as an issuance** | §11 | M2 and M5 respectively, neither a blocker |
+| **Auto-renew on `waxworks.store`** (off; expires 2027-10-13) | runbook | A year away; one dashboard switch |
+| **Feature scope**: gift cards, the customer ledger and E-07, oversold items, the copy picker (M4); the coverage check (M2); the label stylesheet (M3) | §8 | Candidates for deferral — _recommended, not yet ratified_, through `/plan-check` |
 
 ---
 
