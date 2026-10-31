@@ -361,7 +361,8 @@ is a pull request both humans review (§7, workflow §4).
 | Required field for this role missing — a Manager's PIN or email (M-04 d35, d33) | `23502` | `pin_required`, `email_required`, `initials_required` | — |
 | Wrong state for the act — re-sending to someone already enrolled, recovering while an Owner exists (M-04 d38, A-90) | `WX409` | `invalid_state` | what state — one value of the closed list below |
 | PIN pepper missing (A-115, A-127) | `XX000` | `pin_pepper_missing` | — |
-| An argument the database itself rejects — A-120's actor pair half null (decided 2026-10-31 by sr-talbot) | `22023` | `invalid_input` | which argument |
+
+**`invalid_input` raised by the database — decided 2026-10-31 by sr-talbot, not yet in the table above.** An argument the database itself rejects — A-120's actor pair given half null — is raised `invalid_input` with SQLSTATE **`22023`** (`invalid_parameter_value`, so PostgREST answers 400), and its detail names the argument. **D raises it so today.** It joins the table **together with** `REFUSALS` and `REFUSAL_DETAIL` in `packages/contracts/src/client.ts`, in the next contract change, because `tests/contracts-m1.test.ts` holds the table and `REFUSALS` equal; until then the real client reports it as `rpc_failed`, not a refusal.
 
 **`invalid_state`'s detail is a closed list** (eleven values since A-128 added `linked`). A screen may branch on the key **and** the detail; **D** raises exactly these values and its pgTAP refusal tests assert SQLSTATE, key and detail; a new state is a new row here first. _Decided 2026-10-30 by sr-talbot (M1-contracts-3 finding 6); the values are the fake's at `19a49ed`._
 
