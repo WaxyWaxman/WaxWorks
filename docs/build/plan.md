@@ -1,7 +1,7 @@
 # Wax Works — the build plan
 
 **Maintained by:** the coordinator, at the end of every build session. Read first by whoever picks up next.
-**Last updated:** 2026-10-31, sr-talbot's session — through #226; E-01 D built and corrected, its order `In review`; this file reshaped as the path to M4
+**Last updated:** 2026-10-31, sr-talbot's session — through #230; E-01 D `Accepted`; this file reshaped as the path to M4
 
 The [workflow](workflow.md) says how an order moves; the [conventions](conventions.md)
 say what the code looks like; the [status table](status.md) says what has landed.
@@ -31,8 +31,9 @@ build: invented conventions, silent bugs, and context blown by reading everythin
 
 ## 2. Where we are — 2026-10-31
 
-**E-01 D is on `main`, reviewed, and corrected; its order is `In review`, not yet
-`Accepted`.** Everything in the table landed this stretch; read the rows, not this list.
+**E-01 D is `Accepted`** (sr-talbot, 2026-10-31): built in #221, corrected in #225,
+its last tests in #230, A-133 and A-134 in #229. The order's Verdict lists what it
+carries forward. Everything in the table landed this stretch; read the rows, not this list.
 
 | PR | What it did |
 |---|---|
