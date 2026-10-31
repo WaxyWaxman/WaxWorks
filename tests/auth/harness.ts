@@ -155,12 +155,17 @@ export function claims(jwt: string): Record<string, unknown> {
 }
 
 /** PostgREST under a token: what the session reaches. */
-export async function rest(path: string, token: string, init: { method?: string; body?: unknown; schema?: string } = {}): Promise<AuthReply> {
+export async function rest(
+  path: string,
+  token: string,
+  init: { method?: string; body?: unknown; schema?: string; headers?: Record<string, string> } = {},
+): Promise<AuthReply & { preferenceApplied: string | null }> {
   const s = local();
   const headers: Record<string, string> = {
     apikey: s.publishableKey,
     Authorization: `Bearer ${token}`,
     "Content-Type": "application/json",
+    ...init.headers,
   };
   if (init.schema) {
     headers["Accept-Profile"] = init.schema;
@@ -178,7 +183,11 @@ export async function rest(path: string, token: string, init: { method?: string;
   } catch {
     body = { raw: text };
   }
-  return { status: res.status, body: (Array.isArray(body) ? { rows: body } : (body as Record<string, unknown>)) ?? {} };
+  return {
+    status: res.status,
+    body: (Array.isArray(body) ? { rows: body } : (body as Record<string, unknown>)) ?? {},
+    preferenceApplied: res.headers.get("preference-applied"),
+  };
 }
 
 /** A fresh suffix, so each run's fixture rows and Auth users are its own. */

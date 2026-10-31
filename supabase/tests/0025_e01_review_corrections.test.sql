@@ -336,6 +336,43 @@ select is(pg_temp.hook('00000000-0000-0000-0009-0000000000f1', 'passkey'),
   '{"error": {"http_code": 403, "message": "no_principal"}}'::jsonb,
   'A-110 - an inactive System Administrator is refused exactly as no row is: no_principal (A-125)');
 
+-- ── Finding 33 — A-132: same-table duplicates, and the lock ─────────────────
+select pg_temp.as_service();
+-- Max Manager's Auth user onto Una, another users row.
+select is(
+  pg_temp.err($q$select pg_temp.link('user', '00000000-0000-0000-0002-000000000006', '00000000-0000-0000-0009-000000000002')$q$),
+  '{"code": "WX409", "message": "invalid_state", "details": "auth_user_in_use", "hint": null}'::jsonb,
+  'A-132 - an Auth user already linked to a users row is refused for another users row: invalid_state, auth_user_in_use');
+-- Store A1's account onto Store A3.
+select is(
+  pg_temp.err($q$select pg_temp.link('store', '00000000-0000-0000-0001-0000000000a3', '00000000-0000-0000-0009-0000000000a1')$q$),
+  '{"code": "WX409", "message": "invalid_state", "details": "auth_user_in_use", "hint": null}'::jsonb,
+  'A-132 - an Auth user already a Store''s account is refused for another Store: invalid_state, auth_user_in_use');
+reset role;
+
+-- The lock (A-132: "checked under an advisory lock"). A two-session race needs
+-- two connections, which a pgTAP file does not have; what one session can show
+-- is that a link takes the transaction-scoped advisory lock on its Auth id's key
+-- and still holds it when the call returns, so a concurrent link of the same id
+-- waits until this transaction ends. pg_locks splits the bigint key into
+-- classid (high 32 bits) and objid (low 32 bits), objsubid 1.
+create function pg_temp.auth_lock_held(p_auth uuid) returns boolean language sql as $$
+  select exists (
+    select 1 from pg_catalog.pg_locks l
+     where l.locktype = 'advisory' and l.pid = pg_catalog.pg_backend_pid() and l.granted
+       and l.objsubid = 1 and l.mode = 'ExclusiveLock'
+       and ((l.classid::bigint << 32) | l.objid::bigint)
+           = pg_catalog.hashtextextended('auth_user:' || p_auth::text, 0))
+$$;
+select is(pg_temp.auth_lock_held('00000000-0000-0000-0009-0000000000e7'), false,
+  'A-132 - before the link, no advisory lock is held on the Auth id');
+select pg_temp.as_service();
+select is(pg_temp.link('user', '00000000-0000-0000-0002-000000000006', '00000000-0000-0000-0009-0000000000e7') ->> 'kind',
+  'user', 'A-132 - a free Auth user links to a person');
+reset role;
+select is(pg_temp.auth_lock_held('00000000-0000-0000-0009-0000000000e7'), true,
+  'A-132 - the link holds the transaction-scoped advisory lock on its Auth id until the transaction ends');
+
 select has_column('public', 'users', 'enrolment_open_until', 'A-131 - users.enrolment_open_until');
 select has_column('public', 'system_administrators', 'enrolment_open_until', 'A-131 - system_administrators.enrolment_open_until');
 
