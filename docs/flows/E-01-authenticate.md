@@ -84,7 +84,7 @@ The shape decision 18 was built to protect held: actions are still attributed to
 - **What a Manager may administer is bounded to Employees at their own Stores** ([M-04](M-04-manage-users.md) d30). It matters here because the manager-only line is the same line for a Manager and an Owner; what differs is what is offered once across it.
 - **Every Manager and Owner who holds a Store holds a PIN** (M-04 d35, 2026-10-13), so decision 26's manager-only line always has someone to resolve to; an Owner sets theirs at first assignment.
 - **No self-service recovery from the sign-in screen** (M-04 d38): a lost passkey is re-enrolled through an Owner, or a System Administrator for a sole Owner. The sign-in screen offers no *forgot* link.
-- **A demotion to Employee ends a personal session at once** (M-04 d45, 2026-10-30), as deactivation does (decision 30): Employees have no personal session (decision 27). Other role changes still wait for the next session.
+- **A demotion to Employee ends a personal session at once** (M-04 d45, 2026-10-30), as deactivation does (decision 30): Employees have no personal session (decision 27). Other role changes still wait for the next session. **The mechanism is [architecture](../architecture.md) A-122** (2026-10-30): the read helpers check the role live, and the access-token hook issues no token to an Employee or an inactive person — so a demoted or deactivated person reads nothing at once and is signed out at their next refresh.
 - **No invite or re-enrolment link reaches a deactivated person** (M-04 d44): reactivation comes first, so no enrolment session (decision 37) opens for an account that is off.
 
 **From [architecture](../architecture.md):**

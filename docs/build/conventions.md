@@ -346,8 +346,25 @@ is a pull request both humans review (§7, workflow §4).
 | Not found, or not visible to this principal | `WX404` | `not_found` | — |
 | The Owner floor (M-04 d26) | `23514` | `owner_floor` | — |
 | Required field for this role missing — a Manager's PIN or email (M-04 d35, d33) | `23502` | `pin_required`, `email_required`, `initials_required` | — |
-| Wrong state for the act — re-sending to someone already enrolled, recovering while an Owner exists (M-04 d38, A-90) | `WX409` | `invalid_state` | what state |
+| Wrong state for the act — re-sending to someone already enrolled, recovering while an Owner exists (M-04 d38, A-90) | `WX409` | `invalid_state` | what state — one value of the closed list below |
 | PIN pepper missing (A-115) | `XX000` | `pin_pepper_missing` | — |
+
+**`invalid_state`'s detail is a closed list.** A screen may branch on the key **and** the detail; **D** raises exactly these values and its pgTAP refusal tests assert SQLSTATE, key and detail; a new state is a new row here first. _Decided 2026-10-30 by sr-talbot (M1-contracts-3 finding 6); the values are the fake's at `19a49ed`._
+
+| Detail | The state | Raised by | Decision |
+|---|---|---|---|
+| `inactive` | The person is deactivated | `user_change_role`, `user_reset_request`, `user_invite_resend`; `user_set_pin` once the d48 fix lands | M-04 d44, d46, d48 |
+| `active` | The person is already active | `user_reactivate` | M-04 d47 |
+| `pin_not_needed` | A new PIN given at reactivation where nothing clashes | `user_reactivate` | M-04 d47, d49 |
+| `employee_has_no_pin` | A PIN given to, or set on, an Employee | `user_add`, `user_change_role`, `user_reactivate`, `user_set_pin` | M-04 d28, d39 |
+| `no_store` | An Employee or Manager with no Store, at Add or a demotion | `user_add`, `user_change_role` | M-04 d27 |
+| `last_store` | Unassigning an Employee's or Manager's last Store | `user_unassign` | M-04 d27 |
+| `active_owner` | Recovering an Organization that has an active Owner | `owner_recover` | A-90, M-04 d38 |
+| `auth_user_mismatch` | A passkey enrolment for a row not linked to that Auth user | `auth_user_link` (`p_kind = 'passkey'`) | A-117 |
+| `employee` | A link sent to an Employee | `user_reset_request`, `user_invite_resend` | A-114 |
+| `enrolled` | Re-sending an invite to someone already enrolled | `user_invite_resend` | A-114, A-117 |
+
+*`employee` means an Employee only.* The fake also raises it for a Manager or Owner with no email (`fake/identity.ts:576`), a state M-04 d33 and d35 make unreachable; the next contract change splits that branch or removes it.
 
 _Status: the keys, the kinds and the SQLSTATE values decided — the values ratified 2026-10-29 by sr-talbot, on GimpyMatey's proposal below._ `WX` is a class Postgres does not use, reserved here for refusals with no standard code. **PostgREST answers a refusal by its code's class** (its error reference, v12 and *latest*, read 2026-10-29): `28*` → 403, `42501` → 401 or 403, `23505` → 409, `XX000` (`pin_pepper_missing`, a deployment fault) → 500, and every other code here — `23502`, `23514`, the `WX` class — falls to *other*, 400; `P0*` and `55*` would have been 500, which is why `not_found` and `invalid_state` moved. Nothing branches on HTTP status. Re-check the mapping against production's PostgREST version once.
 
