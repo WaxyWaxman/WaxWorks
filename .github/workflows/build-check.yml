@@ -87,5 +87,12 @@ jobs:
           pnpm --filter @waxworks/db-types gen
           git diff --exit-code -- packages/db-types/index.ts || {
             echo "::error::packages/db-types/index.ts is stale — run 'pnpm --filter @waxworks/db-types gen' with local Supabase running and commit it (A-98)"; exit 1; }
+      # A-126: the access-token hook against local Supabase Auth — vitest for token
+      # claims, Playwright's Chromium virtual authenticator for passkeys. Last, so
+      # its fixtures cannot disturb pgTAP or the db-types diff.
+      - name: Install Chromium for the passkey tests
+        run: pnpm --filter @waxworks/tests exec playwright install --with-deps chromium
+      - name: Auth integration tests
+        run: pnpm test:auth
       - if: always()
         run: supabase stop --no-backup

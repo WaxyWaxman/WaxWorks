@@ -34,11 +34,13 @@ describe("A-85 — the end-to-end suite is a top-level e2e/ directory, outside b
   it("the root test script excludes e2e — Playwright is not one of A-97's six CI jobs", () => {
     const pkg = JSON.parse(read("package.json"));
     expect(pkg.scripts.test).toMatch(/--filter\s+!@waxworks\/e2e/);
-    // Statements only — a comment says Playwright is absent, which is the point.
+    // Statements only — a comment says the e2e suite is absent, which is the point.
     const ci = read(".github/workflows/build-check.yml")
       .split("\n")
       .filter((x) => !x.trim().startsWith("#"))
       .join("\n");
-    expect(ci).not.toMatch(/playwright/i);
+    // A-126 runs tests/auth's passkey tests with Playwright's Chromium inside job 6;
+    // what stays out of CI is the end-to-end suite itself (A-97, A-85).
+    expect(ci).not.toMatch(/@waxworks\/e2e|playwright\s+test|(^|[\s/])e2e\//im);
   });
 });
