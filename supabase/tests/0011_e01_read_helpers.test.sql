@@ -4,8 +4,6 @@
 --   A-117 / E-01 d37 - an enrolment session reaches no row.
 --   E-01 d36 - an Owner with no Store picked reads nothing store-dimensioned.
 --
--- Written test-first and NOT YET RUN: no Docker daemon was reachable when
--- this file was written (see the order's Evidence). Its first run is expected red.
 begin;
 select no_plan();
 

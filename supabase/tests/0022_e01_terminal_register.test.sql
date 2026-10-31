@@ -2,8 +2,6 @@
 --   E-01 d2 - a terminal is a browser session on a device; it registers once.
 --   A-113 - no p_terminal_id; the initials resolve here; attributed to who stood at it.
 --
--- Written test-first and NOT YET RUN: no Docker daemon was reachable when
--- this file was written (see the order's Evidence). Its first run is expected red.
 begin;
 select no_plan();
 

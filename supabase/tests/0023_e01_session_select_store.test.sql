@@ -2,8 +2,6 @@
 --   E-01 d27 - a Manager picks an assigned Store, an Owner any; the pick is recorded.
 --   E-01 d36 - nothing to pick changes nothing.
 --
--- Written test-first and NOT YET RUN: no Docker daemon was reachable when
--- this file was written (see the order's Evidence). Its first run is expected red.
 begin;
 select no_plan();
 

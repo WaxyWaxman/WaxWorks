@@ -2,8 +2,6 @@
 -- The unit half of rows 9-17 and 35; the integration half is not in this file.
 --   A-87, A-110, A-117, A-122; E-01 d24, d33, d34, d36, d37.
 --
--- Written test-first and NOT YET RUN: no Docker daemon was reachable when
--- this file was written (see the order's Evidence). Its first run is expected red.
 begin;
 select no_plan();
 
@@ -119,6 +117,13 @@ insert into public.system_administrators (auth_user_id, name, active, added_at) 
   ('00000000-0000-0000-0009-0000000000f2', 'Former Admin', false, now() - interval '1 year');
 update public.system_administrators set deactivated_at = now() where auth_user_id = '00000000-0000-0000-0009-0000000000f2';
 update public.users set selected_store_id = '00000000-0000-0000-0001-0000000000a1' where id = '00000000-0000-0000-0002-000000000002';
+-- A-131: an enrolment session exists only inside a window an Owner or a System
+-- Administrator opened. M-04's and S-01's link-sending functions set it; this
+-- fixture sets it by hand for the enrolment cases below.
+update public.users set enrolment_open_until = now() + interval '24 hours'
+ where id in ('00000000-0000-0000-0002-000000000002', '00000000-0000-0000-0002-000000000004');
+update public.system_administrators set enrolment_open_until = now() + interval '24 hours'
+ where auth_user_id = '00000000-0000-0000-0009-0000000000f1';
 
 -- ── Grants ─────────────────────────────────────────────────────────────────
 select has_function('authz', 'access_token_hook', array['jsonb'], 'A-125 - the access-token hook is authz.access_token_hook(jsonb)');
@@ -178,8 +183,9 @@ select is(
   (select c - 'sub' - 'aud' - 'amr' from (select pg_temp.hook('00000000-0000-0000-0009-0000000000f1', 'passkey') -> 'claims' c) x),
   '{"principal": "sysadmin", "role": "sysadmin"}'::jsonb,
   'A-110 - an active system_administrators row yields principal=sysadmin, the sysadmin role, and null org_id, store_id, user_id');
-select isnt(coalesce(pg_temp.hook('00000000-0000-0000-0009-0000000000f2', 'passkey') #>> '{claims,principal}', 'refused'), 'sysadmin',
-  'A-110 - an inactive system_administrators row is refused exactly as no row is');
+select is(pg_temp.hook('00000000-0000-0000-0009-0000000000f2', 'passkey'),
+  '{"error": {"http_code": 403, "message": "no_principal"}}'::jsonb,
+  'A-110 - an inactive system_administrators row is refused exactly as no row is: no_principal (A-125, clarified 2026-10-31)');
 select is(pg_temp.hook('00000000-0000-0000-0009-0000000000f1', 'otp') #>> '{claims,principal}', 'enrolment',
   'A-117 - a System Administrator''s token without a passkey is an enrolment session');
 

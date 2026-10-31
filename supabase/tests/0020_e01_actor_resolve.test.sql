@@ -4,8 +4,6 @@
 --   A-113 - a header exception: p_initials and p_terminal_id, no actor arguments.
 --   A-92 - every refusal asserts its SQLSTATE and its key.
 --
--- Written test-first and NOT YET RUN: no Docker daemon was reachable when
--- this file was written (see the order's Evidence). Its first run is expected red.
 begin;
 select no_plan();
 

@@ -3,8 +3,6 @@
 --   E-01 d26 - the one active Manager or Owner at this Store holding it, or nobody.
 --   E-01 d31, d32, d38, d39; A-119, A-120, A-123, A-89, A-93, A-115.
 --
--- Written test-first and NOT YET RUN: no Docker daemon was reachable when
--- this file was written (see the order's Evidence). Its first run is expected red.
 begin;
 select no_plan();
 
@@ -327,6 +325,9 @@ select is(
   5, 'E-01 d39 - the flag''s subject joins to exactly the five counted refusals that closed the line (E-01-T24)');
 
 -- ── While closed (E-01 d31, d38) ───────────────────────────────────────────
+-- The closure as it stood when the line closed, to compare after the attempts.
+create temp table closure_before as
+  select id, closed_at, reopens_at from public.pin_line_closures;
 select pg_temp.at_a1();
 select is(
   (select pg_temp.pin('1111', '00000000-0000-0000-0003-000000000002') - 'details'),
@@ -350,8 +351,11 @@ select is((select count(*)::int from public.pin_refusals r, public.pin_line_clos
   3, 'E-01 d38 - three attempts while closed write three rows, counted = false, carrying the open closure (A-123)');
 select is((select count(*)::int from public.pin_line_closures), 1,
   'E-01 d38 - attempts while closed do not start another closure');
-select is((select reopens_at - closed_at from public.pin_line_closures), interval '15 minutes',
-  'E-01 d38 - attempts while closed do not move reopens_at');
+select is(
+  (select jsonb_build_object('closed_at', c.closed_at = b.closed_at, 'reopens_at', c.reopens_at = b.reopens_at)
+     from public.pin_line_closures c join closure_before b on b.id = c.id),
+  '{"closed_at": true, "reopens_at": true}'::jsonb,
+  'E-01 d38 - attempts while closed do not move reopens_at: the closure is unchanged, not merely fifteen minutes long');
 select is((select count(*)::int from public.review_flags), 1,
   'E-01 d38 - attempts while closed raise no further flag');
 

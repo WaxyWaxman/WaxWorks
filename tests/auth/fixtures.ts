@@ -48,6 +48,14 @@ export interface PersonSpec {
   stores: ("A" | "B")[];
   active?: boolean;
   selected?: "A" | "B" | null;
+  /** Four digits, stored as A-89's keyed hash under the seeded pepper. */
+  pin?: string;
+  /**
+   * A-131: whether an Owner's link is outstanding — users.enrolment_open_until
+   * set to now + 24 h, by hand here, as M-04's and S-01's link-sending functions
+   * will set it. Default true.
+   */
+  enrolment?: boolean;
 }
 
 /** An Organization with Stores A and B, A's store account, and the people asked for. */
@@ -80,7 +88,21 @@ export async function makeOrg(run: string, specs: PersonSpec[], sysadmins: { act
       ${p.stores.map((x) => `insert into public.store_assignments (org_id, user_id, store_id) values (${q(orgId)}, ${q(id)}, ${q(store(x))});`).join("\n")}
     `);
     const authId = await createAuthUser(email);
-    await link("user", id, authId);
+    if (p.role === "employee") {
+      // An Employee has no Auth user of their own (A-87), and auth_user_link
+      // refuses to give one (finding 6). One only arrives with a demotion, which
+      // keeps the person's Auth user; this stands in for that, by hand.
+      exec(`update public.users set auth_user_id = ${q(authId)} where id = ${q(id)};`);
+    } else {
+      await link("user", id, authId);
+    }
+    if (p.enrolment !== false) {
+      exec(`update public.users set enrolment_open_until = now() + interval '24 hours' where id = ${q(id)};`);
+    }
+    if (p.pin) {
+      exec(`insert into public.user_pins (org_id, user_id, pin_hash) values (${q(orgId)}, ${q(id)},
+              encode(extensions.hmac(${q(p.pin)}, (select decrypted_secret from vault.decrypted_secrets where name = 'pin_pepper'), 'sha256'), 'hex'));`);
+    }
     people[p.key] = { id, email, authId };
   }
 
@@ -88,8 +110,9 @@ export async function makeOrg(run: string, specs: PersonSpec[], sysadmins: { act
   for (const [i, a] of sysadmins.entries()) {
     const email = `sysadmin-${i}-${run}@wx.test`;
     const authId = await createAuthUser(email);
-    exec(`insert into public.system_administrators (auth_user_id, name, active, deactivated_at)
-         values (${q(authId)}, ${q(email)}, ${a.active}, ${a.active ? "null" : "now()"});`);
+    // A-131: a System Administrator's window is set by hand, as the runbook does.
+    exec(`insert into public.system_administrators (auth_user_id, name, active, deactivated_at, enrolment_open_until)
+         values (${q(authId)}, ${q(email)}, ${a.active}, ${a.active ? "null" : "now()"}, now() + interval '24 hours');`);
     admins.push(authId);
   }
 

@@ -1,7 +1,8 @@
 // Token claims from local Supabase Auth through the access-token hook — no
 // browser (A-126). The passkey rows are passkey.test.ts.
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { authCall, claims, exec, linkSession, passwordSignIn, refresh, rest, runId } from "./harness";
+import { randomUUID } from "node:crypto";
+import { authCall, claims, createAuthUser, deleteAuthUser, exec, linkSession, passwordSignIn, refresh, rest, runId, sql } from "./harness";
 import { makeOrg, type Org } from "./fixtures";
 
 const amr = (jwt: string) => ((claims(jwt).amr as { method: string }[] | undefined) ?? []).map((a) => a.method);
@@ -18,6 +19,8 @@ beforeAll(async () => {
     { key: "employee", role: "employee", initials: "EE", stores: ["A"] },
     { key: "departed", role: "manager", initials: "DD", stores: ["A"], active: false },
     { key: "demoted", role: "manager", initials: "XX", stores: ["A"], selected: "A" },
+    { key: "unsent", role: "manager", initials: "UN", stores: ["A"], selected: "A", enrolment: false },
+    { key: "holder", role: "manager", initials: "HH", stores: ["A"], selected: "A", pin: "4321" },
   ], [{ active: true }, { active: false }]);
 });
 
@@ -101,9 +104,88 @@ describe("A-110 — a System Administrator is an active system_administrators ro
   it("A-110 — an inactive row is refused exactly as no row is: no sysadmin token", async () => {
     const email = await adminEmail(org.sysadmins[1]!);
     const r = await linkSession(email);
-    const principal = r.status === 200 ? claims(r.body.access_token as string).principal : "refused";
-    console.log(`A-110 inactive sysadmin: status ${r.status} ${r.status === 200 ? `principal=${String(principal)}` : JSON.stringify(r.body)}`);
-    expect(principal).not.toBe("sysadmin");
+    console.log(`A-110 inactive sysadmin: status ${r.status} ${JSON.stringify(r.body)}`);
+    expect(r.status).toBe(403);
+    expect(r.body).toMatchObject({ msg: "no_principal" });
+    expect(r.body.access_token).toBeUndefined();
+  });
+
+  it("A-125 — an Auth user matching no row is refused no_principal (A-125, clarified 2026-10-31)", async () => {
+    const email = `nobody-${runId()}@wx.test`;
+    const id = await createAuthUser(email);
+    try {
+      const r = await linkSession(email);
+      console.log(`A-125 unmatched Auth user: status ${r.status} ${JSON.stringify(r.body)}`);
+      expect(r.status).toBe(403);
+      expect(r.body).toMatchObject({ msg: "no_principal" });
+    } finally {
+      await deleteAuthUser(id);
+    }
+  });
+});
+
+describe("A-130 — a store session comes only from a password sign-in", () => {
+  it("A-130 — the store account signed in by a link gets no token (E-01 d34: the Owner's reset is the kill switch)", async () => {
+    const r = await linkSession(org.storeAccount.email);
+    console.log(`A-130 store account by link: status ${r.status} ${JSON.stringify(r.body)}`);
+    expect(r.status).toBe(403);
+    expect(r.body).toMatchObject({ msg: "no_principal" });
+    expect(r.body.access_token).toBeUndefined();
+  });
+});
+
+describe("A-131 — an enrolment session only while an issued link is outstanding", () => {
+  it("A-131 — a Manager with no window open gets no session from a link (M-04 d38: re-enrolled through an Owner)", async () => {
+    const r = await linkSession(org.people.unsent!.email);
+    console.log(`A-131 self-service link: status ${r.status} ${JSON.stringify(r.body)}`);
+    expect(r.status).toBe(403);
+    expect(r.body).toMatchObject({ msg: "no_principal" });
+  });
+});
+
+describe("A-129, A-119 — the PIN pad over HTTP", () => {
+  let store = "";
+
+  beforeAll(async () => {
+    const r = await passwordSignIn(org.storeAccount.email, org.storeAccount.password);
+    expect(r.status, JSON.stringify(r.body)).toBe(200);
+    store = r.body.access_token as string;
+  });
+
+  const pinBody = (pin: string) => ({
+    p_pin: pin, p_terminal_id: org.terminalA, p_request_id: randomUUID(), p_actor_user_id: null, p_actor_initials: null,
+  });
+
+  it("A-129 — a GET of manager_authorize_pin is refused read_only and names nobody, a correct PIN included (finding 1)", async () => {
+    const params = (pin: string) =>
+      `p_pin=${pin}&p_terminal_id=${org.terminalA}&p_request_id=${randomUUID()}`;
+    const right = await rest(`/rpc/manager_authorize_pin?${params("4321")}`, store, { schema: "app" });
+    const wrong = await rest(`/rpc/manager_authorize_pin?${params("9999")}`, store, { schema: "app" });
+    console.log(`A-129 GET correct PIN: status ${right.status} ${JSON.stringify(right.body)}`);
+    console.log(`A-129 GET wrong PIN: status ${wrong.status} ${JSON.stringify(wrong.body)}`);
+    for (const r of [right, wrong]) {
+      expect(r.body).toMatchObject({ code: "25006", message: "read_only" });
+      expect(JSON.stringify(r.body)).not.toContain(org.people.holder!.id);
+    }
+    const written = sql<{ n: number }>(`select count(*)::int as n from public.pin_refusals where org_id = '${org.orgId}'`);
+    expect(written[0]?.n).toBe(0);
+  });
+
+  it("A-119 — refusals return 403 then 400, and PostgREST commits each record, the closure and its flag (E-01 d31, finding 13)", async () => {
+    const seen: string[] = [];
+    for (let i = 1; i <= 6; i++) {
+      const r = await rest("/rpc/manager_authorize_pin", store, { method: "POST", schema: "app", body: pinBody(`90${i}0`) });
+      seen.push(`call ${i}: ${r.status} ${String(r.body.message)}`);
+      expect(r.status).toBe(i <= 5 ? 403 : 400);
+      expect(r.body.message).toBe(i <= 5 ? "pin_refused" : "pin_line_closed");
+    }
+    console.log(`A-119 over HTTP:\n${seen.join("\n")}`);
+    const rows = sql<{ refusals: number; closures: number; flags: number }>(`
+      select (select count(*)::int from public.pin_refusals where org_id = '${org.orgId}') as refusals,
+             (select count(*)::int from public.pin_line_closures where org_id = '${org.orgId}') as closures,
+             (select count(*)::int from public.review_flags where org_id = '${org.orgId}') as flags`);
+    console.log(`A-119 committed: ${JSON.stringify(rows[0])}`);
+    expect(rows[0]).toEqual({ refusals: 6, closures: 1, flags: 1 });
   });
 });
 
