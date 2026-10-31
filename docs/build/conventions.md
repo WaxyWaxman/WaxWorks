@@ -122,14 +122,18 @@ A-97 jobs are keyless.
   serves (A-101). **Tables and functions never share a migration:** a function
   migration opens with `set role waxworks_app;` (A-104), and DDL under that role
   would make the table `waxworks_app`'s too. **Tables live in `public`, functions
-  in `app`, and nothing but functions is ever created in `app`** (A-105).
+  in `app`, and nothing but functions is ever created in `app`** (A-105). **The
+  six row-security helpers live in `authz`** — not `auth`, which no migration may
+  create in — owned by `waxworks_app`, **not** exposed in `config.toml`, with
+  `usage` and `execute` granted to `authenticated` and `sysadmin` only; A-107's
+  suite-wide assertion covers `authz` as it covers `app` (A-124).
 - **The seed exercises the write surface:** `supabase/seed.sql` calls definer
   functions (A-4) rather than inserting rows, so it is the first integration test
   of every function it touches. **Two exceptions, each commented with the
   function it stands in for:** the bootstrap Organization and first Owner (there
   is no sysadmin principal inside `db reset`), and the Auth half of anything A-91
   covers (`auth_user_id` stays null). The seed sets the session claims
-  `auth.org_id()` / `auth.store_id()` / `auth.principal()` before each block,
+  `authz.org_id()` / `authz.store_id()` / `authz.principal()` before each block,
   **refuses to run against an Organization that already exists, and never runs
   against production** (A-101). The fixture rule in
   `.claude/skills/qa/SKILL.md` §`/qa automate` says the same for `e2e/`.
@@ -147,11 +151,11 @@ grant select on <table> to authenticated;          -- only where a session reads
 
 -- Organization-level
 create policy org_isolation on <table> for select
-  using (org_id = auth.org_id() and auth.org_reachable());
+  using (org_id = authz.org_id() and authz.org_reachable());
 
 -- Store-dimensioned
 create policy store_isolation on <table> for select
-  using (org_id = auth.org_id() and store_id = auth.store_id() and auth.store_reachable());
+  using (org_id = authz.org_id() and store_id = authz.store_id() and authz.store_reachable());
 ```
 
 **No client and no service role writes a table** (A-4, A-118). Supabase grants `anon`,
@@ -174,12 +178,12 @@ function shares, from §3 and §6:
 
 | Element | Rule | Source |
 |---|---|---|
-| Actor arguments | `p_actor_user_id` **and** `p_actor_initials`; on a personal session the function asserts the actor **is** `auth.user_id()` | §6 |
-| Manager-only (**M**) on a store session | takes `p_manager_pin`, resolves it to the one active Manager or Owner assigned to `auth.store_id()` in the same transaction, refuses otherwise; `p_manager_user_id` is what it resolves to, never an input | §6 |
+| Actor arguments | `p_actor_user_id` **and** `p_actor_initials`; on a personal session the function asserts the actor **is** `authz.user_id()` | §6 |
+| Manager-only (**M**) on a store session | takes `p_manager_pin`, resolves it to the one active Manager or Owner assigned to `authz.store_id()` in the same transaction, refuses otherwise; `p_manager_user_id` is what it resolves to, never an input | §6 |
 | Owner-only (**O**) | as **M**, then asks whether that person is an Owner and refuses by name | §6 |
-| Sysadmin (**S**) | asserts `auth.principal() = 'sysadmin'` **and** an active `system_administrators` row for `p_actor_user_id = auth.uid()`; takes no initials, terminal or PIN; every other function refuses a null `auth.org_id()` | A-90, A-110, A-113 |
+| Sysadmin (**S**) | asserts `authz.principal() = 'sysadmin'` **and** an active `system_administrators` row for `p_actor_user_id = auth.uid()`; takes no initials, terminal or PIN; every other function refuses a null `authz.org_id()` | A-90, A-110, A-113 |
 | Header exceptions | exactly five: `actor_resolve`, `manager_authorize_pin`, `terminal_register`, every **S** function, and A-91's Auth write-back — each still takes `p_request_id`; see A-113 for what each takes instead. A sixth is a decision, not a convenience | A-113 |
-| Tenancy | re-asserts `auth.org_id()` / `auth.store_id()` and the principal inside the function, not only via RLS | A-40 |
+| Tenancy | re-asserts `authz.org_id()` / `authz.store_id()` and the principal inside the function, not only via RLS | A-40 |
 | Both names recorded | the actor's and, where one authorized, the Manager's | A-28a, A-55, A-89 |
 | Flags, not gates | an action worth a second look proceeds and writes a `review_flags` row with an attributable actor **in the same transaction** | A-28 |
 | Money | integer minor units, columns suffixed `_minor` | A-15 |
@@ -191,7 +195,7 @@ function shares, from §3 and §6:
 | Owner | `waxworks_app`: the dedicated non-superuser role that owns the `app` schema — never `postgres`. It holds `bypassrls` and DML on every product table, granted in each table's migration; nothing outside the product schemas | A-103, A-104 |
 | Ownership by construction | every function migration opens with `set role waxworks_app;` — no per-function `alter … owner to` line; a suite-wide pgTAP assertion holds that every function in `app` is owned by `waxworks_app`, and another that `app` holds functions only | A-104, A-105 |
 | Reachability | the real client calls `supabase.schema("app").rpc(...)`; `config.toml` `[api].schemas` exposes `app` | A-105 |
-| Correlation | `p_request_id` on every function; `p_terminal_id` on a store session, verified against `auth.store_id()`; both stamped with `principal` on every row and log entry the function writes | A-94 |
+| Correlation | `p_request_id` on every function; `p_terminal_id` on a store session, verified against `authz.store_id()`; both stamped with `principal` on every row and log entry the function writes | A-94 |
 | Assertion order | tenant, then principal and actor, then the terminal, then **M**/**O** PIN resolution, then the body | A-103 |
 
 **The header every function starts from (A-103, A-104):**
@@ -212,17 +216,17 @@ security definer
 set search_path = ''
 as $$
 declare
-  v_org_id     uuid := auth.org_id();
-  v_store_id   uuid := auth.store_id();     -- store-dimensioned functions only
+  v_org_id     uuid := authz.org_id();
+  v_store_id   uuid := authz.store_id();     -- store-dimensioned functions only
   v_manager_id uuid;                        -- M / O only; resolved, never an argument
 begin
   if v_org_id is null then
     raise exception 'no_tenant' using errcode = '28000';                       -- A-40, A-90
   end if;
-  if auth.principal() = 'person' and p_actor_user_id is distinct from auth.user_id() then
+  if authz.principal() = 'person' and p_actor_user_id is distinct from authz.user_id() then
     raise exception 'actor_mismatch' using errcode = '28000'; -- §6
   end if;
-  if auth.principal() = 'store' and not app.terminal_belongs_to(p_terminal_id, v_store_id) then
+  if authz.principal() = 'store' and not app.terminal_belongs_to(p_terminal_id, v_store_id) then
     raise exception 'terminal_mismatch' using errcode = '28000';     -- A-94
   end if;
   -- M / O: v_manager_id := app.manager_authorize_pin(p_manager_pin);          -- §6, A-89
@@ -328,7 +332,7 @@ is a pull request both humans review (§7, workflow §4).
 | Validation in the wrapper | ergonomics only — the function is the enforcement point and asserts everything again (A-4, A-48, A-98) |
 | What lands at M0 | every §6 function's signature and a stub wrapper throwing `not_implemented`; schemas and the fake's behaviour arrive in the contract pull request that opens each milestone (A-99) |
 | How `packages/db-types` is regenerated and by whom | D, with `supabase gen types typescript --local`, in the same pull request as the migration; CI re-runs it and fails on a diff (A-98) |
-| How the fake knows who is signed in | `createFakeClient({ session })`, where `session` has §5.4's claim shape — `principal`, `org_id`, `store_id`, `user_id`, `terminal_id` — plus `auth_uid` (the JWT `sub`, which an **S** function compares with `p_actor_user_id`, A-113); `principal` also takes `enrolment` (A-117's session, null `org_id` and `store_id`) and `service`, which stands for the Postgres role `service_role` and is **not** a claim the hook mints — so **D** asserts the role, never `auth.principal() = 'service'` (M1 contracts order, finding 11). And `withSession(session)` returns a client for another principal over the **same** in-memory state, so a test states every principal it acts as. The fake reads the session where the database reads the JWT (A-87), and asserts what the function would. _Decided 2026-10-13 by sr-talbot (M1 contracts order, row 29)._ |
+| How the fake knows who is signed in | `createFakeClient({ session })`, where `session` has §5.4's claim shape — `principal`, `org_id`, `store_id`, `user_id`, `terminal_id` — plus `auth_uid` (the JWT `sub`, which an **S** function compares with `p_actor_user_id`, A-113); `principal` also takes `enrolment` (A-117's session, null `org_id` and `store_id`) and `service`, which stands for the Postgres role `service_role` and is **not** a claim the hook mints — so **D** asserts the role, never `authz.principal() = 'service'` (M1 contracts order, finding 11). And `withSession(session)` returns a client for another principal over the **same** in-memory state, so a test states every principal it acts as. The fake reads the session where the database reads the JWT (A-87), and asserts what the function would. _Decided 2026-10-13 by sr-talbot (M1 contracts order, row 29)._ |
 | How a refusal is told apart | One SQLSTATE and one stable **message key** per kind of refusal, raised by the function and mimicked by the fake; `ContractError` carries both. Screens branch on the key, never on human text. See the table below. **A refusal is the pair:** the message is a key of the table **and** the code is that key's (`isRefusal`); anything else — a real constraint violation, a key raised without `using errcode` — is a failure, `rpc_failed`, with the raw error in `details` only (A-93). _The shape decided 2026-10-13 by sr-talbot (M1 contracts order, row 30); the code values ratified 2026-10-29 by sr-talbot (the table's status line)._ |
 | What never reaches a definer function | A credential. The store account's password goes from the Owner's form to the Server Action's Auth call (A-91) and is never an argument of `store_create` or `store_account_reset`, which take the store account's **email**; a PIN is an argument only where a function verifies it (A-89), and never appears in a refusal (A-93). _Decided 2026-10-13 by sr-talbot (M1 contracts order, row 18)._ |
 
@@ -423,6 +427,7 @@ Ratified 2026-09-20, 2026-09-21 and 2026-10-11. Cite the A-n, not this section.
 | A-103 | The definer-function header: `search_path = ''`, grants, owner, assertion order |
 | A-104 | The owner's ceiling: `bypassrls`, per-table DML, `set role` opener, no `anon` usage on `app`, the ownership assertion |
 | A-105 | Functions in `app`, tables in `public`; `app` exposed to PostgREST and holding functions only |
+| A-124 | The six row-security helpers in `authz`, owned by `waxworks_app` and not exposed to the API |
 | A-91 (amended) | Public sign-up off in every environment |
 | A-106 | No Sentry DSN in any environment until the event payload is built by an allowlist |
 | A-107 | The grant rule held in two places: a list-free suite-wide assertion, and each function's own grants in its smoke test |
