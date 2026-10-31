@@ -54,17 +54,30 @@ ${statements}
 end $wx$`);
 }
 
+/**
+ * `supabase db query --output-format json` prints one of three things, and which
+ * depends on who runs it: a bare array of rows (CI, a plain shell); an object
+ * `{boundary, rows, warning}` when the CLI detects an AI agent (`AI_AGENT`,
+ * `CLAUDECODE`); or a statement with no result set's command tag (`DO`). Anything
+ * else throws: a read that silently came back empty is how `main` went red in CI
+ * while every agent-run local pass was green.
+ */
+export function parseQueryOutput<T>(out: string): T[] {
+  const text = out.trim();
+  if (/^[A-Z]+( [A-Z]+)*( \d+)*$/.test(text)) return [];
+  const json: unknown = JSON.parse(text);
+  if (Array.isArray(json)) return json as T[];
+  if (json && typeof json === "object" && Array.isArray((json as { rows?: unknown }).rows)) return (json as { rows: T[] }).rows;
+  throw new Error(`supabase db query printed neither rows nor a command tag: ${text.slice(0, 200)}`);
+}
+
 /** Runs ONE SQL statement as `postgres` against the local database and returns its rows. */
 export function sql<T = Record<string, unknown>>(text: string): T[] {
   const dir = mkdtempSync(join(tmpdir(), "wx-auth-"));
   const file = join(dir, "q.sql");
   try {
     writeFileSync(file, text, "utf8");
-    const out = supabase(["db", "query", "--local", "--output-format", "json", "-f", file]);
-    const start = out.indexOf("{");
-    if (start < 0) return [];
-    const json = JSON.parse(out.slice(start, out.lastIndexOf("}") + 1)) as { rows?: T[] };
-    return json.rows ?? [];
+    return parseQueryOutput<T>(supabase(["db", "query", "--local", "--output-format", "json", "-f", file]));
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
