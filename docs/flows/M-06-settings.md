@@ -223,6 +223,10 @@ QST are separate registrations (decision 48).
 
 ## Inherited from other flows
 
+**From [architecture](../architecture.md) A-136 (2026-10-31):**
+
+- **Decision 27's log arrives with the print agent.** A browser cannot open the drawer (decision 25), so before the print agent a manual open in the product would record an opening that never happened. In v1 the drawer opens by key and nothing records it; `drawer_opens` and its writer land with the print agent.
+
 **From [M-03](M-03-daily-summary.md) decision 19:**
 
 - **A Section's two-character code (decision 28) becomes reader-facing.** It was specified as an identifier
