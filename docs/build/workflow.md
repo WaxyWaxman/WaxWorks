@@ -2,7 +2,7 @@
 
 **Status:** Ratified 2026-09-17 (files for work orders; a path hook on the developer subagent; developer as both skill and subagent)
 **Amended:** 2026-09-21 — a blocking finding whose remedy is not code is **`discharged`** by a human naming what discharged it, rather than having no terminal state at all. Surfaced by M0 finding 28, which can never be marked `fixed` (§2, §4)
-**Owners:** sr-talbot, WaxyWaxman
+**Owners:** sr-talbot, GimpyMatey
 
 How a `Specified` flow becomes reliable code once we are past the prototype. It
 reuses what the documents already do — append-only decisions, the [end-to-end
