@@ -274,8 +274,10 @@ build): a definer function **returns `jsonb`**, matching its contract's output
 object and A-119's returned refusals; a **PIN is stored as the hex HMAC-SHA-256**
 of its digits, keyed with the pepper from `authz.pin_pepper()` (A-89, A-127); a
 returned refusal **sets the HTTP status by its code's class** (§5); and the six
-`authz` helpers read the JWT's claims through Supabase's **`auth.jwt()`**, not
-`request.jwt.claims` directly, so the record names one way of reading claims.
+`authz` helpers read the JWT's claims ~~through Supabase's **`auth.jwt()`**, not
+`request.jwt.claims` directly~~ **from `request.jwt.claims` directly** — the setting
+`auth.jwt()` itself reads, because `waxworks_app` has no `usage` on `auth` and
+`postgres` cannot grant it (amended 2026-10-31 by sr-talbot, from the E-01 D build).
 
 ### 3.4 pgTAP tests
 
