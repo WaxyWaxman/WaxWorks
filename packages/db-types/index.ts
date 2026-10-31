@@ -398,6 +398,7 @@ export type Database = {
           added_by: string | null
           auth_user_id: string
           deactivated_at: string | null
+          enrolment_open_until: string | null
           name: string
         }
         Insert: {
@@ -406,6 +407,7 @@ export type Database = {
           added_by?: string | null
           auth_user_id: string
           deactivated_at?: string | null
+          enrolment_open_until?: string | null
           name: string
         }
         Update: {
@@ -414,6 +416,7 @@ export type Database = {
           added_by?: string | null
           auth_user_id?: string
           deactivated_at?: string | null
+          enrolment_open_until?: string | null
           name?: string
         }
         Relationships: [
@@ -514,6 +517,7 @@ export type Database = {
           created_at: string
           display_name: string
           email: string | null
+          enrolment_open_until: string | null
           id: string
           initials: string | null
           log: Json
@@ -528,6 +532,7 @@ export type Database = {
           created_at?: string
           display_name: string
           email?: string | null
+          enrolment_open_until?: string | null
           id?: string
           initials?: string | null
           log?: Json
@@ -542,6 +547,7 @@ export type Database = {
           created_at?: string
           display_name?: string
           email?: string | null
+          enrolment_open_until?: string | null
           id?: string
           initials?: string | null
           log?: Json

@@ -3,8 +3,6 @@
 --   A-117 - the passkey kind: auth_user_mismatch, passkey_enrolled_at once, logged.
 --   Relinking is BLOCKED (approval, 2026-10-31): only "does not replace" is held.
 --
--- Written test-first and NOT YET RUN: no Docker daemon was reachable when
--- this file was written (see the order's Evidence). Its first run is expected red.
 begin;
 select no_plan();
 

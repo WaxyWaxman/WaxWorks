@@ -38,6 +38,8 @@ let org: Org;
 let manager: CeremonyResult;
 let owner: CeremonyResult;
 let sysadmin: CeremonyResult;
+/** The manager's newest refresh token: Auth rotates them (enable_refresh_token_rotation). */
+let latestManagerRefresh = "";
 
 beforeAll(async () => {
   org = await makeOrg(runId(), [
@@ -86,6 +88,7 @@ describe("E-01 d33 — a Manager or Owner signs in to a personal session with a 
       expect(claims(access).principal).toBe("person");
       token = r.body.refresh_token as string;
     }
+    latestManagerRefresh = token;
   });
 });
 
@@ -148,5 +151,20 @@ describe("A-110 — a System Administrator's passkey session", () => {
     expect((users.body.rows as unknown[]).length).toBeGreaterThanOrEqual(2);
     const pins = await rest("/user_pins?select=user_id", sysadmin.signedIn.access_token!);
     expect(pins.status).not.toBe(200);
+  });
+});
+
+describe("A-122 — a passkey personal session ends at the next refresh once its holder is deactivated (finding 12)", () => {
+  it("A-122 — active, the refresh is a personal session; deactivated, the next refresh is refused (E-01 d30)", async () => {
+    const before = await refresh(latestManagerRefresh);
+    expect(before.status, JSON.stringify(before.body)).toBe(200);
+    expect(amr(before.body.access_token as string)).toContain("passkey");
+    expect(claims(before.body.access_token as string).principal).toBe("person");
+    sql(`update public.users set active = false where id = '${org.people.manager!.id}'`);
+    const after = await refresh(before.body.refresh_token as string);
+    console.log(`A-122 passkey session after deactivation: status ${after.status} ${JSON.stringify(after.body)}`);
+    expect(after.status).toBe(403);
+    expect(after.body).toMatchObject({ msg: "role_refused" });
+    expect(after.body.access_token).toBeUndefined();
   });
 });

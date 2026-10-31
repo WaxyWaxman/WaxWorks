@@ -7,8 +7,6 @@
 --   A-104 - waxworks_app's DML ceiling.   A-110 / A-90 - the sysadmin role.
 --   A-28, A-68 - review_flags, nothing deletes one.   A-123 - the PIN tables.
 --
--- Written test-first and NOT YET RUN: no Docker daemon was reachable when
--- this file was written (see the order's Evidence). Its first run is expected red.
 begin;
 select no_plan();
 
