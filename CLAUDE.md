@@ -18,7 +18,7 @@ colliding or quietly contradicting each other.
 | `docs/lexicon.md` | Controlled vocabulary — the canonical term for each concept |
 | `docs/prototype.md` | The clickable prototype and its flow ↔ screen map |
 | `docs/qa/e2e-register.md` | The end-to-end test register — one row per whole-flow scenario, its status against the prototype and the product |
-| `docs/build/` | The build plan (`plan.md` — where we are, what is next, read first when picking up), the workflow (`workflow.md`), the stack conventions the developer codes to (`conventions.md`), the build-status table (`status.md`), the production runbook (`runbook.md` — every hand-made production act, A-116), and the work orders (`orders/`) |
+| `docs/build/` | The build plan (`plan.md` — where we are, what is next, read first when picking up), the workflow (`workflow.md`), the stack conventions the developer codes to (`conventions.md`), the build-status table (`status.md`), the production runbook (`runbook.md` — every hand-made production act, A-116), the work orders (`orders/`), and `questions-for-gimpymatey.md` — questions about how the shop runs on the ground, answered by GimpyMatey; a technical or security question goes to `plan.md` §4 instead |
 | `docs/reference/` | Worked examples and external-system notes |
 | `docs/templates/` | Starting point for a new flow document |
 | `.claude/skills/` | The planning skills (see below) |
