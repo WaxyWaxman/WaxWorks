@@ -92,6 +92,9 @@ The shape decision 18 was built to protect held: actions are still attributed to
 - **Decision 31's record and flag survive the refusal** (A-119, 2026-10-13): the PIN resolution writes the refused PIN's row — and at the fifth, the flag — then **returns** the refusal rather than raising it, so the transaction commits them and nothing else.
 - **The pad records the staff session** (A-120, 2026-10-13): `manager_authorize_pin` takes the staff session's actor, null when none is open, verified when given and recorded on a refused PIN's row — decision 31's *whose staff session was open*.
 - **The link's session is an enrolment session** (A-117, 2026-10-13): a token without a passkey reaches nothing, the server confirms the new passkey with Supabase, and `users.passkey_enrolled_at` records that the person has enrolled — which is what lets an Owner's *Re-send invite* refuse someone who already accepted.
+- **A store session comes only from a password sign-in** (A-130, 2026-10-31): the hook refuses a store account's token from any other method, so a magic link to the Store's mailbox cannot outlive the Owner's reset (decision 34).
+- **An enrolment session exists only inside an issued link's window** (A-131, 2026-10-31): a person may not request their own link and enrol a passkey with it; re-enrolment stays an Owner's act ([M-04](M-04-manage-users.md) d38).
+- **A PIN is never checked in a read-only transaction** (A-129, 2026-10-31): the pad and every PIN resolution refuse one first, so decision 31's throttle cannot be bypassed by a GET.
 
 **From [M-06](M-06-settings.md):**
 
