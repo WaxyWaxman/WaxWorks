@@ -121,6 +121,7 @@ The in-place mechanism survives for the manager-only table (decision 9). On a st
 - **A terminal signs in with the Store's store account** ([E-01](E-01-authenticate.md) d24); the store account itself is [M-06](M-06-settings.md) d70's and an Owner's. Nothing in this flow issues or resets it.
 - **The optional barrier password is retired** ([E-01](E-01-authenticate.md) d29), which is why decision 23 is superseded rather than extended.
 - **Managers and Owners sign in with a passkey — never a password, and no fallback** (E-01 d33, 2026-10-13). Add's invite and a promotion's invite (d29, d33) enrol it; *Send reset* sends a re-enrolment link. Someone who cannot create a passkey works from the counter's PIN.
+- **The review queue receives a system-raised flag when a Store's PIN line closes** ([E-01](E-01-authenticate.md) d31, d39, 2026-10-31): it has no actor and points at the refusals that closed the line, each naming its terminal and staff session. Acknowledging it is decision 17's act like any other.
 
 **From [architecture](../architecture.md):**
 
