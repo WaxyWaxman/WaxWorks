@@ -234,6 +234,15 @@ function storeSessionOnly(x: Ctx): void {
   if (x.s!.principal !== "store") x.refuse("role_refused", "store");
 }
 
+/**
+ * M-04 d51: an act that sets a PIN runs on a personal session only — refused at
+ * the till at the principal step, before any PIN is read, so nothing is recorded.
+ */
+function noPinAtTill(x: Ctx, setsPin: boolean): void {
+  x.tenant();
+  if (setsPin && x.s!.principal === "store") x.refuse("role_refused", "person");
+}
+
 const asPerson = (u: UserRow) => ({ user_id: u.user_id, display_name: u.display_name, role: u.role });
 
 export const identityHandlers: Record<string, Handler> = {
@@ -281,6 +290,7 @@ export const identityHandlers: Record<string, Handler> = {
   }),
 
   user_add: handle((x) => {
+    noPinAtTill(x, x.args.p_pin != null);
     const who = x.authorize(false);
     const { by } = who;
     const org = by.org_id;
@@ -317,6 +327,7 @@ export const identityHandlers: Record<string, Handler> = {
   }),
 
   user_change_role: handle((x) => {
+    noPinAtTill(x, x.args.p_pin != null);
     const who = x.authorize(true);
     const org = who.by.org_id;
     const u = x.user(x.args.p_user_id as string, org);
@@ -336,9 +347,13 @@ export const identityHandlers: Record<string, Handler> = {
     const pin = x.args.p_pin as string | null;
     // Employees have no PIN (M-04 d28): refused as user_add refuses it. The key is a placeholder (invalid_state).
     if (to === "employee" && pin !== null) x.refuse("invalid_state", "employee_has_no_pin");
+    // M-04 d53: a demotion sends no invite, so an address on it is refused; Correct changes it.
+    if (!promotion && x.args.p_email != null) x.refuse("invalid_state", "email_not_needed");
     if (to !== "employee") {
       if (!email) x.refuse("email_required");
       const holdsPin = x.tx.pins.has(u.user_id);
+      // M-04 d52: a PIN at promotion only for someone who holds none; changing one is Set PIN's.
+      if (holdsPin && pin !== null) x.refuse("invalid_state", "pin_not_needed");
       if (!holdsPin && pin === null && (to === "manager" || u.store_ids.length > 0)) x.refuse("pin_required");
       if (pin !== null) for (const st of u.store_ids) x.pinClash(st, pin, u.user_id, who);
     }
@@ -367,13 +382,16 @@ export const identityHandlers: Record<string, Handler> = {
     const org = who.by.org_id;
     const u = x.user(x.args.p_user_id as string, org);
     x.subjectInReach(who.by, u, "shares");
-    if (u.role === "owner" && u.active && x.activeOwners(org).length === 1) x.refuse("owner_floor");
+    // M-04 d54: nothing to deactivate for someone already deactivated; nothing is logged.
+    if (!u.active) x.refuse("invalid_state", "inactive");
+    if (u.role === "owner" && x.activeOwners(org).length === 1) x.refuse("owner_floor");
     u.active = false;
     x.log("users.log", u.user_id, "deactivated", who, { before: { active: true }, after: { active: false } });
     return { user_id: u.user_id };
   }),
 
   user_reactivate: handle((x) => {
+    noPinAtTill(x, x.args.p_pin != null);
     const who = x.authorize(false);
     const u = x.user(x.args.p_user_id as string, who.by.org_id);
     x.subjectInReach(who.by, u, "shares");
@@ -456,13 +474,14 @@ export const identityHandlers: Record<string, Handler> = {
   }),
 
   user_set_pin: handle((x) => {
+    noPinAtTill(x, true);
     const who = x.authorize(false);
     const u = x.user(x.args.p_user_id as string, who.by.org_id);
     // M-04 d28: Employees have no PIN. The key is a placeholder (invalid_state).
     if (u.role === "employee") x.refuse("invalid_state", "employee_has_no_pin");
     // M-04 d41: "at their own Stores" (M-04 d28) is one shared Store — a Manager
-    // may set the PIN of anyone who shares any one of theirs.
-    if (who.by.role !== "owner" && !u.store_ids.some((st) => who.by.store_ids.includes(st))) x.refuse("role_refused", "owner");
+    // may set the PIN of a Manager who shares any one of theirs; M-04 d50: never an Owner's.
+    if (who.by.role !== "owner" && (u.role === "owner" || !u.store_ids.some((st) => who.by.store_ids.includes(st)))) x.refuse("role_refused", "owner");
     // M-04 d48: nothing is done to a deactivated person's standing; reactivate first.
     if (!u.active) x.refuse("invalid_state", "inactive");
     const pin = x.args.p_pin as string | null;

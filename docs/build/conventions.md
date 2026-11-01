@@ -354,7 +354,7 @@ is a pull request both humans review (§7, workflow §4).
 | Kind | SQLSTATE | Message key | Detail |
 |---|---|---|---|
 | No tenant; actor is not the session holder; terminal is not this Store's (A-40, §6, A-94) | `28000` | `no_tenant`, `actor_mismatch`, `terminal_mismatch` | — |
-| Wrong principal or role — not a Manager, not an Owner, not a System Administrator (A-90, M-04 d30) | `42501` | `role_refused` | the role required |
+| Wrong principal or role — not a Manager, not an Owner, not a System Administrator (A-90, M-04 d30); an act that sets a PIN at the till (M-04 d51) | `42501` | `role_refused` | the role required — or `person`, the principal required: a PIN-setting act on a store session is refused so, before any PIN is read |
 | Wrong PIN (E-01 d26) | `28P01` | `pin_refused` | — names nobody |
 | PIN line closed (E-01 d31) | `WX429` | `pin_line_closed` | `reopens_at` |
 | Clash — initials or PIN already held at this Store (M-04 d27, d32) | `23505` | `initials_clash`, `pin_clash` | the holder's name for initials; nothing for a PIN |
@@ -370,13 +370,14 @@ is a pull request both humans review (§7, workflow §4).
 
 **`invalid_input` raised by the database — decided 2026-10-31 by sr-talbot; in the table above since the M1 review-keys contract change.** An argument the database itself rejects — A-120's actor pair given half null — is raised `invalid_input` with SQLSTATE **`22023`** (`invalid_parameter_value`, so PostgREST answers 400), and its detail names the argument. **D raises it so today.** It is in `REFUSALS` and `REFUSAL_DETAIL` (`packages/contracts/src/client.ts`), so the real client reports it as a refusal with its detail. The wrapper's own input check answers `code: invalid_input` with the same key; a screen branching on the key reads both the same.
 
-**`invalid_state`'s detail is a closed list** (twelve values since A-128 added `linked` and A-132 `auth_user_in_use`). A screen may branch on the key **and** the detail; **D** raises exactly these values and its pgTAP refusal tests assert SQLSTATE, key and detail; a new state is a new row here first. _Decided 2026-10-30 by sr-talbot (M1-contracts-3 finding 6); the values are the fake's at `19a49ed`._
+**`invalid_state`'s detail is a closed list** (thirteen values since A-128 added `linked`, A-132 `auth_user_in_use` and M-04 d53 `email_not_needed`). A screen may branch on the key **and** the detail; **D** raises exactly these values and its pgTAP refusal tests assert SQLSTATE, key and detail; a new state is a new row here first. _Decided 2026-10-30 by sr-talbot (M1-contracts-3 finding 6); the values are the fake's at `19a49ed`._
 
 | Detail | The state | Raised by | Decision |
 |---|---|---|---|
-| `inactive` | The person is deactivated | `user_change_role`, `user_reset_request`, `user_invite_resend`, `user_set_pin` (the fake now; **D** with M-04 D) | M-04 d44, d46, d48 |
+| `inactive` | The person is deactivated | `user_change_role`, `user_reset_request`, `user_invite_resend`, `user_set_pin`, `user_deactivate` (the fake since the M-04 review contract change; **D** with its correcting migration) | M-04 d44, d46, d48, d54 |
 | `active` | The person is already active | `user_reactivate` | M-04 d47 |
-| `pin_not_needed` | A new PIN given at reactivation where nothing clashes | `user_reactivate` | M-04 d47, d49 |
+| `pin_not_needed` | A new PIN given at reactivation where nothing clashes, or at a promotion of someone who already holds one | `user_reactivate`, `user_change_role` | M-04 d47, d49, d52 |
+| `email_not_needed` | An email given with a demotion, which sends no invite | `user_change_role` | M-04 d53 |
 | `employee_has_no_pin` | A PIN given to, or set on, an Employee | `user_add`, `user_change_role`, `user_reactivate`, `user_set_pin` | M-04 d28, d39 |
 | `no_store` | An Employee or Manager with no Store, at Add or a demotion | `user_add`, `user_change_role` | M-04 d27 |
 | `last_store` | Unassigning an Employee's or Manager's last Store | `user_unassign` | M-04 d27 |
