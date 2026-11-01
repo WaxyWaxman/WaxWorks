@@ -4,6 +4,10 @@
 --   M-04 d28, d32, d39, d40, d47, d48 - the PIN.   M-04 d26 - the Owner floor.
 --   M-04 d33, d42, d43, d44, d46; A-114, A-117, A-131 - role changes, links and the enrolment window.
 --   M-04 d18, d22, d45; A-55, A-93 - deactivation, correction, demotion and the record.
+--   Review corrections (2026-11-01): M-04 d50 (an Owner's PIN is an Owner's to set),
+--   d52 (no PIN at a promotion of a holder), d53 (no email at a demotion), d54 (no
+--   second deactivation); E-01 d40 (Unassign clears the picked Store); findings 7,
+--   8 and 15 (Add's invite, Set PIN's order, a promotion into Owner without email).
 begin;
 select no_plan();
 
@@ -311,7 +315,7 @@ create function pg_temp.call(p_fn text, p_user uuid, p_store uuid default null) 
 begin
   case p_fn
     when 'user_add'           then return pg_temp.add('employee', 'ZQ', array[coalesce(p_store, pg_temp.s('a1'))], null, null, 'Zed Quill');
-    when 'user_change_role'   then return pg_temp.chrole(p_user, 'manager', 'z@a.test', '7777');
+    when 'user_change_role'   then return pg_temp.chrole(p_user, 'owner', 'z@a.test', null);   -- no PIN: M-04 d51 would refuse it at the till first
     when 'user_deactivate'    then return pg_temp.deact(p_user);
     when 'user_reactivate'    then return pg_temp.react(p_user);
     when 'user_assign'        then return pg_temp.assign(p_user, coalesce(p_store, pg_temp.s('a2')));
@@ -362,9 +366,10 @@ $$;
 -- Max's PIN at A1, under Eve's staff session.
 create temp table sa_13 as select * from public.store_assignments;
 select pg_temp.counter(pg_temp.t('1'), pg_temp.u('01'), 'EE', '1111');
-select is(pg_temp.add('manager', 'NM', array[pg_temp.s('a1')], 'nm@a.test', '8001', 'New Manager'), pg_temp.owner_refusal(),
+-- No PIN is carried at the till (M-04 d51 would refuse it first, role_refused / person).
+select is(pg_temp.add('manager', 'NM', array[pg_temp.s('a1')], 'nm@a.test', null, 'New Manager'), pg_temp.owner_refusal(),
   'M-04 d30 - a Manager adding a Manager: 42501 role_refused, owner');
-select is(pg_temp.chrole(pg_temp.u('01'), 'manager', 'eve@a.test', '8002'), pg_temp.owner_refusal(),
+select is(pg_temp.chrole(pg_temp.u('01'), 'manager', 'eve@a.test', null), pg_temp.owner_refusal(),
   'M-04 d30 - a Manager promoting an Employee: role_refused, owner');
 select is(pg_temp.deact(pg_temp.u('04')), pg_temp.owner_refusal(),
   'M-04 d30 - a Manager deactivating a Manager: role_refused, owner');
@@ -412,28 +417,46 @@ select ok(exists (select 1 from public.store_assignments where user_id = pg_temp
       and (select active from public.users where id = pg_temp.u('07')),
   'M-04 d37 - the refused calls changed nothing');
 
--- ── Row 15: M-04 d41 — a Manager sets the PIN of anyone who shares a Store ──
-select pg_temp.counter(pg_temp.t('1'), pg_temp.u('01'), 'EE', '1111');
--- Olive holds A1 and A2; Nat holds 3333 at A2.
-select is(pg_temp.setpin(pg_temp.u('03'), '3333'),
-  '{"code": "23505", "message": "pin_clash", "details": null, "hint": null}'::jsonb,
-  'M-04 d41 - a Manager at A setting the PIN of an Owner at A and B is clash-checked at B too: pin_clash (M-04 d28: at every Store of the holder)');
-select is(pg_temp.setpin(pg_temp.u('03'), '2468'), jsonb_build_object('user_id', pg_temp.u('03')),
-  'M-04 d41 - a Manager at A sets the PIN of an Owner at A and B: accepted');
-select is(pg_temp.setpin(pg_temp.u('05'), '2469'), pg_temp.owner_refusal(),
-  'M-04 d41 - of an Owner at B only: role_refused, owner');
+-- ── Row 15: M-04 d41 as bounded by d50 — a Manager sets the PIN of a Manager ──
+-- who shares a Store, never an Owner's; and on a personal session (M-04 d51).
+-- Olive adds Mia, a Manager at A1 and A2; Max (Manager, A1) then works at his desk.
+select pg_temp.desk(pg_temp.u('03'));
+insert into ids select 'mia', (pg_temp.add('manager', 'MI', array[pg_temp.s('a1'), pg_temp.s('a2')], 'mia@a.test', '2470', 'Mia Both') ->> 'user_id')::uuid;
 reset role;
-select is((select pin_hash from public.user_pins where user_id = pg_temp.u('03')), pg_temp.pin_hash('2468'),
+select pg_temp.desk(pg_temp.u('02'));
+-- Nat holds 3333 at A2.
+select is(pg_temp.setpin(pg_temp.id('mia'), '3333'),
+  '{"code": "23505", "message": "pin_clash", "details": null, "hint": null}'::jsonb,
+  'M-04 d41 - a Manager at A setting the PIN of a Manager at A and B is clash-checked at B too: pin_clash (M-04 d28: at every Store of the holder)');
+select is(pg_temp.setpin(pg_temp.id('mia'), '2468'), jsonb_build_object('user_id', pg_temp.id('mia')),
+  'M-04 d41 - a Manager at A sets the PIN of a Manager at A and B: accepted');
+select is(pg_temp.setpin(pg_temp.u('03'), '2469'), pg_temp.owner_refusal(),
+  'M-04 d50 - a Manager setting the PIN of an Owner who shares their Store: role_refused, owner (an Owner''s PIN is an Owner''s to set)');
+select is(pg_temp.setpin(pg_temp.u('04'), '2469'), pg_temp.owner_refusal(),
+  'M-04 d41 - of a Manager at B only: role_refused, owner');
+reset role;
+select is((select pin_hash from public.user_pins where user_id = pg_temp.id('mia')), pg_temp.pin_hash('2468'),
   'M-04 d41 - the accepted PIN is stored as its keyed hash');
-select is((select pin_hash from public.user_pins where user_id = pg_temp.u('05')), pg_temp.pin_hash('5555'),
-  'M-04 d41 - the refused one left Quinn''s PIN as it was');
+select is((select pin_hash from public.user_pins where user_id = pg_temp.u('03')), pg_temp.pin_hash('2222'),
+  'M-04 d50 - the refused one left Olive''s PIN as it was');
+select is((select pin_hash from public.user_pins where user_id = pg_temp.u('04')), pg_temp.pin_hash('3333'),
+  'M-04 d41 - and Nat''s');
+-- Finding 5, the escalation d50 closes: Max cannot give himself an Owner's PIN
+-- and approve his own promotion with it — the first act is refused (above), and
+-- with Olive's PIN unknown to him his promotion at the till names nobody.
+select pg_temp.counter(pg_temp.t('1'), pg_temp.u('01'), 'EE', '2469');
+select is(pg_temp.chrole(pg_temp.u('02'), 'owner') ->> 'message', 'pin_refused',
+  'M-04 d50 - (the PIN Max tried to give Olive authorises nothing: the escalation in finding 5 has no first step)');
+reset role;
+select is((select role from public.users where id = pg_temp.u('02')), 'manager', 'M-04 d50 - Max is still a Manager');
+select pg_temp.reopen();
 
 -- ── Rows 19 and 20: the clash at the holder's second Store, unnamed and logged ──
-select is((pg_temp.entry(pg_temp.u('03'), 'pin_clash_refused') - 'at' - 'request_id'),
-  jsonb_build_object('action', 'pin_clash_refused', 'store_id', pg_temp.s('a2'), 'actor_user_id', pg_temp.u('01'),
-                     'manager_user_id', pg_temp.u('02'), 'terminal_id', pg_temp.t('1'), 'principal', 'store'),
+select is((pg_temp.entry(pg_temp.id('mia'), 'pin_clash_refused') - 'at' - 'request_id'),
+  jsonb_build_object('action', 'pin_clash_refused', 'store_id', pg_temp.s('a2'), 'actor_user_id', pg_temp.u('02'),
+                     'manager_user_id', pg_temp.u('02'), 'terminal_id', null, 'principal', 'person'),
   'M-04 d32 - the refused clash appends pin_clash_refused to the subject''s users.log: actor, authoriser, the Store, the time, no digits');
-select ok((pg_temp.entry(pg_temp.u('03'), 'pin_clash_refused') ->> 'at') is not null,
+select ok((pg_temp.entry(pg_temp.id('mia'), 'pin_clash_refused') ->> 'at') is not null,
   'M-04 d32 - the clash entry carries its time');
 select pg_temp.reopen();
 
@@ -586,6 +609,8 @@ select is(pg_temp.add('manager', 'ME', array[pg_temp.s('a1')], null, '4646', 'Ma
   'M-04 d33 - user_add of a Manager with no email: 23502 email_required');
 select is(pg_temp.chrole(pg_temp.u('06'), 'manager', null, '4747'), pg_temp.required('email_required'),
   'M-04 d33 - a promotion into Manager of someone with no email, given none: email_required');
+select is(pg_temp.chrole(pg_temp.u('01'), 'owner', null, '4750'), pg_temp.required('email_required'),
+  'M-04 d33 - a promotion into Owner of someone with no email, given none: email_required (finding 15)');
 select is(pg_temp.fix_email(pg_temp.u('02'), null), pg_temp.required('email_required'),
   'M-04 d29 - user_correct nulling a Manager''s email: email_required');
 select is(pg_temp.fix_email(pg_temp.id('ne'), null), jsonb_build_object('user_id', pg_temp.id('ne')),
@@ -612,6 +637,41 @@ select is(pg_temp.entry(pg_temp.u('02'), 'invite_sent'), null, 'M-04 d43 - the e
 select pg_temp.desk(pg_temp.u('03'));
 select is(pg_temp.chrole(pg_temp.u('02'), 'manager') ->> 'invite', 'false', 'M-04 d43 - (Max back to Manager)');
 reset role;
+
+-- Finding 7: Add's half — user_add of a Manager or Owner invites (M-04 d29, d43),
+-- an Employee's does not. UserAddOutput carries no address, so none is returned.
+create temp table results (k text primary key, r jsonb);
+grant all on results to public;
+select pg_temp.desk(pg_temp.u('03'));
+insert into results select 'ada', pg_temp.add('manager', 'AM', array[pg_temp.s('a3')], 'am@a.test', '7311', 'Ada Manager');
+insert into results select 'olga', pg_temp.add('owner', null, '{}'::uuid[], 'olga@a.test', null, 'Olga Roams');
+insert into results select 'eli', pg_temp.add('employee', 'EL', array[pg_temp.s('a3')], null, null, 'Eli Hire');
+reset role;
+select is((select r - 'user_id' from results where k = 'ada'), '{"invite": true}'::jsonb,
+  'M-04 d29 - user_add of a Manager returns invite true (finding 7)');
+select is(pg_temp.acts((select (r ->> 'user_id')::uuid from results where k = 'ada')), array['user_added', 'pin_set', 'invite_sent'],
+  'M-04 d29 - and logs invite_sent, after pin_set, never the link (A-93)');
+select is((select r - 'user_id' from results where k = 'olga'), '{"invite": true}'::jsonb,
+  'M-04 d29 - user_add of an Owner returns invite true');
+select is(pg_temp.acts((select (r ->> 'user_id')::uuid from results where k = 'olga')), array['user_added', 'invite_sent'],
+  'M-04 d29 - and logs invite_sent');
+select is((select r - 'user_id' from results where k = 'eli'), '{"invite": false}'::jsonb,
+  'M-04 d29 - user_add of an Employee returns invite false');
+select is(pg_temp.acts((select (r ->> 'user_id')::uuid from results where k = 'eli')), array['user_added'],
+  'M-04 d29 - and logs no invite_sent');
+select is((select enrolment_open_until from public.users where id = (select (r ->> 'user_id')::uuid from results where k = 'ada')),
+  now() + interval '24 hours', 'A-131 - user_add of a Manager opens the 24-hour window with its invite');
+
+-- M-04 d52 (finding 13): a promotion carrying a PIN for someone who holds one.
+create temp table log_52 as select log from public.users where id = pg_temp.u('02');
+select pg_temp.desk(pg_temp.u('03'));
+select is(pg_temp.chrole(pg_temp.u('02'), 'owner', null, '1357'), pg_temp.state('pin_not_needed'),
+  'M-04 d52 - a promotion carrying a PIN for someone who already holds one: invalid_state, pin_not_needed');
+reset role;
+select ok((select role = 'manager' from public.users where id = pg_temp.u('02'))
+      and (select pin_hash from public.user_pins where user_id = pg_temp.u('02')) = pg_temp.pin_hash('1111')
+      and (select log from public.users where id = pg_temp.u('02')) = (select log from log_52),
+  'M-04 d52 - and wrote nothing: the role, the held PIN and the log as they were (changing a PIN is Set PIN''s)');
 
 -- ── Row 26: M-04 d42 — a promotion that changes the address logs it ────────
 select pg_temp.desk(pg_temp.u('03'));
@@ -647,9 +707,25 @@ select is(pg_temp.chrole(pg_temp.u('01'), 'employee'), jsonb_build_object('user_
 select is(pg_temp.chrole(pg_temp.id('ivy'), 'manager', 'x@a.test', '5151'),
   jsonb_build_object('user_id', pg_temp.id('ivy'), 'invite', false, 'email', null),
   'M1-contracts-3 finding 5 - a same-role call on a deactivated person: invite false, before inactive is asked');
+-- M-04 d53 (finding 12): a demotion carrying an email is refused; Correct changes it.
+select is(pg_temp.chrole(pg_temp.u('02'), 'employee', 'max@new.test'), pg_temp.state('email_not_needed'),
+  'M-04 d53 - a demotion to Employee carrying an email: invalid_state, email_not_needed');
+select is(pg_temp.chrole(pg_temp.u('07'), 'manager', 'gus@new.test'), pg_temp.state('email_not_needed'),
+  'M-04 d53 - Owner to Manager carrying an email: email_not_needed');
+-- M-04 d54: deactivating someone already deactivated — refused, nothing logged.
+select is(pg_temp.deact(pg_temp.u('06')), pg_temp.state('inactive'),
+  'M-04 d54 - deactivating a deactivated Employee: invalid_state, inactive');
+select is(pg_temp.deact(pg_temp.id('rae')), pg_temp.state('inactive'),
+  'M-04 d54 - deactivating a deactivated Owner: inactive, not owner_floor — there is nothing to deactivate');
 reset role;
 select is((select count(*)::int from public.users u join log_27 b using (id) where u.log is distinct from b.log), 0,
-  'M-04 d46 - none of these calls changed any log');
+  'M-04 d46, d53, d54 - none of these calls changed any log');
+select is((select count(*)::int from public.users u, jsonb_array_elements(u.log) e
+            where u.id = pg_temp.id('rae') and e ->> 'action' = 'deactivated'), 1,
+  'M-04 d54 - Rae, deactivated once and then again: one deactivated entry in her log');
+select ok((select role = 'manager' and email = 'm@a.test' from public.users where id = pg_temp.u('02'))
+      and (select role = 'owner' and email = 'gus@a.test' from public.users where id = pg_temp.u('07')),
+  'M-04 d53 - the refused demotions changed neither role nor address');
 select ok((select role = 'manager' and email = 'ivy@new.test' from public.users where id = pg_temp.id('ivy'))
       and (select pin_hash from public.user_pins where user_id = pg_temp.id('ivy')) = pg_temp.pin_hash('4949'),
   'M-04 d46 - and the same-role call wrote nothing it was given');
@@ -666,7 +742,21 @@ select is((select enrolment_open_until from public.users where id = pg_temp.id('
 -- ── Row 29: M-04 d48 — no PIN is set for a deactivated person ──────────────
 select pg_temp.desk(pg_temp.u('03'));
 select is(pg_temp.setpin(pg_temp.id('ivy'), '5252'), pg_temp.state('inactive'), 'M-04 d48 - Set PIN for a deactivated Manager: inactive');
+-- Finding 8: inactive comes after the scope check, as the fake orders it. Zia, a
+-- Manager at A3, is deactivated; Max (Manager, A1) then tries at his desk.
+insert into ids select 'zia', (pg_temp.add('manager', 'ZI', array[pg_temp.s('a3')], 'zia@a.test', '5353', 'Zia Thirdstore') ->> 'user_id')::uuid;
+select is(pg_temp.deact(pg_temp.id('zia')) ->> 'user_id', pg_temp.id('zia')::text, 'M-04 d48 - (Zia deactivated)');
 reset role;
+select pg_temp.desk(pg_temp.u('02'));
+select is(pg_temp.setpin(pg_temp.id('zia'), '5454'), pg_temp.owner_refusal(),
+  'M-04 d48 - a Manager setting the PIN of a deactivated Manager at a Store not theirs: role_refused, owner — scope before inactive (finding 8)');
+select is(pg_temp.setpin(pg_temp.id('rae'), '5454'), pg_temp.owner_refusal(),
+  'M-04 d50 - a Manager setting the PIN of a deactivated Owner: role_refused, owner — scope before inactive');
+select is(pg_temp.setpin(pg_temp.id('ivy'), '5454'), pg_temp.state('inactive'),
+  'M-04 d48 - a Manager setting the PIN of a deactivated Manager who shares their Store: in scope, so inactive');
+reset role;
+select is((select pin_hash from public.user_pins where user_id = pg_temp.id('zia')), pg_temp.pin_hash('5353'),
+  'M-04 d48 - the refused calls left Zia''s PIN as it was');
 select is((select pin_hash from public.user_pins where user_id = pg_temp.id('ivy')), pg_temp.pin_hash('4949'),
   'M-04 d48 - the stored hash is unchanged');
 
@@ -857,12 +947,37 @@ select is(
     where (to_jsonb(r) - 'id' - 'at' - 'request_id' - 'closure_id' - 'org_id' - 'store_id' - 'terminal_id' - 'staff_user_id')::text ~ '[0-9]{4}'),
   0, 'A-93 - no refusal row holds digits');
 
+-- ── E-01 d40: Unassign clears the picked Store when it is the one removed ──
+-- Nat (Manager, A2) is assigned A1 at Olive's desk; his pick is written by hand,
+-- standing in for session_select_store (E-01's function, not under test here).
+select pg_temp.desk(pg_temp.u('03'));
+select is(pg_temp.assign(pg_temp.u('04'), pg_temp.s('a1')) ->> 'user_id', pg_temp.u('04')::text, 'E-01 d40 - (Nat assigned A1)');
+reset role;
+update public.users set selected_store_id = pg_temp.s('a1') where id = pg_temp.u('04');
+select pg_temp.desk(pg_temp.u('03'));
+select is(pg_temp.unassign(pg_temp.u('04'), pg_temp.s('a1')) ->> 'user_id', pg_temp.u('04')::text, 'E-01 d40 - (Nat unassigned from A1, his pick)');
+reset role;
+select is((select selected_store_id from public.users where id = pg_temp.u('04')), null,
+  'E-01 d40 - unassigning a Manager from the Store their session picked clears the pick in the same act');
+select pg_temp.desk(pg_temp.u('03'));
+select is(pg_temp.assign(pg_temp.u('04'), pg_temp.s('a1')) ->> 'user_id', pg_temp.u('04')::text, 'E-01 d40 - (Nat assigned A1 again)');
+reset role;
+update public.users set selected_store_id = pg_temp.s('a2') where id = pg_temp.u('04');
+select pg_temp.desk(pg_temp.u('03'));
+select is(pg_temp.unassign(pg_temp.u('04'), pg_temp.s('a1')) ->> 'user_id', pg_temp.u('04')::text, 'E-01 d40 - (Nat unassigned from A1 again)');
+reset role;
+select is((select selected_store_id from public.users where id = pg_temp.u('04')), pg_temp.s('a2'),
+  'E-01 d40 - unassigning another Store leaves the pick as it was');
+
 -- ── Row 19: with the pepper absent, every function fails closed ────────────
 delete from vault.secrets where name = 'pin_pepper';
 select pg_temp.counter(pg_temp.t('1'), pg_temp.u('01'), 'EE', '2468');
-select is((select array_agg(distinct (pg_temp.call(f, pg_temp.u('06')) - 'raised')::text) from unnest(pg_temp.ten()) f),
+select is((select array_agg(distinct (pg_temp.call(f, pg_temp.u('06')) - 'raised')::text) from unnest(pg_temp.ten()) f
+            where f <> 'user_set_pin'),
   array['{"code": "XX000", "hint": null, "details": null, "message": "pin_pepper_missing"}'],
-  'A-115 - with the pin_pepper secret absent, each of the ten on a store session raises XX000 pin_pepper_missing');
+  'A-115 - with the pin_pepper secret absent, each of the nine with a store-session path raises XX000 pin_pepper_missing on a store session');
+select is(pg_temp.call('user_set_pin', pg_temp.u('06')) ->> 'message', 'role_refused',
+  'M-04 d51 - user_set_pin at the till is refused role_refused before the pepper is ever read');
 reset role;
 select pg_temp.desk(pg_temp.u('03'));
 select is(pg_temp.setpin(pg_temp.u('04'), '1357') ->> 'message', 'pin_pepper_missing',

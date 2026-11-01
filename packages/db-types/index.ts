@@ -32,20 +32,6 @@ export type Database = {
         }
         Returns: Json
       }
-      initials_holder: {
-        Args: {
-          p_except: string
-          p_initials: string
-          p_org_id: string
-          p_store_ids: string[]
-        }
-        Returns: string
-      }
-      lock_active_owners: { Args: { p_org_id: string }; Returns: number }
-      lock_store_assignments: {
-        Args: { p_org_id: string; p_store_ids: string[] }
-        Returns: undefined
-      }
       manager_authorize_pin: {
         Args: {
           p_actor_initials?: string
@@ -55,25 +41,6 @@ export type Database = {
           p_terminal_id: string
         }
         Returns: Json
-      }
-      pin_hash: { Args: { p_pin: string }; Returns: string }
-      pin_resolve: {
-        Args: {
-          p_pin: string
-          p_request_id: string
-          p_staff_user_id: string
-          p_terminal_id: string
-        }
-        Returns: Json
-      }
-      pin_taken: {
-        Args: {
-          p_except: string
-          p_org_id: string
-          p_pin_hash: string
-          p_store_ids: string[]
-        }
-        Returns: string
       }
       session_select_store: {
         Args: {

@@ -309,12 +309,14 @@ end
 $$;
 
 -- Each of the ten by name, with arguments that would succeed for a suitable
--- subject — for the assertions that hold of every function alike.
+-- subject — for the assertions that hold of every function alike. None carries
+-- a PIN but user_set_pin, which cannot help it: M-04 d51 refuses a PIN-setting
+-- act at the till before the actor, so a PIN here would hide what is tested.
 create function pg_temp.call(p_fn text, p_user uuid, p_store uuid default null) returns jsonb language plpgsql as $$
 begin
   case p_fn
     when 'user_add'           then return pg_temp.add('employee', 'ZQ', array[coalesce(p_store, pg_temp.s('a1'))], null, null, 'Zed Quill');
-    when 'user_change_role'   then return pg_temp.chrole(p_user, 'manager', 'z@a.test', '7777');
+    when 'user_change_role'   then return pg_temp.chrole(p_user, 'owner', 'z@a.test', null);
     when 'user_deactivate'    then return pg_temp.deact(p_user);
     when 'user_reactivate'    then return pg_temp.react(p_user);
     when 'user_assign'        then return pg_temp.assign(p_user, coalesce(p_store, pg_temp.s('a2')));
@@ -330,6 +332,14 @@ $$;
 create function pg_temp.ten() returns text[] language sql immutable as $$
   select array['user_add', 'user_change_role', 'user_deactivate', 'user_reactivate', 'user_assign',
                'user_unassign', 'user_correct', 'user_set_pin', 'user_reset_request', 'user_invite_resend']
+$$;
+-- The nine with a store-session path: all but user_set_pin (M-04 d51).
+create function pg_temp.nine() returns text[] language sql immutable as $$
+  select array_remove(pg_temp.ten(), 'user_set_pin')
+$$;
+-- M-04 d51's refusal at the till, as the test wrappers return a raised error.
+create function pg_temp.person_refusal() returns jsonb language sql immutable as $$
+  select '{"code": "42501", "message": "role_refused", "details": "person", "hint": null, "raised": true}'::jsonb
 $$;
 
 -- A user's log, and its entries with a given action.
@@ -399,13 +409,15 @@ reset role;
 
 -- A store session whose actor pair does not verify (initials not theirs).
 select pg_temp.counter(pg_temp.t('1'), pg_temp.u('01'), 'XX', '9999');
-select is((select array_agg(distinct pg_temp.call(f, pg_temp.u('06')) ->> 'message') from unnest(pg_temp.ten()) f),
-  array['actor_mismatch'], 'A-103 - each of the ten, a store-session actor whose initials are not theirs: actor_mismatch');
+select is((select array_agg(distinct pg_temp.call(f, pg_temp.u('06')) ->> 'message') from unnest(pg_temp.nine()) f),
+  array['actor_mismatch'], 'A-103 - each of the nine with a store-session path, a store-session actor whose initials are not theirs: actor_mismatch');
+select is(pg_temp.call('user_set_pin', pg_temp.u('06')), pg_temp.person_refusal(),
+  'M-04 d51 - user_set_pin on a store session is refused role_refused, person, at the principal step: before the actor is read');
 reset role;
 -- An actor not assigned to this Store (Gus is at A2).
 select pg_temp.counter(pg_temp.t('1'), pg_temp.u('07'), 'GG', '9999');
-select is((select array_agg(distinct pg_temp.call(f, pg_temp.u('06')) ->> 'message') from unnest(pg_temp.ten()) f),
-  array['actor_mismatch'], 'A-103 - each of the ten, a store-session actor not assigned to this Store: actor_mismatch');
+select is((select array_agg(distinct pg_temp.call(f, pg_temp.u('06')) ->> 'message') from unnest(pg_temp.nine()) f),
+  array['actor_mismatch'], 'A-103 - each of the nine, a store-session actor not assigned to this Store: actor_mismatch');
 reset role;
 -- A personal session naming another actor.
 select pg_temp.desk(pg_temp.u('03'), pg_temp.u('02'));
@@ -414,12 +426,39 @@ select is((select array_agg(distinct pg_temp.call(f, pg_temp.u('06')) ->> 'messa
 reset role;
 -- A terminal of another Store: the claims name A1, the terminal is A2's.
 select pg_temp.counter(pg_temp.t('3'), pg_temp.u('01'), 'EE', '9999', pg_temp.s('a1'));
-select is((select array_agg(distinct (pg_temp.call(f, pg_temp.u('06')) - 'raised')::text) from unnest(pg_temp.ten()) f),
+select is((select array_agg(distinct (pg_temp.call(f, pg_temp.u('06')) - 'raised')::text) from unnest(pg_temp.nine()) f),
   array['{"code": "28000", "hint": null, "details": null, "message": "terminal_mismatch"}'],
-  'A-94 - each of the ten, a terminal of another Store: 28000 terminal_mismatch');
+  'A-94 - each of the nine, a terminal of another Store: 28000 terminal_mismatch');
+-- M-04 d51: the three that set a PIN only when given one refuse it at the till at
+-- the principal step, before the actor, the terminal and the PIN — all wrong here.
+select is(pg_temp.add('manager', 'ZP', array[pg_temp.s('a1')], 'zp@a.test', '7777', 'Zed Pin'), pg_temp.person_refusal(),
+  'M-04 d51 - user_add carrying a PIN on a store session: role_refused, person, before the actor, the terminal and the PIN');
+select is(pg_temp.chrole(pg_temp.u('06'), 'manager', 'z@a.test', '7777'), pg_temp.person_refusal(),
+  'M-04 d51 - user_change_role carrying a PIN on a store session: role_refused, person');
+select is(pg_temp.react(pg_temp.u('06'), null, '7777'), pg_temp.person_refusal(),
+  'M-04 d51 - user_reactivate carrying a PIN on a store session: role_refused, person');
+select is(pg_temp.setpin(pg_temp.u('02'), '7777'), pg_temp.person_refusal(),
+  'M-04 d51 - user_set_pin on a store session: role_refused, person');
 reset role;
 select is((select count(*)::int from public.pin_refusals), 0,
-  'A-103 - no_tenant, actor_mismatch and terminal_mismatch each come before any PIN is read: no refusal row was written for any of the wrong PINs');
+  'A-103 - no_tenant, actor_mismatch, terminal_mismatch and M-04 d51''s refusal each come before any PIN is read: no refusal row was written for any of the wrong PINs');
+-- Row 41: the same four on a store session whose actor and terminal both verify,
+-- with a wrong PIN — without d51 each would reach the PIN and write a refusal row.
+create temp table log_51 as select id, log from public.users;
+select pg_temp.counter(pg_temp.t('1'), pg_temp.u('01'), 'EE', '9999');
+select is(pg_temp.add('manager', 'ZQ', array[pg_temp.s('a1')], 'zq@a.test', '7778', 'Zed Que'), pg_temp.person_refusal(),
+  'M-04 d51 - user_add carrying a PIN, at the till with a verified actor and a wrong manager PIN: role_refused, person');
+select is(pg_temp.chrole(pg_temp.u('06'), 'manager', 'z@a.test', '7778'), pg_temp.person_refusal(),
+  'M-04 d51 - user_change_role carrying a PIN, verified actor, wrong manager PIN: role_refused, person');
+select is(pg_temp.react(pg_temp.u('06'), null, '7778'), pg_temp.person_refusal(),
+  'M-04 d51 - user_reactivate carrying a PIN, verified actor, wrong manager PIN: role_refused, person');
+select is(pg_temp.setpin(pg_temp.u('02'), '7778'), pg_temp.person_refusal(),
+  'M-04 d51 - user_set_pin, verified actor, wrong manager PIN: role_refused, person');
+reset role;
+select is((select count(*)::int from public.pin_refusals), 0,
+  'M-04 d51 - the wrong manager PIN was never read: pin_refusals unchanged');
+select is((select count(*)::int from public.users u left join log_51 b using (id) where b.id is null or u.log is distinct from b.log), 0,
+  'M-04 d51 - and users.log unchanged: nobody added, nothing logged');
 
 -- ── Row 2: another Organization's user or Store is not_found, and nothing is written ──
 create temp table before_b as select id, log, role, active, initials, display_name from public.users;
@@ -435,8 +474,8 @@ select is(pg_temp.unassign(pg_temp.u('06'), pg_temp.s('b1')) ->> 'message', 'not
   'A-86 - user_unassign from another Organization''s Store: not_found');
 reset role;
 select pg_temp.counter(pg_temp.t('1'), pg_temp.u('01'), 'EE', '2222');
-select is((select array_agg(distinct pg_temp.call(f, pg_temp.u('0c'), pg_temp.s('b1')) ->> 'message') from unnest(pg_temp.ten()) f),
-  array['not_found'], 'A-86 - the same on a store session authorised by an Owner''s PIN: not_found');
+select is((select array_agg(distinct pg_temp.call(f, pg_temp.u('0c'), pg_temp.s('b1')) ->> 'message') from unnest(pg_temp.nine()) f),
+  array['not_found'], 'A-86 - the same on a store session authorised by an Owner''s PIN, for the nine with a store-session path: not_found');
 reset role;
 select is((select count(*)::int from public.users u join before_b b using (id)
             where u.log is distinct from b.log or u.role is distinct from b.role or u.active is distinct from b.active
@@ -450,6 +489,15 @@ select ok((select count(*) from public.store_assignments) = (select count(*) fro
 
 -- ── Rows 5 and 7: A-94's columns, and both names, on every log entry ───────
 -- On a store session: Eve's staff session at T1, Olive's PIN. One request id.
+-- M-04 d51 keeps at the till every act that sets no PIN: Sam (an Employee) takes
+-- the six Employee acts; Sol — a Manager who holds a PIN and never enrolled,
+-- added at Olive's desk — takes the three Owner acts: a promotion to Owner that
+-- carries no PIN (d51, d52), Re-send invite and Send reset. user_set_pin has no
+-- store-session path (asserted above).
+select pg_temp.desk(pg_temp.u('03'));
+insert into ids select 's3', (pg_temp.add('manager', 'S3', array[pg_temp.s('a3')], 's3@a.test', '7101', 'Sol Three') ->> 'user_id')::uuid;
+reset role;
+create temp table s3_before as select jsonb_array_length(log) as n from public.users where id = pg_temp.id('s3');
 select pg_temp.counter(pg_temp.t('1'), pg_temp.u('01'), 'EE', '2222', null, '00000000-0000-0000-0005-0000000000a1');
 insert into ids select 's1', (pg_temp.add('employee', 'S1', array[pg_temp.s('a1')], null, null, 'Sam One') ->> 'user_id')::uuid;
 select is(pg_temp.fix_name(pg_temp.id('s1'), 'Sam Uno'), jsonb_build_object('user_id', pg_temp.id('s1')), 'A-94 - store session: user_correct');
@@ -457,26 +505,30 @@ select is(pg_temp.assign(pg_temp.id('s1'), pg_temp.s('a2')), jsonb_build_object(
 select is(pg_temp.unassign(pg_temp.id('s1'), pg_temp.s('a2')), jsonb_build_object('user_id', pg_temp.id('s1')), 'A-94 - store session: user_unassign');
 select is(pg_temp.deact(pg_temp.id('s1')), jsonb_build_object('user_id', pg_temp.id('s1')), 'A-94 - store session: user_deactivate');
 select is(pg_temp.react(pg_temp.id('s1')), jsonb_build_object('user_id', pg_temp.id('s1')), 'A-94 - store session: user_reactivate');
-select is(pg_temp.chrole(pg_temp.id('s1'), 'manager', 's1@a.test', '7101'),
-  jsonb_build_object('user_id', pg_temp.id('s1'), 'invite', true, 'email', 's1@a.test'), 'A-94 - store session: user_change_role');
-select is(pg_temp.setpin(pg_temp.id('s1'), '7102'), jsonb_build_object('user_id', pg_temp.id('s1')), 'A-94 - store session: user_set_pin');
-select is(pg_temp.resend(pg_temp.id('s1')), jsonb_build_object('user_id', pg_temp.id('s1'), 'email', 's1@a.test'), 'A-94 - store session: user_invite_resend');
-select is(pg_temp.reset_link(pg_temp.id('s1')), jsonb_build_object('user_id', pg_temp.id('s1'), 'email', 's1@a.test'), 'A-94 - store session: user_reset_request');
+select is(pg_temp.chrole(pg_temp.id('s3'), 'owner'),
+  jsonb_build_object('user_id', pg_temp.id('s3'), 'invite', true, 'email', 's3@a.test'),
+  'A-94 - store session: user_change_role (a PIN holder promoted to Owner, carrying no PIN)');
+select is(pg_temp.resend(pg_temp.id('s3')), jsonb_build_object('user_id', pg_temp.id('s3'), 'email', 's3@a.test'), 'A-94 - store session: user_invite_resend');
+select is(pg_temp.reset_link(pg_temp.id('s3')), jsonb_build_object('user_id', pg_temp.id('s3'), 'email', 's3@a.test'), 'A-94 - store session: user_reset_request');
 reset role;
 select ok(pg_temp.id('s1') is not null, 'A-94 - store session: user_add');
 select is(pg_temp.acts(pg_temp.id('s1')),
-  array['user_added', 'corrected', 'assigned', 'unassigned', 'deactivated', 'reactivated', 'pin_set', 'role_changed',
-        'invite_sent', 'pin_set', 'invite_sent', 'reset_link_sent'],
-  'A-55 - one users.log entry per act, for each of the ten functions, in order');
-select is((select count(*)::int from public.users u, jsonb_array_elements(u.log) e
-            where u.id = pg_temp.id('s1')
-              and e ->> 'request_id' = '00000000-0000-0000-0005-0000000000a1'
-              and e ->> 'terminal_id' = pg_temp.t('1')::text
+  array['user_added', 'corrected', 'assigned', 'unassigned', 'deactivated', 'reactivated'],
+  'A-55 - one users.log entry per act: the six Employee acts at the till, in order');
+select is((pg_temp.acts(pg_temp.id('s3')))[(select n from s3_before) + 1 :],
+  array['role_changed', 'invite_sent', 'invite_sent', 'reset_link_sent'],
+  'A-55 - and the three Owner acts at the till, in order (the promotion invites the never-enrolled, M-04 d43)');
+create temp table store_entries as
+  select e from public.users u, jsonb_array_elements(u.log) e
+   where u.id in (pg_temp.id('s1'), pg_temp.id('s3')) and e ->> 'request_id' = '00000000-0000-0000-0005-0000000000a1';
+select is((select count(*)::int from store_entries), 10, 'A-94 - (ten entries carry the store session''s request id)');
+select is((select count(*)::int from store_entries
+            where e ->> 'terminal_id' = pg_temp.t('1')::text
               and e ->> 'principal' = 'store'
               and (e ->> 'at') is not null),
-  12, 'A-94 - on a store session every log entry carries the request id, the terminal and principal store');
+  10, 'A-94 - on a store session every log entry carries the request id, the terminal and principal store');
 select is((select array_agg(distinct jsonb_build_object('actor', e ->> 'actor_user_id', 'manager', e ->> 'manager_user_id')::text)
-             from public.users u, jsonb_array_elements(u.log) e where u.id = pg_temp.id('s1')),
+             from store_entries),
   array[jsonb_build_object('actor', pg_temp.u('01'), 'manager', pg_temp.u('03'))::text],
   'M-04 d4 - on a store session every entry records the acting Employee and the PIN''s holder as authoriser (M-04 d31)');
 
@@ -627,12 +679,14 @@ $$;
 select pg_temp.reopen();
 create temp table log_before_ro as select id, log from public.users;
 select pg_temp.counter(pg_temp.t('1'), pg_temp.u('01'), 'EE', '9999');
-select is((select array_agg(distinct (pg_temp.ro(f, pg_temp.u('06')) - 'raised')::text) from unnest(pg_temp.ten()) f),
+select is((select array_agg(distinct (pg_temp.ro(f, pg_temp.u('06')) - 'raised')::text) from unnest(pg_temp.nine()) f),
   array['{"code": "25006", "hint": null, "details": null, "message": "read_only"}'],
-  'A-129 - each of the ten in a read-only transaction on a store session, with a wrong PIN: 25006 read_only');
+  'A-129 - each of the nine with a store-session path, in a read-only transaction on a store session with a wrong PIN: 25006 read_only');
+select is(pg_temp.ro('user_set_pin', pg_temp.u('06')), pg_temp.person_refusal(),
+  'M-04 d51 - user_set_pin at the till in a read-only transaction: role_refused, person — refused before the guard, and no PIN is read either way');
 reset role;
 select pg_temp.counter(pg_temp.t('1'), pg_temp.u('01'), 'EE', '2222');
-select is((select array_agg(distinct pg_temp.ro(f, pg_temp.u('06')) ->> 'message') from unnest(pg_temp.ten()) f),
+select is((select array_agg(distinct pg_temp.ro(f, pg_temp.u('06')) ->> 'message') from unnest(pg_temp.nine()) f),
   array['read_only'], 'A-129 - and with a correct PIN: read_only');
 reset role;
 select pg_temp.desk(pg_temp.u('03'));

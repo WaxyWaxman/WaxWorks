@@ -311,7 +311,7 @@ create function pg_temp.call(p_fn text, p_user uuid, p_store uuid default null) 
 begin
   case p_fn
     when 'user_add'           then return pg_temp.add('employee', 'ZQ', array[coalesce(p_store, pg_temp.s('a1'))], null, null, 'Zed Quill');
-    when 'user_change_role'   then return pg_temp.chrole(p_user, 'manager', 'z@a.test', '7777');
+    when 'user_change_role'   then return pg_temp.chrole(p_user, 'owner', 'z@a.test', null);   -- no PIN: M-04 d51 would refuse it at the till first
     when 'user_deactivate'    then return pg_temp.deact(p_user);
     when 'user_reactivate'    then return pg_temp.react(p_user);
     when 'user_assign'        then return pg_temp.assign(p_user, coalesce(p_store, pg_temp.s('a2')));
@@ -361,16 +361,26 @@ select is(app.manager_authorize_pin(p_pin => '9103', p_terminal_id => pg_temp.t(
                                     p_actor_user_id => pg_temp.u('01'), p_actor_initials => 'EE') ->> 'message',
   'pin_refused', 'E-01 d32 - refusal 3 of 5, at manager_authorize_pin');
 reset role;
--- … two at user_set_pin, the same staff session …
-select pg_temp.counter(pg_temp.t('1'), pg_temp.u('01'), 'EE', '9104');
-select is(pg_temp.setpin(pg_temp.u('02'), '1212') ->> 'message', 'pin_refused', 'E-01 d32 - refusal 4 of 5, at user_set_pin');
+-- … M-04 d51: user_set_pin at the till is refused before any PIN is read, so its
+-- wrong PIN is neither a refusal row nor a count …
+select pg_temp.counter(pg_temp.t('1'), pg_temp.u('01'), 'EE', '9199');
+select is(pg_temp.setpin(pg_temp.u('02'), '1212'),
+  '{"code": "42501", "message": "role_refused", "details": "person", "hint": null, "raised": true}'::jsonb,
+  'M-04 d51 - user_set_pin on a store session: role_refused, person, before the PIN line');
 reset role;
-select is((select count(*)::int from public.pin_line_closures), 0, 'E-01 d31 - four refusals across the pad and user_set_pin do not close the line');
+select is((select count(*)::int from public.pin_refusals where store_id = pg_temp.s('a1')), 3,
+  'M-04 d51 - and its PIN tried nothing: still three refusal rows');
+-- … two at user_correct (an M function — d51 leaves Set PIN off the till, so the
+-- second door is the M header of an act that sets no PIN), the same staff session …
+select pg_temp.counter(pg_temp.t('1'), pg_temp.u('01'), 'EE', '9104');
+select is(pg_temp.fix_name(pg_temp.u('06'), 'Fay F') ->> 'message', 'pin_refused', 'E-01 d32 - refusal 4 of 5, at user_correct');
+reset role;
+select is((select count(*)::int from public.pin_line_closures), 0, 'E-01 d31 - four refusals across the pad and user_correct do not close the line');
 select pg_temp.counter(pg_temp.t('1'), pg_temp.u('01'), 'EE', '9105');
-select is(pg_temp.setpin(pg_temp.u('02'), '1212') ->> 'message', 'pin_refused', 'E-01 d32 - refusal 5 of 5, at user_set_pin');
+select is(pg_temp.fix_name(pg_temp.u('06'), 'Fay F') ->> 'message', 'pin_refused', 'E-01 d32 - refusal 5 of 5, at user_correct');
 reset role;
 select is((select count(*)::int from public.pin_line_closures where store_id = pg_temp.s('a1')), 1,
-  'E-01 d32 - three at manager_authorize_pin and two at user_set_pin close the Store''s line: one limit (E-01 d31)');
+  'E-01 d32 - three at manager_authorize_pin and two at an M function''s header close the Store''s line: one limit (E-01 d31)');
 select is((select count(*)::int from public.pin_refusals where closure_id = (select id from public.pin_line_closures) and counted), 5,
   'E-01 d38 - the closure claims the five, from both doors');
 -- … and the sixth, at user_add, finds the line closed — even with a correct PIN.
@@ -391,43 +401,45 @@ select is((select count(*)::int from public.pin_refusals where store_id = pg_tem
 select is((select array_agg(distinct terminal_id) from public.pin_refusals where not counted), array[pg_temp.t('1')],
   'A-94 - each refusal row names the terminal it was typed at');
 
--- ── Row 9: E-01 d38's edges through user_set_pin, at Store A2 ──────────────
--- Gus's staff session at T3; Nat's PIN 3333 is the correct one.
+-- ── Row 9: E-01 d38's edges through user_correct, at Store A2 ──────────────
+-- (The row's example was user_set_pin; M-04 d51 took it off the till, so the
+-- edges go through another of the ten.) Gus's staff session at T3, correcting
+-- his own name; Nat's PIN 3333 is the correct one.
 select pg_temp.counter(pg_temp.t('3'), pg_temp.u('07'), 'GG', null);
-select is(pg_temp.setpin(pg_temp.u('03'), '2222'),
+select is(pg_temp.fix_name(pg_temp.u('07'), 'Gus T'),
   '{"code": "28P01", "message": "pin_refused", "details": null, "hint": null}'::jsonb,
   'E-01 d38 - a null p_manager_pin on a store session is refused pin_refused');
 reset role;
 select is((select count(*)::int from public.pin_refusals where store_id = pg_temp.s('a2')), 0,
   'E-01 d38 - a missing PIN tried no digits: no row, nothing counted');
 select pg_temp.counter(pg_temp.t('3'), pg_temp.u('07'), 'GG', '9201');
-select is(pg_temp.setpin(pg_temp.u('03'), '2222') ->> 'message', 'pin_refused', 'E-01 d38 - refusal 1');
+select is(pg_temp.fix_name(pg_temp.u('07'), 'Gus T') ->> 'message', 'pin_refused', 'E-01 d38 - refusal 1');
 reset role;
 select pg_temp.counter(pg_temp.t('3'), pg_temp.u('07'), 'GG', '9202');
-select is(pg_temp.setpin(pg_temp.u('03'), '2222') ->> 'message', 'pin_refused', 'E-01 d38 - refusal 2');
+select is(pg_temp.fix_name(pg_temp.u('07'), 'Gus T') ->> 'message', 'pin_refused', 'E-01 d38 - refusal 2');
 reset role;
 select pg_temp.counter(pg_temp.t('3'), pg_temp.u('07'), 'GG', '9203');
-select is(pg_temp.setpin(pg_temp.u('03'), '2222') ->> 'message', 'pin_refused', 'E-01 d38 - refusal 3');
+select is(pg_temp.fix_name(pg_temp.u('07'), 'Gus T') ->> 'message', 'pin_refused', 'E-01 d38 - refusal 3');
 reset role;
 select pg_temp.counter(pg_temp.t('3'), pg_temp.u('07'), 'GG', '9204');
-select is(pg_temp.setpin(pg_temp.u('03'), '2222') ->> 'message', 'pin_refused', 'E-01 d38 - refusal 4');
+select is(pg_temp.fix_name(pg_temp.u('07'), 'Gus T') ->> 'message', 'pin_refused', 'E-01 d38 - refusal 4');
 reset role;
 -- A success clears nothing.
 select pg_temp.counter(pg_temp.t('3'), pg_temp.u('07'), 'GG', '3333');
-select is(pg_temp.setpin(pg_temp.u('03'), '2222'), jsonb_build_object('user_id', pg_temp.u('03')),
-  'E-01 d38 - four refusals, then a success: Nat''s PIN authorises user_set_pin');
+select is(pg_temp.fix_name(pg_temp.u('07'), 'Gus T'), jsonb_build_object('user_id', pg_temp.u('07')),
+  'E-01 d38 - four refusals, then a success: Nat''s PIN authorises user_correct');
 reset role;
 select is((select count(*)::int from public.pin_line_closures where store_id = pg_temp.s('a2')), 0,
   'E-01 d38 - (four refusals and a success: still open)');
 select pg_temp.counter(pg_temp.t('3'), pg_temp.u('07'), 'GG', '9205');
-select is(pg_temp.setpin(pg_temp.u('03'), '2222') ->> 'message', 'pin_refused', 'E-01 d38 - the fifth refusal is itself pin_refused');
+select is(pg_temp.fix_name(pg_temp.u('07'), 'Gus T') ->> 'message', 'pin_refused', 'E-01 d38 - the fifth refusal is itself pin_refused');
 reset role;
 select is((select count(*)::int from public.pin_line_closures where store_id = pg_temp.s('a2')), 1,
   'E-01 d38 - four refusals, a success, then a fifth close the line: a correct PIN clears nothing');
 -- An attempt while closed: recorded, not counted, carrying the closure.
 select pg_temp.counter(pg_temp.t('3'), pg_temp.u('07'), 'GG', '3333');
-select is(pg_temp.setpin(pg_temp.u('03'), '2222') ->> 'message', 'pin_line_closed',
-  'E-01 d31 - while closed, Nat''s correct PIN at user_set_pin is pin_line_closed');
+select is(pg_temp.fix_name(pg_temp.u('07'), 'Gus T') ->> 'message', 'pin_line_closed',
+  'E-01 d31 - while closed, Nat''s correct PIN at user_correct is pin_line_closed');
 reset role;
 select is(
   (select jsonb_build_object('counted', r.counted, 'closure', r.closure_id = c.id, 'staff', r.staff_user_id = pg_temp.u('07'),
