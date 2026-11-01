@@ -32,6 +32,20 @@ export type Database = {
         }
         Returns: Json
       }
+      initials_holder: {
+        Args: {
+          p_except: string
+          p_initials: string
+          p_org_id: string
+          p_store_ids: string[]
+        }
+        Returns: string
+      }
+      lock_active_owners: { Args: { p_org_id: string }; Returns: number }
+      lock_store_assignments: {
+        Args: { p_org_id: string; p_store_ids: string[] }
+        Returns: undefined
+      }
       manager_authorize_pin: {
         Args: {
           p_actor_initials?: string
@@ -41,6 +55,25 @@ export type Database = {
           p_terminal_id: string
         }
         Returns: Json
+      }
+      pin_hash: { Args: { p_pin: string }; Returns: string }
+      pin_resolve: {
+        Args: {
+          p_pin: string
+          p_request_id: string
+          p_staff_user_id: string
+          p_terminal_id: string
+        }
+        Returns: Json
+      }
+      pin_taken: {
+        Args: {
+          p_except: string
+          p_org_id: string
+          p_pin_hash: string
+          p_store_ids: string[]
+        }
+        Returns: string
       }
       session_select_store: {
         Args: {
@@ -54,6 +87,132 @@ export type Database = {
       }
       terminal_register: {
         Args: { p_actor_initials: string; p_name: string; p_request_id: string }
+        Returns: Json
+      }
+      user_add: {
+        Args: {
+          p_actor_initials: string
+          p_actor_user_id: string
+          p_display_name?: string
+          p_email?: string
+          p_initials?: string
+          p_manager_pin?: string
+          p_pin?: string
+          p_request_id: string
+          p_role?: string
+          p_store_ids?: string[]
+          p_terminal_id?: string
+        }
+        Returns: Json
+      }
+      user_assign: {
+        Args: {
+          p_actor_initials: string
+          p_actor_user_id: string
+          p_manager_pin?: string
+          p_request_id: string
+          p_store_id?: string
+          p_terminal_id?: string
+          p_user_id?: string
+        }
+        Returns: Json
+      }
+      user_change_role: {
+        Args: {
+          p_actor_initials: string
+          p_actor_user_id: string
+          p_email?: string
+          p_manager_pin?: string
+          p_pin?: string
+          p_request_id: string
+          p_role?: string
+          p_terminal_id?: string
+          p_user_id?: string
+        }
+        Returns: Json
+      }
+      user_correct: {
+        Args: {
+          p_actor_initials: string
+          p_actor_user_id: string
+          p_display_name?: string
+          p_email?: string
+          p_initials?: string
+          p_manager_pin?: string
+          p_request_id: string
+          p_terminal_id?: string
+          p_user_id?: string
+        }
+        Returns: Json
+      }
+      user_deactivate: {
+        Args: {
+          p_actor_initials: string
+          p_actor_user_id: string
+          p_manager_pin?: string
+          p_request_id: string
+          p_terminal_id?: string
+          p_user_id?: string
+        }
+        Returns: Json
+      }
+      user_invite_resend: {
+        Args: {
+          p_actor_initials: string
+          p_actor_user_id: string
+          p_manager_pin?: string
+          p_request_id: string
+          p_terminal_id?: string
+          p_user_id?: string
+        }
+        Returns: Json
+      }
+      user_reactivate: {
+        Args: {
+          p_actor_initials: string
+          p_actor_user_id: string
+          p_initials?: string
+          p_manager_pin?: string
+          p_pin?: string
+          p_request_id: string
+          p_terminal_id?: string
+          p_user_id?: string
+        }
+        Returns: Json
+      }
+      user_reset_request: {
+        Args: {
+          p_actor_initials: string
+          p_actor_user_id: string
+          p_manager_pin?: string
+          p_request_id: string
+          p_terminal_id?: string
+          p_user_id?: string
+        }
+        Returns: Json
+      }
+      user_set_pin: {
+        Args: {
+          p_actor_initials: string
+          p_actor_user_id: string
+          p_manager_pin?: string
+          p_pin?: string
+          p_request_id: string
+          p_terminal_id?: string
+          p_user_id?: string
+        }
+        Returns: Json
+      }
+      user_unassign: {
+        Args: {
+          p_actor_initials: string
+          p_actor_user_id: string
+          p_manager_pin?: string
+          p_request_id: string
+          p_store_id?: string
+          p_terminal_id?: string
+          p_user_id?: string
+        }
         Returns: Json
       }
     }
