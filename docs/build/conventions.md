@@ -127,7 +127,11 @@ A-97 jobs are keyless.
   six row-security helpers live in `authz`** — not `auth`, which no migration may
   create in — owned by `waxworks_app`, **not** exposed in `config.toml`, with
   `usage` and `execute` granted to `authenticated` and `sysadmin` only; A-107's
-  suite-wide assertion covers `authz` as it covers `app` (A-124).
+  suite-wide assertion covers `authz` as it covers `app` (A-124). **Internal helpers — functions
+  the §6 entry points call and no session role may — live in `app_internal`**
+  (A-139; the name recorded by sr-talbot, 2026-11-01): owned by `waxworks_app`,
+  **not** exposed in `config.toml`, `usage` granted to no role, each function's
+  `execute` revoked from public and granted to nobody, every call schema-qualified.
 - **The seed exercises the write surface:** `supabase/seed.sql` calls definer
   functions (A-4) rather than inserting rows, so it is the first integration test
   of every function it touches. **Two exceptions, each commented with the
@@ -448,6 +452,7 @@ Ratified 2026-09-20, 2026-09-21 and 2026-10-11. Cite the A-n, not this section.
 | A-104 | The owner's ceiling: `bypassrls`, per-table DML, `set role` opener, no `anon` usage on `app`, the ownership assertion |
 | A-105 | Functions in `app`, tables in `public`; `app` exposed to PostgREST and holding functions only |
 | A-124 | The six row-security helpers in `authz`, owned by `waxworks_app` and not exposed to the API |
+| A-139 | Internal helpers in `app_internal`, owned by `waxworks_app`, not exposed, `usage` granted to no role; `app` holds §6's entry points only |
 | A-91 (amended) | Public sign-up off in every environment |
 | A-106 | No Sentry DSN in any environment until the event payload is built by an allowlist |
 | A-107 | The grant rule held in two places: a list-free suite-wide assertion, and each function's own grants in its smoke test |
