@@ -2,7 +2,7 @@
 
 **Status:** Specified
 **Last updated:** 2026-10-11
-**Owners:** sr-talbot, WaxyWaxman
+**Owners:** sr-talbot, GimpyMatey
 
 This document is the technical spine. [PRD.md](PRD.md) says what Wax Works is and who it serves; the [flows](flows/) say how each job works; this says how it is built. Decisions here are numbered `A-n` and cited the same way flow decisions are — **don't renumber an existing decision, append instead.**
 

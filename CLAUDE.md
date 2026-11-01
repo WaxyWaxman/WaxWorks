@@ -4,7 +4,7 @@ The deliverables are the specification documents under `docs/` and, increasingly
 the code that implements them. Treat writing and interrogating specs as real work,
 not as preamble to code.
 
-Two people work here in parallel — `sr-talbot` and `WaxyWaxman`. Everything below
+Two people work here in parallel — `sr-talbot` and `GimpyMatey`. Everything below
 exists so that two humans and their agents can edit at the same time without
 colliding or quietly contradicting each other.
 

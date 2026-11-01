@@ -1,7 +1,7 @@
 # Wax Works — build conventions
 
 **Status:** Ratified 2026-09-20 — every rule quoted from [architecture](../architecture.md); the seven conventions it first left `_TBD_` are A-97 to A-103
-**Owners:** sr-talbot, WaxyWaxman
+**Owners:** sr-talbot, GimpyMatey
 **Read by:** the `developer` subagent and `/develop`, before the first line of code; `qa-reviewer` and `architect`, when judging a diff
 
 What a developer needs to know about the stack that no flow document says. Every

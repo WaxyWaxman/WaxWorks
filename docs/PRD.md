@@ -2,7 +2,7 @@
 
 **Status:** Draft
 **Last updated:** 2026-09-08
-**Owners:** sr-talbot, WaxyWaxman
+**Owners:** sr-talbot, GimpyMatey
 
 This document is the spine: product context, users, domain model, and cross-cutting concerns. Individual user flows live in [`flows/`](flows/) — see §3. The controlled vocabulary lives in [`lexicon.md`](lexicon.md) — use its canonical terms here and in every flow.
 
