@@ -175,8 +175,8 @@ not so it is worked now. Every row points at the record; nothing here is a decis
 
 | Item | Record | Decides the shape of | Due before |
 |---|---|---|---|
-| **`organizations` has no `org_id`** — it uses `id` as its tenant, against A-86's *every table carries `org_id`*. Already on `main`; a later change is a correcting migration against live rows | order finding 20; A-86 | every Organization-dimensioned policy written from here on | `M-04-D-M1` |
-| **`drawer_opens` has no §6 writer**, though §8 builds the table at M1 | §11; M1-contracts Needs a human | whether the table lands at M1 or waits for M4's till | `M-04-D-M1` |
+| ~~**`organizations` has no `org_id`**~~ — **answered by A-135** (the root's `id` is its tenant key; no migration) — it uses `id` as its tenant, against A-86's *every table carries `org_id`*. Already on `main`; a later change is a correcting migration against live rows | order finding 20; A-86 | every Organization-dimensioned policy written from here on | `M-04-D-M1` |
+| ~~**`drawer_opens` has no §6 writer**, though §8 builds the table at M1~~ — **answered by A-136**: with the print agent | §11; M1-contracts Needs a human | whether the table lands at M1 or waits for M4's till | `M-04-D-M1` |
 | **The Store ID sequence** — *the next seven-digit value* (O-01 d2): where it starts, and global or per Organization; the fake starts at `1000001`, globally | [M1-contracts](orders/M1-contracts.md) Needs a human | `stores` and every `SH-…` identifier | `O-01-D-M1` |
 | **Where a System Administrator's passkey enrolment is recorded** — A-117 and S-01 d7 give them an enrolment session, but `auth_user_link`'s passkey kind looks only in `users` | [M1-contracts](orders/M1-contracts.md) Needs a human; A-117, A-131 | `system_administrators` | `S-01-D-M1` |
 | **Records, genres and the genre map — Organization or Store?** Blocked by `genres.section_id` and `product_tax_code_id` referencing per-Store rows | §11 (user model) | M2's catalog tables and their policies | `M2 D` |
