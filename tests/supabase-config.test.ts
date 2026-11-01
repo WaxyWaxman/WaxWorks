@@ -39,6 +39,15 @@ describe("A-105 — functions live in app, tables in public; app is exposed to P
   });
 });
 
+describe("A-139 — internal helpers live in a schema the API does not expose", () => {
+  it("[api].schemas does not expose app_internal, nor authz (A-124)", () => {
+    const schemas = setting("api", "schemas");
+    expect(schemas, "[api].schemas").toBeTruthy();
+    expect(schemas).not.toMatch(/"app_internal"/);
+    expect(schemas).not.toMatch(/"authz"/);
+  });
+});
+
 describe("A-91 (amended 2026-09-21) — public sign-up is off in every environment", () => {
   it("no section of config.toml leaves a sign-up path open but the email provider's switch", () => {
     // A-91's four Auth-identity paths are the whole set; a fifth built into every
