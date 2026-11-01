@@ -186,7 +186,8 @@ describe("E-01 d31 — five wrong PINs within fifteen minutes, across the Store'
 
     const flags = w.root.inspect().flags.filter((f) => f.kind === "pin_line_closed");
     expect(flags).toHaveLength(1);
-    expect(flags[0]).toMatchObject({ store_id: w.A.store_id, terminal_id: w.t2, actor_user_id: w.yn.user_id });
+    // E-01 d39: the system's flag, no actor; its subject is the closure.
+    expect(flags[0]).toMatchObject({ store_id: w.A.store_id, terminal_id: w.t2, actor_user_id: null, subject_type: "pin_line_closure", context: { refusals: 5 } });
 
     w.clock.advance(15);
     await expect(c.user_add(w.storeA, { ...w.atA(w.t1, "2222"), ...employee("M. Park", "MP", [w.A.store_id]) })).resolves.toBeTruthy();
@@ -199,7 +200,7 @@ describe("E-01 d31 — five wrong PINs within fifteen minutes, across the Store'
     }
     const records = w.root.inspect().pinRefusals;
     // request_id and principal: A-94's correlation, added by the review's finding 7.
-    const row = { store_id: w.A.store_id, terminal_id: w.t1, at: T0.toISOString(), staff_user_id: w.yn.user_id, request_id: expect.stringMatching(UUID), principal: "store" };
+    const row = { store_id: w.A.store_id, terminal_id: w.t1, at: T0.toISOString(), staff_user_id: w.yn.user_id, counted: true, closure_id: null, request_id: expect.stringMatching(UUID), principal: "store" };
     expect(records).toEqual([row, row]);
     // Ids are random hex and can contain any four digits, so they are struck
     // before looking for a PIN: what is left is every value the fake stored.
@@ -351,8 +352,9 @@ describe("M-04 d36 — an Employee's email is optional; M-04 d33 — a promotion
 
   it("a person promoted back who has enrolled a passkey is not invited again (A-117: only while passkey_enrolled_at is null)", async () => {
     const w = await world();
-    await c.user_change_role(w.owner, { ...w.asOwner, p_user_id: w.jm.user_id, p_role: "employee", p_email: null, p_pin: null });
+    // Enrolled as a Manager: an Employee's row is never linked (A-87).
     await enrol(w.root, w.jm.user_id);
+    await c.user_change_role(w.owner, { ...w.asOwner, p_user_id: w.jm.user_id, p_role: "employee", p_email: null, p_pin: null });
     // The demotion cleared the PIN (finding 2), so the promotion sets a new one.
     await expect(c.user_change_role(w.owner, { ...w.asOwner, p_user_id: w.jm.user_id, p_role: "manager", p_email: null, p_pin: "6666" })).resolves.toEqual({ user_id: w.jm.user_id, invite: false, email: null });
   });
@@ -900,13 +902,133 @@ describe("M-04 d44 — Send reset and Re-send invite are refused for a deactivat
   });
 });
 
-describe("A-120, E-01 d31 — five refusals at the pad with a verified pair close the line, and the flag names that staff session", () => {
-  it("the closing flag carries the Employee whose staff session was open", async () => {
+describe("A-120, E-01 d39 — five refusals at the pad with a verified pair close the line; the flag is the system's, and the refusals name the staff session", () => {
+  it("the closing flag has no actor and points at the closure its five refusals carry, each naming the Employee", async () => {
     const w = await world();
     for (const pin of ["9001", "9002", "9003", "9004", "9005"]) {
       await refused(c.manager_authorize_pin(w.storeA, { p_pin: pin, p_terminal_id: w.t1, p_actor_user_id: w.yn.user_id, p_actor_initials: "YN" }), "pin_refused");
     }
-    expect(w.root.inspect().flags).toEqual([expect.objectContaining({ kind: "pin_line_closed", store_id: w.A.store_id, terminal_id: w.t1, actor_user_id: w.yn.user_id })]);
+    const s = w.root.inspect();
+    expect(s.flags).toEqual([expect.objectContaining({ kind: "pin_line_closed", store_id: w.A.store_id, terminal_id: w.t1, actor_user_id: null, subject_type: "pin_line_closure" })]);
+    const closure = s.flags[0]!.subject_id;
+    expect(s.pinRefusals).toHaveLength(5);
+    for (const r of s.pinRefusals) expect(r).toMatchObject({ staff_user_id: w.yn.user_id, counted: true, closure_id: closure });
+  });
+});
+
+// ── The M1 review-keys contract change (plan §3 step 2) ──────────────────────
+
+describe("E-01 d38 — the throttle counts digits tried, and only while the line is open", () => {
+  const atA = (w: Awaited<ReturnType<typeof world>>, pin: string | null) =>
+    c.user_add(w.storeA, { ...w.atA(w.t1, pin), ...employee("K. Park", "KP", [w.A.store_id]) });
+
+  it("a missing PIN is refused pin_refused, and neither recorded nor counted", async () => {
+    const w = await world();
+    for (let i = 0; i < 6; i++) await refused(atA(w, null), "pin_refused");
+    expect(w.root.inspect().pinRefusals).toHaveLength(0);
+    await expect(atA(w, "2222")).resolves.toBeTruthy();
+  });
+
+  it("an attempt while closed is refused with the reopening time and recorded against the closure, not counted", async () => {
+    const w = await world();
+    for (const pin of ["9001", "9002", "9003", "9004", "9005"]) await refused(atA(w, pin), "pin_refused");
+    const closure = w.root.inspect().flags[0]!.subject_id;
+    w.clock.advance(5);
+    for (const pin of ["9006", "2222"]) await refused(atA(w, pin), "pin_line_closed");
+    const s = w.root.inspect();
+    expect(s.pinRefusals.slice(5)).toEqual([0, 1].map(() => expect.objectContaining({ counted: false, closure_id: closure, staff_user_id: w.yn.user_id })));
+    // Not counted: no second closure, and the reopening time did not move.
+    expect(s.flags).toHaveLength(1);
+    w.clock.advance(10);
+    await expect(atA(w, "2222")).resolves.toBeTruthy();
+  });
+
+  it("a missing PIN while closed is pin_refused, not pin_line_closed, and is not recorded", async () => {
+    const w = await world();
+    for (const pin of ["9001", "9002", "9003", "9004", "9005"]) await refused(atA(w, pin), "pin_refused");
+    await refused(atA(w, null), "pin_refused");
+    expect(w.root.inspect().pinRefusals).toHaveLength(5);
+  });
+
+  it("the closure spends the five: the line reopens with an empty count", async () => {
+    const w = await world();
+    for (const pin of ["9001", "9002", "9003", "9004", "9005"]) await refused(atA(w, pin), "pin_refused");
+    w.clock.advance(15);
+    // Four more refusals at once, within fifteen minutes of the five: still open.
+    for (const pin of ["9006", "9007", "9008", "9009"]) await refused(atA(w, pin), "pin_refused");
+    await expect(atA(w, "2222")).resolves.toBeTruthy();
+    expect(w.root.inspect().flags).toHaveLength(1);
+  });
+
+  it("a correct PIN clears nothing: four refusals, a success, and a fifth refusal close the line", async () => {
+    const w = await world();
+    for (const pin of ["9001", "9002", "9003", "9004"]) await refused(atA(w, pin), "pin_refused");
+    await expect(atA(w, "2222")).resolves.toBeTruthy();
+    await refused(atA(w, "9005"), "pin_refused");
+    await refused(atA(w, "2222"), "pin_line_closed");
+  });
+});
+
+describe("M-04 d48 — Set PIN is refused for a deactivated Manager or Owner; reactivate first", () => {
+  it("refused invalid_state / inactive, and the PIN is unchanged", async () => {
+    const w = await world();
+    await c.user_deactivate(w.owner, { ...w.asOwner, p_user_id: w.jm.user_id });
+    const err = await refused(c.user_set_pin(w.owner, { ...w.asOwner, p_user_id: w.jm.user_id, p_pin: "2468" }), "invalid_state");
+    expect(err.detail).toBe("inactive");
+    await c.user_reactivate(w.owner, { ...w.asOwner, p_user_id: w.jm.user_id, p_initials: null, p_pin: null });
+    await expect(c.manager_authorize_pin(w.storeA, { p_pin: "2222", p_terminal_id: w.t1, ...noStaff })).resolves.toMatchObject({ user_id: w.jm.user_id });
+  });
+});
+
+describe("A-128, A-132, A-87 — auth_user_link links a row once, an Auth user once, and never an Employee", () => {
+  it("a row already linked is refused invalid_state / linked", async () => {
+    const w = await world();
+    const service = w.root.withSession(serviceSession);
+    await c.auth_user_link(service, { p_kind: "user", p_row_id: w.jm.user_id, p_auth_user_id: crypto.randomUUID() });
+    const err = await refused(c.auth_user_link(service, { p_kind: "user", p_row_id: w.jm.user_id, p_auth_user_id: crypto.randomUUID() }), "invalid_state");
+    expect(err.detail).toBe("linked");
+  });
+
+  it("an Auth user linked anywhere — a person, a Store, a System Administrator — is refused invalid_state / auth_user_in_use", async () => {
+    const w = await world();
+    const service = w.root.withSession(serviceSession);
+    const auth = crypto.randomUUID();
+    await c.auth_user_link(service, { p_kind: "user", p_row_id: w.jm.user_id, p_auth_user_id: auth });
+    const toStore = await refused(c.auth_user_link(service, { p_kind: "store", p_row_id: w.A.store_id, p_auth_user_id: auth }), "invalid_state");
+    expect(toStore.detail).toBe("auth_user_in_use");
+    const toSysadmin = await refused(c.auth_user_link(service, { p_kind: "user", p_row_id: w.ownerId, p_auth_user_id: SYSADMIN }), "invalid_state");
+    expect(toSysadmin.detail).toBe("auth_user_in_use");
+    expect(w.root.inspect().stores.find((s) => s.store_id === w.A.store_id)!.auth_user_id).toBeNull();
+  });
+
+  it("an Employee's row is refused invalid_state / employee", async () => {
+    const w = await world();
+    const err = await refused(c.auth_user_link(w.root.withSession(serviceSession), { p_kind: "user", p_row_id: w.yn.user_id, p_auth_user_id: crypto.randomUUID() }), "invalid_state");
+    expect(err.detail).toBe("employee");
+  });
+
+  it("a null argument reaching the fake is invalid_input naming it; the wrapper refuses it first", async () => {
+    const w = await world();
+    const service = w.root.withSession(serviceSession);
+    for (const [arg, args] of [
+      ["p_kind", { p_kind: null, p_row_id: w.jm.user_id, p_auth_user_id: crypto.randomUUID() }],
+      ["p_row_id", { p_kind: "user", p_row_id: null, p_auth_user_id: crypto.randomUUID() }],
+      ["p_auth_user_id", { p_kind: "passkey", p_row_id: w.jm.user_id, p_auth_user_id: null }],
+    ] as const) {
+      const e = await service.rpc("auth_user_link", { ...args, p_request_id: crypto.randomUUID() }).then(() => null, (x: unknown) => x as RpcRefusal);
+      expect(e).toMatchObject({ key: "invalid_input", code: REFUSALS.invalid_input, detail: arg });
+    }
+    await expect(c.auth_user_link(service, { p_kind: "user", p_row_id: null, p_auth_user_id: crypto.randomUUID() } as never)).rejects.toMatchObject({ code: "invalid_input" });
+  });
+});
+
+describe("conventions §5 — invalid_input and read_only are refusals the real client recognises", () => {
+  it("22023 invalid_input keeps its detail; 25006 read_only is a refusal with none", async () => {
+    const input = await failed(c.actor_resolve(postgrestError({ code: "22023", message: "invalid_input", details: "p_actor_initials" }), { p_initials: "YN", p_terminal_id: "00000000-0000-4000-8000-000000000009" }));
+    expect(input).toMatchObject({ key: "invalid_input", code: "22023", detail: "p_actor_initials" });
+    const ro = await failed(c.actor_resolve(postgrestError({ code: "25006", message: "read_only", details: "x" }), { p_initials: "YN", p_terminal_id: "00000000-0000-4000-8000-000000000009" }));
+    expect(ro).toMatchObject({ key: "read_only", code: "25006" });
+    expect(ro.detail).toBeUndefined();
   });
 });
 

@@ -67,11 +67,40 @@ export interface LogRow {
   after?: unknown;
 }
 
-/** A-28's review flag; A-94's request id, terminal and principal, as every row a function writes. */
-export interface FlagRow { kind: "pin_line_closed"; store_id: string; terminal_id: string; actor_user_id: string | null; at: string; request_id: string | null; principal: FakeSession["principal"] | null }
+/**
+ * A-28's review flag; A-94's request id, terminal and principal, as every row a
+ * function writes. A null actor is the system's flag (A-68, E-01 d39); its
+ * subject is the closure that raised it (A-123).
+ */
+export interface FlagRow {
+  kind: "pin_line_closed";
+  store_id: string;
+  terminal_id: string;
+  actor_user_id: string | null;
+  subject_type: "pin_line_closure";
+  subject_id: string;
+  context: { refusals: number };
+  at: string;
+  request_id: string | null;
+  principal: FakeSession["principal"] | null;
+}
 
-/** E-01 d31's record of a refused PIN — never the digits — with A-94's correlation. */
-export interface PinRefusalRow { store_id: string; terminal_id: string; at: string; staff_user_id: string | null; request_id: string | null; principal: FakeSession["principal"] | null }
+/**
+ * E-01 d31's record of a refused PIN — never the digits — with A-94's
+ * correlation. `counted` is false for an attempt while the line was closed
+ * (E-01 d38); `closure_id` is the closure it was made during, or the one that
+ * spent it (A-123).
+ */
+export interface PinRefusalRow {
+  store_id: string;
+  terminal_id: string;
+  at: string;
+  staff_user_id: string | null;
+  counted: boolean;
+  closure_id: string | null;
+  request_id: string | null;
+  principal: FakeSession["principal"] | null;
+}
 
 export interface FakeState {
   tx: {
@@ -87,7 +116,8 @@ export interface FakeState {
   sysadmins: { auth_user_id: string; name: string; active: boolean }[];
   durableLog: LogRow[];
   pinRefusals: PinRefusalRow[];
-  pinLines: Map<string, { closed_until: number | null; window: number[] }>;
+  /** pin_line_closures: each Store's latest closure (A-123). The count is read from pinRefusals. */
+  pinLines: Map<string, { closure_id: string; reopens_at: number }>;
   flags: FlagRow[];
   seq: number;
 }

@@ -1,6 +1,6 @@
 // manager_authorize_pin — §6 Identity; A-89, A-113; E-01 d26, d31, d32
 // A header exception (A-113): the PIN pad's own check. Returns the one active
-// Manager or Owner assigned to auth.store_id() holding this PIN, or refuses
+// Manager or Owner assigned to authz.store_id() holding this PIN, or refuses
 // naming nobody. A lookup that opens an area and authorizes no write — every
 // M / O function resolves the PIN again (E-01 d32). Its refusals count toward
 // the Store's limit of five in fifteen minutes (E-01 d31). Store session only.

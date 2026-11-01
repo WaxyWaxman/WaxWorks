@@ -363,16 +363,18 @@ is a pull request both humans review (§7, workflow §4).
 | Required field for this role missing — a Manager's PIN or email (M-04 d35, d33) | `23502` | `pin_required`, `email_required`, `initials_required` | — |
 | Wrong state for the act — re-sending to someone already enrolled, recovering while an Owner exists (M-04 d38, A-90) | `WX409` | `invalid_state` | what state — one value of the closed list below |
 | PIN pepper missing (A-115, A-127) | `XX000` | `pin_pepper_missing` | — |
+| An argument the database itself rejects — A-120's actor pair half null; `auth_user_link`'s null arguments | `22023` | `invalid_input` | the argument's name |
+| Called in a read-only transaction — a function on A-119's list, by GET or HEAD (A-129) | `25006` | `read_only` | — |
 
-**`read_only` — decided 2026-10-31 by sr-talbot (A-129), not yet in the table above.** A function on A-119's list called in a read-only transaction (PostgREST runs GET and HEAD that way) raises `read_only` with SQLSTATE **`25006`**, before any PIN is read; PostgREST answers 405. It joins the table with `REFUSALS` in the next contract change, as below.
+**`read_only` — decided 2026-10-31 by sr-talbot (A-129); in the table above since the M1 review-keys contract change.** A function on A-119's list called in a read-only transaction (PostgREST runs GET and HEAD that way) raises `read_only` with SQLSTATE **`25006`**, before any PIN is read; PostgREST answers 405. It is in `REFUSALS`; the fake has no read-only transaction, so only **D** raises it.
 
-**`invalid_input` raised by the database — decided 2026-10-31 by sr-talbot, not yet in the table above.** An argument the database itself rejects — A-120's actor pair given half null — is raised `invalid_input` with SQLSTATE **`22023`** (`invalid_parameter_value`, so PostgREST answers 400), and its detail names the argument. **D raises it so today.** It joins the table **together with** `REFUSALS` and `REFUSAL_DETAIL` in `packages/contracts/src/client.ts`, in the next contract change, because `tests/contracts-m1.test.ts` holds the table and `REFUSALS` equal; until then the real client reports it as `rpc_failed`, not a refusal.
+**`invalid_input` raised by the database — decided 2026-10-31 by sr-talbot; in the table above since the M1 review-keys contract change.** An argument the database itself rejects — A-120's actor pair given half null — is raised `invalid_input` with SQLSTATE **`22023`** (`invalid_parameter_value`, so PostgREST answers 400), and its detail names the argument. **D raises it so today.** It is in `REFUSALS` and `REFUSAL_DETAIL` (`packages/contracts/src/client.ts`), so the real client reports it as a refusal with its detail. The wrapper's own input check answers `code: invalid_input` with the same key; a screen branching on the key reads both the same.
 
 **`invalid_state`'s detail is a closed list** (twelve values since A-128 added `linked` and A-132 `auth_user_in_use`). A screen may branch on the key **and** the detail; **D** raises exactly these values and its pgTAP refusal tests assert SQLSTATE, key and detail; a new state is a new row here first. _Decided 2026-10-30 by sr-talbot (M1-contracts-3 finding 6); the values are the fake's at `19a49ed`._
 
 | Detail | The state | Raised by | Decision |
 |---|---|---|---|
-| `inactive` | The person is deactivated | `user_change_role`, `user_reset_request`, `user_invite_resend`; `user_set_pin` once the d48 fix lands | M-04 d44, d46, d48 |
+| `inactive` | The person is deactivated | `user_change_role`, `user_reset_request`, `user_invite_resend`, `user_set_pin` (the fake now; **D** with M-04 D) | M-04 d44, d46, d48 |
 | `active` | The person is already active | `user_reactivate` | M-04 d47 |
 | `pin_not_needed` | A new PIN given at reactivation where nothing clashes | `user_reactivate` | M-04 d47, d49 |
 | `employee_has_no_pin` | A PIN given to, or set on, an Employee | `user_add`, `user_change_role`, `user_reactivate`, `user_set_pin` | M-04 d28, d39 |
@@ -382,10 +384,10 @@ is a pull request both humans review (§7, workflow §4).
 | `linked` | Linking a row that is already linked to an Auth user | `auth_user_link` (`user`, `store` kinds) | A-128 |
 | `auth_user_in_use` | Linking an Auth user already linked to another `users`, `stores` or `system_administrators` row | `auth_user_link` | A-132 |
 | `auth_user_mismatch` | A passkey enrolment for a row not linked to that Auth user | `auth_user_link` (`p_kind = 'passkey'`) | A-117 |
-| `employee` | A link sent to an Employee | `user_reset_request`, `user_invite_resend` | A-114 |
+| `employee` | A link sent to an Employee; linking an Employee's row to an Auth user | `user_reset_request`, `user_invite_resend`; `auth_user_link` (`user` kind) | A-114, A-87 |
 | `enrolled` | Re-sending an invite to someone already enrolled | `user_invite_resend` | A-114, A-117 |
 
-*`employee` means an Employee only.* The fake also raises it for a Manager or Owner with no email (`fake/identity.ts:576`), a state M-04 d33 and d35 make unreachable; the next contract change splits that branch or removes it.
+*`employee` means an Employee only.* ~~The fake also raises it for a Manager or Owner with no email, a state M-04 d33 and d35 make unreachable; the next contract change splits that branch or removes it.~~ Removed in the M1 review-keys contract change.
 
 _Status: the keys, the kinds and the SQLSTATE values decided — the values ratified 2026-10-29 by sr-talbot, on GimpyMatey's proposal below._ `WX` is a class Postgres does not use, reserved here for refusals with no standard code. **PostgREST answers a refusal by its code's class** (its error reference, v12 and *latest*, read 2026-10-29): `28*` → 403, `42501` → 401 or 403, `23505` → 409, `XX000` (`pin_pepper_missing`, a deployment fault) → 500, and every other code here — `23502`, `23514`, the `WX` class — falls to *other*, 400; `P0*` and `55*` would have been 500, which is why `not_found` and `invalid_state` moved. Nothing branches on HTTP status. Re-check the mapping against production's PostgREST version once.
 

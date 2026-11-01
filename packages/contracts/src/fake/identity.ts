@@ -36,7 +36,7 @@ class Ctx {
 
   // ── Header assertions (A-103's order) ──────────────────────────────────────
 
-  /** A-40, A-90: every function that is not S refuses a null auth.org_id(). */
+  /** A-40, A-90: every function that is not S refuses a null authz.org_id(). */
   tenant(): string {
     const org = this.s?.org_id;
     if (!org) this.refuse("no_tenant");
@@ -63,7 +63,7 @@ class Ctx {
     return this.refuse("role_refused", "person");
   }
 
-  /** A-94: on a store session the terminal belongs to auth.store_id(). */
+  /** A-94: on a store session the terminal belongs to authz.store_id(). */
   terminal(): string | null {
     if (this.s?.principal !== "store") return null;
     const t = this.args.p_terminal_id as string | null;
@@ -90,36 +90,50 @@ class Ctx {
   /**
    * The one active Manager or Owner assigned to the Store holding this PIN, or
    * nobody (E-01 d26). Refusals count per Store across its terminals; five in
-   * fifteen minutes close the line for fifteen and raise a flag (E-01 d31).
+   * fifteen minutes close the line for fifteen and raise a flag (E-01 d31), and
+   * the count is of digits tried while the line is open (E-01 d38).
    */
   pin(pin: string | null, terminal: string, staff_user_id: string | null): UserRow {
     const st = this.call.state;
     const store_id = this.s!.store_id!;
     const t = this.call.now.getTime();
-    let line = st.pinLines.get(store_id);
-    if (!line) st.pinLines.set(store_id, (line = { closed_until: null, window: [] }));
-    if (line.closed_until !== null) {
-      if (t < line.closed_until) this.refuse("pin_line_closed", new Date(line.closed_until).toISOString());
-      line.closed_until = null;
-    }
-    // Placeholder, not specified: a missing PIN is refused without counting as a guess.
+    // E-01 d38: a missing PIN tried no digits — refused, neither recorded nor counted.
     if (pin === null) this.refuse("pin_refused");
+    const record = (counted: boolean, closure_id: string | null) => st.pinRefusals.push({
+      store_id, terminal_id: terminal, at: this.at, staff_user_id, counted, closure_id, request_id: this.request_id, principal: this.s!.principal,
+    });
+    const line = st.pinLines.get(store_id);
+    if (line && t < line.reopens_at) {
+      // E-01 d31, d38: while closed every PIN is refused with the reopening
+      // time, and the attempt is recorded against the closure, not counted.
+      record(false, line.closure_id);
+      this.refuse("pin_line_closed", new Date(line.reopens_at).toISOString());
+    }
     const holder = this.tx.users.find((u) =>
       u.org_id === this.s!.org_id && u.active && u.role !== "employee" && u.store_ids.includes(store_id) && this.tx.pins.get(u.user_id) === pin);
+    // E-01 d38: a correct PIN clears nothing — the window is the last fifteen minutes' refusals.
     if (holder) return holder;
 
-    st.pinRefusals.push({ store_id, terminal_id: terminal, at: this.at, staff_user_id, request_id: this.request_id, principal: this.s!.principal });
-    line.window = [...line.window.filter((x) => x > t - FIFTEEN_MINUTES), t];
-    if (line.window.length >= 5) {
-      // Placeholder, not specified: closure consumes the count, and attempts while closed are not counted.
-      line.closed_until = t + FIFTEEN_MINUTES;
-      line.window = [];
-      st.flags.push({ kind: "pin_line_closed", store_id, terminal_id: terminal, actor_user_id: staff_user_id, at: this.at, request_id: this.request_id, principal: this.s!.principal });
+    record(true, null);
+    const window = st.pinRefusals.filter((r) =>
+      r.store_id === store_id && r.counted && r.closure_id === null && Date.parse(r.at) > t - FIFTEEN_MINUTES);
+    if (window.length >= 5) {
+      const closure_id = uid();
+      st.pinLines.set(store_id, { closure_id, reopens_at: t + FIFTEEN_MINUTES });
+      // E-01 d38: the closure spends the five, so the line reopens with an empty count.
+      for (const r of window) r.closure_id = closure_id;
+      // E-01 d39: the system's flag, no actor (A-68); its subject is the closure,
+      // whose refusals each name their own terminal and staff session (A-123).
+      st.flags.push({
+        kind: "pin_line_closed", store_id, terminal_id: terminal, actor_user_id: null,
+        subject_type: "pin_line_closure", subject_id: closure_id, context: { refusals: window.length },
+        at: this.at, request_id: this.request_id, principal: this.s!.principal,
+      });
     }
     return this.refuse("pin_refused");
   }
 
-  /** S: auth.principal() = 'sysadmin' and an active system_administrators row for p_actor_user_id = auth.uid() (A-110, A-113). */
+  /** S: authz.principal() = 'sysadmin' and an active system_administrators row for p_actor_user_id = auth.uid() (A-110, A-113). */
   sysadmin(): string {
     const s = this.s;
     if (s?.principal !== "sysadmin") this.refuse("role_refused", "sysadmin");
@@ -449,6 +463,8 @@ export const identityHandlers: Record<string, Handler> = {
     // M-04 d41: "at their own Stores" (M-04 d28) is one shared Store — a Manager
     // may set the PIN of anyone who shares any one of theirs.
     if (who.by.role !== "owner" && !u.store_ids.some((st) => who.by.store_ids.includes(st))) x.refuse("role_refused", "owner");
+    // M-04 d48: nothing is done to a deactivated person's standing; reactivate first.
+    if (!u.active) x.refuse("invalid_state", "inactive");
     const pin = x.args.p_pin as string | null;
     if (pin === null) {
       if (u.store_ids.length > 0) x.refuse("pin_required");
@@ -546,12 +562,15 @@ export const identityHandlers: Record<string, Handler> = {
   auth_user_link: handle((x) => {
     // A-113, A-114: in place of tenant and actor, the caller is the service role.
     if (x.s?.principal !== "service") x.refuse("role_refused", "service");
-    const kind = x.args.p_kind as "user" | "store" | "passkey";
-    const id = x.args.p_row_id as string;
-    const auth = x.args.p_auth_user_id as string;
+    // The arguments the database itself rejects, in its order, naming the argument
+    // (conventions §5). The wrapper refuses these first; a raw rpc reaches them.
+    const kind = x.args.p_kind as "user" | "store" | "passkey" | null;
+    if (kind !== "user" && kind !== "store" && kind !== "passkey") x.refuse("invalid_input", "p_kind");
+    const id = (x.args.p_row_id as string | null) ?? x.refuse("invalid_input", "p_row_id");
+    const auth = (x.args.p_auth_user_id as string | null) ?? x.refuse("invalid_input", "p_auth_user_id");
     if (kind === "passkey") {
       // A-117: the row's Auth user IS p_auth_user_id; passkey_enrolled_at set where
-      // null; every enrolment logged, never a credential (A-93). The refusal key is a placeholder (invalid_state).
+      // null; every enrolment logged, never a credential (A-93).
       const u = x.tx.users.find((r) => r.user_id === id) ?? x.refuse("not_found");
       if (u.auth_user_id !== auth) x.refuse("invalid_state", "auth_user_mismatch");
       u.passkey_enrolled_at ??= x.at;
@@ -562,6 +581,14 @@ export const identityHandlers: Record<string, Handler> = {
       ? x.tx.users.find((u) => u.user_id === id)
       : x.tx.stores.find((s) => s.store_id === id);
     if (!target) return x.refuse("not_found");
+    // A-128: a link is made once; nothing repoints a row at another Auth user.
+    if (target.auth_user_id !== null) x.refuse("invalid_state", "linked");
+    // A-87: Employees have no Auth user.
+    if ("role" in target && target.role === "employee") x.refuse("invalid_state", "employee");
+    // A-132: one Auth user, one row, across users, stores and system_administrators.
+    // The database checks under an advisory lock on the id; the fake runs one call at a time.
+    if (x.tx.users.some((u) => u.auth_user_id === auth) || x.tx.stores.some((s) => s.auth_user_id === auth)
+      || x.call.state.sysadmins.some((a) => a.auth_user_id === auth)) x.refuse("invalid_state", "auth_user_in_use");
     target.auth_user_id = auth;
     x.tx.log.push(x.row(kind === "user" ? "users.log" : "stores.log", id, "auth_user_linked", null, null, null));
     return { kind, row_id: id };
@@ -572,8 +599,9 @@ export const identityHandlers: Record<string, Handler> = {
 function linkSent(x: Ctx, action: "reset_link_sent" | "invite_sent") {
   const who = x.authorize(true);
   const u = x.user(x.args.p_user_id as string, who.by.org_id);
-  // A-114: to a Manager or Owner. The key is a placeholder (invalid_state).
-  if (u.role === "employee" || !u.email) x.refuse("invalid_state", "employee");
+  // A-114: to a Manager or Owner. `employee` means an Employee only (conventions
+  // §5); a Manager or Owner always has an email (M-04 d33, d35).
+  if (u.role === "employee") x.refuse("invalid_state", "employee");
   // M-04 d44: no link reaches a deactivated person; reactivate first.
   if (!u.active) x.refuse("invalid_state", "inactive");
   // A-117: Re-send invite is for someone who never accepted.

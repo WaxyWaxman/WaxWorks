@@ -2,7 +2,7 @@
 // A header exception (A-113): a browser on a store session names itself. It
 // takes no p_terminal_id — it mints the id every later call carries — and takes
 // p_actor_initials, resolving them itself among the active Users assigned to
-// auth.store_id() exactly as actor_resolve does; the registration is logged
+// authz.store_id() exactly as actor_resolve does; the registration is logged
 // against that person. Store session only.
 import { z } from "zod";
 import { contract, initials } from "../wrapper";
