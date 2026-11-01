@@ -29,6 +29,12 @@ export const REFUSALS = {
   initials_required: "23502",
   invalid_state: "WX409",
   pin_pepper_missing: "XX000",
+  // An argument the database itself rejects, the detail naming it (conventions
+  // §5). The wrapper's own Zod refusal shares the key with code `invalid_input`;
+  // a screen branching on the key reads both the same.
+  invalid_input: "22023",
+  // A-129: a function that must keep its refusal record, called read-only (GET).
+  read_only: "25006",
 } as const;
 export type RefusalKey = keyof typeof REFUSALS;
 
@@ -49,7 +55,7 @@ export function isRefusal(key: string, code: string | undefined): key is Refusal
  * refusal's DETAIL is dropped by the real client, so a body that names a PIN's
  * holder in `pin_clash` cannot reach the screen (M-04 d32, A-93).
  */
-export const REFUSAL_DETAIL: ReadonlySet<RefusalKey> = new Set<RefusalKey>(["role_refused", "pin_line_closed", "initials_clash", "invalid_state"]);
+export const REFUSAL_DETAIL: ReadonlySet<RefusalKey> = new Set<RefusalKey>(["role_refused", "pin_line_closed", "initials_clash", "invalid_state", "invalid_input"]);
 
 /**
  * What a WaxClient throws when the database (or the fake) refuses or fails: the

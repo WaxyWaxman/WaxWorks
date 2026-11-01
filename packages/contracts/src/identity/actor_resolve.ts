@@ -1,7 +1,7 @@
 // actor_resolve — §6 Identity; §5.3, A-87, A-113; E-01 d17, d19, d25; M-04 d15
 // A header exception (A-113): the one place a string becomes a person, so it
 // takes no actor arguments. Resolves an exact, normalised match among the
-// active Users assigned to auth.store_id(); anything else is not_found, naming
+// active Users assigned to authz.store_id(); anything else is not_found, naming
 // nobody. Store session only; the terminal is verified (A-94).
 // Not modelled at M1: §6's exception for a Sale already Open and locked to a
 // deactivated User — there are no Sales until M4.
