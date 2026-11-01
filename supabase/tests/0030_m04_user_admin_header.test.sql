@@ -442,6 +442,23 @@ select is(pg_temp.setpin(pg_temp.u('02'), '7777'), pg_temp.person_refusal(),
 reset role;
 select is((select count(*)::int from public.pin_refusals), 0,
   'A-103 - no_tenant, actor_mismatch, terminal_mismatch and M-04 d51''s refusal each come before any PIN is read: no refusal row was written for any of the wrong PINs');
+-- Row 41: the same four on a store session whose actor and terminal both verify,
+-- with a wrong PIN — without d51 each would reach the PIN and write a refusal row.
+create temp table log_51 as select id, log from public.users;
+select pg_temp.counter(pg_temp.t('1'), pg_temp.u('01'), 'EE', '9999');
+select is(pg_temp.add('manager', 'ZQ', array[pg_temp.s('a1')], 'zq@a.test', '7778', 'Zed Que'), pg_temp.person_refusal(),
+  'M-04 d51 - user_add carrying a PIN, at the till with a verified actor and a wrong manager PIN: role_refused, person');
+select is(pg_temp.chrole(pg_temp.u('06'), 'manager', 'z@a.test', '7778'), pg_temp.person_refusal(),
+  'M-04 d51 - user_change_role carrying a PIN, verified actor, wrong manager PIN: role_refused, person');
+select is(pg_temp.react(pg_temp.u('06'), null, '7778'), pg_temp.person_refusal(),
+  'M-04 d51 - user_reactivate carrying a PIN, verified actor, wrong manager PIN: role_refused, person');
+select is(pg_temp.setpin(pg_temp.u('02'), '7778'), pg_temp.person_refusal(),
+  'M-04 d51 - user_set_pin, verified actor, wrong manager PIN: role_refused, person');
+reset role;
+select is((select count(*)::int from public.pin_refusals), 0,
+  'M-04 d51 - the wrong manager PIN was never read: pin_refusals unchanged');
+select is((select count(*)::int from public.users u left join log_51 b using (id) where b.id is null or u.log is distinct from b.log), 0,
+  'M-04 d51 - and users.log unchanged: nobody added, nothing logged');
 
 -- ── Row 2: another Organization's user or Store is not_found, and nothing is written ──
 create temp table before_b as select id, log, role, active, initials, display_name from public.users;

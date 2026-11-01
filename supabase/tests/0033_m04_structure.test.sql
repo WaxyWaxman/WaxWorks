@@ -203,6 +203,28 @@ select is((select count(*)::int from pg_class c join pg_namespace n on n.oid = c
   0, 'A-139 - app_internal holds functions only (A-105''s rule for app)');
 select is((select nspowner::regrole::text from pg_namespace where nspname = 'app_internal'), 'waxworks_app',
   'A-139 - app_internal is owned by waxworks_app, so A-104''s set role opener creates in it');
+-- §6's entry points, as its Identity row names them today. A later order adding
+-- an app function of another domain adds its §6 name here.
+select is((select array_agg(p.proname::text order by p.proname) from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+            where n.nspname = 'app'
+              and p.proname <> all (array['terminal_register', 'actor_resolve', 'manager_authorize_pin', 'session_select_store',
+                                          'user_add', 'user_change_role', 'user_deactivate', 'user_reactivate', 'user_assign',
+                                          'user_unassign', 'user_correct', 'user_set_pin', 'user_reset_request',
+                                          'user_invite_resend', 'store_create', 'store_account_reset', 'auth_user_link',
+                                          'organization_create', 'owner_recover', 'owner_reset_request'])),
+  null, 'A-139 - no function in app outside §6''s list: app holds the entry points only');
+
+-- ── Row 46: A-137 — delete on store_assignments and user_pins, and no other identity table ──
+-- Every table in public is an identity table at M1.
+select is((select array_agg(c.relname::text order by c.relname) from pg_class c join pg_namespace n on n.oid = c.relnamespace
+            where n.nspname = 'public' and c.relkind in ('r', 'p') and has_table_privilege('waxworks_app', c.oid, 'delete')),
+  array['store_assignments', 'user_pins'],
+  'A-137 - waxworks_app holds delete on store_assignments and user_pins, and on no other identity table');
+select is((select array_agg(distinct r.rolname::text) from pg_roles r, pg_class c join pg_namespace n on n.oid = c.relnamespace
+            where n.nspname = 'public' and c.relkind in ('r', 'p')
+              and r.rolname in ('authenticated', 'anon', 'service_role', 'sysadmin')
+              and has_table_privilege(r.rolname, c.oid, 'delete')),
+  null, 'A-137 - no client role holds delete on any identity table: the grant is the owner''s ceiling only');
 
 -- ── Row 32: M-04 d5 — Users are deactivated, never deleted ─────────────────
 select is((select array_agg(p.proname::text) from pg_proc p join pg_namespace n on n.oid = p.pronamespace

@@ -720,6 +720,9 @@ select is(pg_temp.deact(pg_temp.id('rae')), pg_temp.state('inactive'),
 reset role;
 select is((select count(*)::int from public.users u join log_27 b using (id) where u.log is distinct from b.log), 0,
   'M-04 d46, d53, d54 - none of these calls changed any log');
+select is((select count(*)::int from public.users u, jsonb_array_elements(u.log) e
+            where u.id = pg_temp.id('rae') and e ->> 'action' = 'deactivated'), 1,
+  'M-04 d54 - Rae, deactivated once and then again: one deactivated entry in her log');
 select ok((select role = 'manager' and email = 'm@a.test' from public.users where id = pg_temp.u('02'))
       and (select role = 'owner' and email = 'gus@a.test' from public.users where id = pg_temp.u('07')),
   'M-04 d53 - the refused demotions changed neither role nor address');
