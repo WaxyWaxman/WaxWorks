@@ -1181,3 +1181,106 @@ describe("E-01 d40 — unassigning a Manager from the Store their personal sessi
     });
   });
 });
+
+// ── The rework review's decisions (M-04 d55–d58, E-01 d40 as written; 2026-11-01) ──
+
+/** K. Moreau, a second Manager at A whose PIN the Owner sets, and J. Mbeki's own personal session. */
+async function twoManagers() {
+  const w = await world();
+  const km = await c.user_add(w.owner, { ...w.asOwner, p_display_name: "K. Moreau", p_initials: "KM", p_role: "manager", p_email: "km@example.test", p_store_ids: [w.A.store_id], p_pin: "3333" });
+  const jm = w.root.withSession(person(w.org.org_id, w.jm.user_id));
+  const asJm = { p_actor_user_id: w.jm.user_id, p_actor_initials: null, p_terminal_id: null, p_manager_pin: null };
+  return { ...w, km, jmSession: jm, asJm };
+}
+
+describe("M-04 d55 — a PIN a Manager set does not carry into Owner standing; one an Owner or its holder set does", () => {
+  it("JM sets KM's PIN; promoted to Owner without a new one, KM is refused pin_required, and the escalation the review reproduced fails", async () => {
+    const w = await twoManagers();
+    await c.user_set_pin(w.jmSession, { ...w.asJm, p_user_id: w.km.user_id, p_pin: "2468" });
+    const promote = { ...w.asOwner, p_user_id: w.km.user_id, p_role: "owner" as const, p_email: null };
+    await refused(c.user_change_role(w.owner, { ...promote, p_pin: null }), "pin_required");
+    expect(w.root.inspect().users.find((u) => u.user_id === w.km.user_id)!.role).toBe("manager");
+    // With a new PIN, on the Owner's personal session (M-04 d51): accepted, and the old one is gone.
+    await expect(c.user_change_role(w.owner, { ...promote, p_pin: "5173" })).resolves.toMatchObject({ user_id: w.km.user_id });
+    await refused(c.user_change_role(w.storeA, { ...w.atA(w.t1, "2468"), p_user_id: w.jm.user_id, p_role: "owner", p_email: null, p_pin: null }), "pin_refused");
+    await expect(c.manager_authorize_pin(w.storeA, { p_pin: "5173", p_terminal_id: w.t1, ...noStaff })).resolves.toMatchObject({ user_id: w.km.user_id, role: "owner" });
+  });
+
+  it("a PIN its holder set carries: JM sets their own, and is promoted to Owner without one", async () => {
+    const w = await twoManagers();
+    await c.user_set_pin(w.jmSession, { ...w.asJm, p_user_id: w.jm.user_id, p_pin: "8042" });
+    await expect(c.user_change_role(w.owner, { ...w.asOwner, p_user_id: w.jm.user_id, p_role: "owner", p_email: null, p_pin: null }))
+      .resolves.toMatchObject({ user_id: w.jm.user_id });
+  });
+
+  it("a PIN an Owner set carries, so M-04 d52 still refuses a second one: pin_not_needed", async () => {
+    const w = await twoManagers();
+    const err = await refused(c.user_change_role(w.owner, { ...w.asOwner, p_user_id: w.km.user_id, p_role: "owner", p_email: null, p_pin: "5173" }), "invalid_state");
+    expect(err.detail).toBe("pin_not_needed");
+  });
+
+  it("an Owner demoted, given a PIN by a Manager, and promoted again needs a new one", async () => {
+    const w = await twoManagers();
+    const own = { ...w.asOwner, p_email: null };
+    await c.user_change_role(w.owner, { ...own, p_user_id: w.km.user_id, p_role: "owner", p_pin: null });
+    await c.user_change_role(w.owner, { ...own, p_user_id: w.km.user_id, p_role: "manager", p_pin: null });
+    await c.user_set_pin(w.jmSession, { ...w.asJm, p_user_id: w.km.user_id, p_pin: "2468" });
+    await refused(c.user_change_role(w.owner, { ...own, p_user_id: w.km.user_id, p_role: "owner", p_pin: null }), "pin_required");
+  });
+});
+
+describe("M-04 d56 — clearing a PIN is logged only when one was held", () => {
+  it("a Store-less Owner with no PIN: the clear succeeds and writes nothing; with one, it is logged once", async () => {
+    const w = await world();
+    const ow = await c.user_add(w.owner, { ...w.asOwner, p_display_name: "R. Okafor", p_initials: null, p_role: "owner", p_email: "ro@example.test", p_store_ids: [], p_pin: null });
+    const clear = () => c.user_set_pin(w.owner, { ...w.asOwner, p_user_id: ow.user_id, p_pin: null });
+    const cleared = () => w.root.inspect().log.filter((l) => l.subject_id === ow.user_id && l.action === "pin_cleared");
+    await expect(clear()).resolves.toEqual({ user_id: ow.user_id });
+    expect(cleared()).toHaveLength(0);
+    await c.user_set_pin(w.owner, { ...w.asOwner, p_user_id: ow.user_id, p_pin: "6060" });
+    await clear();
+    expect(cleared()).toHaveLength(1);
+  });
+});
+
+describe("M-04 d57 — a Correct that changes nothing writes nothing", () => {
+  it("every field omitted, or given its current value: no corrected entry; a real change is logged", async () => {
+    const w = await world();
+    const corrected = () => w.root.inspect().log.filter((l) => l.subject_id === w.yn.user_id && l.action === "corrected");
+    await expect(c.user_correct(w.owner, { ...w.asOwner, p_user_id: w.yn.user_id })).resolves.toEqual({ user_id: w.yn.user_id });
+    await c.user_correct(w.owner, { ...w.asOwner, p_user_id: w.yn.user_id, p_initials: " yn ", p_display_name: "Y. Nakamura" });
+    expect(corrected()).toHaveLength(0);
+    await c.user_correct(w.owner, { ...w.asOwner, p_user_id: w.yn.user_id, p_display_name: "Yui Nakamura" });
+    expect(corrected()).toHaveLength(1);
+  });
+});
+
+describe("M-04 d58 — every Add of a Manager or Owner is refused at the till, PIN or not; the till adds Employees", () => {
+  it("a Store-less Owner and a Manager without a PIN, at the till: role_refused / person, nothing recorded; an Employee is added", async () => {
+    const w = await world();
+    const at = w.atA(w.t1, "1111");
+    const before = w.root.inspect();
+    for (const act of [
+      c.user_add(w.storeA, { ...at, p_display_name: "R. Okafor", p_initials: null, p_role: "owner", p_email: "ro@example.test", p_store_ids: [], p_pin: null }),
+      c.user_add(w.storeA, { ...at, p_display_name: "K. Moreau", p_initials: "KM", p_role: "manager", p_email: "km@example.test", p_store_ids: [w.A.store_id], p_pin: null }),
+    ]) {
+      const err = await refused(act, "role_refused");
+      expect(err.detail).toBe("person");
+    }
+    const after = w.root.inspect();
+    expect({ users: after.users.length, log: after.log.length, refusals: after.pinRefusals.length })
+      .toEqual({ users: before.users.length, log: before.log.length, refusals: before.pinRefusals.length });
+    await expect(c.user_add(w.storeA, { ...at, ...employee("A. Diallo", "AD", [w.A.store_id]) })).resolves.toMatchObject({ invite: false });
+  });
+});
+
+describe("E-01 d40 — an Owner's pick stands when they are unassigned from it; an Owner reaches every Store", () => {
+  it("the Owner, at A and B with A picked, is unassigned from A: the pick is still A", async () => {
+    const w = await world();
+    await c.user_assign(w.owner, { ...w.asOwner, p_user_id: w.ownerId, p_store_id: w.B.store_id });
+    const asMe = { p_actor_user_id: w.ownerId, p_actor_initials: null, p_terminal_id: null };
+    await c.session_select_store(w.owner, { ...asMe, p_store_id: w.A.store_id });
+    await c.user_unassign(w.owner, { ...w.asOwner, p_user_id: w.ownerId, p_store_id: w.A.store_id });
+    await expect(c.session_select_store(w.owner, { ...asMe, p_store_id: null })).resolves.toMatchObject({ selected_store_id: w.A.store_id });
+  });
+});

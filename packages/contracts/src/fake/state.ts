@@ -102,6 +102,8 @@ export interface PinRefusalRow {
   principal: FakeSession["principal"] | null;
 }
 
+export type PinSetter = "owner" | "holder" | "manager";
+
 export interface FakeState {
   tx: {
     orgs: OrgRow[];
@@ -109,6 +111,11 @@ export interface FakeState {
     users: UserRow[];
     /** user_pins — never copied out by snapshot() (A-89, A-93). */
     pins: Map<string, string>;
+    /**
+     * Who last set each PIN, by role (M-04 d55): an Owner, the holder, or a
+     * Manager. A PIN with no entry counts as set by a Manager.
+     */
+    pinSetBy: Map<string, PinSetter>;
     terminals: TerminalRow[];
     log: LogRow[];
     storeNumber: number;
@@ -134,7 +141,7 @@ export type Handler = (call: Call) => unknown;
 
 export function emptyState(sysadmins: readonly { auth_user_id: string; name: string; active?: boolean }[]): FakeState {
   return {
-    tx: { orgs: [], stores: [], users: [], pins: new Map(), terminals: [], log: [], storeNumber: 1_000_000 },
+    tx: { orgs: [], stores: [], users: [], pins: new Map(), pinSetBy: new Map(), terminals: [], log: [], storeNumber: 1_000_000 },
     sysadmins: sysadmins.map((s) => ({ ...s, active: s.active ?? true })),
     durableLog: [],
     pinRefusals: [],

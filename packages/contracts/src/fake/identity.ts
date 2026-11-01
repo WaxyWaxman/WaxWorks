@@ -208,6 +208,18 @@ class Ctx {
     };
   }
 
+  /** Sets a PIN and records who set it, by role (M-04 d55). */
+  setPin(u: UserRow, pin: string, by: UserRow): void {
+    this.tx.pins.set(u.user_id, pin);
+    this.tx.pinSetBy.set(u.user_id, by.user_id === u.user_id ? "holder" : by.role === "owner" ? "owner" : "manager");
+  }
+
+  /** Clears a PIN and its setter; true when one was held (M-04 d56). */
+  clearPin(u: UserRow): boolean {
+    this.tx.pinSetBy.delete(u.user_id);
+    return this.tx.pins.delete(u.user_id);
+  }
+
   log(table: LogRow["table"], subject_id: string, action: string, who: { actor: UserRow; by: UserRow; terminal: string | null }, extra: Partial<LogRow> = {}): void {
     this.tx.log.push(this.row(table, subject_id, action, who.actor.user_id, who.by.user_id, who.terminal, extra));
   }
@@ -237,6 +249,7 @@ function storeSessionOnly(x: Ctx): void {
 /**
  * M-04 d51: an act that sets a PIN runs on a personal session only — refused at
  * the till at the principal step, before any PIN is read, so nothing is recorded.
+ * M-04 d58: so is every Add of a Manager or Owner, PIN or not.
  */
 function noPinAtTill(x: Ctx, setsPin: boolean): void {
   x.tenant();
@@ -290,7 +303,7 @@ export const identityHandlers: Record<string, Handler> = {
   }),
 
   user_add: handle((x) => {
-    noPinAtTill(x, x.args.p_pin != null);
+    noPinAtTill(x, x.args.p_pin != null || x.args.p_role !== "employee");
     const who = x.authorize(false);
     const { by } = who;
     const org = by.org_id;
@@ -318,7 +331,7 @@ export const identityHandlers: Record<string, Handler> = {
       active: true, store_ids: [...stores], selected_store_id: null, auth_user_id: null, passkey_enrolled_at: null,
     };
     x.tx.users.push(user);
-    if (pin) x.tx.pins.set(user.user_id, pin);
+    if (pin) x.setPin(user, pin, by);
     const invite = role !== "employee";
     x.log("users.log", user.user_id, "user_added", who, { after: { role, initials, store_ids: stores, email } });
     if (pin) x.log("users.log", user.user_id, "pin_set", who);
@@ -351,10 +364,13 @@ export const identityHandlers: Record<string, Handler> = {
     if (!promotion && x.args.p_email != null) x.refuse("invalid_state", "email_not_needed");
     if (to !== "employee") {
       if (!email) x.refuse("email_required");
-      const holdsPin = x.tx.pins.has(u.user_id);
+      // M-04 d55: a held PIN carries into Owner standing only if an Owner or its
+      // holder last set it; one a Manager set must be replaced at the promotion.
+      const stale = promotion && to === "owner" && x.tx.pins.has(u.user_id) && (x.tx.pinSetBy.get(u.user_id) ?? "manager") === "manager";
+      const holdsPin = x.tx.pins.has(u.user_id) && !stale;
       // M-04 d52: a PIN at promotion only for someone who holds none; changing one is Set PIN's.
       if (holdsPin && pin !== null) x.refuse("invalid_state", "pin_not_needed");
-      if (!holdsPin && pin === null && (to === "manager" || u.store_ids.length > 0)) x.refuse("pin_required");
+      if (!holdsPin && pin === null && (to === "manager" || u.store_ids.length > 0 || stale)) x.refuse("pin_required");
       if (pin !== null) for (const st of u.store_ids) x.pinClash(st, pin, u.user_id, who);
     }
     // M-04 d43 (A-117): any promotion into Manager or Owner — Manager to Owner
@@ -367,10 +383,10 @@ export const identityHandlers: Record<string, Handler> = {
     const after = emailChanged ? { role: to, email } : { role: to };
     u.role = to;
     u.email = email;
-    if (pin !== null && to !== "employee") { x.tx.pins.set(u.user_id, pin); x.log("users.log", u.user_id, "pin_set", who); }
+    if (pin !== null && to !== "employee") { x.setPin(u, pin, who.by); x.log("users.log", u.user_id, "pin_set", who); }
     // M-04 d39: a demotion to Employee clears the PIN, so a promotion back sets a
     // fresh one, clash-checked (E-01 d26).
-    if (to === "employee" && x.tx.pins.delete(u.user_id)) x.log("users.log", u.user_id, "pin_cleared", who);
+    if (to === "employee" && x.clearPin(u)) x.log("users.log", u.user_id, "pin_cleared", who);
     x.log("users.log", u.user_id, "role_changed", who, { before, after });
     if (invite) x.log("users.log", u.user_id, "invite_sent", who, { after: { email } });
     // A-118: the Server Action sends the invite to the address returned here.
@@ -414,7 +430,7 @@ export const identityHandlers: Record<string, Handler> = {
     u.active = true;
     u.initials = initials;
     // Logged as changed, never as a value (M-04 d28).
-    if (fresh !== null) { x.tx.pins.set(u.user_id, fresh); x.log("users.log", u.user_id, "pin_set", who); }
+    if (fresh !== null) { x.setPin(u, fresh, who.by); x.log("users.log", u.user_id, "pin_set", who); }
     x.log("users.log", u.user_id, "reactivated", who, { before, after: { active: true, initials } });
     return { user_id: u.user_id };
   }),
@@ -448,7 +464,8 @@ export const identityHandlers: Record<string, Handler> = {
     // M-04 d27: an Employee's or Manager's last Store. The key is a placeholder (invalid_state).
     if (u.role !== "owner" && u.store_ids.length === 1) x.refuse("invalid_state", "last_store");
     u.store_ids = u.store_ids.filter((s) => s !== st);
-    if (u.selected_store_id === st) u.selected_store_id = null;
+    // E-01 d40: a Manager's pick of the Store removed is cleared; an Owner reaches every Store, so theirs stands.
+    if (u.role === "manager" && u.selected_store_id === st) u.selected_store_id = null;
     x.log("users.log", u.user_id, "unassigned", who, { store_id: st });
     return { user_id: u.user_id };
   }),
@@ -469,7 +486,10 @@ export const identityHandlers: Record<string, Handler> = {
       if (x.args.p_email === null && u.role !== "employee") x.refuse("email_required");
       u.email = x.args.p_email as string | null;
     }
-    x.log("users.log", u.user_id, "corrected", who, { before, after: { initials: u.initials, display_name: u.display_name, email: u.email } });
+    const after = { initials: u.initials, display_name: u.display_name, email: u.email };
+    // M-04 d57: a Correct that changes nothing writes nothing.
+    if (after.initials === before.initials && after.display_name === before.display_name && after.email === before.email) return { user_id: u.user_id };
+    x.log("users.log", u.user_id, "corrected", who, { before, after });
     return { user_id: u.user_id };
   }),
 
@@ -487,12 +507,12 @@ export const identityHandlers: Record<string, Handler> = {
     const pin = x.args.p_pin as string | null;
     if (pin === null) {
       if (u.store_ids.length > 0) x.refuse("pin_required");
-      x.tx.pins.delete(u.user_id);
-      x.log("users.log", u.user_id, "pin_cleared", who);
+      // M-04 d56: logged only when a PIN was held.
+      if (x.clearPin(u)) x.log("users.log", u.user_id, "pin_cleared", who);
       return { user_id: u.user_id };
     }
     for (const st of u.store_ids) x.pinClash(st, pin, u.user_id, who);
-    x.tx.pins.set(u.user_id, pin);
+    x.setPin(u, pin, who.by);
     // Logged as changed, never as a value (M-04 d28, A-93).
     x.log("users.log", u.user_id, "pin_set", who);
     return { user_id: u.user_id };

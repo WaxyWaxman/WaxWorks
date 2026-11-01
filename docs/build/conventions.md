@@ -358,13 +358,13 @@ is a pull request both humans review (§7, workflow §4).
 | Kind | SQLSTATE | Message key | Detail |
 |---|---|---|---|
 | No tenant; actor is not the session holder; terminal is not this Store's (A-40, §6, A-94) | `28000` | `no_tenant`, `actor_mismatch`, `terminal_mismatch` | — |
-| Wrong principal or role — not a Manager, not an Owner, not a System Administrator (A-90, M-04 d30); an act that sets a PIN at the till (M-04 d51) | `42501` | `role_refused` | the role required — or `person`, the principal required: a PIN-setting act on a store session is refused so, before any PIN is read |
+| Wrong principal or role — not a Manager, not an Owner, not a System Administrator (A-90, M-04 d30); an act that sets a PIN at the till (M-04 d51), and every Add of a Manager or Owner there (M-04 d58); an authoriser who no longer qualifies after the function's last lock (A-140) | `42501` | `role_refused` | the role required — or `person`, the principal required: a PIN-setting act on a store session is refused so, before any PIN is read |
 | Wrong PIN (E-01 d26) | `28P01` | `pin_refused` | — names nobody |
 | PIN line closed (E-01 d31) | `WX429` | `pin_line_closed` | `reopens_at` |
 | Clash — initials or PIN already held at this Store (M-04 d27, d32) | `23505` | `initials_clash`, `pin_clash` | the holder's name for initials; nothing for a PIN |
 | Not found, or not visible to this principal | `WX404` | `not_found` | — |
 | The Owner floor (M-04 d26) | `23514` | `owner_floor` | — |
-| Required field for this role missing — a Manager's PIN or email (M-04 d35, d33) | `23502` | `pin_required`, `email_required`, `initials_required` | — |
+| Required field for this role missing — a Manager's PIN or email (M-04 d35, d33); a new PIN at a promotion into Owner when the held one was set by a Manager (M-04 d55) | `23502` | `pin_required`, `email_required`, `initials_required` | — |
 | Wrong state for the act — re-sending to someone already enrolled, recovering while an Owner exists (M-04 d38, A-90) | `WX409` | `invalid_state` | what state — one value of the closed list below |
 | PIN pepper missing (A-115, A-127) | `XX000` | `pin_pepper_missing` | — |
 | An argument the database itself rejects — A-120's actor pair half null; `auth_user_link`'s null arguments | `22023` | `invalid_input` | the argument's name |
@@ -380,7 +380,7 @@ is a pull request both humans review (§7, workflow §4).
 |---|---|---|---|
 | `inactive` | The person is deactivated | `user_change_role`, `user_reset_request`, `user_invite_resend`, `user_set_pin`, `user_deactivate` (the fake since the M-04 review contract change; **D** with its correcting migration) | M-04 d44, d46, d48, d54 |
 | `active` | The person is already active | `user_reactivate` | M-04 d47 |
-| `pin_not_needed` | A new PIN given at reactivation where nothing clashes, or at a promotion of someone who already holds one | `user_reactivate`, `user_change_role` | M-04 d47, d49, d52 |
+| `pin_not_needed` | A new PIN given at reactivation where nothing clashes, or at a promotion of someone who already holds one that carries (last set by an Owner or the holder) | `user_reactivate`, `user_change_role` | M-04 d47, d49, d52, d55 |
 | `email_not_needed` | An email given with a demotion, which sends no invite | `user_change_role` | M-04 d53 |
 | `employee_has_no_pin` | A PIN given to, or set on, an Employee | `user_add`, `user_change_role`, `user_reactivate`, `user_set_pin` | M-04 d28, d39 |
 | `no_store` | An Employee or Manager with no Store, at Add or a demotion | `user_add`, `user_change_role` | M-04 d27 |
