@@ -1251,6 +1251,31 @@ describe("M-04 d61 — the new PIN at a promotion into Owner must differ from th
   });
 });
 
+describe("M-04 d62 — Set PIN refuses the same digits over a Manager-set PIN, by an Owner or the holder", () => {
+  it("JM sets KM's PIN 2468; the Owner re-sets 2468 — pin_required, nothing logged; KM re-sets their own 2468 — pin_required; the Owner sets 1357 — accepted and Owner-set, so a promotion then carries it", async () => {
+    const w = await twoManagers();
+    await c.user_set_pin(w.jmSession, { ...w.asJm, p_user_id: w.km.user_id, p_pin: "2468" });
+    const before = w.root.inspect().log.length;
+    await refused(c.user_set_pin(w.owner, { ...w.asOwner, p_user_id: w.km.user_id, p_pin: "2468" }), "pin_required");
+    const km = w.root.withSession(person(w.org.org_id, w.km.user_id));
+    const asKm = { p_actor_user_id: w.km.user_id, p_actor_initials: null, p_terminal_id: null, p_manager_pin: null };
+    await refused(c.user_set_pin(km, { ...asKm, p_user_id: w.km.user_id, p_pin: "2468" }), "pin_required");
+    expect(w.root.inspect().log.length).toBe(before);
+    await expect(c.manager_authorize_pin(w.storeA, { p_pin: "2468", p_terminal_id: w.t1, ...noStaff })).resolves.toMatchObject({ user_id: w.km.user_id, role: "manager" });
+    await expect(c.user_set_pin(w.owner, { ...w.asOwner, p_user_id: w.km.user_id, p_pin: "1357" })).resolves.toEqual({ user_id: w.km.user_id });
+    // Owner-set now: the promotion into Owner carries it (M-04 d55), and a PIN with it is pin_not_needed (d52).
+    await expect(c.user_change_role(w.owner, { ...w.asOwner, p_user_id: w.km.user_id, p_role: "owner", p_email: null, p_pin: null })).resolves.toMatchObject({ user_id: w.km.user_id });
+    await expect(c.manager_authorize_pin(w.storeA, { p_pin: "1357", p_terminal_id: w.t1, ...noStaff })).resolves.toMatchObject({ user_id: w.km.user_id, role: "owner" });
+  });
+
+  it("a Manager re-setting a Manager-set PIN to the same digits is accepted and it stays Manager-set", async () => {
+    const w = await twoManagers();
+    await c.user_set_pin(w.jmSession, { ...w.asJm, p_user_id: w.km.user_id, p_pin: "2468" });
+    await expect(c.user_set_pin(w.jmSession, { ...w.asJm, p_user_id: w.km.user_id, p_pin: "2468" })).resolves.toEqual({ user_id: w.km.user_id });
+    await refused(c.user_change_role(w.owner, { ...w.asOwner, p_user_id: w.km.user_id, p_role: "owner", p_email: null, p_pin: null }), "pin_required");
+  });
+});
+
 describe("M-04 d56 — clearing a PIN is logged only when one was held", () => {
   it("a Store-less Owner with no PIN: the clear succeeds and writes nothing; with one, it is logged once", async () => {
     const w = await world();

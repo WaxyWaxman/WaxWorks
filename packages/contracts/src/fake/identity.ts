@@ -514,6 +514,13 @@ export const identityHandlers: Record<string, Handler> = {
       if (x.clearPin(u)) x.log("users.log", u.user_id, "pin_cleared", who);
       return { user_id: u.user_id };
     }
+    // M-04 d62: a Manager-set PIN cannot become Owner-set or holder-set without a
+    // digit changing — the same digits, set by an Owner or by the holder, are
+    // refused as if no PIN were given, before any clash check; nothing is written.
+    // A Manager re-setting it to the same digits is unaffected (it stays Manager-set).
+    const heldByManager = x.tx.pins.has(u.user_id) && (x.tx.pinSetBy.get(u.user_id) ?? "manager") === "manager";
+    const asManager = who.by.user_id !== u.user_id && who.by.role !== "owner";
+    if (heldByManager && !asManager && x.tx.pins.get(u.user_id) === pin) x.refuse("pin_required");
     for (const st of u.store_ids) x.pinClash(st, pin, u.user_id, who);
     x.setPin(u, pin, who.by);
     // Logged as changed, never as a value (M-04 d28, A-93).
