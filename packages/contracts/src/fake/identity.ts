@@ -371,6 +371,9 @@ export const identityHandlers: Record<string, Handler> = {
       // M-04 d52: a PIN at promotion only for someone who holds none; changing one is Set PIN's.
       if (holdsPin && pin !== null) x.refuse("invalid_state", "pin_not_needed");
       if (!holdsPin && pin === null && (to === "manager" || u.store_ids.length > 0 || stale)) x.refuse("pin_required");
+      // M-04 d61: the replacement must differ from the Manager-set PIN it replaces;
+      // the same digits are refused as if no new PIN were given, before any clash check.
+      if (stale && pin !== null && x.tx.pins.get(u.user_id) === pin) x.refuse("pin_required");
       if (pin !== null) for (const st of u.store_ids) x.pinClash(st, pin, u.user_id, who);
     }
     // M-04 d43 (A-117): any promotion into Manager or Owner — Manager to Owner
