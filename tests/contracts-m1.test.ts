@@ -1229,6 +1229,28 @@ describe("M-04 d55 — a PIN a Manager set does not carry into Owner standing; o
   });
 });
 
+describe("M-04 d61 — the new PIN at a promotion into Owner must differ from the Manager-set one it replaces", () => {
+  it("JM sets KM's PIN 2468; promoted to Owner with 2468, KM is refused pin_required and nothing changes; with 1357, accepted and the old PIN is gone", async () => {
+    const w = await twoManagers();
+    await c.user_set_pin(w.jmSession, { ...w.asJm, p_user_id: w.km.user_id, p_pin: "2468" });
+    const before = w.root.inspect().log.length;
+    const promote = { ...w.asOwner, p_user_id: w.km.user_id, p_role: "owner" as const, p_email: null };
+    await refused(c.user_change_role(w.owner, { ...promote, p_pin: "2468" }), "pin_required");
+    expect(w.root.inspect().users.find((u) => u.user_id === w.km.user_id)!.role).toBe("manager");
+    expect(w.root.inspect().log.length).toBe(before);
+    await expect(c.manager_authorize_pin(w.storeA, { p_pin: "2468", p_terminal_id: w.t1, ...noStaff })).resolves.toMatchObject({ user_id: w.km.user_id, role: "manager" });
+    await expect(c.user_change_role(w.owner, { ...promote, p_pin: "1357" })).resolves.toMatchObject({ user_id: w.km.user_id });
+    await refused(c.manager_authorize_pin(w.storeA, { p_pin: "2468", p_terminal_id: w.t1, ...noStaff }), "pin_refused");
+    await expect(c.manager_authorize_pin(w.storeA, { p_pin: "1357", p_terminal_id: w.t1, ...noStaff })).resolves.toMatchObject({ user_id: w.km.user_id, role: "owner" });
+  });
+
+  it("a PIN an Owner set carries, so the same digits at the promotion are still pin_not_needed, not d61's refusal", async () => {
+    const w = await twoManagers();
+    const err = await refused(c.user_change_role(w.owner, { ...w.asOwner, p_user_id: w.km.user_id, p_role: "owner", p_email: null, p_pin: "3333" }), "invalid_state");
+    expect(err.detail).toBe("pin_not_needed");
+  });
+});
+
 describe("M-04 d56 — clearing a PIN is logged only when one was held", () => {
   it("a Store-less Owner with no PIN: the clear succeeds and writes nothing; with one, it is logged once", async () => {
     const w = await world();
