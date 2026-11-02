@@ -614,16 +614,19 @@ export type Database = {
         Row: {
           org_id: string
           pin_hash: string
+          set_by: string
           user_id: string
         }
         Insert: {
           org_id: string
           pin_hash: string
+          set_by?: string
           user_id: string
         }
         Update: {
           org_id?: string
           pin_hash?: string
+          set_by?: string
           user_id?: string
         }
         Relationships: [
