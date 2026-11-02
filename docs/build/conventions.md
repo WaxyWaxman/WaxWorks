@@ -364,7 +364,7 @@ is a pull request both humans review (§7, workflow §4).
 | Clash — initials or PIN already held at this Store (M-04 d27, d32) | `23505` | `initials_clash`, `pin_clash` | the holder's name for initials; nothing for a PIN |
 | Not found, or not visible to this principal | `WX404` | `not_found` | — |
 | The Owner floor (M-04 d26) | `23514` | `owner_floor` | — |
-| Required field for this role missing — a Manager's PIN or email (M-04 d35, d33); a new PIN at a promotion into Owner when the held one was set by a Manager (M-04 d55) | `23502` | `pin_required`, `email_required`, `initials_required` | — |
+| Required field for this role missing — a Manager's PIN or email (M-04 d35, d33); a new PIN at a promotion into Owner when the held one was set by a Manager, or when the PIN given equals the held one (M-04 d55, d61) | `23502` | `pin_required`, `email_required`, `initials_required` | — |
 | Wrong state for the act — re-sending to someone already enrolled, recovering while an Owner exists (M-04 d38, A-90) | `WX409` | `invalid_state` | what state — one value of the closed list below |
 | PIN pepper missing (A-115, A-127) | `XX000` | `pin_pepper_missing` | — |
 | An argument the database itself rejects — A-120's actor pair half null; `auth_user_link`'s null arguments | `22023` | `invalid_input` | the argument's name |
