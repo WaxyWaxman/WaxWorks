@@ -1,7 +1,7 @@
 # Wax Works — the build plan
 
 **Maintained by:** the coordinator, at the end of every build session. Read first by whoever picks up next.
-**Last updated:** 2026-11-01, sr-talbot's session — through #248; M-04 D in review, rework pass 3 approved; the register's M1 view brought to M-04 d50–d61
+**Last updated:** 2026-11-01, sr-talbot's session — through #251; M-04 D pass 3 built and reviewed (findings 50–62), two human items open; the register's M1 view brought to M-04 d50–d61
 
 The [workflow](workflow.md) says how an order moves; the [conventions](conventions.md)
 say what the code looks like; the [status table](status.md) says what has landed.
@@ -32,12 +32,15 @@ build: invented conventions, silent bugs, and context blown by reading everythin
 ## 2. Where we are — 2026-11-01
 
 **E-01 D is `Accepted`** (sr-talbot, 2026-10-31, verdict in #231). **M-04 D is `In review`**:
-built in #237, corrected in #241 (pass 1) and #248 (pass 2), each pass reviewed by
-qa-reviewer, architect and `/code-review` — 49 findings so far, finding 1 `discharged`
-by A-137. **Rework pass 3 is approved** (this session): Checklist rows 55 and 56 for
-M-04 d59 and d61, findings 37–40, 43, 45, 48 and 49 to the developer. It starts once the
-contract pull request carrying d61 into the fake has merged. Nothing on the **U** track
-exists beyond M0's shell. Read the rows, not this list.
+built in #237, corrected in #241 (pass 1), #248 (pass 2) and #251 (pass 3), each pass
+reviewed by qa-reviewer, architect and `/code-review` — 62 findings, finding 1 `discharged`
+by A-137, nothing blocking open. **Pass 3 landed with its review's findings 50–62 open**
+(#251 merged by sr-talbot before the findings were written; they follow in the next pull
+request). Two are a human's: finding 51 (a Manager-set PIN re-set to the same digits
+carries into Owner standing — `/flow-clarify M-04`) and finding 54 (which refusal wins
+when the re-check and an earlier check both apply — a draft A-n in the order's Needs a
+human). The rest are tests and harness, the register's, or the **U** order's. Nothing on
+the **U** track exists beyond M0's shell. Read the rows, not this list.
 
 | PR | What it did |
 |---|---|
@@ -52,13 +55,14 @@ exists beyond M0's shell. Read the rows, not this list.
 | [#242](https://github.com/WaxyWaxman/WaxWorks/pull/242), [#243](https://github.com/WaxyWaxman/WaxWorks/pull/243) | **M-04 d55** (a Manager-set PIN does not carry into Owner standing); **A-140** (the authoriser re-checked after the last lock) |
 | [#244](https://github.com/WaxyWaxman/WaxWorks/pull/244)–[#246](https://github.com/WaxyWaxman/WaxWorks/pull/246) | Finding 1 discharged; d56–d58; `app_internal` in conventions; pass 2 approved — rows 49–54 |
 | [#247](https://github.com/WaxyWaxman/WaxWorks/pull/247), [#248](https://github.com/WaxyWaxman/WaxWorks/pull/248) | **M-04 d59, d60**; **rework pass 2 built** — `user_pins.set_by`, the shared header in `app_internal`, the two-session race harness; findings 37–49 and their answers |
+| [#249](https://github.com/WaxyWaxman/WaxWorks/pull/249), [#250](https://github.com/WaxyWaxman/WaxWorks/pull/250) | **M-04 d61** (the new PIN at a promotion into Owner must differ from the held one); **pass 3 approved** — rows 55, 56; register rows M-04-T29–T33, T16/T20/T22/T27 `Stale`; then d61 in the fake |
+| [#251](https://github.com/WaxyWaxman/WaxWorks/pull/251) | **Rework pass 3 built** — `authoriser_recheck` returns the role it read; the four PIN writers record it (d59); `user_change_role` refuses an equal PIN (d61); `user_correct` re-checks before its initials loop; the race harness hardened (finding 39); the backfill test (finding 45). Reviewers' runs: pgTAP 842, `test:auth` 40 ×7, `pnpm test` 564 |
 
-**What the M-04 D order still needs before `Accepted`:** pass 3 built and checked
-(`/work-order check`, then the three reviewers), with no `should` finding open.
-Finding 38 is answered (d61, this session); 31 and 47 are answered in the register
-(this session); 41, 42, 44 and 46 by A-140's note and d60. The developer's pass-3
-lane is the correcting migrations and `tests/`; the fake's d61 comes first, in a
-contract pull request both owners review.
+**What the M-04 D order still needs before `Accepted`:** the two human items
+answered (findings 51 and 54 — a decision each); then either a small pass 4 for the
+test-only findings 50, 52, 53, 57–61 and whatever 51's answer changes, or an owner's
+verdict that carries them forward with owners named, as E-01 D's did. Findings 55
+and 56 go to the **U** order and `/qa`.
 
 **Production** is unchanged since 2026-10-13: M0's two migrations, never seeded, no
 hook, no pepper, no System Administrators. **M1's migrations have not been pushed**,
