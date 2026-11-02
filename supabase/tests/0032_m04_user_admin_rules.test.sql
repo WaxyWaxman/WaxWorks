@@ -1210,5 +1210,91 @@ reset role;
 select is((select selected_store_id from public.users where id = pg_temp.u('03')), pg_temp.s('a2'),
   'E-01 d40 - an Owner unassigned from the Store their session picked keeps the pick: an Owner reaches every Store');
 
+
+-- ════════════════════════════════════════════════════════════════════════════
+-- Rework pass 3 (2026-11-01): row 55 (M-04 d59), finding 40 (A-140's branches by
+-- behaviour), row 56 (M-04 d61).
+-- ════════════════════════════════════════════════════════════════════════════
+-- ── Row 55 and finding 40: app_internal.authoriser_recheck, called directly ──
+-- No session may call it (A-139), so these run as postgres, against Org C (above)
+-- with two more people: Cyd, an active Employee at C1; Cass, a deactivated Manager at C1.
+insert into public.users (id, org_id, role, initials, display_name, email, active) values
+  ('00000000-0000-0000-0002-0000000000c5', '00000000-0000-0000-0000-00000000000c', 'employee', 'CY', 'Cyd Employee', null,         true),
+  ('00000000-0000-0000-0002-0000000000c6', '00000000-0000-0000-0000-00000000000c', 'manager',  'CS', 'Cass Gone',    'cass@c.test', false);
+insert into public.store_assignments (org_id, user_id, store_id) values
+  ('00000000-0000-0000-0000-00000000000c', '00000000-0000-0000-0002-0000000000c5', '00000000-0000-0000-0001-0000000000c1'),
+  ('00000000-0000-0000-0000-00000000000c', '00000000-0000-0000-0002-0000000000c6', '00000000-0000-0000-0001-0000000000c1');
+-- What the re-check returned, or the refusal it raised.
+create function pg_temp.recheck(p_by uuid, p_role text, p_reach uuid[] default null, p_every boolean default false,
+                                p_org uuid default '00000000-0000-0000-0000-00000000000c') returns jsonb
+language plpgsql as $$
+declare v text; v_code text; v_msg text; v_detail text;
+begin
+  v := app_internal.authoriser_recheck(p_org, p_by, p_role, p_reach, p_every);
+  return jsonb_build_object('role', v);
+exception when others then
+  get stacked diagnostics v_code = returned_sqlstate, v_msg = message_text, v_detail = pg_exception_detail;
+  return jsonb_build_object('code', v_code, 'message', v_msg, 'details', nullif(v_detail, ''));
+end
+$$;
+create function pg_temp.recheck_refused(p_detail text) returns jsonb language sql immutable as $$
+  select jsonb_build_object('code', '42501', 'message', 'role_refused', 'details', p_detail)
+$$;
+select is(pg_temp.recheck(pg_temp.u('c1'), 'owner'), '{"role": "owner"}'::jsonb,
+  'M-04 d59 - authoriser_recheck returns the role it read: an active Owner, for an Owner-only act, owner');
+select is(pg_temp.recheck(pg_temp.u('c3'), 'manager', array[pg_temp.s('c1')]), '{"role": "manager"}'::jsonb,
+  'M-04 d59 - a Manager in reach, for a Manager-level act: manager — the role a PIN they set is recorded as');
+select is(pg_temp.recheck(pg_temp.u('c1'), 'manager', array[pg_temp.s('c2')], true), '{"role": "owner"}'::jsonb,
+  'A-140 - an Owner, for a Manager-level act at Stores they do not hold: owner — reach is asked of a Manager only');
+select is(pg_temp.recheck(pg_temp.u('c3'), 'manager', array[pg_temp.s('c1'), pg_temp.s('c2')]), '{"role": "manager"}'::jsonb,
+  'A-140 - a Manager sharing one of the subject''s Stores (C1 of C1, C2): accepted, M-04 d37''s one shared Store (finding 40)');
+select is(pg_temp.recheck(pg_temp.u('c3'), 'manager', array[pg_temp.s('c2')]), pg_temp.recheck_refused('owner'),
+  'A-140 - a Manager sharing none of them: role_refused, owner — reach lost (finding 40)');
+select is(pg_temp.recheck(pg_temp.u('c3'), 'manager', array[pg_temp.s('c1'), pg_temp.s('c2')], true), pg_temp.recheck_refused('owner'),
+  'A-140 - a Manager holding one of two Stores where every one is required (M-04 d30, a Manager''s own Stores): role_refused, owner (finding 40)');
+select is(pg_temp.recheck(pg_temp.u('c3'), 'owner'), pg_temp.recheck_refused('owner'),
+  'A-140 - a Manager, for an Owner-only act: role_refused, owner (finding 40)');
+select is(pg_temp.recheck(pg_temp.u('c5'), 'manager', array[pg_temp.s('c1')]), pg_temp.recheck_refused('manager'),
+  'A-140 - an active Employee, for a Manager-level act: role_refused, manager — the role the act requires (A-140''s note 3; finding 40)');
+select is(pg_temp.recheck(pg_temp.u('c6'), 'manager', array[pg_temp.s('c1')]), pg_temp.recheck_refused('manager'),
+  'A-140 - a deactivated Manager in reach: role_refused, manager — no longer active (finding 40)');
+select is(pg_temp.recheck(pg_temp.u('c2'), 'owner'), pg_temp.recheck_refused('owner'),
+  'A-140 - a deactivated Owner: role_refused, owner (finding 40)');
+select is(pg_temp.recheck(pg_temp.u('c1'), 'owner', null, false, '00000000-0000-0000-0000-00000000000a'), pg_temp.recheck_refused('owner'),
+  'A-140 - an Owner of another Organization is nobody here: role_refused (A-86)');
+
+-- ── Row 56: M-04 d61 — the new PIN at a promotion into Owner differs from the held one ──
+-- Mae, a Manager at A3, added by Olive; Theo (a Manager at A3) sets her PIN 2468.
+select pg_temp.desk(pg_temp.u('03'));
+insert into ids select 'mae', (pg_temp.add('manager', 'MZ', array[pg_temp.s('a3')], 'mae@a.test', '7401', 'Mae Third') ->> 'user_id')::uuid;
+reset role;
+select pg_temp.desk(pg_temp.id('theo'));
+select is(pg_temp.setpin(pg_temp.id('mae'), '2468'), jsonb_build_object('user_id', pg_temp.id('mae')),
+  'M-04 d61 - (Theo, a Manager sharing A3, sets Mae''s PIN 2468)');
+reset role;
+select is((select set_by from public.user_pins where user_id = pg_temp.id('mae')), 'manager',
+  'M-04 d61 - (recorded as set by a Manager, so a promotion into Owner must replace it: M-04 d55)');
+create temp table pins_61 as select user_id, pin_hash, set_by from public.user_pins;
+create temp table log_61 as select id, log from public.users;
+select pg_temp.desk(pg_temp.u('03'));
+select is(pg_temp.chrole(pg_temp.id('mae'), 'owner', null, '2468'), pg_temp.required('pin_required'),
+  'M-04 d61 - Olive promotes Mae into Owner with 2468, the PIN Theo set: refused 23502 pin_required, as if none were given');
+reset role;
+select is((select role from public.users where id = pg_temp.id('mae')), 'manager',
+  'M-04 d61 - Mae is still a Manager');
+select is((select count(*)::int from (select user_id, pin_hash, set_by from public.user_pins except select * from pins_61) x)
+        + (select count(*)::int from (select * from pins_61 except select user_id, pin_hash, set_by from public.user_pins) y), 0,
+  'M-04 d61 - user_pins unchanged');
+select is((select count(*)::int from public.users u join log_61 b using (id) where u.log is distinct from b.log), 0,
+  'M-04 d61 - and no users.log row: nothing was written');
+select pg_temp.desk(pg_temp.u('03'));
+select is(pg_temp.chrole(pg_temp.id('mae'), 'owner', null, '1357'),
+  jsonb_build_object('user_id', pg_temp.id('mae'), 'invite', true, 'email', 'mae@a.test'),
+  'M-04 d61 - with 1357, a PIN that differs: accepted');
+reset role;
+select ok((select role = 'owner' from public.users where id = pg_temp.id('mae'))
+      and (select pin_hash = pg_temp.pin_hash('1357') and set_by = 'owner' from public.user_pins where user_id = pg_temp.id('mae')),
+  'M-04 d61, d59 - Mae is an Owner, her PIN replaced and recorded as set by an Owner');
+
 select * from finish();
 rollback;
