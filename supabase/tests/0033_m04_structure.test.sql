@@ -369,5 +369,51 @@ select is(array[app_internal.pin_setter('00000000-0000-0000-0000-000000000001', 
   array['holder', 'holder', 'owner', 'manager'],
   'M-04 d55 - the holder setting their own is the holder, whatever their role; otherwise the setter''s role');
 
+
+-- ════════════════════════════════════════════════════════════════════════════
+-- Rework pass 3 (2026-11-01): row 55 (M-04 d59), row 56 (M-04 d61), findings 43, 49.
+-- ════════════════════════════════════════════════════════════════════════════
+-- ── Row 55: M-04 d59 — the setter recorded is the role the re-check read ──
+-- In each of the four that write a PIN, the re-check's return is assigned to a
+-- variable, every pin_setter call takes that variable as the setter's role, and
+-- the header's v_by_role (read before the wait) reaches no pin_setter call.
+create function pg_temp.recheck_var(p_name text) returns text language sql stable as $$
+  select (regexp_match(pg_temp.src(p_name), '(\w+)\s*:=\s*app_internal\.authoriser_recheck\(', 'i'))[1]
+$$;
+select is((select array_agg(f order by f) from unnest(array['user_add', 'user_change_role', 'user_reactivate', 'user_set_pin']) f
+            where pg_temp.recheck_var(f) is null
+               or pg_temp.times(f, 'app_internal.pin_setter(') = 0
+               or exists (select 1 from pg_temp.calls(f, 'app_internal.pin_setter') c
+                           where c.args !~* ('^\s*v_by_id,\s*' || pg_temp.recheck_var(f) || ',')
+                              or c.args ~* '\mv_by_role\M')),
+  null, 'M-04 d59 - in user_add, user_change_role, user_reactivate and user_set_pin the setter recorded is the role authoriser_recheck returned, and v_by_role reaches no user_pins write');
+select ok(pg_temp.src('authoriser_recheck') ~* 'return\s+v_role\s*;',
+  'M-04 d59 - app_internal.authoriser_recheck returns the role it read');
+select is((select format_type(p.prorettype, null) from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+            where n.nspname = 'app_internal' and p.proname = 'authoriser_recheck'),
+  'text', 'M-04 d59 - (its return type is the role, text)');
+
+-- ── Row 56: M-04 d61 — the given PIN compared with the held one before any clash ──
+select ok(pg_temp.src('user_change_role') ~* 'if\s+v_stale\s+and\s+v_hash\s*=\s*v_held\s+then\s+raise\s+exception\s+''pin_required'''
+      and pg_temp.at('user_change_role', 'v_hash = v_held') > pg_temp.at('user_change_role', 'v_hash := app_internal.pin_hash(p_pin)')
+      and pg_temp.at('user_change_role', 'v_hash = v_held') < pg_temp.at('user_change_role', 'app_internal.pin_taken'),
+  'M-04 d61 - user_change_role compares the given PIN, through app_internal.pin_hash, with the held hash in d55''s replace case, before any clash check');
+select ok(pg_temp.at('user_change_role', 'into v_set_by, v_held') > pg_temp.subject_lock('user_change_role')
+      and pg_temp.src('user_change_role') ~* 'select\s+p\.set_by,\s*p\.pin_hash\s+into\s+v_set_by,\s*v_held\s+from\s+public\.user_pins',
+  'M-04 d61 - (the held hash is read under the subject''s lock, A-138 step 3)');
+
+-- ── Finding 43: the re-check before the initials check, in all four ──
+select is((select array_agg(f order by f) from unnest(array['user_add', 'user_assign', 'user_reactivate', 'user_correct']) f
+            where not (pg_temp.at(f, 'app_internal.authoriser_recheck(') > 0
+                   and pg_temp.at(f, 'app_internal.authoriser_recheck(') < pg_temp.at(f, 'initials_clash'))),
+  null, 'A-140 - user_add, user_assign, user_reactivate and user_correct re-check the authoriser before the initials check, so one who stopped qualifying learns no holder''s name (finding 43)');
+
+-- ── Finding 49: a clear reaches the Stores' lock only with no Store to lock ──
+select ok(pg_temp.src('user_set_pin') ~* 'if\s+p_pin\s+is\s+null\s+and\s+cardinality\(v_stores\)\s*>\s*0\s+then\s+raise\s+exception\s+''pin_required'''
+      and pg_temp.at('user_set_pin', 'cardinality(v_stores) > 0') < pg_temp.at('user_set_pin', 'app_internal.lock_store_assignments'),
+  'M-04 d35, d56 - user_set_pin refuses a clear for anyone holding a Store before the Stores'' lock, so a clear locks an empty Store set (finding 49)');
+select ok(pg_temp.src('lock_store_assignments') ~* 's\.id\s*=\s*any\(p_store_ids\)' and pg_temp.src('lock_store_assignments') ~* 'a\.store_id\s*=\s*any\(p_store_ids\)',
+  'A-138 - (lock_store_assignments locks only rows of the Stores it is given: none for an empty set)');
+
 select * from finish();
 rollback;

@@ -13,10 +13,21 @@ import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-const shell = process.platform === "win32";
+/**
+ * How to start the Supabase CLI with these arguments. On Windows the CLI may be
+ * a shim only a shell resolves, so it runs through one — as a single command
+ * line, because arguments passed beside `shell: true` are deprecated (DEP0190;
+ * M-04 D M1 finding 39). Elsewhere it is spawned directly. Every argument here is
+ * the harness's own (a subcommand, a flag, a temporary file path), never input.
+ */
+export function supabaseCommand(args: string[]): { command: string; args: string[]; shell: boolean } {
+  if (process.platform !== "win32") return { command: "supabase", args, shell: false };
+  return { command: ["supabase", ...args.map((a) => (/[\s"]/.test(a) ? `"${a.replace(/"/g, '\\"')}"` : a))].join(" "), args: [], shell: true };
+}
 
 function supabase(args: string[]): string {
-  const run = spawnSync("supabase", args, { encoding: "utf8", shell, maxBuffer: 16 * 1024 * 1024 });
+  const c = supabaseCommand(args);
+  const run = spawnSync(c.command, c.args, { encoding: "utf8", shell: c.shell, maxBuffer: 16 * 1024 * 1024 });
   if (run.status !== 0) {
     throw new Error(`supabase ${args.join(" ")} failed: ${run.stdout} ${run.stderr}`);
   }
