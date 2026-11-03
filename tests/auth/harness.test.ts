@@ -2,7 +2,7 @@
 // the CLI (an AI agent or not). These hold the parser to all three shapes, so a
 // read cannot come back silently empty in one environment and full in the other.
 import { describe, expect, it } from "vitest";
-import { parseQueryOutput } from "./harness";
+import { parseQueryOutput, supabaseCommand } from "./harness";
 
 describe("A-126 harness — supabase db query output, with or without an AI agent", () => {
   it("a bare array of rows (CI, a plain shell)", () => {
@@ -27,5 +27,26 @@ describe("A-126 harness — supabase db query output, with or without an AI agen
   it("anything else throws rather than reading as empty", () => {
     expect(() => parseQueryOutput('{"boundary": "b"}')).toThrow(/neither rows nor a command tag/);
     expect(() => parseQueryOutput("connection refused")).toThrow();
+  });
+});
+
+describe("M-04 D M1 finding 61 — supabaseCommand refuses what cmd.exe would interpret, rather than escaping it", () => {
+  it("on Windows, a plain argument passes, and one with whitespace is quoted", () => {
+    expect(supabaseCommand(["db", "query", "--local", "-f", "C:\\Temp\\wx-race-1\\q.sql"], "win32")).toEqual({
+      command: "supabase db query --local -f C:\\Temp\\wx-race-1\\q.sql",
+      args: [],
+      shell: true,
+    });
+    expect(supabaseCommand(["-f", "C:\\Users\\A B\\q.sql"], "win32").command).toBe('supabase -f "C:\\Users\\A B\\q.sql"');
+  });
+
+  it("on Windows, an argument holding a quote, %, ^, &, |, <, > or ! is refused", () => {
+    for (const bad of ['a"b', "50%", "a^b", "a&b", "a|b", "a<b", "a>b", "a!b"]) {
+      expect(() => supabaseCommand(["-f", bad], "win32"), bad).toThrow(/finding 61/);
+    }
+  });
+
+  it("elsewhere the arguments are passed as they are, with no shell", () => {
+    expect(supabaseCommand(["-f", 'a"b'], "linux")).toEqual({ command: "supabase", args: ["-f", 'a"b'], shell: false });
   });
 });

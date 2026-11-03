@@ -19,10 +19,21 @@ import { join } from "node:path";
  * line, because arguments passed beside `shell: true` are deprecated (DEP0190;
  * M-04 D M1 finding 39). Elsewhere it is spawned directly. Every argument here is
  * the harness's own (a subcommand, a flag, a temporary file path), never input.
+ * cmd.exe honours no escape inside quotes, so an argument holding a character it
+ * would interpret (`"`, `%`, `^`, `&`, `|`, `<`, `>`, `!`) is refused, not escaped
+ * (finding 61); whitespace alone is quoted.
  */
-export function supabaseCommand(args: string[]): { command: string; args: string[]; shell: boolean } {
-  if (process.platform !== "win32") return { command: "supabase", args, shell: false };
-  return { command: ["supabase", ...args.map((a) => (/[\s"]/.test(a) ? `"${a.replace(/"/g, '\\"')}"` : a))].join(" "), args: [], shell: true };
+export function supabaseCommand(
+  args: string[],
+  platform: NodeJS.Platform = process.platform,
+): { command: string; args: string[]; shell: boolean } {
+  if (platform !== "win32") return { command: "supabase", args, shell: false };
+  for (const a of args) {
+    if (/["%^&|<>!]/.test(a)) {
+      throw new Error(`supabaseCommand: ${JSON.stringify(a)} holds a character cmd.exe would interpret; refused, not escaped (M-04 D M1 finding 61)`);
+    }
+  }
+  return { command: ["supabase", ...args.map((a) => (/\s/.test(a) ? `"${a}"` : a))].join(" "), args: [], shell: true };
 }
 
 function supabase(args: string[]): string {
