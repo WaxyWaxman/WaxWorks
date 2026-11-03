@@ -480,6 +480,23 @@ describe("S-01 d3 — recovery restores an Owner, and A-90 refuses owner_recover
     const orgLog = w.root.inspect().log.filter((l) => l.table === "organizations.log" && l.subject_id === w.org.org_id);
     expect(orgLog.map((l) => l.actor_user_id)).toContain(SYSADMIN);
   });
+
+  it("S-01 d8 — owner_reset_request to a deactivated Owner is refused inactive, nothing logged; accepted once reactivated", async () => {
+    const w = await world();
+    const sys = w.root.withSession(sysadminSession);
+    const ao = await c.user_add(w.owner, { ...w.asOwner, p_display_name: "A. Okoye", p_initials: null, p_role: "owner", p_email: "ao@example.test", p_store_ids: [], p_pin: null });
+    await c.user_deactivate(w.owner, { ...w.asOwner, p_user_id: ao.user_id });
+    const before = w.root.inspect().log.length;
+    const err = await refused(c.owner_reset_request(sys, { p_actor_user_id: SYSADMIN, p_org_id: w.org.org_id, p_user_id: ao.user_id }), "invalid_state");
+    expect(err.detail).toBe("inactive");
+    expect(w.root.inspect().log.length).toBe(before);
+    // The Organization still has an active Owner, so the remedy is inside (S-01 d8): reactivated from inside, the reset then sends.
+    await c.user_reactivate(w.owner, { ...w.asOwner, p_user_id: ao.user_id, p_initials: null, p_pin: null });
+    await expect(c.owner_reset_request(sys, { p_actor_user_id: SYSADMIN, p_org_id: w.org.org_id, p_user_id: ao.user_id })).resolves.toEqual({ user_id: ao.user_id, email: "ao@example.test" });
+  });
+  // S-01 d9 (a reactivation by owner_recover logs on the person too) is in the fake but has no
+  // test here: the Owner floor (M-04 d26) leaves no path through the API to an Organization with
+  // no active Owner. The D order's pgTAP constructs that state directly (S-01-D-M1 row 19).
 });
 
 describe("A-110 — a System Administrator's functions accept only a sysadmin principal, and every other function refuses one (A-90)", () => {
