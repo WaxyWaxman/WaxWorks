@@ -57,11 +57,16 @@ describe("M-04 D M1 row 49 — M-04 d55: a PIN present before the set_by column 
   it(`M-04 d55 — ${MIGRATION}, run against user_pins with a row already in it, reads that row as set by a Manager`, () => {
     const user = org.people.manager!.id;
     expect(migration).not.toContain("$wxmig$");
+    // Finding 53: on a shared local stack another session's lock on user_pins
+    // fails the drop in two seconds, rather than queueing every later user_pins
+    // query behind it until the test's own timeout.
     const before = rolledBack(`
+    set local lock_timeout = '2s';
     alter table public.user_pins drop column set_by;            -- user_pins as it was before ${MIGRATION}
     select string_agg(attname, ',' order by attnum) into v from pg_catalog.pg_attribute
      where attrelid = 'public.user_pins'::regclass and attnum > 0 and not attisdropped;`);
     const read = rolledBack(`
+    set local lock_timeout = '2s';
     alter table public.user_pins drop column set_by;            -- user_pins as it was before ${MIGRATION}
     if not exists (select 1 from public.user_pins where user_id = '${user}') then
       raise exception 'the fixture''s PIN row is missing';

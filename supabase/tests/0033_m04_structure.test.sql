@@ -415,5 +415,59 @@ select ok(pg_temp.src('user_set_pin') ~* 'if\s+p_pin\s+is\s+null\s+and\s+cardina
 select ok(pg_temp.src('lock_store_assignments') ~* 's\.id\s*=\s*any\(p_store_ids\)' and pg_temp.src('lock_store_assignments') ~* 'a\.store_id\s*=\s*any\(p_store_ids\)',
   'A-138 - (lock_store_assignments locks only rows of the Stores it is given: none for an empty set)');
 
+
+-- ════════════════════════════════════════════════════════════════════════════
+-- Rework pass 4 (2026-11-01): row 57 (M-04 d62), row 58 (A-141), finding 50.
+-- ════════════════════════════════════════════════════════════════════════════
+-- ── Row 57: M-04 d62 — Set PIN compares the given PIN with a Manager-set held one ──
+-- Refused when the held PIN is Manager-set and the setter is not acting as a
+-- Manager (the holder, or the re-check read an Owner); after the re-check (whose
+-- role it uses, d59), after the PIN is hashed, before any clash check.
+select ok(pg_temp.src('user_set_pin') ~* 'if\s+v_set_by\s*=\s*''manager''\s+and\s+\(v_by_id\s*=\s*v_u\.id\s+or\s+v_set_role\s*=\s*''owner''\)\s+and\s+v_hash\s*=\s*v_held\s+then\s+raise\s+exception\s+''pin_required'''
+      and pg_temp.at('user_set_pin', 'v_hash = v_held') > pg_temp.at('user_set_pin', 'v_set_role := app_internal.authoriser_recheck(')
+      and pg_temp.at('user_set_pin', 'v_hash = v_held') > pg_temp.at('user_set_pin', 'v_hash := app_internal.pin_hash(p_pin)')
+      and pg_temp.at('user_set_pin', 'v_hash = v_held') < pg_temp.at('user_set_pin', 'app_internal.pin_taken'),
+  'M-04 d62 - user_set_pin refuses pin_required when the PIN given, through app_internal.pin_hash, equals a Manager-set held one and the holder or an Owner sets it: after the re-check, before any clash check');
+select ok(pg_temp.at('user_set_pin', 'into v_set_by, v_held') > pg_temp.subject_lock('user_set_pin')
+      and pg_temp.src('user_set_pin') ~* 'select\s+p\.set_by,\s*p\.pin_hash\s+into\s+v_set_by,\s*v_held\s+from\s+public\.user_pins\s+p\s+where\s+p\.org_id\s*=\s*v_org_id\s+and\s+p\.user_id\s*=\s*v_u\.id',
+  'M-04 d62 - (the held PIN and its setter are read under the subject''s lock, A-138 step 3)');
+
+-- ── Finding 50: set_by is written through app_internal.pin_setter, and no other way ──
+select is((select array_agg(distinct f order by f) from unnest(pg_temp.ten()) f,
+                  lateral regexp_matches(pg_temp.src(f), 'insert\s+into\s+public\.user_pins\s*\(([^)]*)\)([^;]*);', 'gi') m
+            where m[1] !~* '\mset_by\M' or m[2] !~* 'app_internal\.pin_setter\('),
+  null, 'M-04 d55, d59 - every insert into user_pins names set_by, and its values take it from app_internal.pin_setter (finding 50)');
+select is((select array_agg(distinct f order by f) from unnest(pg_temp.ten()) f,
+                  lateral regexp_matches(pg_temp.src(f), '\mset_by\s*=\s*([^\s,;]+)', 'gi') m
+            where m[1] !~* '^(excluded\.set_by|app_internal\.pin_setter\()'),
+  null, 'M-04 d55, d59 - every assignment of set_by in the ten is app_internal.pin_setter''s value or the insert''s own (excluded.set_by): no setter is written another way (finding 50)');
+
+-- ── Row 58: A-141 — where the re-check sits among the checks after the last lock ──
+-- Before it: the act's own lookups and no-op returns, and the checks A-138 places
+-- after its last step, so where both apply the earlier refusal stands.
+select ok(pg_temp.at('user_change_role', 'app_internal.authoriser_recheck(') > 0
+      and pg_temp.at('user_change_role', 'if v_u.role = p_role then') > 0
+      and pg_temp.at('user_change_role', 'if v_u.role = p_role then') < pg_temp.at('user_change_role', 'app_internal.authoriser_recheck(')
+      and pg_temp.at('user_change_role', '''invite'', false') < pg_temp.at('user_change_role', 'app_internal.authoriser_recheck(')
+      and pg_temp.at('user_change_role', 'detail = ''inactive''') > 0
+      and pg_temp.at('user_change_role', 'detail = ''inactive''') < pg_temp.at('user_change_role', 'app_internal.authoriser_recheck(')
+      and pg_temp.at('user_change_role', 'owner_floor') > 0
+      and pg_temp.at('user_change_role', 'owner_floor') < pg_temp.at('user_change_role', 'app_internal.authoriser_recheck('),
+  'A-141 - in user_change_role the same-role return, inactive and owner_floor each precede the re-check: the earlier check''s answer stands');
+select ok(pg_temp.at('user_reactivate', 'detail = ''active''') > 0
+      and pg_temp.at('user_reactivate', 'detail = ''active''') < pg_temp.at('user_reactivate', 'app_internal.authoriser_recheck('),
+  'A-141 - in user_reactivate active precedes the re-check');
+select ok(pg_temp.at('user_deactivate', 'detail = ''inactive''') > 0
+      and pg_temp.at('user_deactivate', 'detail = ''inactive''') < pg_temp.at('user_deactivate', 'app_internal.authoriser_recheck(')
+      and pg_temp.at('user_deactivate', 'owner_floor') < pg_temp.at('user_deactivate', 'app_internal.authoriser_recheck('),
+  'A-141 - in user_deactivate inactive (M-04 d54) and owner_floor precede the re-check');
+-- After it: any check whose refusal names another person, and every write.
+select is((select array_agg(f order by f) from unnest(pg_temp.ten()) f
+            where pg_temp.at(f, 'app_internal.authoriser_recheck(') = 0
+               or (pg_temp.at(f, 'initials_clash') > 0 and pg_temp.at(f, 'initials_clash') < pg_temp.at(f, 'app_internal.authoriser_recheck('))
+               or (pg_temp.at(f, 'app_internal.initials_holder') > 0 and pg_temp.at(f, 'app_internal.initials_holder') < pg_temp.at(f, 'app_internal.authoriser_recheck('))
+               or pg_temp.at(f, 'app_internal.authoriser_recheck(') > coalesce(pg_temp.first_write(f), 2147483647)),
+  null, 'A-141 - in each of the ten the re-check precedes any initials_clash (a refusal naming another person) and every write');
+
 select * from finish();
 rollback;

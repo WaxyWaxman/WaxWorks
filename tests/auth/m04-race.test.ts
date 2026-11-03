@@ -26,6 +26,10 @@
 // that ends early fails the wait at once with its output — or, if it ended
 // before holding anything, is started again (holding(), below); and whatever
 // happens, the blocker is killed and awaited before the test returns.
+//
+// Rework pass 4: a request is counted as waiting only in the chain of lock waits
+// rooted at this blocker (finding 59); stopping a blocker also ends its backend,
+// and only an end seen before the stop is retried (finding 52).
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { spawn } from "node:child_process";
 import { randomUUID } from "node:crypto";
@@ -37,17 +41,26 @@ import { enrolAndSignIn, passkeyPage } from "./browser";
 import { makeOrg, type Org } from "./fixtures";
 
 interface Blocker {
+  /** The tag its SQL carries and, once it holds its row, its application_name's suffix. */
+  tag: string;
   /** Resolves when the blocker's connection has ended. */
   done: Promise<{ status: number | null; out: string }>;
   /** Whether it has ended, and what it printed so far. */
   ended(): boolean;
   out(): string;
-  /** Ends it, if it has not ended, and waits for that. */
+  /** Ends it, if it has not ended, and waits for that; a blocker also ends its backend. */
   stop(): Promise<void>;
 }
 
-/** Starts one statement as postgres on its own connection. */
-function background(text: string): Blocker {
+/**
+ * Starts one statement as postgres on its own connection. Finding 52 asked
+ * whether, under `shell: true` on Windows, `child.kill()` leaves the CLI and its
+ * connection alive. Measured 2026-11-03 (supabase 2.117.0): `kill()` ended both
+ * CLI processes and the backend within 1.5 s, while `taskkill /T /F` ended the
+ * processes and left the backend sleeping. So `kill()` stays, and a blocker's
+ * stop also ends its backend by its tag (below), whichever way the CLI ended.
+ */
+function background(text: string, tag: string): Blocker {
   const dir = mkdtempSync(join(tmpdir(), "wx-race-"));
   const file = join(dir, "q.sql");
   writeFileSync(file, text, "utf8");
@@ -65,6 +78,7 @@ function background(text: string): Blocker {
     });
   });
   return {
+    tag,
     done,
     ended: () => ended,
     out: () => out,
@@ -81,7 +95,7 @@ function background(text: string): Blocker {
  * `release` — a boolean SQL expression — is true.
  */
 function blocker(rowId: string, tag: string, release: string): Blocker {
-  return background(`do $wx$ /* wx_race_blocker ${tag} */
+  const b = background(`do $wx$ /* wx_race_blocker ${tag} */
 declare t0 timestamptz := clock_timestamp();
 begin
   perform 1 from public.users where id = '${rowId}' for no key update;
@@ -94,16 +108,39 @@ begin
     end if;
     perform pg_catalog.pg_sleep(0.05);
   end loop;
-end $wx$`);
+end $wx$`, tag);
+  return {
+    ...b,
+    async stop() {
+      await b.stop();
+      // Whatever ended the CLI, its backend ends too, so nothing queues behind an
+      // orphan until the loop's own timeout (finding 52).
+      sql(`select pg_catalog.pg_terminate_backend(pid) from pg_catalog.pg_stat_activity
+            where query like '%wx_race_blocker ${tag} %' and pid <> pg_catalog.pg_backend_pid()`);
+    },
+  };
 }
 
 const count = (where: string) =>
   sql<{ n: number }>(`select count(*)::int as n from pg_catalog.pg_stat_activity where ${where}`)[0]!.n;
 const blockerHolds = (tag: string) => count(`application_name = 'wx_race_hold_${tag}'`);
-/** Requests calling `fn` that wait on a lock — the SQL the blocker and the release check can use too. */
-const waitingSql = (fn: string) =>
-  `(select count(*) from pg_catalog.pg_stat_activity where wait_event_type = 'Lock' and query like '%${fn}%' and query not like '%wx_race_blocker%' and query not like '%pg_stat_activity%')`;
-const waiting = (fn: string) => sql<{ n: number }>(`select ${waitingSql(fn)}::int as n`)[0]!.n;
+/**
+ * Requests calling `fn` that wait on a lock behind this blocker — directly, or
+ * behind a request that does — so another session calling `fn` on the same stack
+ * is never counted (finding 59). `root` is the blocker's pid as SQL: its own
+ * `pg_backend_pid()` inside its release check, its application_name from outside.
+ */
+const waitingSql = (fn: string, root: string) =>
+  `(with recursive chain(pid) as (select ${root}
+      union select a.pid from pg_catalog.pg_stat_activity a join chain c on c.pid = any(pg_catalog.pg_blocking_pids(a.pid)))
+    select count(*) from pg_catalog.pg_stat_activity a join chain c on c.pid = a.pid
+     where a.wait_event_type = 'Lock' and a.query like '%${fn}%')`;
+/** The release check's root: the blocker itself. */
+const self = "pg_catalog.pg_backend_pid()";
+const waiting = (fn: string, b: Blocker) =>
+  sql<{ n: number }>(
+    `select ${waitingSql(fn, `(select pid from pg_catalog.pg_stat_activity where application_name = 'wx_race_hold_${b.tag}')`)}::int as n`,
+  )[0]!.n;
 
 /** Polls `test` until it holds; fails at once, with the blocker's output, if the blocker has ended. */
 async function until(what: string, b: Blocker, test: () => boolean, ms = 30_000): Promise<void> {
@@ -123,7 +160,9 @@ async function until(what: string, b: Blocker, test: () => boolean, ms = 30_000)
  * Observed once in eight runs (2026-11-01, finding 39): the CLI process
  * (`supabase.exe` 2.117.0, a compiled wrapper beside `supabase-go.exe`) ended
  * before connecting, printing a JavaScript code frame. Anything after the hold
- * is never retried: there, an early end fails the test with its output.
+ * is never retried: there, an early end fails the test with its output. Only an
+ * end seen before this side stops it counts as early: a timeout with a live
+ * blocker is not retried (finding 52).
  */
 async function holding(rowId: string, tag: string, release: string): Promise<Blocker> {
   for (let attempt = 1; ; attempt++) {
@@ -133,8 +172,9 @@ async function holding(rowId: string, tag: string, release: string): Promise<Blo
       await until(`the blocker to hold its row (attempt ${attempt})`, b, () => blockerHolds(t) === 1);
       return b;
     } catch (e) {
+      const endedByItself = b.ended(); // read before stop(), which always ends it
       await b.stop();
-      const early = b.ended() && blockerHolds(t) === 0;
+      const early = endedByItself && blockerHolds(t) === 0;
       console.log(`race blocker attempt ${attempt} ended before holding its row: ${String(e)}`);
       if (!early || attempt >= 3) throw e;
     }
@@ -210,10 +250,10 @@ const activeOwners = (org: Org) =>
  * waiting behind the first; the blocker commits when both wait.
  */
 async function race(hold: string, tag: string, first: () => ReturnType<typeof rest>, second: () => ReturnType<typeof rest>) {
-  const b = await holding(hold, tag, `${waitingSql("user_change_role")} >= 2`);
+  const b = await holding(hold, tag, `${waitingSql("user_change_role", self)} >= 2`);
   try {
     const one = first();
-    await until("the first request to wait on the Owners' lock", b, () => waiting("user_change_role") === 1);
+    await until("the first request to wait on the Owners' lock", b, () => waiting("user_change_role", b) === 1);
     const two = second();
     const [r1, r2, rb] = await Promise.all([one, two, b.done]);
     expect(rb.status, `blocker: ${rb.out}`).toBe(0);
@@ -275,6 +315,7 @@ describe("M-04 D M1 row 53 — A-140: the authoriser is re-checked after the las
     console.log(`A-140 race: after ${JSON.stringify(roles(three.org))}`);
     expect(r1.status).toBe(200);
     expect(r1.body).toEqual({ user_id: p.o2!.id, invite: false, email: null });
+    expect(r2.status).toBe(403); // finding 57: the status, not only the body
     expect(r2.body).toMatchObject({ code: "42501", message: "role_refused", details: "owner" });
     expect(roles(three.org)).toMatchObject({ o1: "owner", o2: "manager", o3: "owner" });
     // Nothing of O2's refused act was written: O3's log holds no role_changed.
@@ -297,6 +338,9 @@ describe("M-04 D M1 row 55 — M-04 d59: the setter recorded is the authoriser's
       { key: "y", role: "owner", initials: "OY", stores: ["A"], pin: "4312" },
       { key: "mo", role: "manager", initials: "MO", stores: ["A"], pin: "4313" },
     ]);
+    // Finding 50: Mo's fixture PIN is made Owner-set, so a set_by of 'manager'
+    // after the race can only be the race's own write, not the fixture's default.
+    sql(`update public.user_pins set set_by = 'owner' where user_id = '${org.people.mo!.id}'`);
     x = await personalSession(org.people.x!.email);
     y = await personalSession(org.people.y!.email);
   });
@@ -308,15 +352,20 @@ describe("M-04 D M1 row 55 — M-04 d59: the setter recorded is the authoriser's
   it("M-04 d59 — X, an Owner, sets Mo's PIN while Y demotes X during the wait: accepted, set_by = 'manager'; Mo's promotion into Owner then requires a new PIN (M-04 d55)", async () => {
     const p = org.people;
     const tag = `d59_${runId()}`;
+    const pinOf = () =>
+      sql<{ set_by: string; is_new: boolean }>(
+        `select p.set_by, p.pin_hash = app_internal.pin_hash('4399') as is_new from public.user_pins p where p.user_id = '${p.mo!.id}'`,
+      )[0];
+    expect(pinOf(), "Mo's fixture PIN, before the race (finding 50)").toEqual({ set_by: "owner", is_new: false });
     // Held: Mo's row, the subject X's Set PIN locks at A-138 step 3. Released once
     // Y's demotion of X has committed while X's act waits.
     const b = await holding(p.mo!.id, tag,
-      `${waitingSql("user_set_pin")} >= 1 and (select role from public.users where id = '${p.x!.id}') = 'manager'`);
+      `${waitingSql("user_set_pin", self)} >= 1 and (select role from public.users where id = '${p.x!.id}') = 'manager'`);
     let set!: Awaited<ReturnType<typeof rest>>;
     let demoted!: Awaited<ReturnType<typeof rest>>;
     try {
       const setting = atDesk("user_set_pin", x, p.x!.id, { p_user_id: p.mo!.id, p_pin: "4399" });
-      await until("X's Set PIN to wait on Mo's row", b, () => waiting("user_set_pin") === 1);
+      await until("X's Set PIN to wait on Mo's row", b, () => waiting("user_set_pin", b) === 1);
       demoted = await atDesk("user_change_role", y, p.y!.id, { p_user_id: p.x!.id, p_role: "manager", p_email: null, p_pin: null });
       const [r, rb] = await Promise.all([setting, b.done]);
       set = r;
@@ -324,7 +373,8 @@ describe("M-04 D M1 row 55 — M-04 d59: the setter recorded is the authoriser's
     } finally {
       await b.stop();
     }
-    const setBy = sql<{ set_by: string }>(`select set_by from public.user_pins where user_id = '${p.mo!.id}'`)[0]?.set_by;
+    const pin = pinOf();
+    const setBy = pin?.set_by;
     console.log(`M-04 d59 race: Y demotes X -> ${demoted.status} ${JSON.stringify(demoted.body)}`);
     console.log(`M-04 d59 race: X sets Mo's PIN -> ${set.status} ${JSON.stringify(set.body)}, set_by ${setBy}`);
     expect(demoted.status).toBe(200);
@@ -332,6 +382,7 @@ describe("M-04 D M1 row 55 — M-04 d59: the setter recorded is the authoriser's
     expect(set.body).toEqual({ user_id: p.mo!.id });
     expect(roles(org)).toMatchObject({ x: "manager", y: "owner", mo: "manager" });
     expect(setBy).toBe("manager");
+    expect(pin?.is_new, "Mo's PIN is the 4399 X's act wrote (finding 50)").toBe(true);
     // M-04 d55: a PIN a Manager set does not carry into Owner standing.
     const promoted = await atDesk("user_change_role", y, p.y!.id, { p_user_id: p.mo!.id, p_role: "owner", p_email: null, p_pin: null });
     console.log(`M-04 d59 race: Y promotes Mo into Owner without a new PIN -> ${promoted.status} ${JSON.stringify(promoted.body)}`);

@@ -1296,5 +1296,63 @@ select ok((select role = 'owner' from public.users where id = pg_temp.id('mae'))
       and (select pin_hash = pg_temp.pin_hash('1357') and set_by = 'owner' from public.user_pins where user_id = pg_temp.id('mae')),
   'M-04 d61, d59 - Mae is an Owner, her PIN replaced and recorded as set by an Owner');
 
+
+-- ════════════════════════════════════════════════════════════════════════════
+-- Rework pass 4 (2026-11-01): row 57 (M-04 d62).
+-- ════════════════════════════════════════════════════════════════════════════
+-- ── Row 57: M-04 d62 — Set PIN refuses the same digits over a Manager-set PIN, by an Owner or the holder ──
+-- Pax, a Manager at A3, added by Olive; Theo (a Manager at A3) sets Pax's PIN 8642.
+select pg_temp.desk(pg_temp.u('03'));
+insert into ids select 'pax', (pg_temp.add('manager', 'PX', array[pg_temp.s('a3')], 'pax@a.test', '7403', 'Pax Third') ->> 'user_id')::uuid;
+reset role;
+select pg_temp.desk(pg_temp.id('theo'));
+select is(pg_temp.setpin(pg_temp.id('pax'), '8642'), jsonb_build_object('user_id', pg_temp.id('pax')),
+  'M-04 d62 - (Theo, a Manager sharing A3, sets Pax''s PIN 8642)');
+reset role;
+select is((select set_by from public.user_pins where user_id = pg_temp.id('pax')), 'manager',
+  'M-04 d62 - (recorded as set by a Manager)');
+create temp table pins_62 as select user_id, pin_hash, set_by from public.user_pins;
+create temp table log_62 as select id, log from public.users;
+create function pg_temp.pins_62_changed() returns int language sql stable as $$
+  select (select count(*)::int from (select user_id, pin_hash, set_by from public.user_pins except select * from pins_62) x)
+       + (select count(*)::int from (select * from pins_62 except select user_id, pin_hash, set_by from public.user_pins) y)
+$$;
+create function pg_temp.log_62_changed() returns int language sql stable as $$
+  select count(*)::int from public.users u join log_62 b using (id) where u.log is distinct from b.log
+$$;
+-- Olive, an Owner, sets the same digits.
+select pg_temp.desk(pg_temp.u('03'));
+select is(pg_temp.setpin(pg_temp.id('pax'), '8642'), pg_temp.required('pin_required'),
+  'M-04 d62 - Olive, an Owner, sets Pax''s PIN to 8642, the digits Theo set: refused 23502 pin_required');
+reset role;
+select is(pg_temp.pins_62_changed(), 0, 'M-04 d62 - user_pins unchanged: the PIN is still the Manager-set one');
+select is(pg_temp.log_62_changed(), 0, 'M-04 d62 - and no users.log row: nothing was written');
+-- Pax, the holder, on their own personal session, sets the same digits.
+select pg_temp.desk(pg_temp.id('pax'));
+select is(pg_temp.setpin(pg_temp.id('pax'), '8642'), pg_temp.required('pin_required'),
+  'M-04 d62 - Pax, the holder, sets their own PIN to 8642 on a personal session: refused 23502 pin_required');
+reset role;
+select is(pg_temp.pins_62_changed(), 0, 'M-04 d62 - user_pins unchanged after the holder''s refusal');
+select is(pg_temp.log_62_changed(), 0, 'M-04 d62 - and no users.log row after the holder''s refusal');
+-- Theo, a Manager, re-sets the Manager-set PIN to its own digits: unaffected.
+select pg_temp.desk(pg_temp.id('theo'));
+select is(pg_temp.setpin(pg_temp.id('pax'), '8642'), jsonb_build_object('user_id', pg_temp.id('pax')),
+  'M-04 d62 - Theo, a Manager, re-sets Pax''s Manager-set PIN to the same 8642: accepted');
+reset role;
+select ok((select pin_hash = pg_temp.pin_hash('8642') and set_by = 'manager' from public.user_pins where user_id = pg_temp.id('pax')),
+  'M-04 d62 - still 8642, still recorded as set by a Manager: it carries nothing (d55)');
+-- Olive sets a PIN that differs: accepted, recorded Owner-set.
+select pg_temp.desk(pg_temp.u('03'));
+select is(pg_temp.setpin(pg_temp.id('pax'), '7531'), jsonb_build_object('user_id', pg_temp.id('pax')),
+  'M-04 d62 - Olive sets 7531, a PIN that differs: accepted');
+reset role;
+select ok((select pin_hash = pg_temp.pin_hash('7531') and set_by = 'owner' from public.user_pins where user_id = pg_temp.id('pax')),
+  'M-04 d62, d59 - Pax''s PIN replaced, recorded as set by an Owner');
+-- Once Owner-set, the same PIN again is not d62's case: Olive re-sets 7531.
+select pg_temp.desk(pg_temp.u('03'));
+select is(pg_temp.setpin(pg_temp.id('pax'), '7531'), jsonb_build_object('user_id', pg_temp.id('pax')),
+  'M-04 d62 - an Owner re-setting an Owner-set PIN to the same PIN: accepted, d62 reaches only a Manager-set PIN');
+reset role;
+
 select * from finish();
 rollback;
