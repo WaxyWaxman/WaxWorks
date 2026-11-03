@@ -1,7 +1,7 @@
 # Wax Works — the build plan
 
 **Maintained by:** the coordinator, at the end of every build session. Read first by whoever picks up next.
-**Last updated:** 2026-11-01, sr-talbot's session — through #251; M-04 D pass 3 built and reviewed (findings 50–62), two human items open; the register's M1 view brought to M-04 d50–d61
+**Last updated:** 2026-11-03, sr-talbot's session — through #254 and the verdict (#255); M-04 D `Accepted`; the M1 D track is E-01 D and M-04 D done, S-01 D, O-01 D and the seed order next
 
 The [workflow](workflow.md) says how an order moves; the [conventions](conventions.md)
 say what the code looks like; the [status table](status.md) says what has landed.
@@ -29,18 +29,20 @@ build: invented conventions, silent bugs, and context blown by reading everythin
 
 ---
 
-## 2. Where we are — 2026-11-01
+## 2. Where we are — 2026-11-03
 
-**E-01 D is `Accepted`** (sr-talbot, 2026-10-31, verdict in #231). **M-04 D is `In review`**:
-built in #237, corrected in #241 (pass 1), #248 (pass 2) and #251 (pass 3), each pass
-reviewed by qa-reviewer, architect and `/code-review` — 62 findings, finding 1 `discharged`
-by A-137, nothing blocking open. **Pass 3 landed with its review's findings 50–62 open**
-(#251 merged by sr-talbot before the findings were written; they follow in the next pull
-request). Two are a human's: finding 51 (a Manager-set PIN re-set to the same digits
-carries into Owner standing — `/flow-clarify M-04`) and finding 54 (which refusal wins
-when the re-check and an earlier check both apply — a draft A-n in the order's Needs a
-human). The rest are tests and harness, the register's, or the **U** order's. Nothing on
-the **U** track exists beyond M0's shell. Read the rows, not this list.
+**E-01 D is `Accepted`** (sr-talbot, 2026-10-31, verdict in #231). **M-04 D is `Accepted`**
+(sr-talbot, 2026-11-03, verdict in #255): built in #237, corrected in #241 (pass 1), #248
+(pass 2), #251 (pass 3) and #254 (pass 4), each pass reviewed by qa-reviewer, architect and
+`/code-review` — 74 findings, finding 1 `discharged` by A-137, nothing blocking open; the
+Verdict's carried-forward table names an owner for each of the rest (the Windows race
+harness → the next `tests/auth` order; two structural assertions → the next `0032`/`0033`
+order; d60 and T33 → the **U** order; a PIN history → M-04's open question). Pass 4
+merged before its verdict, as every pass has; the verdict followed within the hour.
+The identity function set is built and tested: the ten user functions, the shared
+header and re-check in `app_internal`, `user_pins.set_by`, M-04 d50–d62 and A-137–A-141
+with a reading note. **Nothing on the U track exists beyond M0's shell.** Read the rows,
+not this list.
 
 | PR | What it did |
 |---|---|
@@ -57,12 +59,17 @@ the **U** track exists beyond M0's shell. Read the rows, not this list.
 | [#247](https://github.com/WaxyWaxman/WaxWorks/pull/247), [#248](https://github.com/WaxyWaxman/WaxWorks/pull/248) | **M-04 d59, d60**; **rework pass 2 built** — `user_pins.set_by`, the shared header in `app_internal`, the two-session race harness; findings 37–49 and their answers |
 | [#249](https://github.com/WaxyWaxman/WaxWorks/pull/249), [#250](https://github.com/WaxyWaxman/WaxWorks/pull/250) | **M-04 d61** (the new PIN at a promotion into Owner must differ from the held one); **pass 3 approved** — rows 55, 56; register rows M-04-T29–T33, T16/T20/T22/T27 `Stale`; then d61 in the fake |
 | [#251](https://github.com/WaxyWaxman/WaxWorks/pull/251) | **Rework pass 3 built** — `authoriser_recheck` returns the role it read; the four PIN writers record it (d59); `user_change_role` refuses an equal PIN (d61); `user_correct` re-checks before its initials loop; the race harness hardened (finding 39); the backfill test (finding 45). Reviewers' runs: pgTAP 842, `test:auth` 40 ×7, `pnpm test` 564 |
+| [#252](https://github.com/WaxyWaxman/WaxWorks/pull/252), [#253](https://github.com/WaxyWaxman/WaxWorks/pull/253) | Pass-3 findings 50–62; **M-04 d62** (Set PIN refuses the same digits over a Manager-set PIN, by an Owner or the holder); **A-141** (the re-check's place among the checks); pass 4 approved — rows 57, 58; then d62 in the fake |
+| [#254](https://github.com/WaxyWaxman/WaxWorks/pull/254) | **Rework pass 4 built** — `user_set_pin` replaced for d62; A-141's structural tests; findings 50, 52, 53, 57–61 fixed, 60 disputed. Reviewers' runs: pgTAP 863, `pnpm test` 566, `test:auth` 43 in 8 of 10 Windows runs (finding 63); CI green. Findings 63–74 |
+| [#255](https://github.com/WaxyWaxman/WaxWorks/pull/255) | **M-04 D `Accepted`** — the Verdict and its carried-forward table; A-141's reading note (findings 64, 65); d62's accepted consequence and a PIN-history open question (66, 67) |
 
-**What the M-04 D order still needs before `Accepted`:** the two human items
-answered (findings 51 and 54 — a decision each); then either a small pass 4 for the
-test-only findings 50, 52, 53, 57–61 and whatever 51's answer changes, or an owner's
-verdict that carries them forward with owners named, as E-01 D's did. Findings 55
-and 56 go to the **U** order and `/qa`.
+**What M1's D track still needs:** S-01 D M1 and O-01 D M1 drafted, approved and built
+— each needs its schema questions answered first (§4: the Store ID sequence; where a
+System Administrator's passkey enrolment is recorded), then the seed order (A-101's
+bootstrap rows). Then E-01 U M1 and M-04 U M1 against the fake at `0c1c173`, carrying
+M-04 d60's screen half, the two refusals' text at d61/d62 (*a different PIN*), and the
+Windows harness item from M-04 D's verdict. `/qa ready M1` once both tracks' rows show
+in `status.md`.
 
 **Production** is unchanged since 2026-10-13: M0's two migrations, never seeded, no
 hook, no pepper, no System Administrators. **M1's migrations have not been pushed**,
@@ -114,7 +121,7 @@ Ask sr-talbot before each step that writes.
 |---|---|---|---|
 | 1 | ~~**Close E-01 D's review**~~ *done — `Accepted` 2026-10-31, #231.* Was: the developer fixes — the developer fixes findings 14 and 33 (tests only); `/architecture` ratifies or rejects the two drafts (System Administrator window closed by hand; PostgREST `db-tx-end` stays `commit`, with a `Prefer: tx=rollback` test); `/work-order accept` | Verdict by an owner | Nothing here touches a table |
 | 2 | ~~**One contract pull request**~~ *done — #235 (`5ea9522`), then #240 and #245 for the review's decisions.* Was: both owners review: M-04 d48 in the fake; attempts while closed recorded (d38); the flag's null actor (d39); `linked` and `auth_user_in_use` in the fake; `invalid_input` and `read_only` into `REFUSALS`, `REFUSAL_DETAIL` and conventions §5's table (which `tests/contracts-m1.test.ts` holds equal); `authz.` names in the contracts' comments; the inactive-Store detail once §4 decides it | Merged after review | E-01 U branches on these keys; every M1 order cites the resulting commit |
-| 3 | **`M-04-D-M1`** *(now — `In review`, rework pass 3 approved 2026-11-01; its contract pull request for d61, then the developer)* — the Identity function set (`user_add`, `user_change_role`, `user_set_pin`, `user_reactivate`, …), **carrying A-129's guard on every PIN function and A-131's setters** on every link-sending function. Decide `drawer_opens`' writer and `organizations.org_id` (§4) **before drafting** — both are schema | Drafted, `Approved`, built, checked, `Accepted` | The order's Checklist names A-129 and A-131 by their rows |
+| 3 | ~~**`M-04-D-M1`**~~ *done — `Accepted` 2026-11-03, #255, after four rework passes (#237, #241, #248, #251, #254).* Was: the Identity function set (`user_add`, `user_change_role`, `user_set_pin`, `user_reactivate`, …), **carrying A-129's guard on every PIN function and A-131's setters** on every link-sending function. Decide `drawer_opens`' writer and `organizations.org_id` (§4) **before drafting** — both are schema | Drafted, `Approved`, built, checked, `Accepted` | The order's Checklist names A-129 and A-131 by their rows |
 | 4 | **`S-01-D-M1`** (`organization_create`, System Administrator recovery acts) and **`O-01-D-M1`** (`store_create` with the first shop's values — A-112; the Owner's reset and re-send — A-114). Decide the Store ID sequence and where a System Administrator's passkey enrolment is recorded **before drafting** | As above | Both small; one developer each, in sequence, so neither edits the other's lane |
 | 5 | **`E-01-U-M1`**, then **`M-04-U-M1`** with Create Organization and Create Store screens (A-111) | As above | The accept-invite route moves Auth links onto the product's origin (runbook) |
 | 6 | **`/qa ready M1`**; `/qa automate` the rows that both tracks make automatable (E-01-T1, T10, T11, T13 at least — order finding 15 says the rest wait on M-04's half) | Both tracks in [status.md](status.md) | — |
@@ -175,7 +182,7 @@ not so it is worked now. Every row points at the record; nothing here is a decis
 | **Production's PostgREST `db-tx-end`** must be `commit` (no client override), or `Prefer: tx=rollback` reopens the PIN oracle A-129 closed. Unrecorded. Draft decision in [E-01-D-M1](orders/E-01-D-M1.md) Needs a human — _recommended, not yet ratified_ | order finding 31 | `/architecture`, then an owner reads the dashboard | Before `supabase db push` |
 | **A System Administrator's `enrolment_open_until` is never closed by enrolling** — whoever reads that mailbox can add a passkey that signs in as `sysadmin` for the rest of the window. Draft decision: cleared by hand, recorded in the runbook — _recommended, not yet ratified_ | order finding 30; A-131 | `/architecture` | Before the first System Administrator enrols |
 | **Runbook §2's hand steps**: invite and recovery templates reworded (they promise a password that no longer exists); email provider on and sign-up off; link lifetime ≤ 24 h; hook enabled; `pin_pepper` created; three System Administrators with passkeys; `store_create`'s body carries the first shop's values | [runbook](runbook.md) §2 | sr-talbot | In the runbook's order, after M1 merges |
-| ~~**E-01 D `Accepted`**~~ — **done 2026-10-31, #231.** In its place: **M-04 D `Accepted`** — rework pass 3 (M-04 d59, d61; findings 37–49) built, checked and reviewed | [M-04-D-M1](orders/M-04-D-M1.md) | developer, then an owner's verdict | Before `/qa ready M1` |
+| ~~**E-01 D `Accepted`**~~ — **done 2026-10-31, #231.** ~~**M-04 D `Accepted`**~~ — **done 2026-11-03, #255.** In their place: **S-01 D M1 and O-01 D M1 drafted** — blocked on the schema rows above (the Store ID sequence; the System Administrator's enrolment record) | [S-01](../flows/S-01-onboard-and-recover-organizations.md), [O-01](../flows/O-01-administer-the-organization.md) | `/architecture` for the schema rows, then `/work-order` | Before `/qa ready M1` |
 
 ### Schema — decide before the migration that depends on it
 
