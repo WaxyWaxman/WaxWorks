@@ -21,7 +21,9 @@ import { join } from "node:path";
  * the harness's own (a subcommand, a flag, a temporary file path), never input.
  * cmd.exe honours no escape inside quotes, so an argument holding a character it
  * would interpret (`"`, `%`, `^`, `&`, `|`, `<`, `>`, `!`) is refused, not escaped
- * (finding 61); whitespace alone is quoted.
+ * (finding 61); whitespace alone is quoted. A line break is refused too — cmd.exe
+ * ends the command at one even inside quotes — and so is a trailing backslash,
+ * which before a closing quote reads as an escaped quote (finding 71).
  */
 export function supabaseCommand(
   args: string[],
@@ -32,17 +34,41 @@ export function supabaseCommand(
     if (/["%^&|<>!]/.test(a)) {
       throw new Error(`supabaseCommand: ${JSON.stringify(a)} holds a character cmd.exe would interpret; refused, not escaped (M-04 D M1 finding 61)`);
     }
+    if (/[\r\n]/.test(a) || a.endsWith("\\")) {
+      throw new Error(`supabaseCommand: ${JSON.stringify(a)} holds a line break or ends in a backslash, which cmd.exe would misread; refused (M-04 D M1 finding 71)`);
+    }
   }
   return { command: ["supabase", ...args.map((a) => (/\s/.test(a) ? `"${a}"` : a))].join(" "), args: [], shell: true };
 }
 
+/**
+ * Whether a failed CLI run is the Windows wrapper crashing before the query ran
+ * (M-04 D M1 findings 39 and 63: the Bun-wrapped `supabase.exe` 2.117.0 ends with a
+ * `PlatformError` and a JavaScript code frame, before it connects), rather than
+ * the query's own failure — which the database reports with a SQLSTATE, and which
+ * is never retried. Off Windows nothing is: the crash has not been seen there.
+ */
+export function isCliCrash(output: string, platform: NodeJS.Platform = process.platform): boolean {
+  return platform === "win32" && /PlatformError/.test(output) && !/SQLSTATE/.test(output);
+}
+
+/** At most this many runs of one CLI call, the first included, while it crashes before running. */
+const CLI_ATTEMPTS = 3;
+
 function supabase(args: string[]): string {
   const c = supabaseCommand(args);
-  const run = spawnSync(c.command, c.args, { encoding: "utf8", shell: c.shell, maxBuffer: 16 * 1024 * 1024 });
-  if (run.status !== 0) {
-    throw new Error(`supabase ${args.join(" ")} failed: ${run.stdout} ${run.stderr}`);
+  for (let attempt = 1; ; attempt++) {
+    const run = spawnSync(c.command, c.args, { encoding: "utf8", shell: c.shell, maxBuffer: 16 * 1024 * 1024 });
+    if (run.status === 0) return run.stdout;
+    const output = `${run.stdout} ${run.stderr}`;
+    // Finding 63: a crash of the wrapper ran nothing, so running it again is safe —
+    // a poll, a fixture write or a blocker's terminate alike.
+    if (isCliCrash(output) && attempt < CLI_ATTEMPTS) {
+      console.log(`supabase ${args.slice(0, 2).join(" ")}: the CLI crashed before running (attempt ${attempt} of ${CLI_ATTEMPTS}); running it again (M-04 D M1 finding 63)`);
+      continue;
+    }
+    throw new Error(`supabase ${args.join(" ")} failed: ${output}`);
   }
-  return run.stdout;
 }
 
 export interface LocalStack {

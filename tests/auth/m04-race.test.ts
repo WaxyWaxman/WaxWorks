@@ -114,9 +114,16 @@ end $wx$`, tag);
     async stop() {
       await b.stop();
       // Whatever ended the CLI, its backend ends too, so nothing queues behind an
-      // orphan until the loop's own timeout (finding 52).
-      sql(`select pg_catalog.pg_terminate_backend(pid) from pg_catalog.pg_stat_activity
-            where query like '%wx_race_blocker ${tag} %' and pid <> pg_catalog.pg_backend_pid()`);
+      // orphan until the loop's own timeout (finding 52). Keyed on the query text
+      // by position, not LIKE, whose `_` is a wildcard (finding 70).
+      try {
+        sql(`select pg_catalog.pg_terminate_backend(pid) from pg_catalog.pg_stat_activity
+              where position('wx_race_blocker ${tag} ' in query) > 0 and pid <> pg_catalog.pg_backend_pid()`);
+      } catch (e) {
+        // Finding 70: stop() runs in a `finally`; a cleanup failure there must not
+        // replace the test's own result, so it is reported and not thrown.
+        console.log(`race blocker ${tag}: ending its backend failed; the test's own result stands: ${String(e)}`);
+      }
     },
   };
 }
@@ -172,10 +179,16 @@ async function holding(rowId: string, tag: string, release: string): Promise<Blo
       await until(`the blocker to hold its row (attempt ${attempt})`, b, () => blockerHolds(t) === 1);
       return b;
     } catch (e) {
-      const endedByItself = b.ended(); // read before stop(), which always ends it
+      // Read before stop(), which always ends it. Finding 72: after stop() ends the
+      // backend the hold count is always 0, so it is not asked; an end the blocker
+      // reached by itself, before the hold was seen, is the early end.
+      const early = b.ended();
       await b.stop();
-      const early = endedByItself && blockerHolds(t) === 0;
-      console.log(`race blocker attempt ${attempt} ended before holding its row: ${String(e)}`);
+      // Finding 63: say which side failed — the blocker, or this side's wait for it
+      // (a poll's own CLI crash is retried inside sql(); what reaches here is not).
+      console.log(early
+        ? `race blocker attempt ${attempt} ended by itself before holding its row: ${String(e)}`
+        : `race blocker attempt ${attempt}: the wait for its hold failed while the blocker still ran; not retried: ${String(e)}`);
       if (!early || attempt >= 3) throw e;
     }
   }
