@@ -379,6 +379,10 @@ describe("O-01 d2 and O-01 d3 — a new Store has a trading name and a store acc
     expect(w.A.store_number).toMatch(/^\d{7}$/);
     expect([w.A.position, w.B.position]).toEqual([1, 2]);
     expect(w.B.store_number).not.toBe(w.A.store_number);
+    // A-142: one global sequence from 1000001, carried as seven-digit text — the first
+    // Store minted is 1000001 and every later one, in any Organization, is higher.
+    expect(w.A.store_number).toBe("1000001");
+    expect(Number(w.B.store_number)).toBeGreaterThan(Number(w.A.store_number));
     await expect(c.store_account_reset(w.owner, { ...w.asOwner, p_store_id: w.A.store_id })).resolves.toMatchObject({ store_id: w.A.store_id, store_account_email: "home@example.test" });
     await refused(c.store_account_reset(w.storeA, { ...w.atA(w.t1, "2222"), p_store_id: w.A.store_id }), "role_refused");
     await refused(c.store_create(w.storeA, { ...w.atA(w.t1, "2222"), p_trading_name: "Annex", p_store_account_email: "annex@example.test" }), "role_refused");
