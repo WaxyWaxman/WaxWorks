@@ -367,7 +367,7 @@ is a pull request both humans review (§7, workflow §4).
 | Required field for this role missing — a Manager's PIN or email (M-04 d35, d33); a new PIN at a promotion into Owner when the held one was set by a Manager, or when the PIN given equals the held one; a Set PIN equal to a Manager-set held PIN, by an Owner or the holder (M-04 d55, d61, d62) | `23502` | `pin_required`, `email_required`, `initials_required` | — |
 | Wrong state for the act — re-sending to someone already enrolled, recovering while an Owner exists (M-04 d38, A-90) | `WX409` | `invalid_state` | what state — one value of the closed list below |
 | PIN pepper missing (A-115, A-127) | `XX000` | `pin_pepper_missing` | — |
-| An argument the database itself rejects — A-120's actor pair half null; `auth_user_link`'s null arguments | `22023` | `invalid_input` | the argument's name |
+| An argument the database itself rejects — A-120's actor pair half null; `auth_user_link`'s null arguments; `owner_recover` given both `p_user_id` and a new Owner's name and email, or neither (S-01 D M1 approval, 2026-11-03; the wrapper refuses it client-side first) | `22023` | `invalid_input` | the argument's name — `p_user_id` for `owner_recover` |
 | Called in a read-only transaction — a function on A-119's list, by GET or HEAD (A-129) | `25006` | `read_only` | — |
 
 **`read_only` — decided 2026-10-31 by sr-talbot (A-129); in the table above since the M1 review-keys contract change.** A function on A-119's list called in a read-only transaction (PostgREST runs GET and HEAD that way) raises `read_only` with SQLSTATE **`25006`**, before any PIN is read; PostgREST answers 405. It is in `REFUSALS`; the fake has no read-only transaction, so only **D** raises it.
@@ -378,7 +378,7 @@ is a pull request both humans review (§7, workflow §4).
 
 | Detail | The state | Raised by | Decision |
 |---|---|---|---|
-| `inactive` | The person is deactivated | `user_change_role`, `user_reset_request`, `user_invite_resend`, `user_set_pin`, `user_deactivate` (the fake since the M-04 review contract change; **D** with its correcting migration) | M-04 d44, d46, d48, d54 |
+| `inactive` | The person is deactivated | `user_change_role`, `user_reset_request`, `user_invite_resend`, `user_set_pin`, `user_deactivate` (the fake since the M-04 review contract change; **D** with its correcting migration); `owner_reset_request` (S-01 d8, 2026-11-03) | M-04 d44, d46, d48, d54; S-01 d8 |
 | `active` | The person is already active | `user_reactivate` | M-04 d47 |
 | `pin_not_needed` | A new PIN given at reactivation where nothing clashes, or at a promotion of someone who already holds one that carries (last set by an Owner or the holder) | `user_reactivate`, `user_change_role` | M-04 d47, d49, d52, d55 |
 | `email_not_needed` | An email given with a demotion, which sends no invite | `user_change_role` | M-04 d53 |
