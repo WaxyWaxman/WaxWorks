@@ -26,7 +26,7 @@ export interface Org {
 const q = (v: string | null) => (v === null ? "null" : `'${v.replace(/'/g, "''")}'`);
 
 /** Links an Auth user to a row through the product's own write-back (A-114). */
-async function link(kind: "user" | "store", rowId: string, authId: string): Promise<void> {
+export async function link(kind: "user" | "store", rowId: string, authId: string): Promise<void> {
   const s = local();
   const res = await fetch(`${s.url}/rest/v1/rpc/auth_user_link`, {
     method: "POST",
