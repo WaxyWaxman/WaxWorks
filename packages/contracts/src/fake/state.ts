@@ -141,7 +141,7 @@ export type Handler = (call: Call) => unknown;
 
 export function emptyState(sysadmins: readonly { auth_user_id: string; name: string; active?: boolean }[]): FakeState {
   return {
-    tx: { orgs: [], stores: [], users: [], pins: new Map(), pinSetBy: new Map(), terminals: [], log: [], storeNumber: 1_000_000 },
+    tx: { orgs: [], stores: [], users: [], pins: new Map(), pinSetBy: new Map(), terminals: [], log: [], storeNumber: 1_000_000 /* A-142: the first Store ID is 1000001 */ },
     sysadmins: sysadmins.map((s) => ({ ...s, active: s.active ?? true })),
     durableLog: [],
     pinRefusals: [],

@@ -535,7 +535,8 @@ export const identityHandlers: Record<string, Handler> = {
     const who = x.authorize(true);
     const org = who.by.org_id;
     const position = x.tx.stores.filter((s) => s.org_id === org).length + 1;
-    // Placeholder, not specified: where the seven-digit sequence starts, and whether it is global.
+    // A-142: one global sequence from 1000001, unique across every Organization,
+    // carried as seven-digit text; the position is max + 1 within the Organization.
     const store_number = String(++x.tx.storeNumber);
     const store: StoreRow = {
       store_id: uid(), org_id: org, trading_name: x.args.p_trading_name as string, store_number, position,
