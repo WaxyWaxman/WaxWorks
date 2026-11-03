@@ -42,6 +42,36 @@ export type Database = {
         }
         Returns: Json
       }
+      organization_create: {
+        Args: {
+          p_actor_user_id: string
+          p_name: string
+          p_owner_email: string
+          p_owner_name: string
+          p_request_id: string
+        }
+        Returns: Json
+      }
+      owner_recover: {
+        Args: {
+          p_actor_user_id: string
+          p_org_id: string
+          p_owner_email?: string
+          p_owner_name?: string
+          p_request_id: string
+          p_user_id?: string
+        }
+        Returns: Json
+      }
+      owner_reset_request: {
+        Args: {
+          p_actor_user_id: string
+          p_org_id: string
+          p_request_id: string
+          p_user_id: string
+        }
+        Returns: Json
+      }
       session_select_store: {
         Args: {
           p_actor_initials: string
