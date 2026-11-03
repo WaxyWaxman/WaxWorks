@@ -585,6 +585,8 @@ export const identityHandlers: Record<string, Handler> = {
       if (owner.role !== "owner") x.refuse("not_found");
       owner.active = true;
       invite = owner.passkey_enrolled_at === null;
+      // S-01 d9: a reactivation is logged on the person as well as on the Organization.
+      x.tx.log.push(x.row("users.log", owner.user_id, "reactivated", sys, null, null));
     } else {
       owner = {
         user_id: uid(), org_id: org.org_id, display_name: x.args.p_owner_name as string, initials: null, role: "owner",
@@ -603,6 +605,8 @@ export const identityHandlers: Record<string, Handler> = {
     const org = x.tx.orgs.find((o) => o.org_id === x.args.p_org_id) ?? x.refuse("not_found");
     const owner = x.user(x.args.p_user_id as string, org.org_id);
     if (owner.role !== "owner" || !owner.email) x.refuse("not_found");
+    // S-01 d8: a reset link to a deactivated Owner is refused; the screen offers reactivation first.
+    if (!owner.active) x.refuse("invalid_state", "inactive");
     // S-01 d3, O-01 d5: logged where the Organization's Owners read it; never the link (A-93).
     x.tx.log.push(x.row("organizations.log", org.org_id, "reset_link_sent", sys, null, null, { after: { user_id: owner.user_id } }));
     x.tx.log.push(x.row("users.log", owner.user_id, "reset_link_sent", sys, null, null));
