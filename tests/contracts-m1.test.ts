@@ -475,7 +475,7 @@ describe("S-01 d3 — recovery restores an Owner, and A-90 refuses owner_recover
   it("owner_recover is refused while an active Owner exists; owner_reset_request reaches the Owner and is logged on the Organization", async () => {
     const w = await world();
     const sys = w.root.withSession(sysadminSession);
-    await refused(c.owner_recover(sys, { p_actor_user_id: SYSADMIN, p_org_id: w.org.org_id, p_user_id: null, p_owner_name: "N. Owner", p_owner_email: "n@example.test" }), "invalid_state");
+    await refused(c.owner_recover(sys, { p_actor_user_id: SYSADMIN, p_org_id: w.org.org_id, p_user_id: null, p_owner_name: "N. Owner", p_owner_email: "n@example.test", p_replace_user_id: null }), "invalid_state");
     await expect(c.owner_reset_request(sys, { p_actor_user_id: SYSADMIN, p_org_id: w.org.org_id, p_user_id: w.ownerId })).resolves.toEqual({ user_id: w.ownerId, email: "m.chen@example.test" });
     const orgLog = w.root.inspect().log.filter((l) => l.table === "organizations.log" && l.subject_id === w.org.org_id);
     expect(orgLog.map((l) => l.actor_user_id)).toContain(SYSADMIN);
@@ -494,9 +494,90 @@ describe("S-01 d3 — recovery restores an Owner, and A-90 refuses owner_recover
     await c.user_reactivate(w.owner, { ...w.asOwner, p_user_id: ao.user_id, p_initials: null, p_pin: null });
     await expect(c.owner_reset_request(sys, { p_actor_user_id: SYSADMIN, p_org_id: w.org.org_id, p_user_id: ao.user_id })).resolves.toEqual({ user_id: ao.user_id, email: "ao@example.test" });
   });
-  // S-01 d9 (a reactivation by owner_recover logs on the person too) is in the fake but has no
-  // test here: the Owner floor (M-04 d26) leaves no path through the API to an Organization with
-  // no active Owner. The D order's pgTAP constructs that state directly (S-01-D-M1 row 19).
+  // S-01 d9 (a reactivation by owner_recover logs on the person too): the Owner floor (M-04 d26)
+  // leaves no path through the API to an Organization with no active Owner, so it is asserted
+  // below through A-146's replacement, the one path that reaches a reactivation here.
+});
+
+describe("S-01 d11, A-146 — owner_recover replaces an active, unreachable Owner in one act; the plain call is still refused while an Owner exists", () => {
+  const recover = (w: Awaited<ReturnType<typeof world>>, args: Partial<Parameters<typeof c.owner_recover>[1]>) =>
+    c.owner_recover(w.root.withSession(sysadminSession), {
+      p_actor_user_id: SYSADMIN, p_org_id: w.org.org_id, p_user_id: null, p_owner_name: null, p_owner_email: null, p_replace_user_id: null, ...args,
+    });
+
+  it("naming the only Owner deactivates them and invites a new Owner; both logs carry both acts, and invite_sent lands on the person (S-01 d14)", async () => {
+    const w = await world();
+    const before = w.root.inspect().log.length;
+    const r = await recover(w, { p_owner_name: "N. Owner", p_owner_email: "n@example.test", p_replace_user_id: w.ownerId });
+    expect(r).toMatchObject({ invite: true, email: "n@example.test" });
+    const users = w.root.inspect().users;
+    expect(users.find((u) => u.user_id === w.ownerId)!.active).toBe(false);
+    expect(users.find((u) => u.user_id === r.user_id)).toMatchObject({ role: "owner", active: true, store_ids: [] });
+    expect(users.filter((u) => u.org_id === w.org.org_id && u.role === "owner" && u.active)).toHaveLength(1);
+    const added = w.root.inspect().log.slice(before);
+    expect(added.map((l) => [l.table, l.subject_id === w.ownerId ? "old" : l.subject_id === r.user_id ? "new" : l.subject_id === w.org.org_id ? "org" : "?", l.action])).toEqual([
+      ["users.log", "old", "deactivated"],
+      ["organizations.log", "org", "owner_replaced"],
+      ["organizations.log", "org", "owner_invited"],
+      ["users.log", "new", "invite_sent"],
+    ]);
+    expect(added.every((l) => l.actor_user_id === SYSADMIN)).toBe(true);
+    expect(added[1]).toMatchObject({ before: { user_id: w.ownerId }, after: { user_id: r.user_id } });
+  });
+
+  it("the refusals: an already-deactivated Owner is `inactive`; a Manager is not found; the person restored cannot be the one replaced; nothing is written", async () => {
+    const w = await world();
+    const ao = await c.user_add(w.owner, { ...w.asOwner, p_display_name: "A. Okoye", p_initials: null, p_role: "owner", p_email: "ao@example.test", p_store_ids: [], p_pin: null });
+    await c.user_deactivate(w.owner, { ...w.asOwner, p_user_id: ao.user_id });
+    const bo = await c.user_add(w.owner, { ...w.asOwner, p_display_name: "B. Osei", p_initials: null, p_role: "owner", p_email: "bo@example.test", p_store_ids: [], p_pin: null });
+    const before = w.root.inspect().log.length;
+    expect((await refused(recover(w, { p_owner_name: "N. Owner", p_owner_email: "n@example.test", p_replace_user_id: ao.user_id }), "invalid_state")).detail).toBe("inactive");
+    await refused(recover(w, { p_owner_name: "N. Owner", p_owner_email: "n@example.test", p_replace_user_id: w.jm.user_id }), "not_found");
+    const same = await failed(recover(w, { p_user_id: w.ownerId, p_replace_user_id: w.ownerId }));
+    expect(same.code).toBe("invalid_input");
+    // Restoring someone already active (reachable only with a replacement) — M-04 d47's key.
+    expect((await refused(recover(w, { p_user_id: bo.user_id, p_replace_user_id: w.ownerId }), "invalid_state")).detail).toBe("active");
+    expect(w.root.inspect().log.length).toBe(before);
+    expect(w.root.inspect().users.find((u) => u.user_id === w.ownerId)!.active).toBe(true);
+  });
+});
+
+describe("S-01 d10, M-04 d63 — an Owner reactivated by owner_recover keeps their Stores; clashing initials or a clashing PIN are cleared, nothing else is touched", () => {
+  it("initials and a PIN taken by colleagues meanwhile are cleared; the colleagues keep theirs; the reactivation is logged on the person (S-01 d9) with what changed; Assign then wants initials", async () => {
+    const w = await world();
+    // An Owner holding Store A with initials and a PIN, deactivated from inside.
+    const ao = await c.user_add(w.owner, { ...w.asOwner, p_display_name: "A. Okoye", p_initials: "AO", p_role: "owner", p_email: "ao@example.test", p_store_ids: [w.A.store_id], p_pin: "3333" });
+    await c.user_deactivate(w.owner, { ...w.asOwner, p_user_id: ao.user_id });
+    // Meanwhile a new hire takes AO at A, and the Manager at A is given the PIN 3333.
+    const hire = await c.user_add(w.owner, { ...w.asOwner, ...employee("A. Olsen", "AO", [w.A.store_id]) });
+    await c.user_set_pin(w.owner, { ...w.asOwner, p_user_id: w.jm.user_id, p_pin: "3333" });
+    const sys = w.root.withSession(sysadminSession);
+    const before = w.root.inspect().log.length;
+    const r = await c.owner_recover(sys, { p_actor_user_id: SYSADMIN, p_org_id: w.org.org_id, p_user_id: ao.user_id, p_owner_name: null, p_owner_email: null, p_replace_user_id: w.ownerId });
+    expect(r).toEqual({ user_id: ao.user_id, invite: true, email: "ao@example.test" });
+    const users = w.root.inspect().users;
+    expect(users.find((u) => u.user_id === ao.user_id)).toMatchObject({ active: true, initials: null, store_ids: [w.A.store_id] });
+    expect(users.find((u) => u.user_id === hire.user_id)).toMatchObject({ active: true, initials: "AO" });
+    const reactivated = w.root.inspect().log.slice(before).find((l) => l.table === "users.log" && l.subject_id === ao.user_id && l.action === "reactivated");
+    expect(reactivated).toMatchObject({ actor_user_id: SYSADMIN, before: { active: false, initials: "AO", pin_held: true }, after: { active: true, initials: null, pin_held: false } });
+    // The Manager still holds 3333: on the store session at A it authorizes as J. Mbeki.
+    await expect(c.manager_authorize_pin(w.storeA, { ...noStaff, p_pin: "3333", p_terminal_id: w.t1 })).resolves.toMatchObject({ user_id: w.jm.user_id });
+    // M-04 d63 / d34: the Owner now holds A with no initials; assigning them to B is refused as always.
+    const aoSession = w.root.withSession(person(w.org.org_id, ao.user_id));
+    await refused(c.user_assign(aoSession, { p_actor_user_id: ao.user_id, p_actor_initials: null, p_terminal_id: null, p_manager_pin: null, p_user_id: ao.user_id, p_store_id: w.B.store_id }), "initials_required");
+  });
+
+  it("a value that does not clash is kept", async () => {
+    const w = await world();
+    const bo = await c.user_add(w.owner, { ...w.asOwner, p_display_name: "B. Osei", p_initials: "BO", p_role: "owner", p_email: "bo@example.test", p_store_ids: [w.A.store_id], p_pin: "4444" });
+    await c.user_deactivate(w.owner, { ...w.asOwner, p_user_id: bo.user_id });
+    const sys = w.root.withSession(sysadminSession);
+    await c.owner_recover(sys, { p_actor_user_id: SYSADMIN, p_org_id: w.org.org_id, p_user_id: bo.user_id, p_owner_name: null, p_owner_email: null, p_replace_user_id: w.ownerId });
+    expect(w.root.inspect().users.find((u) => u.user_id === bo.user_id)).toMatchObject({ active: true, initials: "BO", store_ids: [w.A.store_id] });
+    await expect(c.manager_authorize_pin(w.storeA, { ...noStaff, p_pin: "4444", p_terminal_id: w.t1 })).resolves.toMatchObject({ user_id: bo.user_id });
+    const last = w.root.inspect().log.filter((l) => l.subject_id === bo.user_id).map((l) => l.action);
+    expect(last.slice(-2)).toEqual(["reactivated", "invite_sent"]);
+  });
 });
 
 describe("A-110 — a System Administrator's functions accept only a sysadmin principal, and every other function refuses one (A-90)", () => {

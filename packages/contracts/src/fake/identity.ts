@@ -576,17 +576,50 @@ export const identityHandlers: Record<string, Handler> = {
   owner_recover: handle((x) => {
     const sys = x.sysadmin();
     const org = x.tx.orgs.find((o) => o.org_id === x.args.p_org_id) ?? x.refuse("not_found");
-    if (x.activeOwners(org.org_id).length > 0) x.refuse("invalid_state", "active_owner");
     const id = x.args.p_user_id as string | null;
+    const replaceId = x.args.p_replace_user_id as string | null;
+    // The arguments the database itself rejects (conventions §5); the wrapper refuses first.
+    if (replaceId !== null && replaceId === id) x.refuse("invalid_input", "p_replace_user_id");
+    let replaced: UserRow | null = null;
+    if (replaceId !== null) {
+      // A-146, S-01 d11: an active Owner the System Administrator judges unreachable is
+      // deactivated and another restored in the same act — never below M-04 d26's floor.
+      replaced = x.user(replaceId, org.org_id);
+      if (replaced.role !== "owner") x.refuse("not_found");
+      if (!replaced.active) x.refuse("invalid_state", "inactive");
+    } else if (x.activeOwners(org.org_id).length > 0) {
+      x.refuse("invalid_state", "active_owner");
+    }
     let owner: UserRow;
     let invite: boolean;
     if (id !== null) {
       owner = x.user(id, org.org_id);
       if (owner.role !== "owner") x.refuse("not_found");
+      // M-04 d47: nothing to restore for someone already active (reachable only with a replacement).
+      if (owner.active) x.refuse("invalid_state", "active");
+    } else {
+      owner = null as unknown as UserRow; // written below
+    }
+    if (replaced) {
+      replaced.active = false;
+      x.tx.log.push(x.row("users.log", replaced.user_id, "deactivated", sys, null, null, { before: { active: true }, after: { active: false } }));
+    }
+    if (id !== null) {
+      const heldPin = x.tx.pins.get(owner.user_id);
+      const before = { active: false, initials: owner.initials, pin_held: heldPin !== undefined };
       owner.active = true;
+      // S-01 d10: the Stores stay; initials or a PIN now held by an active colleague at one
+      // of them are cleared, not prompted for — the Owner sets new ones at their next
+      // sign-in (E-01 d41, M-04 d63). Only the clashing value is cleared.
+      if (owner.initials !== null && owner.store_ids.some((st) =>
+        x.tx.users.some((u) => u.active && u.user_id !== owner.user_id && u.store_ids.includes(st) && u.initials === owner.initials))) {
+        owner.initials = null;
+      }
+      if (heldPin !== undefined && owner.store_ids.some((st) => x.pinTaken(st, heldPin, owner.user_id))) x.clearPin(owner);
       invite = owner.passkey_enrolled_at === null;
       // S-01 d9: a reactivation is logged on the person as well as on the Organization.
-      x.tx.log.push(x.row("users.log", owner.user_id, "reactivated", sys, null, null));
+      x.tx.log.push(x.row("users.log", owner.user_id, "reactivated", sys, null, null,
+        { before, after: { active: true, initials: owner.initials, pin_held: x.tx.pins.has(owner.user_id) } }));
     } else {
       owner = {
         user_id: uid(), org_id: org.org_id, display_name: x.args.p_owner_name as string, initials: null, role: "owner",
@@ -595,7 +628,12 @@ export const identityHandlers: Record<string, Handler> = {
       x.tx.users.push(owner);
       invite = true;
     }
+    if (replaced) {
+      x.tx.log.push(x.row("organizations.log", org.org_id, "owner_replaced", sys, null, null, { before: { user_id: replaced.user_id }, after: { user_id: owner.user_id } }));
+    }
     x.tx.log.push(x.row("organizations.log", org.org_id, id ? "owner_reactivated" : "owner_invited", sys, null, null, { after: { user_id: owner.user_id } }));
+    // S-01 d14: an invite is logged on the person, as organization_create and user_add log theirs.
+    if (invite) x.tx.log.push(x.row("users.log", owner.user_id, "invite_sent", sys, null, null));
     // A-118: the address the Server Action sends the invite to.
     return { user_id: owner.user_id, invite, email: invite ? owner.email : null };
   }),
