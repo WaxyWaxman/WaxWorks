@@ -364,10 +364,10 @@ is a pull request both humans review (§7, workflow §4).
 | Clash — initials or PIN already held at this Store (M-04 d27, d32) | `23505` | `initials_clash`, `pin_clash` | the holder's name for initials; nothing for a PIN |
 | Not found, or not visible to this principal | `WX404` | `not_found` | — |
 | The Owner floor (M-04 d26) | `23514` | `owner_floor` | — |
-| Required field for this role missing — a Manager's PIN or email (M-04 d35, d33); a new PIN at a promotion into Owner when the held one was set by a Manager, or when the PIN given equals the held one; a Set PIN equal to a Manager-set held PIN, by an Owner or the holder (M-04 d55, d61, d62) | `23502` | `pin_required`, `email_required`, `initials_required` | — |
+| Required field for this role missing — a Manager's PIN or email (M-04 d35, d33); a new PIN at a promotion into Owner when the held one was set by a Manager, or when the PIN given equals the held one; a Set PIN equal to a Manager-set held PIN, by an Owner or the holder (M-04 d55, d61, d62); the first Owner's email at `organization_create` and a new Owner's at `owner_recover`, missing or blank after trim (S-01 D M1 finding 4, 2026-11-08) | `23502` | `pin_required`, `email_required`, `initials_required` | — |
 | Wrong state for the act — re-sending to someone already enrolled, recovering while an Owner exists (M-04 d38, A-90) | `WX409` | `invalid_state` | what state — one value of the closed list below |
 | PIN pepper missing (A-115, A-127) | `XX000` | `pin_pepper_missing` | — |
-| An argument the database itself rejects — A-120's actor pair half null; `auth_user_link`'s null arguments; `owner_recover` given both `p_user_id` and a new Owner's name and email, or neither (S-01 D M1 approval, 2026-11-03; the wrapper refuses it client-side first) | `22023` | `invalid_input` | the argument's name — `p_user_id` for `owner_recover` |
+| An argument the database itself rejects — A-120's actor pair half null; `auth_user_link`'s null arguments; `owner_recover` given both `p_user_id` and a new Owner's name and email, or neither (S-01 D M1 approval, 2026-11-03; the wrapper refuses it client-side first); a blank `p_name` or `p_owner_name` after trim at `organization_create` or `owner_recover`, and `owner_recover`'s `p_replace_user_id` naming the person being restored (S-01 D M1 finding 4, A-146, 2026-11-08) | `22023` | `invalid_input` | the argument's name — `p_user_id`, `p_name`, `p_owner_name` or `p_replace_user_id` |
 | Called in a read-only transaction — a function on A-119's list, by GET or HEAD (A-129) | `25006` | `read_only` | — |
 
 **`read_only` — decided 2026-10-31 by sr-talbot (A-129); in the table above since the M1 review-keys contract change.** A function on A-119's list called in a read-only transaction (PostgREST runs GET and HEAD that way) raises `read_only` with SQLSTATE **`25006`**, before any PIN is read; PostgREST answers 405. It is in `REFUSALS`; the fake has no read-only transaction, so only **D** raises it.
@@ -378,14 +378,14 @@ is a pull request both humans review (§7, workflow §4).
 
 | Detail | The state | Raised by | Decision |
 |---|---|---|---|
-| `inactive` | The person is deactivated | `user_change_role`, `user_reset_request`, `user_invite_resend`, `user_set_pin`, `user_deactivate` (the fake since the M-04 review contract change; **D** with its correcting migration); `owner_reset_request` (S-01 d8, 2026-11-03) | M-04 d44, d46, d48, d54; S-01 d8 |
+| `inactive` | The person is deactivated | `user_change_role`, `user_reset_request`, `user_invite_resend`, `user_set_pin`, `user_deactivate` (the fake since the M-04 review contract change; **D** with its correcting migration); `owner_reset_request` (S-01 d8, 2026-11-03); `owner_recover` when the Owner named to replace is already deactivated (A-146, 2026-11-08) | M-04 d44, d46, d48, d54; S-01 d8 |
 | `active` | The person is already active | `user_reactivate` | M-04 d47 |
 | `pin_not_needed` | A new PIN given at reactivation where nothing clashes, or at a promotion of someone who already holds one that carries (last set by an Owner or the holder) | `user_reactivate`, `user_change_role` | M-04 d47, d49, d52, d55 |
 | `email_not_needed` | An email given with a demotion, which sends no invite | `user_change_role` | M-04 d53 |
 | `employee_has_no_pin` | A PIN given to, or set on, an Employee | `user_add`, `user_change_role`, `user_reactivate`, `user_set_pin` | M-04 d28, d39 |
 | `no_store` | An Employee or Manager with no Store, at Add or a demotion | `user_add`, `user_change_role` | M-04 d27 |
 | `last_store` | Unassigning an Employee's or Manager's last Store | `user_unassign` | M-04 d27 |
-| `active_owner` | Recovering an Organization that has an active Owner | `owner_recover` | A-90, M-04 d38 |
+| `active_owner` | Recovering an Organization that has an active Owner, with no Owner named to replace (since A-146, 2026-11-08) | `owner_recover` | A-90, A-146, M-04 d38 |
 | `linked` | Linking a row that is already linked to an Auth user | `auth_user_link` (`user`, `store` kinds) | A-128 |
 | `auth_user_in_use` | Linking an Auth user already linked to another `users`, `stores` or `system_administrators` row | `auth_user_link` | A-132 |
 | `auth_user_mismatch` | A passkey enrolment for a row not linked to that Auth user | `auth_user_link` (`p_kind = 'passkey'`) | A-117 |
