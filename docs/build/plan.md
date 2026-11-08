@@ -29,7 +29,7 @@ build: invented conventions, silent bugs, and context blown by reading everythin
 
 ---
 
-## 2. Where we are — 2026-11-03
+## 2. Where we are — 2026-11-08
 
 **E-01 D is `Accepted`** (sr-talbot, 2026-10-31, verdict in #231). **M-04 D is `Accepted`**
 (sr-talbot, 2026-11-03, verdict in #255): built in #237, corrected in #241 (pass 1), #248
@@ -62,11 +62,11 @@ not this list.
 | [#252](https://github.com/WaxyWaxman/WaxWorks/pull/252), [#253](https://github.com/WaxyWaxman/WaxWorks/pull/253) | Pass-3 findings 50–62; **M-04 d62** (Set PIN refuses the same digits over a Manager-set PIN, by an Owner or the holder); **A-141** (the re-check's place among the checks); pass 4 approved — rows 57, 58; then d62 in the fake |
 | [#254](https://github.com/WaxyWaxman/WaxWorks/pull/254) | **Rework pass 4 built** — `user_set_pin` replaced for d62; A-141's structural tests; findings 50, 52, 53, 57–61 fixed, 60 disputed. Reviewers' runs: pgTAP 863, `pnpm test` 566, `test:auth` 43 in 8 of 10 Windows runs (finding 63); CI green. Findings 63–74 |
 | [#255](https://github.com/WaxyWaxman/WaxWorks/pull/255) | **M-04 D `Accepted`** — the Verdict and its carried-forward table; A-141's reading note (findings 64, 65); d62's accepted consequence and a PIN-history open question (66, 67) |
+| [#256](https://github.com/WaxyWaxman/WaxWorks/pull/256)–[#261](https://github.com/WaxyWaxman/WaxWorks/pull/261) | **A-142, A-143**; the Store ID in the fake; [`S-01-D-M1`](orders/S-01-D-M1.md) and [`O-01-D-M1`](orders/O-01-D-M1.md) drafted; S-01 D approved with **S-01 d8, d9**, then those in the fake (`ce1e723`) and recorded in the order |
+| [#262](https://github.com/WaxyWaxman/WaxWorks/pull/262), [#263](https://github.com/WaxyWaxman/WaxWorks/pull/263) | **S-01 D built** — `organization_create`, `owner_recover`, `owner_reset_request`, `In review`; then findings 1–15 from qa-reviewer, architect and `/code-review` — nothing blocking; six human decisions raised |
+| [#264](https://github.com/WaxyWaxman/WaxWorks/pull/264) | **The review's decisions** — A-144 ratified; **A-145** (the seed under sysadmin claims), **A-146** (`owner_recover` replaces an unreachable active Owner; supersedes A-90's refusal), **A-147** (a System Administrator enrols by Supabase's invite; several passkeys; no recovery); **S-01 d10–d14, M-04 d63, E-01 d41**; conventions §5's keys for finding 4; S-01-T1/T3 `Stale`, T4/T5 registered; **pass 2 approved** (rows 27–33) |
 
-**What M1's D track still needs:** S-01 D M1 and O-01 D M1 drafted, approved and built
-— each needs its schema questions answered first (§4: the Store ID sequence; where a
-System Administrator's passkey enrolment is recorded), then the seed order (A-101's
-bootstrap rows). Then E-01 U M1 and M-04 U M1 against the fake at `0c1c173`, carrying
+**What M1's D track still needs:** the contract change for S-01 d10, d11 and d14 (`p_replace_user_id`, the clearing, `invite_sent`), then **S-01 D M1 pass 2** (rows 27–33) to `Accepted`; **O-01 D M1** approved and built (drafted, #258; A-142's columns are its row 11); then the seed order (A-145 — `organization_create` under the fabricated System Administrator's claims). Then E-01 U M1 and M-04 U M1 against the fake at `0c1c173`, carrying
 M-04 d60's screen half, the two refusals' text at d61/d62 (*a different PIN*), and the
 Windows harness item from M-04 D's verdict. `/qa ready M1` once both tracks' rows show
 in `status.md`.
@@ -180,7 +180,7 @@ not so it is worked now. Every row points at the record; nothing here is a decis
 | **What is WaxyWaxman?** The GitHub repository's owner, and one of the three System Administrators [runbook](runbook.md) §2 creates (from A-110's landing, #190), but not an owner of the documents and with no commits. A third person, GimpyMatey's other account, or an account no one signs in as — the runbook creates a `sysadmin` passkey for it, so the answer decides whether that row stays | [runbook](runbook.md) §2 | sr-talbot | Before the first System Administrator is created |
 | **Joint assent on A-119 to A-134 and every A-n after, E-01 d38–d39, M-04 d39–d49, the A-91 amendment** — each ratified by sr-talbot alone | `architecture.md` §2 rows; the flows | GimpyMatey | Before `/qa ready M1` |
 | **Production's PostgREST `db-tx-end`** must be `commit` (no client override), or `Prefer: tx=rollback` reopens the PIN oracle A-129 closed. Unrecorded. Draft decision in [E-01-D-M1](orders/E-01-D-M1.md) Needs a human — _recommended, not yet ratified_ | order finding 31 | `/architecture`, then an owner reads the dashboard | Before `supabase db push` |
-| ~~**A System Administrator's `enrolment_open_until` is never closed by enrolling**~~ — **A-134, ratified 2026-10-31** (cleared by hand, in the runbook); confirmed by A-143, 2026-11-03, with a one-hour window. Still open: how a System Administrator obtains the link and on which page they enrol — S-01, with the E-01 **U** order | order finding 30; A-131, A-134, A-143 | `/flow-clarify S-01` | Before the first System Administrator enrols |
+| ~~**A System Administrator's `enrolment_open_until` is never closed by enrolling**~~ — **A-134, ratified 2026-10-31** (cleared by hand, in the runbook); confirmed by A-143, 2026-11-03, with a one-hour window. ~~Still open: how a System Administrator obtains the link and on which page they enrol — S-01, with the E-01 **U** order~~ **Closed by A-147 / S-01 d13, 2026-11-08:** Supabase's invite, opened on the accept page; several passkeys, one window each; no recovery | order finding 30; A-131, A-134, A-143, A-147 | [runbook](runbook.md) §2 — two confirmations before the first entry | Before the first System Administrator enrols |
 | **Runbook §2's hand steps**: invite and recovery templates reworded (they promise a password that no longer exists); email provider on and sign-up off; link lifetime ≤ 24 h; hook enabled; `pin_pepper` created; three System Administrators with passkeys; `store_create`'s body carries the first shop's values | [runbook](runbook.md) §2 | sr-talbot | In the runbook's order, after M1 merges |
 | ~~**E-01 D `Accepted`**~~ — **done 2026-10-31, #231.** ~~**M-04 D `Accepted`**~~ — **done 2026-11-03, #255.** In their place: **S-01 D M1 and O-01 D M1 drafted** — blocked on the schema rows above (the Store ID sequence; the System Administrator's enrolment record) | [S-01](../flows/S-01-onboard-and-recover-organizations.md), [O-01](../flows/O-01-administer-the-organization.md) | `/architecture` for the schema rows, then `/work-order` | Before `/qa ready M1` |
 
