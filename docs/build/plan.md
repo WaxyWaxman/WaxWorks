@@ -29,7 +29,7 @@ build: invented conventions, silent bugs, and context blown by reading everythin
 
 ---
 
-## 2. Where we are — 2026-11-03
+## 2. Where we are — 2026-11-08
 
 **E-01 D is `Accepted`** (sr-talbot, 2026-10-31, verdict in #231). **M-04 D is `Accepted`**
 (sr-talbot, 2026-11-03, verdict in #255): built in #237, corrected in #241 (pass 1), #248
@@ -62,11 +62,11 @@ not this list.
 | [#252](https://github.com/WaxyWaxman/WaxWorks/pull/252), [#253](https://github.com/WaxyWaxman/WaxWorks/pull/253) | Pass-3 findings 50–62; **M-04 d62** (Set PIN refuses the same digits over a Manager-set PIN, by an Owner or the holder); **A-141** (the re-check's place among the checks); pass 4 approved — rows 57, 58; then d62 in the fake |
 | [#254](https://github.com/WaxyWaxman/WaxWorks/pull/254) | **Rework pass 4 built** — `user_set_pin` replaced for d62; A-141's structural tests; findings 50, 52, 53, 57–61 fixed, 60 disputed. Reviewers' runs: pgTAP 863, `pnpm test` 566, `test:auth` 43 in 8 of 10 Windows runs (finding 63); CI green. Findings 63–74 |
 | [#255](https://github.com/WaxyWaxman/WaxWorks/pull/255) | **M-04 D `Accepted`** — the Verdict and its carried-forward table; A-141's reading note (findings 64, 65); d62's accepted consequence and a PIN-history open question (66, 67) |
+| [#256](https://github.com/WaxyWaxman/WaxWorks/pull/256)–[#261](https://github.com/WaxyWaxman/WaxWorks/pull/261) | **A-142, A-143**; the Store ID in the fake; [`S-01-D-M1`](orders/S-01-D-M1.md) and [`O-01-D-M1`](orders/O-01-D-M1.md) drafted; S-01 D approved with **S-01 d8, d9**, then those in the fake (`ce1e723`) and recorded in the order |
+| [#262](https://github.com/WaxyWaxman/WaxWorks/pull/262), [#263](https://github.com/WaxyWaxman/WaxWorks/pull/263) | **S-01 D built** — `organization_create`, `owner_recover`, `owner_reset_request`, `In review`; then findings 1–15 from qa-reviewer, architect and `/code-review` — nothing blocking; six human decisions raised |
+| [#264](https://github.com/WaxyWaxman/WaxWorks/pull/264) | **The review's decisions** — A-144 ratified; **A-145** (the seed under sysadmin claims), **A-146** (`owner_recover` replaces an unreachable active Owner; supersedes A-90's refusal), **A-147** (a System Administrator enrols by Supabase's invite; several passkeys; no recovery); **S-01 d10–d14, M-04 d63, E-01 d41**; conventions §5's keys for finding 4; S-01-T1/T3 `Stale`, T4/T5 registered; **pass 2 approved** (rows 27–33) |
 
-**What M1's D track still needs:** S-01 D M1 and O-01 D M1 drafted, approved and built
-— each needs its schema questions answered first (§4: the Store ID sequence; where a
-System Administrator's passkey enrolment is recorded), then the seed order (A-101's
-bootstrap rows). Then E-01 U M1 and M-04 U M1 against the fake at `0c1c173`, carrying
+**What M1's D track still needs:** the contract change for S-01 d10, d11 and d14 (`p_replace_user_id`, the clearing, `invite_sent`), then **S-01 D M1 pass 2** (rows 27–33) to `Accepted`; **O-01 D M1** approved and built (drafted, #258; A-142's columns are its row 11); then the seed order (A-145 — `organization_create` under the fabricated System Administrator's claims). Then E-01 U M1 and M-04 U M1 against the fake at `0c1c173`, carrying
 M-04 d60's screen half, the two refusals' text at d61/d62 (*a different PIN*), and the
 Windows harness item from M-04 D's verdict. `/qa ready M1` once both tracks' rows show
 in `status.md`.
