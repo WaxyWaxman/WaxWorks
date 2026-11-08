@@ -10,7 +10,7 @@
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { runId, sql } from "./harness";
+import { read as readRows, runId, sql } from "./harness";
 import { makeOrg, type Org } from "./fixtures";
 
 const MIGRATION = "20261101130000_add_set_by_to_user_pins.sql";
@@ -73,7 +73,7 @@ describe("M-04 D M1 row 49 — M-04 d55: a PIN present before the set_by column 
     end if;
     execute $wxmig$${migration}$wxmig$;                          -- the migration itself, as committed
     select p.set_by into v from public.user_pins p where p.user_id = '${user}';`);
-    const after = sql<{ set_by: string }>(`select set_by from public.user_pins where user_id = '${user}'`)[0]?.set_by;
+    const after = readRows<{ set_by: string }>(`select set_by from public.user_pins where user_id = '${user}'`)[0]?.set_by;
     console.log(`M-04 d55 backfill: columns before the migration ${before}; the present row read after it: ${read}; after the rollback, as stored: ${after}`);
     expect(before.split(",")).not.toContain("set_by");
     expect(read).toBe("manager");

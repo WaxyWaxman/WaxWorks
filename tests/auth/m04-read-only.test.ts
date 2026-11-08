@@ -9,7 +9,7 @@
 // Nothing here prints a stored hash or a digit (A-93; review finding 10).
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { randomUUID } from "node:crypto";
-import { passwordSignIn, rest, runId, sql } from "./harness";
+import { passwordSignIn, read, rest, runId } from "./harness";
 import { makeOrg, type Org } from "./fixtures";
 
 let org: Org;
@@ -31,7 +31,7 @@ afterAll(async () => {
 });
 
 const state = () =>
-  sql<{ refusals: number; log: number; name: string }>(`
+  read<{ refusals: number; log: number; name: string }>(`
     select (select count(*)::int from public.pin_refusals where org_id = '${org.orgId}') as refusals,
            (select jsonb_array_length(log) from public.users where id = '${org.people.subject!.id}') as log,
            (select display_name from public.users where id = '${org.people.subject!.id}') as name`)[0];

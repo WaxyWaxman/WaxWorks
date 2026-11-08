@@ -4,9 +4,9 @@
 --   A-113          - principal, then actor, then the active row, before anything else.
 --   A-119, A-129   - neither binds: no returned refusal, no read-only guard.
 --   A-114, A-104   - no Auth table is touched.
---   A-138          - owner_recover: the Owners' lock, the count, active_owner, then the
---                    subject under its own lock; owner_reset_request: the subject's lock
---                    before any write; no lock on the Organization's row (S-01 d3's note).
+--   A-138, A-144   - owner_recover: the Organization's row, the Owners' lock, the count, active_owner,
+--                    the subjects, the restored Owner's Stores; owner_reset_request: the Organization's
+--                    row, then the subject, before any write; organization_create none (pass 2: S-01 d10-d12).
 --   A-140, A-141   - the System Administrator re-read after the last lock, after the
 --                    act's own refusals, before the first write.
 begin;
@@ -76,20 +76,20 @@ select ok(pg_temp.at('owner_recover', 'app_internal.lock_active_owners(') > 0
           and pg_temp.at('owner_recover', 'app_internal.lock_active_owners(') < pg_temp.at('owner_recover', 'app_internal.active_owner_count(')
           and pg_temp.at('owner_recover', 'app_internal.active_owner_count(') < pg_temp.at('owner_recover', '''active_owner'''),
   'A-138 - owner_recover takes the Owners'' lock (step 2), then counts under it, then refuses active_owner');
-select ok(pg_temp.times('owner_recover', 'for no key update') = 1
-          and pg_temp.src('owner_recover') ~* 'select[^;]*from public\.users u[^;]*p_user_id[^;]*for no key update'
-          and pg_temp.at('owner_recover', 'for no key update') > pg_temp.at('owner_recover', '''active_owner'''),
-  'A-138 - owner_recover reads its subject in the statement that locks it (step 3), after active_owner');
-select ok(pg_temp.times('owner_reset_request', 'for no key update') = 1
+select ok(pg_temp.src('owner_recover') ~* 'from public\.users u\s+where u\.org_id = p_org_id and u\.id in \(p_replace_user_id, p_user_id\)\s+order by u\.id\s+for no key update'
+          and pg_temp.at('owner_recover', 'order by u.id') > pg_temp.at('owner_recover', '''active_owner''')
+          and pg_temp.at('owner_recover', 'order by u.id') < pg_temp.at('owner_recover', '''inactive'''),
+  'A-138, A-146 - owner_recover locks both subjects (step 3) in one statement, in id order, after active_owner and before it reads their state');
+select ok(pg_temp.times('owner_reset_request', 'for no key update') = 2
           and pg_temp.src('owner_reset_request') ~* 'select[^;]*from public\.users u[^;]*p_user_id[^;]*for no key update'
-          and pg_temp.at('owner_reset_request', 'for no key update') < pg_temp.first_write('owner_reset_request')
+          and pg_temp.last_at('owner_reset_request', 'for no key update') < pg_temp.first_write('owner_reset_request')
           and pg_temp.at('owner_reset_request', 'lock_active_owners') = 0,
-  'A-138 - owner_reset_request takes step 3 alone: the subject read under its lock, before any write');
+  'A-138 - owner_reset_request takes step 3 after the Organization''s row: the subject read under its lock, before any write');
 select ok(pg_temp.src('organization_create') !~* '(for\s+(no\s+key\s+)?update|for\s+(key\s+)?share|lock_active_owners|lock_store_assignments)',
   'A-138 - organization_create takes no lock: the Organization does not exist before its insert');
-select is((select array_agg(f order by f) from unnest(pg_temp.three()) f
-            where pg_temp.src(f) ~* 'from\s+public\.organizations[^;]*for\s+(no\s+key\s+update|update|share|key\s+share)'),
-  null, 'A-138, S-01 d3 - none of the three locks the Organization''s row (accepted 2026-11-03: two recoveries may both invite)');
+select is((select array_agg(f order by f) from unnest(array['owner_recover', 'owner_reset_request']) f
+            where not (pg_temp.src(f) ~* 'from\s+public\.organizations\s+o\s+where\s+o\.id\s*=\s*p_org_id\s+for\s+no\s+key\s+update' and pg_temp.at(f, 'for no key update') < least(coalesce(nullif(pg_temp.at(f, 'app_internal.lock_active_owners('), 0), 1000000), pg_temp.last_at(f, 'for no key update')))),
+  null, 'A-144, S-01 d12 - owner_recover and owner_reset_request lock the Organization''s row (for no key update) after the header and before the Owner rows and the subject (0042:90-92 inverted)');
 
 -- ── Row 23: A-140, A-141 — the re-check ────────────────────────────────────
 select is(pg_temp.times('organization_create', 'public.system_administrators'), 1,
@@ -97,21 +97,44 @@ select is(pg_temp.times('organization_create', 'public.system_administrators'), 
 select is((select array_agg(f order by f) from unnest(array['owner_recover', 'owner_reset_request']) f
             where pg_temp.times(f, 'public.system_administrators') <> 2),
   null, 'A-140 - owner_recover and owner_reset_request read the System Administrator''s row twice: the header, and the re-check');
-select ok(pg_temp.last_at('owner_recover', 'public.system_administrators') > pg_temp.at('owner_recover', 'for no key update')
+select ok(pg_temp.last_at('owner_recover', 'public.system_administrators') > pg_temp.last_at('owner_recover', 'for no key update')
           and pg_temp.last_at('owner_recover', 'public.system_administrators') > pg_temp.at('owner_recover', 'app_internal.lock_active_owners(')
           and pg_temp.last_at('owner_recover', 'public.system_administrators') > pg_temp.last_at('owner_recover', '''active_owner''')
           and pg_temp.last_at('owner_recover', 'public.system_administrators') > pg_temp.last_at('owner_recover', '''not_found''')
           and pg_temp.last_at('owner_recover', 'public.system_administrators') < pg_temp.first_write('owner_recover'),
   'A-140, A-141 - owner_recover re-reads the System Administrator after its last lock, after active_owner and not_found, before its first write');
-select ok(pg_temp.last_at('owner_reset_request', 'public.system_administrators') > pg_temp.at('owner_reset_request', 'for no key update')
+select ok(pg_temp.last_at('owner_reset_request', 'public.system_administrators') > pg_temp.last_at('owner_reset_request', 'for no key update')
           and pg_temp.last_at('owner_reset_request', 'public.system_administrators') > pg_temp.last_at('owner_reset_request', '''not_found''')
           and pg_temp.last_at('owner_reset_request', 'public.system_administrators') > pg_temp.last_at('owner_reset_request', '''inactive''')
           and pg_temp.last_at('owner_reset_request', 'public.system_administrators') < pg_temp.first_write('owner_reset_request'),
-  'A-140, A-141 - owner_reset_request re-reads the System Administrator after its lock, after not_found and inactive, before its first write');
+  'A-140, A-141 - owner_reset_request re-reads the System Administrator after its locks, after not_found and inactive, before its first write (structural only: it calls no helper a runtime case could replace, so no single-session runtime case holds it - S-01 D M1 finding 9)');
 select is((select array_agg(f order by f) from unnest(pg_temp.three()) f
             where substr(pg_temp.src(f), pg_temp.last_at(f, 'public.system_administrators') - 200, 400)
                   !~* 'role_refused'),
   null, 'A-140 - each re-check refuses role_refused (detail sysadmin, as the header does)');
+
+-- ── Rows 29, 30: S-01 d10, A-146 — the restored Owner's Stores, then the re-check ──
+select ok(pg_temp.at('owner_recover', 'app_internal.store_set(') > pg_temp.at('owner_recover', 'order by u.id')
+          and pg_temp.at('owner_recover', 'app_internal.lock_store_assignments(') > pg_temp.at('owner_recover', 'app_internal.store_set(')
+          and pg_temp.at('owner_recover', 'app_internal.lock_store_assignments(') > pg_temp.at('owner_recover', '''active'''),
+  'A-138, S-01 d10 - owner_recover reads the restored Owner''s Stores after step 3, then locks them and their assignments (steps 4 and 5), after the subjects'' refusals');
+select ok(pg_temp.last_at('owner_recover', 'public.system_administrators') > pg_temp.at('owner_recover', 'app_internal.lock_store_assignments('),
+  'A-140, A-146 - owner_recover''s re-check comes after its last lock, steps 4 and 5 included');
+select ok(pg_temp.at('owner_recover', 'app_internal.initials_holder(') > pg_temp.at('owner_recover', 'app_internal.lock_store_assignments(')
+          and pg_temp.at('owner_recover', 'app_internal.pin_taken(') > pg_temp.at('owner_recover', 'app_internal.lock_store_assignments('),
+  'S-01 d10, M-04 d63 - the clash is read through the shared helpers (initials_holder, pin_taken), under the Stores'' lock, not a copy');
+select ok(pg_temp.times('owner_recover', 'from public.store_assignments') = 0
+          and pg_temp.times('owner_recover', 'into public.store_assignments') = 0,
+  'S-01 d10 - owner_recover reads and writes no assignment itself: the Store set is app_internal.store_set''s, and the Stores stay');
+select ok(pg_temp.at('owner_recover', 'delete from public.user_pins') > pg_temp.last_at('owner_recover', 'public.system_administrators')
+          and pg_temp.times('owner_recover', 'delete from public.') = 1,
+  'S-01 d10, A-137 - a clashing PIN is cleared by deleting its user_pins row (the one delete), after the re-check');
+select ok(pg_temp.at('owner_recover', '''deactivated''') > pg_temp.last_at('owner_recover', 'public.system_administrators')
+          and pg_temp.at('owner_recover', '''deactivated''') < pg_temp.last_at('owner_recover', 'app_internal.initials_holder('),
+  'A-146, S-01 d11 - the replaced Owner is deactivated after the re-check and before the clash is read, so their own initials and PIN clash with nothing (the fake''s order)');
+select ok(pg_temp.last_at('owner_recover', 'app_internal.active_owner_count(') > pg_temp.last_at('owner_recover', 'insert into public.users')
+          and pg_temp.src('owner_recover') ~* 'active_owner_count\(p_org_id\)\s*<\s*1',
+  'A-146 - after its writes owner_recover asserts the Organization still has an active Owner (M-04 d26''s floor at every commit)');
 
 select * from finish();
 rollback;

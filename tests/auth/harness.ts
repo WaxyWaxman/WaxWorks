@@ -52,18 +52,30 @@ export function isCliCrash(output: string, platform: NodeJS.Platform = process.p
   return platform === "win32" && /PlatformError/.test(output) && !/SQLSTATE/.test(output);
 }
 
+/**
+ * Whether a failed CLI call is run again: only a READ that crashed (S-01 D M1
+ * finding 8). That the crash ran nothing is an inference from where it was seen
+ * (findings 39, 63: before connecting); nothing in the output proves it. A read
+ * run twice changes nothing, so the inference costs nothing there. A write — a
+ * fixture insert or update, `exec`'s block, a blocker's terminate — is never run
+ * twice on that inference: its crash fails the test, loudly, with the output.
+ */
+export function mayRetry(output: string, kind: "read" | "write", platform: NodeJS.Platform = process.platform): boolean {
+  return kind === "read" && isCliCrash(output, platform);
+}
+
 /** At most this many runs of one CLI call, the first included, while it crashes before running. */
 const CLI_ATTEMPTS = 3;
 
-function supabase(args: string[]): string {
+function supabase(args: string[], kind: "read" | "write"): string {
   const c = supabaseCommand(args);
   for (let attempt = 1; ; attempt++) {
     const run = spawnSync(c.command, c.args, { encoding: "utf8", shell: c.shell, maxBuffer: 16 * 1024 * 1024 });
     if (run.status === 0) return run.stdout;
     const output = `${run.stdout} ${run.stderr}`;
-    // Finding 63: a crash of the wrapper ran nothing, so running it again is safe —
-    // a poll, a fixture write or a blocker's terminate alike.
-    if (isCliCrash(output) && attempt < CLI_ATTEMPTS) {
+    // Finding 63: a crash of the wrapper before it connects is retried — for a
+    // read only (finding 8: a write is never run twice on an inference).
+    if (mayRetry(output, kind) && attempt < CLI_ATTEMPTS) {
       console.log(`supabase ${args.slice(0, 2).join(" ")}: the CLI crashed before running (attempt ${attempt} of ${CLI_ATTEMPTS}); running it again (M-04 D M1 finding 63)`);
       continue;
     }
@@ -82,7 +94,7 @@ let stack: LocalStack | undefined;
 /** The running local stack's URL and keys, from `supabase status`. */
 export function local(): LocalStack {
   if (stack) return stack;
-  const out = supabase(["status", "-o", "json"]);
+  const out = supabase(["status", "-o", "json"], "read");
   const json = JSON.parse(out.slice(out.indexOf("{"), out.lastIndexOf("}") + 1)) as Record<string, string>;
   const url = json.API_URL;
   const publishableKey = json.PUBLISHABLE_KEY;
@@ -119,16 +131,34 @@ export function parseQueryOutput<T>(out: string): T[] {
   throw new Error(`supabase db query printed neither rows nor a command tag: ${text.slice(0, 200)}`);
 }
 
-/** Runs ONE SQL statement as `postgres` against the local database and returns its rows. */
-export function sql<T = Record<string, unknown>>(text: string): T[] {
+function query<T>(text: string, kind: "read" | "write"): T[] {
   const dir = mkdtempSync(join(tmpdir(), "wx-auth-"));
   const file = join(dir, "q.sql");
   try {
     writeFileSync(file, text, "utf8");
-    return parseQueryOutput<T>(supabase(["db", "query", "--local", "--output-format", "json", "-f", file]));
+    return parseQueryOutput<T>(supabase(["db", "query", "--local", "--output-format", "json", "-f", file], kind));
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
+}
+
+/**
+ * Runs ONE SQL statement as `postgres` against the local database and returns its
+ * rows. Treated as a write: a CLI crash is never retried (finding 8). Use `read`
+ * for a statement that changes nothing.
+ */
+export function sql<T = Record<string, unknown>>(text: string): T[] {
+  return query<T>(text, "write");
+}
+
+/**
+ * Runs ONE statement that changes nothing — a `select` of rows or of
+ * pg_stat_activity, never a function with an effect — and returns its rows. A
+ * CLI crash before it ran is retried (findings 39, 63), because running a read
+ * twice is harmless whether or not the first ran.
+ */
+export function read<T = Record<string, unknown>>(text: string): T[] {
+  return query<T>(text, "read");
 }
 
 export interface Session {

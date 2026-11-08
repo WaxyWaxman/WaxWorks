@@ -58,6 +58,7 @@ export type Database = {
           p_org_id: string
           p_owner_email?: string
           p_owner_name?: string
+          p_replace_user_id?: string
           p_request_id: string
           p_user_id?: string
         }
