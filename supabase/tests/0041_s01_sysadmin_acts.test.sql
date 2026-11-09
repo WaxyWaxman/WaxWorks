@@ -3,7 +3,7 @@
 --   S-01 d2, d5   - organization_create: the Organization and its first Owner, no
 --                   initials, no Store; the invite is logged, never sent here.
 --   S-01 d3, d9   - owner_recover: refused while an active Owner exists; restores the
---                   original row or invites a new Owner; logged on both.
+--   S-01 d10, d14   original row or invites a new Owner; logged on both (pass 2: pin_held, invite_sent).
 --   S-01 d8       - owner_reset_request to a deactivated Owner: invalid_state, inactive.
 --   A-86, A-135   - the Organization is the tenant's root; another's ids are not_found.
 --   A-90, A-110   - every act appends organizations.log with the System Administrator.
@@ -266,10 +266,10 @@ select is(pg_temp.acts(pg_temp.ulog(pg_temp.u('b1'))), array['deactivated', 'rea
   'S-01 d9 - the reactivation is logged on the Owner''s own users.log');
 select is(pg_temp.ulog(pg_temp.u('b1')) -> -1 ->> 'actor_user_id', pg_temp.sys('f1')::text,
   'S-01 d9 - with the System Administrator as its actor');
-select is(pg_temp.ulog(pg_temp.u('b1')) -> -1 -> 'before', '{"active": false, "initials": "OB"}'::jsonb,
-  'O-01 d5 - the person''s entry carries the value before');
-select is(pg_temp.ulog(pg_temp.u('b1')) -> -1 -> 'after', '{"active": true, "initials": "OB"}'::jsonb,
-  'O-01 d5 - and after');
+select is(pg_temp.ulog(pg_temp.u('b1')) -> -1 -> 'before', '{"active": false, "initials": "OB", "pin_held": false}'::jsonb,
+  'O-01 d5, S-01 d10 - the person''s entry carries the value before (initials and pin_held, the fields d10 may clear)');
+select is(pg_temp.ulog(pg_temp.u('b1')) -> -1 -> 'after', '{"active": true, "initials": "OB", "pin_held": false}'::jsonb,
+  'O-01 d5, S-01 d10 - and after: nothing clashed, so nothing was cleared');
 select is(pg_temp.acts(pg_temp.olog(pg_temp.org('b'))), array['owner_reactivated'],
   'S-01 d3 - and on the Organization''s log, owner_reactivated');
 select is(pg_temp.olog(pg_temp.org('b')) -> -1 -> 'after', jsonb_build_object('user_id', pg_temp.u('b1')),
@@ -295,8 +295,8 @@ select is((select r from recovered where k = 'c1'),
   'S-01 d3, A-117 - reactivating an Owner who never enrolled returns {user_id, invite: true, email}');
 select is((select enrolment_open_until from public.users where id = pg_temp.u('c1')), now() + interval '24 hours',
   'A-131 - and opens their window to now plus 24 hours');
-select is(pg_temp.acts(pg_temp.ulog(pg_temp.u('c1'))), array['reactivated'],
-  'S-01 d9 - logged reactivated on the person');
+select is(pg_temp.acts(pg_temp.ulog(pg_temp.u('c1'))), array['reactivated', 'invite_sent'],
+  'S-01 d9, d14 - logged reactivated on the person, then invite_sent: the invite is logged on the person');
 select is(pg_temp.acts(pg_temp.olog(pg_temp.org('c'))), array['owner_reactivated'],
   'S-01 d3 - and owner_reactivated on the Organization');
 
@@ -329,7 +329,7 @@ select is((select array_agg(k order by k) from recovered where not (r -> 'invite
 -- ════════════════════════════════════════════════════════════════════════════
 -- Row 20: S-01 d3, d8; M-04 d38 — owner_reset_request
 -- ════════════════════════════════════════════════════════════════════════════
-select pg_temp.snap('a', pg_temp.org('a'));
+select pg_temp.snap('a', pg_temp.org('a')), pg_temp.snap('b', pg_temp.org('b'));
 select is(pg_temp.reset_link(gen_random_uuid(), pg_temp.u('a1'), pg_temp.r(30)), pg_temp.refusal('WX404', 'not_found'),
   'A-86 - owner_reset_request for an Organization that does not exist: not_found');
 select is(pg_temp.reset_link(pg_temp.org('a'), pg_temp.u('a2'), pg_temp.r(31)), pg_temp.refusal('WX404', 'not_found'),
@@ -340,8 +340,8 @@ select is(pg_temp.reset_link(pg_temp.org('a'), pg_temp.u('b1'), pg_temp.r(33)), 
   'A-86 - owner_reset_request naming an Owner of another Organization: not_found');
 select is(pg_temp.reset_link(pg_temp.org('a'), pg_temp.u('a3'), pg_temp.r(34)), pg_temp.refusal('WX409', 'invalid_state', 'inactive'),
   'S-01 d8 - a reset link to a deactivated Owner is refused invalid_state, inactive');
-select ok(pg_temp.unchanged('a', pg_temp.org('a')),
-  'S-01 d8, A-119 - nothing written by those refusals: enrolment_open_until and both logs unchanged');
+select ok(pg_temp.unchanged('a', pg_temp.org('a')) and pg_temp.unchanged('b', pg_temp.org('b')),
+  'S-01 d8, A-119 - nothing written by those refusals: enrolment_open_until and both logs unchanged, in Org A and in Org B, whose Owner b1 was named from Org A');
 
 select is(pg_temp.reset_link(pg_temp.org('a'), pg_temp.u('a1'), pg_temp.r(35)),
   jsonb_build_object('user_id', pg_temp.u('a1'), 'email', 'oa@a.test'),
@@ -367,11 +367,11 @@ insert into written
    where e ->> 'principal' = 'sysadmin';
 select is((select array_agg(tbl || ':' || (e ->> 'action') order by tbl, e ->> 'action') from written),
   array['organizations:organization_created', 'organizations:organization_created', 'organizations:owner_invited',
-        'organizations:owner_reactivated', 'organizations:owner_reactivated', 'organizations:reset_link_sent',
-        'users:invite_sent', 'users:invite_sent', 'users:reactivated', 'users:reactivated', 'users:reset_link_sent'],
-  'A-90, A-94 - the entries the S calls wrote, and only those, carry principal sysadmin');
-select is((select array_agg(distinct x.name) from written w join public.system_administrators x on x.auth_user_id = (w.e ->> 'actor_user_id')::uuid),
-  array['Sam Sysadmin'], 'A-90, A-110 - every entry''s actor is the caller''s auth_user_id, resolvable to the system_administrators row''s name');
+        'organizations:owner_reactivated', 'organizations:owner_reactivated', 'organizations:reset_link_sent', 'users:invite_sent',
+        'users:invite_sent', 'users:invite_sent', 'users:invite_sent', 'users:reactivated', 'users:reactivated', 'users:reset_link_sent'],
+  'A-90, A-94, S-01 d14 - the entries the S calls wrote, and only those, carry principal sysadmin (four invites: two creations, c1, Dee)');
+select is((select array_agg(distinct w.e ->> 'actor_user_id') || array_agg(distinct x.name) from written w left join public.system_administrators x on x.auth_user_id = (w.e ->> 'actor_user_id')::uuid),
+  array[pg_temp.sys('f1')::text, 'Sam Sysadmin'], 'A-90, A-110 - every entry''s actor is exactly the caller''s auth_user_id, resolvable to the system_administrators row''s name');
 select is((select count(*)::int from written where (e ->> 'actor_user_id') is null), 0,
   'A-90 - no entry lacks its actor');
 select ok((select bool_and(e ? 'terminal_id' and e -> 'terminal_id' = 'null'::jsonb) from written),
@@ -382,13 +382,13 @@ select is((select array_agg(e ->> 'action' order by e ->> 'action') from written
   array['reset_link_sent', 'reset_link_sent'], 'A-94 - one call''s two entries share its request id');
 select ok((select bool_and(e ? 'at' and e ? 'manager_user_id' and e -> 'manager_user_id' = 'null'::jsonb) from written),
   'O-01 d5, A-89 - every entry carries its timestamp, in users.log''s shape (no authorising Manager)');
-select is((select array_agg(distinct k order by k) from written, jsonb_object_keys(e) k where tbl = 'organizations'),
-  array['action', 'actor_user_id', 'after', 'at', 'before', 'manager_user_id', 'principal', 'request_id', 'terminal_id'],
-  'O-01 d5 - every organizations.log entry carries actor, timestamp, before and after, and the A-94 columns');
+select is((select count(*)::int from written where tbl = 'organizations' and not (e ?& array['action', 'actor_user_id', 'after', 'at', 'before',
+             'manager_user_id', 'principal', 'request_id', 'terminal_id'])), 0,
+  'O-01 d5 - every organizations.log entry carries actor, timestamp, before and after, and the A-94 columns (each entry, not the union of keys)');
 -- A-94: a p_request_id of any value refuses nothing.
-insert into ids select 'nullreq', (pg_temp.create_org('No Request', 'N. Request', 'nr@example.test', null) ->> 'org_id')::uuid;
-select ok(pg_temp.id('nullreq') is not null and pg_temp.olog(pg_temp.id('nullreq')) -> 0 -> 'request_id' = 'null'::jsonb,
-  'A-94 - a null p_request_id refuses nothing: it correlates, it never authorises');
+insert into ids select 'nullreq', (pg_temp.create_org('No Request', 'N. Request', 'nr@example.test', null) ->> 'org_id')::uuid; create temp table nullreq (k text, r jsonb); insert into nullreq select 'reset', pg_temp.reset_link(pg_temp.id('nullreq'), (select id from public.users where org_id = pg_temp.id('nullreq')), null); insert into nullreq select 'recover', pg_temp.run(format('select app.owner_recover(p_actor_user_id => %L::uuid, p_request_id => null, p_org_id => %L::uuid, p_user_id => null, p_owner_name => %L, p_owner_email => %L, p_replace_user_id => %L::uuid)', pg_temp.sys('f1'), pg_temp.id('nullreq'), 'R. Placed', 'rp@example.test', (select id from public.users where org_id = pg_temp.id('nullreq') and display_name = 'N. Request')));
+select ok(pg_temp.id('nullreq') is not null and (select bool_and(r ? 'user_id') from nullreq) and (select count(*) from nullreq) = 2 and (select bool_and(e -> 'request_id' = 'null'::jsonb) from (select e from public.organizations o, jsonb_array_elements(o.log) e where o.id = pg_temp.id('nullreq') union all select e from public.users u, jsonb_array_elements(u.log) e where u.org_id = pg_temp.id('nullreq')) x),
+  'A-94 - a null p_request_id refuses nothing at any of the three (organization_create, owner_reset_request, owner_recover): it correlates, it never authorises');
 -- A-114, A-93: link sent, never the link.
 select is((select count(*)::int from (select e from public.organizations, jsonb_array_elements(log) e
                                       union all select e from public.users, jsonb_array_elements(log) e) x

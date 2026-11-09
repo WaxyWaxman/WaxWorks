@@ -2,7 +2,7 @@
 // the CLI (an AI agent or not). These hold the parser to all three shapes, so a
 // read cannot come back silently empty in one environment and full in the other.
 import { describe, expect, it } from "vitest";
-import { isCliCrash, parseQueryOutput, supabaseCommand } from "./harness";
+import { isCliCrash, mayRetry, parseQueryOutput, supabaseCommand } from "./harness";
 
 describe("A-126 harness — supabase db query output, with or without an AI agent", () => {
   it("a bare array of rows (CI, a plain shell)", () => {
@@ -84,5 +84,22 @@ describe("M-04 D M1 finding 63 — a Windows CLI crash before the query runs is 
 
   it("off Windows nothing is retried: the crash has not been seen there (CI is Linux)", () => {
     expect(isCliCrash(crash, "linux")).toBe(false);
+  });
+});
+
+describe("S-01 D M1 finding 8 — only a read is retried after a CLI crash; a write never runs twice on an inference (S-01 D M1 row 32)", () => {
+  const crash = "failed:  error: PlatformError\n    at supabase.exe (B:/~BUN/root/supabase.exe:12:3)";
+
+  it("a read that crashed is retried: running it twice changes nothing", () => {
+    expect(mayRetry(crash, "read", "win32")).toBe(true);
+  });
+
+  it("a write that crashed is not: nothing proves the crash ran nothing", () => {
+    expect(mayRetry(crash, "write", "win32")).toBe(false);
+  });
+
+  it("a read's own SQL failure is not retried either, and off Windows nothing is", () => {
+    expect(mayRetry('ERROR: syntax error (SQLSTATE 42601)', "read", "win32")).toBe(false);
+    expect(mayRetry(crash, "read", "linux")).toBe(false);
   });
 });

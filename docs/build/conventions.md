@@ -379,7 +379,7 @@ is a pull request both humans review (§7, workflow §4).
 | Detail | The state | Raised by | Decision |
 |---|---|---|---|
 | `inactive` | The person is deactivated | `user_change_role`, `user_reset_request`, `user_invite_resend`, `user_set_pin`, `user_deactivate` (the fake since the M-04 review contract change; **D** with its correcting migration); `owner_reset_request` (S-01 d8, 2026-11-03); `owner_recover` when the Owner named to replace is already deactivated (A-146, 2026-11-08) | M-04 d44, d46, d48, d54; S-01 d8 |
-| `active` | The person is already active | `user_reactivate` | M-04 d47 |
+| `active` | The person is already active | `user_reactivate`; `owner_recover` when `p_user_id` names an active Owner beside a replacement (A-146, 2026-11-08) | M-04 d47; A-146 |
 | `pin_not_needed` | A new PIN given at reactivation where nothing clashes, or at a promotion of someone who already holds one that carries (last set by an Owner or the holder) | `user_reactivate`, `user_change_role` | M-04 d47, d49, d52, d55 |
 | `email_not_needed` | An email given with a demotion, which sends no invite | `user_change_role` | M-04 d53 |
 | `employee_has_no_pin` | A PIN given to, or set on, an Employee | `user_add`, `user_change_role`, `user_reactivate`, `user_set_pin` | M-04 d28, d39 |

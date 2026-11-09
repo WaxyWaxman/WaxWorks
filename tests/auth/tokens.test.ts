@@ -2,7 +2,7 @@
 // browser (A-126). The passkey rows are passkey.test.ts.
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { randomUUID } from "node:crypto";
-import { authCall, claims, createAuthUser, deleteAuthUser, exec, linkSession, passwordSignIn, refresh, rest, runId, sql } from "./harness";
+import { authCall, claims, createAuthUser, deleteAuthUser, exec, linkSession, passwordSignIn, read, refresh, rest, runId } from "./harness";
 import { makeOrg, type Org } from "./fixtures";
 
 const amr = (jwt: string) => ((claims(jwt).amr as { method: string }[] | undefined) ?? []).map((a) => a.method);
@@ -167,7 +167,7 @@ describe("A-129, A-119 — the PIN pad over HTTP", () => {
       expect(r.body).toMatchObject({ code: "25006", message: "read_only" });
       expect(JSON.stringify(r.body)).not.toContain(org.people.holder!.id);
     }
-    const written = sql<{ n: number }>(`select count(*)::int as n from public.pin_refusals where org_id = '${org.orgId}'`);
+    const written = read<{ n: number }>(`select count(*)::int as n from public.pin_refusals where org_id = '${org.orgId}'`);
     expect(written[0]?.n).toBe(0);
   });
 
@@ -180,7 +180,7 @@ describe("A-129, A-119 — the PIN pad over HTTP", () => {
       expect(r.body.message).toBe(i <= 5 ? "pin_refused" : "pin_line_closed");
     }
     console.log(`A-119 over HTTP:\n${seen.join("\n")}`);
-    const rows = sql<{ refusals: number; closures: number; flags: number }>(`
+    const rows = read<{ refusals: number; closures: number; flags: number }>(`
       select (select count(*)::int from public.pin_refusals where org_id = '${org.orgId}') as refusals,
              (select count(*)::int from public.pin_line_closures where org_id = '${org.orgId}') as closures,
              (select count(*)::int from public.review_flags where org_id = '${org.orgId}') as flags`);
@@ -194,7 +194,7 @@ describe("A-129, A-119 — the PIN pad over HTTP", () => {
     exec(`delete from public.review_flags where org_id = '${org.orgId}' and kind = 'pin_line_closed';`);
     exec(`delete from public.pin_line_closures where org_id = '${org.orgId}';`);
     const count = () =>
-      sql<{ n: number }>(`select count(*)::int as n from public.pin_refusals where org_id = '${org.orgId}'`)[0]?.n ?? -1;
+      read<{ n: number }>(`select count(*)::int as n from public.pin_refusals where org_id = '${org.orgId}'`)[0]?.n ?? -1;
     const seen: string[] = [];
     const variants: Array<[string, string]> = [
       ["tx=rollback", "tx=rollback"],

@@ -5,7 +5,7 @@
 // and E-01 d27's pick copied into the next token.
 import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { authCall, claims, linkSession, local, refresh, rest, runId, sql } from "./harness";
+import { authCall, claims, linkSession, local, read, refresh, rest, runId, sql } from "./harness";
 import { enrolAndSignIn, passkeyPage, type CeremonyResult } from "./browser";
 import { makeOrg, type Org } from "./fixtures";
 
@@ -104,7 +104,7 @@ describe("A-117 — the enrolment is recorded through app.auth_user_link", () =>
       body: JSON.stringify({ p_kind: "passkey", p_row_id: org.people.manager!.id, p_auth_user_id: org.people.manager!.authId, p_request_id: randomUUID() }),
     });
     expect(res.status, await res.clone().text()).toBe(200);
-    const rows = sql<{ enrolled: boolean }>(`select passkey_enrolled_at is not null as enrolled from public.users where id = '${org.people.manager!.id}'`);
+    const rows = read<{ enrolled: boolean }>(`select passkey_enrolled_at is not null as enrolled from public.users where id = '${org.people.manager!.id}'`);
     expect(rows[0]?.enrolled).toBe(true);
   });
 });
