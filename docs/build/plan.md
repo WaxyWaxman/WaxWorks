@@ -68,7 +68,7 @@ not this list.
 | [#265](https://github.com/WaxyWaxman/WaxWorks/pull/265) | **The contract change for pass 2** (`163d9a6`) — `owner_recover` takes `p_replace_user_id` (A-146); clashing initials and PIN cleared at a reactivation (S-01 d10); `invite_sent` on the person (d14) |
 | [#267](https://github.com/WaxyWaxman/WaxWorks/pull/267) | **Pass 2 built and reviewed** — the correcting migration for the three **S** functions, `0043`, the S-01 race; qa-reviewer's runs: pgTAP 1066, `test:auth` 59 ×2, `pnpm test` 571; findings 16–35, nothing blocking. **A-148** (a deactivation closes the enrolment window), **A-149** (E-01 d41 is the shell's, the E-01 **U** order), **S-01 d15** (no new Owner at the replaced Owner's address); finding 20 kept as built; **pass 3 approved** (rows 34–37) |
 
-**What M1's D track still needs:** the contract change for S-01 d15, then **S-01 D M1 pass 3** (rows 34–37) built, reviewed and `Accepted`; **O-01 D M1** approved and built (drafted, #258; A-142's columns are its row 11); then the seed order (A-145 — `organization_create` under the fabricated System Administrator's claims). Then E-01 U M1 and M-04 U M1 against the fake at `0c1c173`, carrying
+**What M1's D track still needs:** **S-01 D M1 pass 3** (rows 34–37, against the contract at `b16cc99`, #269) built, reviewed and `Accepted`; **O-01 D M1** approved and built (drafted, #258; A-142's columns are its row 11); then the seed order (A-145 — `organization_create` under the fabricated System Administrator's claims). Then E-01 U M1 and M-04 U M1 against the fake at `0c1c173`, carrying
 M-04 d60's screen half, the two refusals' text at d61/d62 (*a different PIN*), and the
 Windows harness item from M-04 D's verdict. `/qa ready M1` once both tracks' rows show
 in `status.md`.
