@@ -575,11 +575,23 @@ export const identityHandlers: Record<string, Handler> = {
 
   owner_recover: handle((x) => {
     const sys = x.sysadmin();
-    const org = x.tx.orgs.find((o) => o.org_id === x.args.p_org_id) ?? x.refuse("not_found");
     const id = x.args.p_user_id as string | null;
     const replaceId = x.args.p_replace_user_id as string | null;
-    // The arguments the database itself rejects (conventions §5); the wrapper refuses first.
+    // The arguments the database itself rejects, in its order and before any row is
+    // read (conventions §5); the wrapper refuses these first, a raw rpc reaches them.
+    const blank = (v: unknown) => typeof v !== "string" || v.trim() === "";
+    const noName = blank(x.args.p_owner_name);
+    const noEmail = blank(x.args.p_owner_email);
+    // A person together with a name or an email; or none of the three.
+    if (id !== null ? !(x.args.p_owner_name == null && x.args.p_owner_email == null) : (x.args.p_owner_name == null && x.args.p_owner_email == null)) {
+      x.refuse("invalid_input", "p_user_id");
+    }
+    if (id === null) {
+      if (noName) x.refuse("invalid_input", "p_owner_name");
+      if (noEmail) x.refuse("email_required");
+    }
     if (replaceId !== null && replaceId === id) x.refuse("invalid_input", "p_replace_user_id");
+    const org = x.tx.orgs.find((o) => o.org_id === x.args.p_org_id) ?? x.refuse("not_found");
     let replaced: UserRow | null = null;
     if (replaceId !== null) {
       // A-146, S-01 d11: an active Owner the System Administrator judges unreachable is

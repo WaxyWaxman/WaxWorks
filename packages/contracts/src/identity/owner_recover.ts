@@ -19,8 +19,13 @@ export const OwnerRecoverInput = sysadminHeader.extend({
   /** The active, unreachable Owner to replace (A-146); null for the plain recovery. */
   p_replace_user_id: z.string().uuid().nullable(),
 }).strict().refine(
-  (v) => (v.p_user_id === null) === (v.p_owner_name !== null && v.p_owner_email !== null),
-  { error: "either a deactivated Owner to reactivate, or a new Owner's name and email" },
+  // Conventions §5 (2026-11-08): a person to reactivate comes with no name and no
+  // email — a stray one beside p_user_id is refused, not ignored — and a new Owner
+  // comes with both. The database refuses the same shapes.
+  (v) => (v.p_user_id !== null
+    ? v.p_owner_name === null && v.p_owner_email === null
+    : v.p_owner_name !== null && v.p_owner_email !== null),
+  { error: "either a deactivated Owner to reactivate, or a new Owner's name and email — not a mixture" },
 ).refine(
   (v) => v.p_replace_user_id === null || v.p_replace_user_id !== v.p_user_id,
   { error: "the Owner replaced cannot be the Owner restored", path: ["p_replace_user_id"] },
