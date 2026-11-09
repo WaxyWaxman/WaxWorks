@@ -233,3 +233,61 @@ describe("S-01 D M1 row 30 — A-146, A-122: the Owner a replacement deactivates
     expect(owners).toEqual([{ display_name: "Rex New", active: true }, { display_name: "o1", active: false }]);
   });
 });
+
+describe("S-01 D M1 row 35 — A-148: a reset link sent before a deactivation opens no session after the reactivation", () => {
+  let org: Org;
+  const winRun = runId();
+  const newEmail = `s01-nell-${winRun}@wx.test`;
+
+  beforeAll(async () => {
+    // An active, linked, enrolled Owner with no link outstanding: the reset link
+    // (owner_reset_request, E-01 d33's re-enrolment) is what opens the window here.
+    org = await makeOrg(winRun, [{ key: "o1", role: "owner", initials: "O1", stores: ["A"], enrolment: false }]);
+    exec(`update public.users set passkey_enrolled_at = now() where id = '${org.people.o1!.id}';`);
+  });
+
+  afterAll(async () => {
+    await org?.cleanup();
+  });
+
+  /** A magic link for the address, minted now and opened later — as an emailed link is. */
+  async function mintLink(email: string): Promise<string> {
+    const l = await authCall("/admin/generate_link", { key: "secret", body: { type: "magiclink", email } });
+    expect(l.status, JSON.stringify(l.body)).toBeLessThan(300);
+    return (l.body.hashed_token ?? (l.body.properties as Record<string, unknown> | undefined)?.hashed_token) as string;
+  }
+  const open = (hashed: string) => authCall("/verify", { body: { type: "magiclink", token_hash: hashed } });
+  const windowOf = (id: string) => read<{ w: string | null }>(`select enrolment_open_until::text as w from public.users where id = '${id}'`)[0]!.w;
+
+  it("A-148 — the reset link opens an enrolment session; minted again, deactivated by a replacement and restored, the Owner's link is refused", async () => {
+    expect(sysadminToken, "the System Administrator signed in").toBeDefined();
+    const o1 = org.people.o1!;
+    const reset = await rest("/rpc/owner_reset_request", sysadminToken, {
+      method: "POST",
+      schema: "app",
+      body: { p_actor_user_id: sysadminId, p_request_id: randomUUID(), p_org_id: org.orgId, p_user_id: o1.id },
+    });
+    console.log(`S-01 A-148 owner_reset_request -> ${reset.status} ${JSON.stringify(reset.body)}`);
+    expect(reset.status).toBe(200);
+    // The control: inside the window the reset link is an enrolment session.
+    const first = await open(await mintLink(o1.email));
+    console.log(`S-01 A-148 reset link opened at once -> ${first.status} ${JSON.stringify(first.status === 200 ? ours(first.body.access_token as string) : first.body)}`);
+    expect(first.status, JSON.stringify(first.body)).toBe(200);
+    expect(ours(first.body.access_token as string)).toMatchObject({ principal: "enrolment", user_id: o1.id });
+    // A link still outstanding when the Owner is replaced…
+    const outstanding = await mintLink(o1.email);
+    const replaced = await recover({ p_org_id: org.orgId, p_owner_name: "Nell New", p_owner_email: newEmail, p_replace_user_id: o1.id });
+    console.log(`S-01 A-148 owner_recover replacing O1 -> ${replaced.status} ${JSON.stringify(replaced.body)}; O1's window: ${windowOf(o1.id)}`);
+    expect(replaced.status).toBe(200);
+    // …and the Owner restored by a second replacement (enrolled, so no link is sent).
+    const restored = await recover({ p_org_id: org.orgId, p_user_id: o1.id, p_replace_user_id: replaced.body.user_id as string });
+    console.log(`S-01 A-148 owner_recover restoring O1 -> ${restored.status} ${JSON.stringify(restored.body)}; O1's window: ${windowOf(o1.id)}`);
+    expect(restored.status).toBe(200);
+    expect(restored.body).toEqual({ user_id: o1.id, invite: false, email: null });
+    const after = await open(outstanding);
+    console.log(`S-01 A-148 outstanding link opened after the reactivation -> ${after.status} ${JSON.stringify(after.status === 200 ? ours(after.body.access_token as string) : after.body)}`);
+    expect(windowOf(o1.id)).toBeNull();
+    expect(after.status).toBeGreaterThanOrEqual(400);
+    expect(after.body.access_token).toBeUndefined();
+  });
+});
