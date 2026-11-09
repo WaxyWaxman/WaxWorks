@@ -687,7 +687,7 @@ select is(pg_temp.entry(pg_temp.id('ivy'), 'role_changed') -> 'after', '{"role":
 select is(pg_temp.entry(pg_temp.id('ivy'), 'invite_sent') -> 'after', '{"email": "ivy@new.test"}'::jsonb,
   'M-04 d42 - invite_sent names the new address');
 select is((select email from public.users where id = pg_temp.id('ivy')), 'ivy@new.test', 'M-04 d42 - the address is changed');
-
+create temp table eou_27 as select id, enrolment_open_until as v from public.users where id in (pg_temp.id('rae'), pg_temp.id('ivy'));   -- row 37's windows before row 27 deactivates them (A-148; S-01 D M1 pass 3, row 35)
 -- ── Row 27: M-04 d46 — no role change for the deactivated; same role writes nothing ──
 select pg_temp.desk(pg_temp.u('03'));
 select is(pg_temp.deact(pg_temp.u('06')) ->> 'user_id', pg_temp.u('06')::text, 'M-04 d46 - (Fay deactivated)');
@@ -849,10 +849,10 @@ select is((select enrolment_open_until from public.users where id = pg_temp.u('0
   'A-131 - user_reset_request sets enrolment_open_until to now() + 24 hours');
 select is((select enrolment_open_until from public.users where id = pg_temp.id('kim')), now() + interval '24 hours',
   'A-131 - user_invite_resend sets it');
-select is((select enrolment_open_until from public.users where id = pg_temp.id('rae')), now() + interval '24 hours',
-  'A-131 - user_add of an Owner sets it');
-select is((select enrolment_open_until from public.users where id = pg_temp.id('ivy')), now() + interval '24 hours',
-  'A-131 - user_change_role, when it invites, sets it');
+select is((select jsonb_build_object('set', e.v, 'now', u.enrolment_open_until) from eou_27 e join public.users u on u.id = e.id where e.id = pg_temp.id('rae')), jsonb_build_object('set', now() + interval '24 hours', 'now', null),
+  'A-131 - user_add of an Owner sets it (read before row 27''s deactivation, which A-148 makes close it: null now)');
+select is((select jsonb_build_object('set', e.v, 'now', u.enrolment_open_until) from eou_27 e join public.users u on u.id = e.id where e.id = pg_temp.id('ivy')), jsonb_build_object('set', now() + interval '24 hours', 'now', null),
+  'A-131 - user_change_role, when it invites, sets it (read before row 27''s deactivation, which A-148 makes close it: null now)');
 select is((select enrolment_open_until from public.users where id = pg_temp.id('ne')), null,
   'A-131 - an Employee''s Add leaves it null');
 select is((select enrolment_open_until from public.users where id = pg_temp.u('02')), null,

@@ -219,8 +219,8 @@ select is(pg_temp.recover(pg_temp.org('d'), null, null, null, pg_temp.r(11)),
   pg_temp.refusal('22023', 'invalid_input', 'p_user_id'),
   'S-01 d3 - owner_recover given neither: invalid_input, p_user_id');
 select is(pg_temp.recover(pg_temp.org('d'), null, 'Name Only', null, pg_temp.r(12)),
-  pg_temp.refusal('22023', 'invalid_input', 'p_user_id'),
-  'S-01 d3 - owner_recover given a name but no email, and no p_user_id: invalid_input, p_user_id (the contract''s refine)');
+  pg_temp.refusal('23502', 'email_required'),
+  'S-01 d3 - owner_recover given a name but no email, and no p_user_id: email_required, as organization_create answers (conventions §5, pass-2 finding 16; amended in place, pass 3)');
 select ok(pg_temp.unchanged('d', pg_temp.org('d')), 'A-119 - none of the invalid_input refusals wrote anything');
 
 -- An unknown Organization.

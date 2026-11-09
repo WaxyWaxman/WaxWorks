@@ -386,5 +386,78 @@ select is(pg_temp.recover('w1', pg_temp.org('70'), pg_temp.u('72'), null, null, 
 select ok(pg_temp.unchanged('z', pg_temp.org('60')) and pg_temp.unchanged('w', pg_temp.org('70')) and pg_temp.unchanged('o', pg_temp.org('90')),
   'A-146 - nothing written by any of those refusals: Org Z, Org W and Org O unchanged, logs, PINs and Stores included');
 
+-- ════════════════════════════════════════════════════════════════════════════
+-- Pass 3, row 37 (finding 21): S-01 d10's "at one of those Stores", three more cases
+-- ════════════════════════════════════════════════════════════════════════════
+-- Org V (a0): Stores Va (a1) and Vb (a2). vo Owner VO, deactivated, enrolled, at Va
+--             and Vb, PIN 2468; ve Employee VO, active, at Vb only. (A clash at the
+--             Owner's second Store.)
+-- Org U (b0): Store Ub (b1). uo Owner UO, deactivated, enrolled, at Ub, PIN 1357; um
+--             Manager UM, deactivated, at Ub, PIN 1357. (A PIN held only by an inactive Manager.)
+-- Org T (c0): Stores Ta (c1) and Tb (c2). to Owner TO, deactivated, enrolled, at Ta,
+--             PIN 8642; te Employee TO and tm Manager TM (PIN 8642), both active, at Tb
+--             only. (Values held at a Store that is not the Owner's.)
+insert into public.organizations (id, name) values
+  ('00000000-0000-0000-0000-0000000000a0', 'Org V'), ('00000000-0000-0000-0000-0000000000b0', 'Org U'),
+  ('00000000-0000-0000-0000-0000000000c0', 'Org T');
+insert into public.stores (id, org_id, trading_name) values
+  ('00000000-0000-0000-0001-0000000000a1', '00000000-0000-0000-0000-0000000000a0', 'V Store A'),
+  ('00000000-0000-0000-0001-0000000000a2', '00000000-0000-0000-0000-0000000000a0', 'V Store B'),
+  ('00000000-0000-0000-0001-0000000000b1', '00000000-0000-0000-0000-0000000000b0', 'U Store'),
+  ('00000000-0000-0000-0001-0000000000c1', '00000000-0000-0000-0000-0000000000c0', 'T Store A'),
+  ('00000000-0000-0000-0001-0000000000c2', '00000000-0000-0000-0000-0000000000c0', 'T Store B');
+insert into public.users (id, org_id, role, initials, display_name, email, passkey_enrolled_at, active, log) values
+  ('00000000-0000-0000-0002-0000000000a1', '00000000-0000-0000-0000-0000000000a0', 'owner',    'VO', 'Vic Owner',   'vo@v.test', now(), false, '[]'),
+  ('00000000-0000-0000-0002-0000000000a2', '00000000-0000-0000-0000-0000000000a0', 'employee', 'VO', 'Val Other',   null,        null,  true,  '[]'),
+  ('00000000-0000-0000-0002-0000000000b1', '00000000-0000-0000-0000-0000000000b0', 'owner',    'UO', 'Uma Owner',   'uo@u.test', now(), false, '[]'),
+  ('00000000-0000-0000-0002-0000000000b2', '00000000-0000-0000-0000-0000000000b0', 'manager',  'UM', 'Ugo Manager', 'um@u.test', now(), false, '[]'),
+  ('00000000-0000-0000-0002-0000000000c1', '00000000-0000-0000-0000-0000000000c0', 'owner',    'TO', 'Tia Owner',   'to@t.test', now(), false, '[]'),
+  ('00000000-0000-0000-0002-0000000000c2', '00000000-0000-0000-0000-0000000000c0', 'employee', 'TO', 'Tom Other',   null,        null,  true,  '[]'),
+  ('00000000-0000-0000-0002-0000000000c3', '00000000-0000-0000-0000-0000000000c0', 'manager',  'TM', 'Tess Manager', 'tm@t.test', now(), true, '[]');
+insert into public.store_assignments (org_id, user_id, store_id) values
+  ('00000000-0000-0000-0000-0000000000a0', '00000000-0000-0000-0002-0000000000a1', '00000000-0000-0000-0001-0000000000a1'),
+  ('00000000-0000-0000-0000-0000000000a0', '00000000-0000-0000-0002-0000000000a1', '00000000-0000-0000-0001-0000000000a2'),
+  ('00000000-0000-0000-0000-0000000000a0', '00000000-0000-0000-0002-0000000000a2', '00000000-0000-0000-0001-0000000000a2'),
+  ('00000000-0000-0000-0000-0000000000b0', '00000000-0000-0000-0002-0000000000b1', '00000000-0000-0000-0001-0000000000b1'),
+  ('00000000-0000-0000-0000-0000000000b0', '00000000-0000-0000-0002-0000000000b2', '00000000-0000-0000-0001-0000000000b1'),
+  ('00000000-0000-0000-0000-0000000000c0', '00000000-0000-0000-0002-0000000000c1', '00000000-0000-0000-0001-0000000000c1'),
+  ('00000000-0000-0000-0000-0000000000c0', '00000000-0000-0000-0002-0000000000c2', '00000000-0000-0000-0001-0000000000c2'),
+  ('00000000-0000-0000-0000-0000000000c0', '00000000-0000-0000-0002-0000000000c3', '00000000-0000-0000-0001-0000000000c2');
+insert into public.user_pins (org_id, user_id, pin_hash, set_by) values
+  ('00000000-0000-0000-0000-0000000000a0', '00000000-0000-0000-0002-0000000000a1', pg_temp.pin_hash('2468'), 'holder'),
+  ('00000000-0000-0000-0000-0000000000b0', '00000000-0000-0000-0002-0000000000b1', pg_temp.pin_hash('1357'), 'holder'),
+  ('00000000-0000-0000-0000-0000000000b0', '00000000-0000-0000-0002-0000000000b2', pg_temp.pin_hash('1357'), 'owner'),
+  ('00000000-0000-0000-0000-0000000000c0', '00000000-0000-0000-0002-0000000000c1', pg_temp.pin_hash('8642'), 'holder'),
+  ('00000000-0000-0000-0000-0000000000c0', '00000000-0000-0000-0002-0000000000c3', pg_temp.pin_hash('8642'), 'owner');
+insert into kept values ('ve', pg_temp.person(pg_temp.u('a2'))), ('um', pg_temp.person(pg_temp.u('b2'))),
+                        ('te', pg_temp.person(pg_temp.u('c2'))), ('tm', pg_temp.person(pg_temp.u('c3')));
+
+-- A clash at the Owner's second Store.
+insert into got select 'vo', pg_temp.recover('vo', pg_temp.org('a0'), pg_temp.u('a1'), null, null, null);
+select is((select jsonb_build_object('active', u.active, 'initials', u.initials, 'pin', (select count(*) from public.user_pins p where p.user_id = u.id),
+                                     'stores', (select jsonb_agg(a.store_id order by a.store_id) from public.store_assignments a where a.user_id = u.id))
+             from public.users u where u.id = pg_temp.u('a1')),
+  jsonb_build_object('active', true, 'initials', null, 'pin', 1, 'stores', jsonb_build_array(pg_temp.st('a1'), pg_temp.st('a2'))),
+  'S-01 d10 (finding 21) - initials held by an active colleague at the Owner''s second Store only are cleared; the PIN nobody holds and both Stores stay');
+-- A PIN held only by an inactive Manager.
+insert into got select 'uo', pg_temp.recover('uo', pg_temp.org('b0'), pg_temp.u('b1'), null, null, null);
+select is((select jsonb_build_object('active', u.active, 'initials', u.initials, 'pin', (select count(*) from public.user_pins p where p.user_id = u.id))
+             from public.users u where u.id = pg_temp.u('b1')),
+  '{"active": true, "initials": "UO", "pin": 1}'::jsonb,
+  'S-01 d10 (finding 21) - a PIN held at the Owner''s Store only by a deactivated Manager clashes with nothing: kept');
+-- Values held at a Store that is not the Owner's.
+insert into got select 'to', pg_temp.recover('to', pg_temp.org('c0'), pg_temp.u('c1'), null, null, null);
+select is((select jsonb_build_object('active', u.active, 'initials', u.initials, 'pin', (select count(*) from public.user_pins p where p.user_id = u.id))
+             from public.users u where u.id = pg_temp.u('c1')),
+  '{"active": true, "initials": "TO", "pin": 1}'::jsonb,
+  'S-01 d10 (finding 21) - initials and a PIN held by active colleagues at a Store that is not the Owner''s clash with nothing: both kept');
+select is(array[pg_temp.ulog(pg_temp.u('a1')) -> -1 -> 'after', pg_temp.ulog(pg_temp.u('b1')) -> -1 -> 'after', pg_temp.ulog(pg_temp.u('c1')) -> -1 -> 'after'],
+  array['{"active": true, "initials": null, "pin_held": true}'::jsonb, '{"active": true, "initials": "UO", "pin_held": true}'::jsonb,
+        '{"active": true, "initials": "TO", "pin_held": true}'::jsonb],
+  'S-01 d10 (finding 21) - and each reactivated entry''s after says so');
+select ok(pg_temp.person(pg_temp.u('a2')) = (select v from kept where k = 've') and pg_temp.person(pg_temp.u('b2')) = (select v from kept where k = 'um')
+          and pg_temp.person(pg_temp.u('c2')) = (select v from kept where k = 'te') and pg_temp.person(pg_temp.u('c3')) = (select v from kept where k = 'tm'),
+  'S-01 d10 (finding 21) - the colleagues are untouched in all three: row, PIN and Stores');
+
 select * from finish();
 rollback;
