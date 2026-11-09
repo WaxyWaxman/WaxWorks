@@ -5,7 +5,9 @@
 // Owner is named in p_replace_user_id: then they are deactivated and the
 // restoration happens in the same act (A-146, S-01 d11). A reactivated Owner
 // keeps their Stores; clashing initials or a clashing PIN are cleared (S-01
-// d10). An invite is logged on the person (S-01 d14).
+// d10). An invite is logged on the person (S-01 d14). A new Owner invited at a
+// replacement may not carry the replaced Owner's email (S-01 d15) — a check on
+// stored data, so the function's and the fake's, not the wrapper's.
 import { z } from "zod";
 import { contract, sysadminHeader } from "../wrapper";
 
