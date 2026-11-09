@@ -535,6 +535,8 @@ describe("S-01 d11, A-146 — owner_recover replaces an active, unreachable Owne
     await refused(recover(w, { p_owner_name: "N. Owner", p_owner_email: "n@example.test", p_replace_user_id: w.jm.user_id }), "not_found");
     const same = await failed(recover(w, { p_user_id: w.ownerId, p_replace_user_id: w.ownerId }));
     expect(same.code).toBe("invalid_input");
+    // S-01 d15: the "new" Owner may not be invited at the replaced Owner's own address, in any case.
+    expect((await refused(recover(w, { p_owner_name: "M. Chen", p_owner_email: "M.CHEN@example.test", p_replace_user_id: w.ownerId }), "invalid_input")).detail).toBe("p_owner_email");
     // Restoring someone already active (reachable only with a replacement) — M-04 d47's key.
     expect((await refused(recover(w, { p_user_id: bo.user_id, p_replace_user_id: w.ownerId }), "invalid_state")).detail).toBe("active");
     expect(w.root.inspect().log.length).toBe(before);

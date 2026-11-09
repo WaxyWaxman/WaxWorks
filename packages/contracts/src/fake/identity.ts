@@ -598,6 +598,13 @@ export const identityHandlers: Record<string, Handler> = {
       // M-04 d47: nothing to restore for someone already active (reachable only with a replacement).
       if (owner.active) x.refuse("invalid_state", "active");
     } else {
+      // S-01 d15: a replacement may not invite a new Owner at the replaced Owner's own
+      // address — for a lost passkey the act is the reset link, and a row at that
+      // address could never be linked (A-132).
+      const same = (a: string | null) => (a ?? "").trim().toLowerCase();
+      if (replaced && same(replaced.email) !== "" && same(replaced.email) === same(x.args.p_owner_email as string)) {
+        x.refuse("invalid_input", "p_owner_email");
+      }
       owner = null as unknown as UserRow; // written below
     }
     if (replaced) {
