@@ -544,6 +544,49 @@ describe("S-01 d11, A-146 — owner_recover replaces an active, unreachable Owne
   });
 });
 
+describe("conventions §5 — owner_recover's argument shapes: the wrapper, the fake and the database refuse the same ones (S-01 D M1 pass-3 findings 37, 39)", () => {
+  it("the wrapper refuses a person given with a stray name or email, as it refuses a new Owner missing either", async () => {
+    const w = await world();
+    const sys = w.root.withSession(sysadminSession);
+    const base = { p_actor_user_id: SYSADMIN, p_org_id: w.org.org_id, p_replace_user_id: null };
+    for (const args of [
+      { p_user_id: w.ownerId, p_owner_name: "Stray", p_owner_email: null },
+      { p_user_id: w.ownerId, p_owner_name: null, p_owner_email: "stray@example.test" },
+      { p_user_id: w.ownerId, p_owner_name: "Stray", p_owner_email: "stray@example.test" },
+      { p_user_id: null, p_owner_name: "N. Owner", p_owner_email: null },
+      { p_user_id: null, p_owner_name: null, p_owner_email: "n@example.test" },
+      { p_user_id: null, p_owner_name: null, p_owner_email: null },
+    ]) {
+      expect((await failed(c.owner_recover(sys, { ...base, ...args }))).code).toBe("invalid_input");
+    }
+  });
+
+  it("a raw rpc reaching the fake is refused as the database refuses it, before the Organization is read", async () => {
+    const w = await world();
+    const sys = w.root.withSession(sysadminSession);
+    const unknownOrg = crypto.randomUUID();
+    const before = w.root.inspect().log.length;
+    for (const [args, expected] of [
+      [{ p_user_id: w.ownerId, p_owner_name: "Stray", p_owner_email: null }, { key: "invalid_input", detail: "p_user_id" }],
+      [{ p_user_id: w.ownerId, p_owner_name: null, p_owner_email: "stray@example.test" }, { key: "invalid_input", detail: "p_user_id" }],
+      [{ p_user_id: null, p_owner_name: null, p_owner_email: null }, { key: "invalid_input", detail: "p_user_id" }],
+      [{ p_user_id: null, p_owner_name: "N. Owner", p_owner_email: null }, { key: "email_required" }],
+      [{ p_user_id: null, p_owner_name: "N. Owner", p_owner_email: "   " }, { key: "email_required" }],
+      [{ p_user_id: null, p_owner_name: null, p_owner_email: "n@example.test" }, { key: "invalid_input", detail: "p_owner_name" }],
+      [{ p_user_id: null, p_owner_name: "  ", p_owner_email: "n@example.test" }, { key: "invalid_input", detail: "p_owner_name" }],
+    ] as const) {
+      const e = await sys.rpc("owner_recover", { p_actor_user_id: SYSADMIN, p_org_id: unknownOrg, p_replace_user_id: null, ...args, p_request_id: crypto.randomUUID() })
+        .then(() => null, (x: unknown) => x as RpcRefusal);
+      expect(e).toMatchObject({ ...expected, code: REFUSALS[expected.key] });
+    }
+    // The same id in both places is refused before the Organization is read too (finding 22a).
+    const same = await sys.rpc("owner_recover", { p_actor_user_id: SYSADMIN, p_org_id: unknownOrg, p_user_id: w.ownerId, p_owner_name: null, p_owner_email: null, p_replace_user_id: w.ownerId, p_request_id: crypto.randomUUID() })
+      .then(() => null, (x: unknown) => x as RpcRefusal);
+    expect(same).toMatchObject({ key: "invalid_input", detail: "p_replace_user_id" });
+    expect(w.root.inspect().log.length).toBe(before);
+  });
+});
+
 describe("S-01 d10, M-04 d63 — an Owner reactivated by owner_recover keeps their Stores; clashing initials or a clashing PIN are cleared, nothing else is touched", () => {
   it("initials and a PIN taken by colleagues meanwhile are cleared; the colleagues keep theirs; the reactivation is logged on the person (S-01 d9) with what changed; Assign then wants initials", async () => {
     const w = await world();
