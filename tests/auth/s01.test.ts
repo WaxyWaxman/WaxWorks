@@ -291,3 +291,79 @@ describe("S-01 D M1 row 35 — A-148: a reset link sent before a deactivation op
     expect(after.body.access_token).toBeUndefined();
   });
 });
+
+describe("S-01 D M1 row 38 — A-150: a reset link sent before a demotion to Employee opens no session after the re-promotion", () => {
+  let org: Org;
+  let ownerToken: string;
+  const demRun = runId();
+
+  beforeAll(async () => {
+    // An Owner with a personal session (E-01 d27: the link's session, then a passkey
+    // made and signed in with — m04-race.test.ts's personalSession), and an enrolled,
+    // linked Manager with no link outstanding: user_reset_request opens the window here.
+    org = await makeOrg(demRun, [
+      { key: "o", role: "owner", initials: "OO", stores: ["A"], pin: "5101" },
+      { key: "m", role: "manager", initials: "MM", stores: ["A"], pin: "5102", enrolment: false },
+    ]);
+    exec(`update public.users set passkey_enrolled_at = now() where id = '${org.people.m!.id}';`);
+    const page = await passkeyPage();
+    try {
+      const l = await linkSession(org.people.o!.email);
+      expect(l.status, JSON.stringify(l.body)).toBe(200);
+      const r = await enrolAndSignIn(page.page, { access_token: l.body.access_token as string, refresh_token: l.body.refresh_token as string });
+      expect(r.registered.error).toBeNull();
+      expect(r.signedIn.error).toBeNull();
+      ownerToken = r.signedIn.access_token!;
+    } finally {
+      await page.close();
+    }
+  });
+
+  afterAll(async () => {
+    await org?.cleanup();
+  });
+
+  /** A magic link for the address, minted now and opened later — as an emailed link is. */
+  async function mintLink(email: string): Promise<string> {
+    const l = await authCall("/admin/generate_link", { key: "secret", body: { type: "magiclink", email } });
+    expect(l.status, JSON.stringify(l.body)).toBeLessThan(300);
+    return (l.body.hashed_token ?? (l.body.properties as Record<string, unknown> | undefined)?.hashed_token) as string;
+  }
+  const open = (hashed: string) => authCall("/verify", { body: { type: "magiclink", token_hash: hashed } });
+  const windowOf = (id: string) => read<{ w: string | null }>(`select enrolment_open_until::text as w from public.users where id = '${id}'`)[0]!.w;
+  /** An M-04 function on the Owner's personal session: the session holder is actor and authoriser (M-04 d31). */
+  const atDesk = (fn: string, args: Record<string, unknown>) =>
+    rest(`/rpc/${fn}`, ownerToken, {
+      method: "POST",
+      schema: "app",
+      body: { p_actor_user_id: org.people.o!.id, p_actor_initials: null, p_request_id: randomUUID(), p_terminal_id: null, p_manager_pin: null, ...args },
+    });
+
+  it("A-150 — the reset link opens an enrolment session; minted again, the Manager demoted to Employee and promoted back, the link is refused", async () => {
+    expect(ownerToken, "the Owner signed in").toBeDefined();
+    const m = org.people.m!;
+    const reset = await atDesk("user_reset_request", { p_user_id: m.id });
+    console.log(`S-01 A-150 user_reset_request -> ${reset.status} ${JSON.stringify(reset.body)}; M's window: ${windowOf(m.id)}`);
+    expect(reset.status).toBe(200);
+    // The control: inside the window the reset link is an enrolment session.
+    const first = await open(await mintLink(m.email));
+    console.log(`S-01 A-150 reset link opened at once -> ${first.status} ${JSON.stringify(first.status === 200 ? ours(first.body.access_token as string) : first.body)}`);
+    expect(first.status, JSON.stringify(first.body)).toBe(200);
+    expect(ours(first.body.access_token as string)).toMatchObject({ principal: "enrolment", user_id: m.id });
+    // A link still outstanding when the Manager is demoted to Employee…
+    const outstanding = await mintLink(m.email);
+    const demoted = await atDesk("user_change_role", { p_user_id: m.id, p_role: "employee", p_email: null, p_pin: null });
+    console.log(`S-01 A-150 user_change_role to employee -> ${demoted.status} ${JSON.stringify(demoted.body)}; M's window: ${windowOf(m.id)}`);
+    expect(demoted.status).toBe(200);
+    // …and promoted back to Manager (enrolled, so no invite; the demotion cleared the PIN, M-04 d39).
+    const promoted = await atDesk("user_change_role", { p_user_id: m.id, p_role: "manager", p_email: null, p_pin: "5103" });
+    console.log(`S-01 A-150 user_change_role back to manager -> ${promoted.status} ${JSON.stringify(promoted.body)}; M's window: ${windowOf(m.id)}`);
+    expect(promoted.status).toBe(200);
+    expect(promoted.body).toEqual({ user_id: m.id, invite: false, email: null });
+    const after = await open(outstanding);
+    console.log(`S-01 A-150 outstanding link opened after the re-promotion -> ${after.status} ${JSON.stringify(after.status === 200 ? ours(after.body.access_token as string) : after.body)}`);
+    expect(windowOf(m.id)).toBeNull();
+    expect(after.status).toBeGreaterThanOrEqual(400);
+    expect(after.body.access_token).toBeUndefined();
+  });
+});
