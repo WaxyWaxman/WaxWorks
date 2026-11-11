@@ -250,5 +250,30 @@ select is(array[pg_temp.recover(gen_random_uuid(), null, null, null, null),
         pg_temp.refusal('23502', 'email_required'), pg_temp.refusal('22023', 'invalid_input', 'p_owner_name')],
   'conventions §5 - the same four shapes for an Organization that does not exist: the argument refusal, never not_found (before any read)');
 
+-- ════════════════════════════════════════════════════════════════════════════
+-- Row 39 (pass 4, finding 42): S-01 d15 with the STORED address varied — appended
+-- after the last assertion, so every earlier line and number holds.
+-- Org L (c2): lo Owner, active, stored ' Mixed@Case.TEST ' (case and padding on the
+--             stored side). Org N (c3): no Owner, active, stored address null.
+-- Org B (c4): bo Owner, active, stored address blank ('   ').
+-- ════════════════════════════════════════════════════════════════════════════
+insert into public.organizations (id, name) values
+  ('00000000-0000-0000-0000-0000000000c2', 'Org L'), ('00000000-0000-0000-0000-0000000000c3', 'Org N'),
+  ('00000000-0000-0000-0000-0000000000c4', 'Org B');
+insert into public.users (id, org_id, role, initials, display_name, email, passkey_enrolled_at, active, log, enrolment_open_until) values
+  ('00000000-0000-0000-0002-0000000000c2', '00000000-0000-0000-0000-0000000000c2', 'owner', 'LO', 'Lou Owner', ' Mixed@Case.TEST ', now(), true, '[]', null),
+  ('00000000-0000-0000-0002-0000000000c3', '00000000-0000-0000-0000-0000000000c3', 'owner', 'NO', 'Nan Owner', null,                now(), true, '[]', null),
+  ('00000000-0000-0000-0002-0000000000c4', '00000000-0000-0000-0000-0000000000c4', 'owner', 'BO', 'Bea Owner', '   ',               now(), true, '[]', null);
+select pg_temp.snap('l', pg_temp.org('c2'));
+select is(pg_temp.recover(pg_temp.org('c2'), null, 'Lee New', 'mixed@case.test', pg_temp.u('c2')),
+  pg_temp.refusal('22023', 'invalid_input', 'p_owner_email'),
+  'S-01 d15 (finding 42) - the replaced Owner''s stored address in another case and padded: still their address, invalid_input, p_owner_email');
+select ok(pg_temp.unchanged('l', pg_temp.org('c2')), 'S-01 d15 (finding 42) - nothing written in Org L by that refusal');
+insert into got select 'n', pg_temp.recover(pg_temp.org('c3'), null, 'Ned New', 'ned@n.test', pg_temp.u('c3'));
+insert into got select 'b', pg_temp.recover(pg_temp.org('c4'), null, 'Ben New', 'ben@b.test', pg_temp.u('c4'));
+select is(array[(select r - 'user_id' from got where k = 'n'), (select r - 'user_id' from got where k = 'b')],
+  array['{"invite": true, "email": "ned@n.test"}'::jsonb, '{"invite": true, "email": "ben@b.test"}'::jsonb],
+  'S-01 d15 (finding 42) - a replaced Owner whose stored address is null, or blank, matches nothing: the replacement invites');
+
 select * from finish();
 rollback;

@@ -77,9 +77,9 @@ select ok(pg_temp.at('owner_recover', 'app_internal.lock_active_owners(') > 0
           and pg_temp.at('owner_recover', 'app_internal.active_owner_count(') < pg_temp.at('owner_recover', '''active_owner'''),
   'A-138 - owner_recover takes the Owners'' lock (step 2), then counts under it, then refuses active_owner');
 select ok(pg_temp.src('owner_recover') ~* 'from public\.users u\s+where u\.org_id = p_org_id and u\.id in \(p_replace_user_id, p_user_id\)\s+order by u\.id\s+for no key update' and pg_temp.at('owner_recover', 'order by u.id') > pg_temp.at('owner_recover', '''active_owner''') and pg_temp.at('owner_recover', 'order by u.id') > pg_temp.at('owner_recover', 'for no key update') and pg_temp.at('owner_recover', 'for no key update') < pg_temp.at('owner_recover', 'app_internal.lock_active_owners(')
-          and regexp_count(pg_temp.src('owner_recover'), 'from\s+public\.users\s+u\s+where\s+u\.id\s*=') = 2 and regexp_instr(pg_temp.src('owner_recover'), 'from\s+public\.users\s+u\s+where\s+u\.id\s*=') > pg_temp.at('owner_recover', 'order by u.id')
+          and regexp_instr(pg_temp.src('owner_recover'), '"?public"?\s*\.\s*"?users\M', 1, 2) > pg_temp.at('owner_recover', 'order by u.id') and regexp_instr(pg_temp.src('owner_recover'), '"?public"?\s*\.\s*"?users\M') between pg_temp.at('owner_recover', 'app_internal.lock_active_owners(') and pg_temp.at('owner_recover', 'order by u.id')
           and pg_temp.at('owner_recover', 'from public.user_pins') > pg_temp.at('owner_recover', 'order by u.id') and pg_temp.at('owner_recover', 'app_internal.store_set(') > pg_temp.at('owner_recover', 'order by u.id') and pg_temp.at('owner_recover', 'order by u.id') < pg_temp.at('owner_recover', '''inactive'''),
-  'A-138, A-146 - owner_recover locks both subjects (step 3) in one statement, in id order, after the Organization''s row and active_owner; every read of a subject''s row, its PIN hash and its Store set comes after that statement by position (S-01 D M1 finding 17)');
+  'A-138, A-146 - owner_recover locks both subjects (step 3) in one statement, in id order, after the Organization''s row and active_owner; every read of a subject''s row, its PIN hash and its Store set comes after that statement by position (S-01 D M1 finding 17), whatever its text: the first reference to public.users is the step-3 statement and every other comes after it (finding 41)');
 select ok(pg_temp.times('owner_reset_request', 'for no key update') = 2
           and pg_temp.src('owner_reset_request') ~* 'select[^;]*from public\.users u[^;]*p_user_id[^;]*for no key update'
           and pg_temp.last_at('owner_reset_request', 'for no key update') < pg_temp.first_write('owner_reset_request')
@@ -135,6 +135,10 @@ select ok(pg_temp.at('owner_recover', '''deactivated''') > pg_temp.last_at('owne
 select ok(pg_temp.last_at('owner_recover', 'app_internal.active_owner_count(') > pg_temp.last_at('owner_recover', 'insert into public.users')
           and pg_temp.src('owner_recover') ~* 'active_owner_count\(p_org_id\)\s*<\s*1',
   'A-146 - after its writes owner_recover asserts the Organization still has an active Owner (M-04 d26''s floor at every commit)');
+select ok(pg_temp.at('owner_recover', 'pg_catalog.lower(') > pg_temp.at('owner_recover', 'order by u.id')
+          and pg_temp.at('owner_recover', '''p_owner_email''') > pg_temp.at('owner_recover', 'pg_catalog.lower(')
+          and pg_temp.at('owner_recover', '''p_owner_email''') < pg_temp.last_at('owner_recover', 'public.system_administrators'),
+  'A-141, S-01 d15 - owner_recover''s d15 comparison and its refusal (invalid_input, p_owner_email) come after step 3 and before the A-140 re-check: the act''s own refusal precedes the re-check (S-01 D M1 finding 49)');
 
 select * from finish();
 rollback;
