@@ -37,8 +37,8 @@ group can wait until the shop has run on the system for a while.
 
 | # | Question | Why it matters | Record | Answer | Date |
 |---|---|---|---|---|---|
-| 11 | **One catalog or one per shop?** If the Organization has two Stores, do they share one list of records and one genre scheme, or does each shop keep its own? (Stock is always per Store; this is about the record *descriptions* and genres.) | Decides the shape of the catalog tables; expensive to change after real stock is loaded | architecture §11 (user model) | | |
-| 12 | **Should counter staff see cost** on the search screen? The prototype hides it behind a tap; no decision says whether an Employee may see what the shop paid. | A screen rule for E-03 | E-03 open questions | | |
+| 11 | **One catalog or one per shop?** If the Organization has two Stores, do they share one list of records and one genre scheme, or does each shop keep its own? (Stock is always per Store; this is about the record *descriptions* and genres.) | Decides the shape of the catalog tables; expensive to change after real stock is loaded | architecture §11 (user model) | **One per shop.** Each Store keeps its own record descriptions and genre scheme — which is the catalog's shape today (A-86, A-6), so §11's *move it to the Organization* is answered no. | 2026-11-13 |
+| 12 | **Should counter staff see cost** on the search screen? The prototype hides it behind a tap; no decision says whether an Employee may see what the shop paid. | A screen rule for E-03 | E-03 open questions | **Yes, behind a tap** — as the prototype does. | 2026-11-13 |
 
 ## 3. Needed before M3 — receiving
 
