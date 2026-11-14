@@ -89,6 +89,10 @@ Pay-outs are the one cash movement that is captured, because money leaving the t
 
 ## Inherited from other flows
 
+**From [E-05](E-05-sell-a-record.md) decision 40:**
+
+- **A void counts in the voider's column** (2026-11-13): sections 6 and 7's void count is attributed to the Employee who voided the Sale, not to its seller. A void is possible only on a Current Sale, so it always belongs to the batch of the day it was rung.
+
 **From [architecture](../architecture.md) A-83 and A-84:**
 
 - **The stored summary is the schema of every range report, and it carries a version.** Decision 27 sums decision 13's stored
