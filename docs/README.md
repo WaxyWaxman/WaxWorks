@@ -27,6 +27,7 @@ Point-of-sale and inventory management for independent vinyl record stores.
 | E-05 | [Point of Sale](flows/E-05-sell-a-record.md) | Employee | **Specified** |
 | E-06 | [Process a return](flows/E-06-process-a-return.md) | Employee | **Specified** |
 | E-07 | [Manage customers](flows/E-07-manage-customers.md) | Employee | **Specified** |
+| E-08 | [Take stock](flows/E-08-take-stock.md) | Employee | **Specified** |
 | M-01 | [Suppliers](flows/M-01-supplier-margin.md) | Employee | **Specified** |
 | M-02 | [Re-order inventory](flows/M-02-reorder-inventory.md) | Manager | **Specified** |
 | M-03 | [Daily summary](flows/M-03-daily-summary.md) | Manager | **Specified** |
