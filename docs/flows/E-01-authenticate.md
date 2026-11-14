@@ -87,6 +87,11 @@ The shape decision 18 was built to protect held: actions are still attributed to
 - **A demotion to Employee ends a personal session at once** (M-04 d45, 2026-10-30), as deactivation does (decision 30): Employees have no personal session (decision 27). Other role changes still wait for the next session. **The mechanism is [architecture](../architecture.md) A-122** (2026-10-30): the read helpers check the role live, and the access-token hook issues no token to an Employee or an inactive person — so a demoted or deactivated person reads nothing at once and is signed out at their next refresh.
 - **No invite or re-enrolment link reaches a deactivated person** (M-04 d44): reactivation comes first, so no enrolment session (decision 37) opens for an account that is off.
 
+**From [O-01](O-01-administer-the-organization.md):**
+
+- **A closed Store is not offered in any Store pick, and a pick of one is refused `not_found`** (O-01 d8, 2026-11-13) — decision 27's pick list and decision 36's Create Store landing show active Stores only.
+- **Reaching another Store is by assignment only** (O-01 d9, 2026-11-13) — decision 27's *a Manager one of theirs* stands; there is no read-only reach.
+
 **From [S-01](S-01-onboard-and-recover-organizations.md):**
 
 - **A recovery may clear an Owner's initials or PIN** (S-01 d10, M-04 d63, 2026-11-08); decision 41 is what their next sign-in does about it.
@@ -163,7 +168,7 @@ The shape decision 18 was built to protect held: actions are still attributed to
 - ~~**Credentials** — **deferred to a later version**, not open (decision 18).~~ — **Resolved** by decisions 24–30: store account, PIN, personal session with a second factor; decision 30 discharges decision 18's checklist.
 - ~~**Multi-store membership** — **deferred to a later version**, not open.~~ — **Resolved** by decision 25 and [M-04](M-04-manage-users.md) d27: a User is assigned to one or more Stores of their Organization; initials are unique per Store among the assigned.
 - ~~**Does the store account need a second factor?** Decision 28 leaves it open. A shared terminal makes a phone code awkward and a remembered device plausible; a store account with no second factor makes the Store's email password the whole of the counter's access. Owned here.~~ — **Resolved** by decision 34: no; the password is the whole of the counter's access, and the Owner's reset is the kill switch.
-- **May a Manager on a personal session pick a Store they are not assigned to?** Decision 27 says an Owner may pick any and a Manager one of theirs; whether a Manager may *read* a sister Store without being assigned is a question for the `O-` series, which owns assignment across the Organization.
+- ~~**May a Manager on a personal session pick a Store they are not assigned to?**~~ — **resolved by [O-01](O-01-administer-the-organization.md) d9** (2026-11-13): no; covering a sister Store is an assignment. *Was:* Decision 27 says an Owner may pick any and a Manager one of theirs; whether a Manager may *read* a sister Store without being assigned is a question for the `O-` series, which owns assignment across the Organization.
 - **A personal session on a shared machine.** Decision 27 names the hole and states the practice — the counter runs a store session — without enforcing it. Whether the product should refuse a personal session on a device that also holds a store session, or time one out, is open.
 - ~~**Initials collisions.**~~ — **Resolved** by decision 14: initials are unique within a Store, enforced when [M-04](M-04-manage-users.md) creates the User. Whether **deactivated** Users hold their initials against reuse is part of that decision's detail and is recorded in M-04.
 - ~~**Does the 15-minute lapse apply during an open Sale?**~~ — **Resolved** by decision 10: it does not. A Sale left part-rung on the counter keeps its terminal alive, and the Sale stays locked to the Employee who opened it ([E-05](E-05-sell-a-record.md) d23).
