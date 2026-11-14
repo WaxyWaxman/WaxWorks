@@ -78,6 +78,10 @@ This is distinct from a supplier **Invoice** ([E-02](E-02-receive-inventory.md))
 
 ## Inherited from other flows
 
+**From [E-03](E-03-search-inventory.md) decision 26:**
+
+- **The precedent decision 25 looked for now exists** (2026-11-13): cost on Find is hidden behind a tap as a courtesy against a customer reading the screen, not a gate. Decision 25's standing figures stay ungated and shown; whether they follow E-03's mask is this flow's call, not settled by E-03.
+
 **From [M-03](M-03-daily-summary.md) decision 22:**
 
 - **Account type becomes a reporting dimension.** [M-03](M-03-daily-summary.md)'s report splits sales by
