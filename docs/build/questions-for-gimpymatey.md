@@ -44,9 +44,9 @@ group can wait until the shop has run on the system for a while.
 
 | # | Question | Why it matters | Record | Answer | Date |
 |---|---|---|---|---|---|
-| 13 | **Invoice numbers across shops.** Two Stores buying from the same Supplier: could their invoice numbers overlap, or does the Supplier number each shop's invoices separately? | Decides whether the invoice key carries the Store | architecture §11 (user model); A-17, A-22, A-32 | | |
-| 14 | **Deleting a Supplier** — Manager-only, or anyone? The rules gate some deletions and not others, and Suppliers were left undecided. | One line in M-01 | M-01 open questions | | |
-| 15 | **Labels at receiving.** Does the pilot shop need printed shelf labels from day one of receiving, or can the label stylesheet follow after live testing? | Whether the label print lands in M3 or after | [plan.md](plan.md) §3 (recommended, not yet ratified) | | |
+| 13 | **Invoice numbers across shops.** Two Stores buying from the same Supplier: could their invoice numbers overlap, or does the Supplier number each shop's invoices separately? | Decides whether the invoice key carries the Store | architecture §11 (user model); A-17, A-22, A-32 | **No, never** — a Supplier numbers invoices in one sequence across all the Organization's shops, so the Supplier's invoice number needs no Store in its key. *(§11's other half — the system's own `SH-YYMMDD-n` minted per Store — is a technical choice, left to `/architecture`.)* | 2026-11-13 |
+| 14 | **Deleting a Supplier** — Manager-only, or anyone? The rules gate some deletions and not others, and Suppliers were left undecided. | One line in M-01 | M-01 open questions | **Managers only.** | 2026-11-13 |
+| 15 | **Labels at receiving.** Does the pilot shop need printed shelf labels from day one of receiving, or can the label stylesheet follow after live testing? | Whether the label print lands in M3 or after | [plan.md](plan.md) §3 (recommended, not yet ratified) | **Day one** — labels print from the first day of receiving, so the label stylesheet stays in M3 and plan.md's deferral candidate is declined. | 2026-11-13 |
 
 ## 4. Needed before M4 — the till
 
