@@ -148,18 +148,18 @@ PurchaseOrder and Invoice tables, the pricing helpers, `invoice_is_paid()` retur
 writing its journal in the same transaction (A-67). **Schema decisions due before
 the D order:** `invoice_number` and `SH-YYMMDD-n` across Stores (§4); bigint minor
 units across PostgREST (M0 finding 10); the predicates' `pure` label against A-113.
-**Candidate for after live testing:** the label print stylesheet, which the
-receiving loop does not need to be exercised.
+~~**Candidate for after live testing:** the label print stylesheet, which the
+receiving loop does not need to be exercised.~~ — **declined 2026-11-13 by GimpyMatey** ([questions for GimpyMatey](questions-for-gimpymatey.md) Q15): labels print from day one of receiving, so the stylesheet stays in M3.
 
 ### M4 — the till
 
 Sale functions, locking, counters, the sell screen, split tender, hold and re-open,
 returns with routing. **Schema decisions due before the D order:** gift card
-currency across Stores (A-51); whose void and which batch (§11). **Candidates for
+currency across Stores (A-51); whose void and which batch (§11). ~~**Candidates for
 after live testing** — _recommended, not yet ratified_, via `/plan-check` against
 §8: gift cards, the customer ledger and E-07 as a whole, oversold items, the copy
 picker. Each is a table group or a screen that a one-shop pilot can run without,
-and each is cheaper to shape after a week of real sales than before.
+and each is cheaper to shape after a week of real sales than before.~~ — **declined 2026-11-13 by GimpyMatey** ([questions for GimpyMatey](questions-for-gimpymatey.md) Q16): all four are needed on the first day of selling, so M4 keeps §8's full scope.
 
 **What this path does not do:** M5's close and receipts, M6's hardening, M7 and
 M8. The cron drain's principal (§4) is therefore not on this path, but A-118 forces
@@ -223,7 +223,7 @@ not so it is worked now. Every row points at the record; nothing here is a decis
 | **Operator alerting and health**; **the paid Supabase plan and backups**; **A-96's `staging` branch**; **Sentry's allowlist and DSN**; **A-91's key-rule CI job** | §11; A-109; A-96; A-106 | M6 hardening's list |
 | **The `release_cache` shape**; **a date-range report as an issuance** | §11 | M2 and M5 respectively, neither a blocker |
 | **Auto-renew on `waxworks.store`** (off; expires 2027-10-13) | runbook | A year away; one dashboard switch |
-| **Feature scope**: gift cards, the customer ledger and E-07, oversold items, the copy picker (M4); the coverage check (M2); the label stylesheet (M3) | §8 | Candidates for deferral — _recommended, not yet ratified_, through `/plan-check` |
+| **Feature scope**: gift cards, the customer ledger and E-07, oversold items, the copy picker (M4); the coverage check (M2); ~~the label stylesheet (M3)~~ | §8 | Candidates for deferral — _recommended, not yet ratified_, through `/plan-check`. **M4's four and M3's label stylesheet declined 2026-11-13 by GimpyMatey** ([questions for GimpyMatey](questions-for-gimpymatey.md) Q15, Q16) — needed from day one; the coverage check (M2) is still a candidate |
 
 ---
 
