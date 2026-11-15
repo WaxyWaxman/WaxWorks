@@ -75,6 +75,7 @@ import { closeUndoRefusal } from "../lib/ledgerPeriods";
 import { yearEndClosingBatch, type LedgerIssuance } from "../lib/ledgerStatements";
 import type { LedgerReconciliation } from "../lib/ledgerReconciliation";
 import { toCalendarDate } from "../lib/calendarDate";
+import { mintSecondHandRef } from "../lib/secondHandRef";
 import {
   CURRENT_USER,
   CUSTOMERS,
@@ -219,19 +220,6 @@ function applyTenderEffect(
 // than patch every `.replace(" ", "T")` call site.
 const now = () => new Date().toLocaleString("en-CA", { hour12: false }).replace(",", "");
 
-// E-02 d39 — `SH-YYMMDD-n` for a second-hand intake with no supplier
-// paperwork. Takes the received date as one calendar day; anything
-// unparseable falls back to today, because a reference that exists beats a
-// blank one.
-function mintSecondHandRef(receivedDate: string, invoices: Invoice[]): string {
-  const iso = toCalendarDate(receivedDate) || new Date().toLocaleDateString("en-CA");
-  const [y, m, d] = iso.split("-");
-  const stem = `SH-${y.slice(2)}${m}${d}`;
-  // Sequence against what already exists for that day rather than a counter,
-  // so the number cannot drift from the references actually on file.
-  const taken = invoices.filter((iv) => iv.invoiceNumber.startsWith(stem + "-")).length;
-  return `${stem}-${taken + 1}`;
-}
 
 
 interface AppState {
@@ -4445,17 +4433,16 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
     // No supplier paperwork to key off — auto-generate our own reference
     // rather than block opening the invoice on a number that doesn't exist.
     //
-    // A second-hand intake mints from the RECEIVED DATE rather than a store
-    // counter (E-02 d39, A-32): the day the stock arrived is the one fact a
-    // walk-in trade-in reliably has, and a counter value tells you nothing
-    // when you find the reference again six months later. `-n` sequences a
-    // second intake the same day, counted against the references already
-    // minted for that date rather than a global counter — so the sequence is
-    // per-day and reads as one.
+    // A second-hand intake mints from the Store's POSITION and the RECEIVED
+    // DATE rather than a store counter (E-02 d39, A-32, A-152): the day the
+    // stock arrived is the one fact a walk-in trade-in reliably has, and the
+    // position keeps two Stores' references apart against the Organization's
+    // one second-hand Supplier. `-n` sequences this Store's intakes that day,
+    // counted against the references already on file.
     const invoiceNumber =
       input.invoiceNumber.trim() ||
       (input.intakeMode === "Second-hand"
-        ? mintSecondHandRef(receivedDate, s.invoices)
+        ? mintSecondHandRef(s.storeDetails.position, receivedDate, s.invoices.map((iv) => iv.invoiceNumber))
         : `REF${String(s.nextInvoiceRef).padStart(4, "0")}`);
     const invoice: Invoice = {
       id,
