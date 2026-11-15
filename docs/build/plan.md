@@ -148,18 +148,18 @@ PurchaseOrder and Invoice tables, the pricing helpers, `invoice_is_paid()` retur
 writing its journal in the same transaction (A-67). **Schema decisions due before
 the D order:** `invoice_number` and `SH-YYMMDD-n` across Stores (§4); bigint minor
 units across PostgREST (M0 finding 10); the predicates' `pure` label against A-113.
-**Candidate for after live testing:** the label print stylesheet, which the
-receiving loop does not need to be exercised.
+~~**Candidate for after live testing:** the label print stylesheet, which the
+receiving loop does not need to be exercised.~~ — **declined 2026-11-13 by GimpyMatey** ([questions for GimpyMatey](questions-for-gimpymatey.md) Q15): labels print from day one of receiving, so the stylesheet stays in M3.
 
 ### M4 — the till
 
 Sale functions, locking, counters, the sell screen, split tender, hold and re-open,
 returns with routing. **Schema decisions due before the D order:** gift card
-currency across Stores (A-51); whose void and which batch (§11). **Candidates for
+currency across Stores (A-51); whose void and which batch (§11). ~~**Candidates for
 after live testing** — _recommended, not yet ratified_, via `/plan-check` against
 §8: gift cards, the customer ledger and E-07 as a whole, oversold items, the copy
 picker. Each is a table group or a screen that a one-shop pilot can run without,
-and each is cheaper to shape after a week of real sales than before.
+and each is cheaper to shape after a week of real sales than before.~~ — **declined 2026-11-13 by GimpyMatey** ([questions for GimpyMatey](questions-for-gimpymatey.md) Q16): all four are needed on the first day of selling, so M4 keeps §8's full scope.
 
 **What this path does not do:** M5's close and receipts, M6's hardening, M7 and
 M8. The cron drain's principal (§4) is therefore not on this path, but A-118 forces
@@ -212,6 +212,8 @@ not so it is worked now. Every row points at the record; nothing here is a decis
 | **A PIN or initials held twice** raise raw `P0003` — failure, not a keyed refusal, and uncounted | order finding 34 | Unreachable while M-04's uniqueness holds |
 | **`no_principal` reused** for the A-130 and A-131 refusals — _recommended, not yet ratified_ | order finding 36 | A key; ratify in the contract pull request or later |
 | **conventions §5's `employee` row** does not list `auth_user_link` in *Raised by* | order finding 37 | A doc line |
+| **Conventions §5's trim** — its definition names four characters *and* "the wrapper's `.trim()`", which strips more; and it reads as general while the M-04 functions still trim the space character only, so `E'JS	'` beside `JS` raises no initials clash by raw rpc. _Status: recommended, not yet ratified:_ the four characters, §5 reworded (S-01-D-M1 Verdict) | [S-01-D-M1](orders/S-01-D-M1.md) findings 52, 53, 58 | The wrapper trims and checks email shape first; only a raw rpc by an authorised Owner, Manager or System Administrator reaches it |
+| **Passkeys after a demotion** — A-150 closes an unused link, not an enrolment session already minted from it; within the token's hour it can register a passkey, `auth_user_link`'s passkey kind checks neither `active` nor `role`, and nothing removes Auth passkeys on demotion or deactivation. Not specified | [S-01-D-M1](orders/S-01-D-M1.md) finding 56; A-117, A-122, A-150 | Needs a reset link reaching someone other than the person, then a demotion and a re-promotion; `/architecture` before M6 |
 | **A missing PIN while the line is closed** — the code answers `pin_refused`, records nothing | E-01 d38 open question | Behaviour at an edge no screen reaches yet |
 | **The hook does not set `role` explicitly** on the store, person and enrolment paths | order findings 19, 38 | Defence in depth; `auth.users.role` is `authenticated` unless changed with the service key |
 | **`enrolment_open_until` unbounded; readable Org-wide by every store session; an open enrolment session outlives its window by up to an hour** | order findings 39, 45 | Observations against a one-shop pilot |
@@ -223,7 +225,7 @@ not so it is worked now. Every row points at the record; nothing here is a decis
 | **Operator alerting and health**; **the paid Supabase plan and backups**; **A-96's `staging` branch**; **Sentry's allowlist and DSN**; **A-91's key-rule CI job** | §11; A-109; A-96; A-106 | M6 hardening's list |
 | **The `release_cache` shape**; **a date-range report as an issuance** | §11 | M2 and M5 respectively, neither a blocker |
 | **Auto-renew on `waxworks.store`** (off; expires 2027-10-13) | runbook | A year away; one dashboard switch |
-| **Feature scope**: gift cards, the customer ledger and E-07, oversold items, the copy picker (M4); the coverage check (M2); the label stylesheet (M3) | §8 | Candidates for deferral — _recommended, not yet ratified_, through `/plan-check` |
+| **Feature scope**: gift cards, the customer ledger and E-07, oversold items, the copy picker (M4); the coverage check (M2); ~~the label stylesheet (M3)~~ | §8 | Candidates for deferral — _recommended, not yet ratified_, through `/plan-check`. **M4's four and M3's label stylesheet declined 2026-11-13 by GimpyMatey** ([questions for GimpyMatey](questions-for-gimpymatey.md) Q15, Q16) — needed from day one; the coverage check (M2) is still a candidate |
 
 ---
 
