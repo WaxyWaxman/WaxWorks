@@ -123,6 +123,11 @@ The in-place mechanism survives for the manager-only table (decision 9). On a st
 - **Managers and Owners sign in with a passkey — never a password, and no fallback** (E-01 d33, 2026-10-13). Add's invite and a promotion's invite (d29, d33) enrol it; *Send reset* sends a re-enrolment link. Someone who cannot create a passkey works from the counter's PIN.
 - **The review queue receives a system-raised flag when a Store's PIN line closes** ([E-01](E-01-authenticate.md) d31, d39, 2026-10-31): it has no actor and points at the refusals that closed the line, each naming its terminal and staff session. Acknowledging it is decision 17's act like any other.
 
+**From [O-01](O-01-administer-the-organization.md):**
+
+- **A closed Store's people stay assigned** (O-01 d7, 2026-11-13), so their history reads correctly; a closing changes no assignment.
+- **Covering a sister Store is an assignment** (O-01 d9, 2026-11-13): decision 27's assignment is the only reach to another Store.
+
 **From [S-01](S-01-onboard-and-recover-organizations.md):**
 
 - **An Owner reactivated by a System Administrator keeps their Stores; clashing initials or a clashing PIN are cleared, and they set new ones at their next sign-in** (S-01 d10, 2026-11-08) — the exception decision 63 records.

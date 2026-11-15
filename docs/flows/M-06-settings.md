@@ -223,6 +223,10 @@ QST are separate registrations (decision 48).
 
 ## Inherited from other flows
 
+**From [O-01](O-01-administer-the-organization.md):**
+
+- **A closed Store keeps its Store ID and position, and its position is never reused** (O-01 d7, 2026-11-13). Decision 47's two identifiers outlive a closing: a reopened Store has the same ones, and a Store created while another is closed takes the next position, not the closed one's.
+
 **From [architecture](../architecture.md) A-136 (2026-10-31):**
 
 - **Decision 27's log arrives with the print agent.** A browser cannot open the drawer (decision 25), so before the print agent a manual open in the product would record an opening that never happened. In v1 the drawer opens by key and nothing records it; `drawer_opens` and its writer land with the print agent.

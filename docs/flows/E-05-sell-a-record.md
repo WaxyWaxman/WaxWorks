@@ -205,6 +205,10 @@ Held copies count against **available** stock but remain on hand.
   and refused to build. The rule about expiry is **this flow's** to state; d33 records that it is
   relying on it, because whoever adds an expiry will be reading this file and not that one.
 
+**From [O-01](O-01-administer-the-organization.md):**
+
+- **Closing a Store Voids its Open Sales and cancels its Held Sales' holds** (O-01 d7, as amended by O-01 d10, 2026-11-14) — decision 5's Void and the Cancel Hold function, each recorded against the Owner who closed the Store. An Open Sale has no Sale number and moved no money, so nothing is reversed; a cancelled hold's copies go back to sellable stock. A reopened Store keeps its Sale numbering, which is unique per Store (decision 22).
+
 **From [M-04](M-04-manage-users.md):**
 
 - **A Sale's header displays the Employee's name, not their initials** ([M-04](M-04-manage-users.md) d16). Initials are released when a User is deactivated and may be reissued, so they no longer identify one person on their own. Attribution itself is unchanged — the Sale points at the User row.
