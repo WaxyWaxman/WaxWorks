@@ -102,6 +102,10 @@ An optional cross-reference links the two, so a payout can be traced to the copi
 
 ## Inherited from other flows
 
+**From [E-03](E-03-search-inventory.md) decision 26:**
+
+- **The copies table's cost is shown behind a tap on Find** (2026-11-13): hidden when the screen opens, revealed by any Employee, stored nowhere. A courtesy, not a gate.
+
 **From [E-06](E-06-process-a-return.md) decision 30:**
 
 - **A reason-coded adjustment written by a Return's write-off can be reversed when that Return is voided, and
