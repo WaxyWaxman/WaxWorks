@@ -103,6 +103,10 @@ An optional cross-reference links the two, so a payout can be traced to the copi
 
 ## Inherited from other flows
 
+**From [E-03](E-03-search-inventory.md) decision 26:**
+
+- **The copies table's cost is shown behind a tap on Find** (2026-11-13): hidden when the screen opens, revealed by any Employee, stored nowhere. A courtesy, not a gate.
+
 **From [E-08](E-08-take-stock.md) decisions 2, 5, 11, 18, 19, 21, 22, 23 (2026-11-13; stock-take is not in v1, E-08 d15):**
 
 - **A committed stock-take writes this flow's adjustments, one per copy, attributed to the Manager who committed it** (E-08 d2). Decision 3's *manager-only* holds. Its reasons come from decision 4's list, proposed by default (*Shrinkage* for a copy not found, *Found* for one not expected) and changeable before commit (E-08 d5). A reader of the reason-code history meets adjustments made in bulk from a count, alongside one-off adjustments made here.
