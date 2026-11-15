@@ -1,7 +1,7 @@
 # Wax Works — the build plan
 
 **Maintained by:** the coordinator, at the end of every build session. Read first by whoever picks up next.
-**Last updated:** 2026-11-03, sr-talbot's session — through #257; M-04 D `Accepted`; A-142 and A-143 ratified; S-01 D M1 and O-01 D M1 drafted and awaiting approval
+**Last updated:** 2026-11-14, GimpyMatey's session — twelve pull requests (#276–#287) waiting on sr-talbot, §2's first block. *Before that:* 2026-11-03, sr-talbot's session — through #257; M-04 D `Accepted`; A-142 and A-143 ratified; S-01 D M1 and O-01 D M1 drafted and awaiting approval
 
 The [workflow](workflow.md) says how an order moves; the [conventions](conventions.md)
 say what the code looks like; the [status table](status.md) says what has landed.
@@ -29,7 +29,59 @@ build: invented conventions, silent bugs, and context blown by reading everythin
 
 ---
 
-## 2. Where we are — 2026-11-08
+## 2. Where we are — 2026-11-14
+
+### For sr-talbot, picking up after GimpyMatey's session of 2026-11-13 and 2026-11-14
+
+**Nothing is merged; twelve pull requests wait on you.** All twelve merge cleanly
+against `main` on their own and none has a failing check (as of 2026-11-14). Each
+description lists what it carries; this is the map. Decisions ratified by GimpyMatey
+alone are jointly owned under the working agreements, so your review is the assent —
+or the place to supersede one.
+
+| PR | Carries | Worth your eye |
+|---|---|---|
+| #276 | GimpyMatey's answers to all 29 questions in [questions-for-gimpymatey](questions-for-gimpymatey.md); Q24–Q26 recorded as post-v1 ([PRD](../PRD.md) §7) | — |
+| #277 | O-01's decisions 7 to 13: closing and reopening a Store (Void and Cancel Hold at closing, recorded against the Owner, no review flag); covering a sister Store by assignment; WaxWorks staff rename an Organization, which carries a contact; and the new A-n for both | **The new A-n widens A-90's System Administrator boundary** with a fourth **S** function, `organization_rename`, and adds `organization_contact_set` **O**. Post-v1, but it changes `organization_create`'s contract when it lands |
+| #278 | Group 1 confirmations; a new E-01 decision; a new M-06 decision (the drawer opened by key) | **Numbering collision with #284** — below |
+| #279 | Group 2: the catalog stays per shop (A-6, §11); cost behind a tap on Find (a new E-03 decision) | — |
+| #280 | Groups 3–4: who a void belongs to (E-05); E-06's decisions 35 to 38 (a returned copy's label); E-07's decisions 31 to 35 (deleting a Customer on request); remote approval left possible (M-04); and an A-n for the deletion | **That A-n amends A-95:** a deleted Customer's `customer_ledger` rows stay, unlinked, and a new `customer_deletions` table records the deletion |
+| #281 | Group 5 notes into the flows; a pronoun fix | — |
+| #282 | **E-08 take stock** (new flow, `Specified`, post-v1), printing a label from the titlecard (a new E-04 decision), an A-n for the `found_sold_copy` review-flag kind (system-raised), the `/spec-audit` fix-up, PRD §4 and lexicon §16 | It adds a review-flag kind |
+| #283 | An A-n: the second-hand reference is `SH<position>-YYMMDD-n`; the prototype mints it | — |
+| #284 | The first shop's settings (Hot Wax: Alberta/AB, CAD and USD at 1.3, `.99`, eleven tenders, drawer on every Sale, store details); seven new M-06 decisions (Cheque and E-transfer as `card`; the receipt's arrangement, three text blocks, social fields, the default layout) | **Feeds `O-01-D-M1`**: rows 18–19 are answered, and row 17's `store_settings` must carry the receipt's three text blocks, social fields and arrangement — before the migration exists |
+| #285 | GimpyMatey's joint assent on A-121–A-150, E-01's decisions 38 to 41, M-04's decisions 39 to 63, the A-91 amendment and the conventions §5 notes; this handover | — |
+| #286 | A stale immutability citation in E-02 and A-27 corrected; a new E-02 decision (history shows an Invoice as it stands) | — |
+| #287 | Nine struck-decision citations annotated; with #284 it takes `check_docs` to **0 warnings** | — |
+
+**Merge order, to keep conflicts small:** #283, #278, #280, #281, #276, #279, #282,
+#277, then #284–#287 in any order. Several pairs touch neighbouring lines and will
+conflict on whichever merges second; **after each merge, GimpyMatey's session brings the
+rest up to date by merging `main` into them** (no force-push) and re-runs `check_docs`.
+
+**The numbering collision.** #278 and #284 both add M-06's **seventy-first** decision,
+with different content — a drafting slip. #278 merges first and keeps the number; when
+#284 is brought up to date, its seven decisions move up by one (seventy-second to
+seventy-eighth), with every citation in #284 renumbered in the same commit. Nothing on
+`main` cites either yet.
+
+**After the merges, five one-line follow-ups**, each marking an open question answered
+where a second PR touched the same line:
+
+| Once merged | Edit |
+|---|---|
+| #278 + #283 | architecture §11: the `SH-` half answered by #283's A-n |
+| #280 + #281 | E-07 *Data protection*: answered by #280's E-07 decisions and A-n |
+| #281 + #284 | M-06 *Receipt template*: answered by #284's receipt decisions |
+| #280 + #282 | #280's last E-06 decision names *E-04's titlecard reprint* in words; it becomes a numbered citation of #282's E-04 decision |
+| #277 + #281 | O-01 *The Organization's own name and details*: answered by #277's last two O-01 decisions |
+
+**The critical path is unchanged and is yours:** approve and build `S-01-D-M1` (#275)
+and `O-01-D-M1`, then the M1 **U** orders. GimpyMatey's part of what blocked
+`O-01-D-M1` — the first shop's values — is answered in #284.
+
+### The build, as of 2026-11-08
+
 
 **E-01 D is `Accepted`** (sr-talbot, 2026-10-31, verdict in #231). **M-04 D is `Accepted`**
 (sr-talbot, 2026-11-03, verdict in #255): built in #237, corrected in #241 (pass 1), #248
