@@ -2,7 +2,7 @@
 
 **Actor:** Employee (Undo End of Day is **manager-only** — [M-03](M-03-daily-summary.md) d4, [architecture](../architecture.md) A-28a)
 **Status:** Specified
-**Related:** [E-03 Search the inventory](E-03-search-inventory.md) · [E-04 Manage the inventory](E-04-manage-inventory.md) · [E-06 Process a return](E-06-process-a-return.md) · [E-07 Manage customers](E-07-manage-customers.md) · [M-02 Re-order inventory](M-02-reorder-inventory.md) · [M-03 Daily summary](M-03-daily-summary.md) · [M-05 Accounts payable](M-05-accounts-payable.md) · [M-06 Settings](M-06-settings.md) · [M-07 Chart of accounts](M-07-chart-of-accounts.md)
+**Related:** [E-03 Search the inventory](E-03-search-inventory.md) · [E-04 Manage the inventory](E-04-manage-inventory.md) · [E-06 Process a return](E-06-process-a-return.md) · [E-07 Manage customers](E-07-manage-customers.md) · [M-02 Re-order inventory](M-02-reorder-inventory.md) · [M-03 Daily summary](M-03-daily-summary.md) · [M-05 Accounts payable](M-05-accounts-payable.md) · [M-06 Settings](M-06-settings.md) · [M-07 Chart of accounts](M-07-chart-of-accounts.md) · [E-08 Take stock](E-08-take-stock.md)
 
 **Job:** As an employee, I need to ring up a sale and take payment.
 
@@ -247,6 +247,11 @@ Held copies count against **available** stock but remain on hand.
 - **Inventory is perpetual, so tendering a Sale moves cost** ([M-07](M-07-chart-of-accounts.md) d2). Each copy sold moves **its own recorded cost** from Inventory into cost of goods at that moment — never an average and never a recomputed figure. Nothing changes at the till: this is a consequence of what `sale_tender` already does, not a new step in it.
 - **A Sale's business date is the date it was tendered** ([M-07](M-07-chart-of-accounts.md) d19), a **calendar** date ending at midnight, with no separate business-day boundary and no setting for one. That is the same moment [architecture](../architecture.md) A-57 resolves tax at, so the two never disagree — and it means a Sale rung at 00:30 after a late night files on the new day.
 - **The day's Sales become journal lines at the close** ([M-07](M-07-chart-of-accounts.md) d7, d14), grouped by `(business date, account)` so a close covering two days files each on its own. A mis-rung tender is therefore worth catching before close — decision 27's Current-Sales search is where, and decisions 31 and 32 are how.
+
+**From [E-08](E-08-take-stock.md)** (post-v1, decision 15):
+
+- **A copy sold or held while a stock-take count is open leaves or stays on that count's expected list as it happens** (E-08 d4, d7). The till is never frozen by a count. A mis-ring — the wrong sleeve scanned — shows up at the count as an unexpected copy on the shelf.
+- **A copy this flow has sold may be brought back on hand by a count, committed as *Found*** (E-08 d11). The Sale is not changed: its line still names the copy. The system raises a `found_sold_copy` ReviewFlag ([architecture](../architecture.md) A-151) for a Manager to look into.
 
 **From [architecture](../architecture.md) A-86 and the user model (2026-09-20):**
 
