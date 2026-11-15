@@ -49,6 +49,11 @@
 - **An Owner whose initials or PIN were cleared at recovery sets both before their personal session reaches anything** (E-01 d41, 2026-11-08) — decision 10's other half.
 - **A System Administrator's invite link opens the same accept page** (E-01 d37, A-147): an enrolment session that can register a passkey and nothing else (decision 13).
 
+**From [O-01](O-01-administer-the-organization.md):**
+
+- **Renaming an Organization is a System Administrator's act, on the Owner's request** (O-01 d12, 2026-11-14): an Owner does not edit the name. It is logged before and after where the Organization's Owners read it (decision 3). A fourth System Administrator function beyond [architecture](../architecture.md) A-90's three, still to be added there.
+- **An Organization carries a contact email and phone** (O-01 d13, 2026-11-14): entered by the System Administrator at creation (decision 2), kept current by an Owner afterwards. Post-v1, with the Organization screen.
+
 **From [architecture](../architecture.md):**
 
 - **What ships at M1** (A-111, 2026-10-13). S-01's **Create Organization** (d2, d5) ships at M1; the identity lists and change log (d1) and the recovery acts (d3) stay post-v1. The reason is real shop data in production before v1 (A-109), which has no other governed way in.
