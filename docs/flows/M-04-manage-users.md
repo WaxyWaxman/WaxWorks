@@ -128,6 +128,11 @@ The in-place mechanism survives for the manager-only table (decision 9). On a st
 - **An Owner reactivated by a System Administrator keeps their Stores; clashing initials or a clashing PIN are cleared, and they set new ones at their next sign-in** (S-01 d10, 2026-11-08) — the exception decision 63 records.
 - **A System Administrator may replace an Owner who is active but unreachable** (S-01 d11, A-146, 2026-11-08): deactivated and another restored in one act, so decision 26's floor holds at every commit; the only act from outside that ends an Owner's access.
 
+**From [E-08](E-08-take-stock.md)** (post-v1, decision 15):
+
+- **Committing a stock-take count is manager-only** (E-08 d2): an Employee counts, a Manager reviews the differences and commits. It is the same line as E-04 d3's on-hand adjustment, so the manager-gated list gains no new kind of act.
+- **A count raises a system `found_sold_copy` ReviewFlag** when it brings a sold copy back on hand (E-08 d11, [architecture](../architecture.md) A-151). It has no actor, and a Manager acknowledges it like any other flag (decision 17).
+
 **From [architecture](../architecture.md):**
 
 - **A demotion to Employee closes the person's enrolment window** (A-150, 2026-11-08): `user_change_role` nulls it with the role, so a link sent before the demotion opens nothing after a re-promotion. Built by a correcting migration in the S-01 D M1 order's pass 4.

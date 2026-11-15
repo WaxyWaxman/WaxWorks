@@ -157,6 +157,11 @@ Consequence to accept knowingly: per-item margin reporting reflects only supplie
   Invoice. Where the batch was bought on a promotion the expectation reads high, being computed from the
   Supplier's standing Discount ([M-01](M-01-supplier-margin.md) d2).
 
+**From [E-08](E-08-take-stock.md)** (post-v1, decision 15):
+
+- **A copy received while a stock-take count is open joins that count's expected list** (E-08 d4). Nothing in receiving changes; the count follows the movement row.
+- **A copy a count sets aside comes in through this flow** (E-08 d23, d24): a copy whose Record this Store does not know, or whose sticker the system does not recognise, is received as new stock or through second-hand intake, or leaves the shop. The count records nothing for it.
+
 **From [architecture](../architecture.md) A-86 and the user model (2026-09-20):**
 
 - **Receiving, Invoices and their lines stay per Store; the Supplier they come from is the Organization's** ([architecture](../architecture.md) A-86). Consequence recorded as open in architecture §11 and owned jointly with this flow: **`invoice_number` minted from a Store counter (A-22) and `SH-YYMMDD-n` (A-32) can now collide across two Stores against one Supplier** — the key gains `store_id`, or the minted value carries the Store; undecided.

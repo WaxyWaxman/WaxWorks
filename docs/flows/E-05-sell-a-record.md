@@ -248,6 +248,11 @@ Held copies count against **available** stock but remain on hand.
 - **A Sale's business date is the date it was tendered** ([M-07](M-07-chart-of-accounts.md) d19), a **calendar** date ending at midnight, with no separate business-day boundary and no setting for one. That is the same moment [architecture](../architecture.md) A-57 resolves tax at, so the two never disagree — and it means a Sale rung at 00:30 after a late night files on the new day.
 - **The day's Sales become journal lines at the close** ([M-07](M-07-chart-of-accounts.md) d7, d14), grouped by `(business date, account)` so a close covering two days files each on its own. A mis-rung tender is therefore worth catching before close — decision 27's Current-Sales search is where, and decisions 31 and 32 are how.
 
+**From [E-08](E-08-take-stock.md)** (post-v1, decision 15):
+
+- **A copy sold or held while a stock-take count is open leaves or stays on that count's expected list as it happens** (E-08 d4, d7). The till is never frozen by a count. A mis-ring — the wrong sleeve scanned — shows up at the count as an unexpected copy on the shelf.
+- **A copy this flow has sold may be brought back on hand by a count, committed as *Found*** (E-08 d11). The Sale is not changed: its line still names the copy. The system raises a `found_sold_copy` ReviewFlag ([architecture](../architecture.md) A-151) for a Manager to look into.
+
 **From [architecture](../architecture.md) A-86 and the user model (2026-09-20):**
 
 - **A gift card is the Organization's liability and is honoured at any of its Stores** ([architecture](../architecture.md) A-86, amending A-51 — *a sister Store cannot honour it* is struck). Which home currency a card carries when two Stores differ is open in architecture §11.
