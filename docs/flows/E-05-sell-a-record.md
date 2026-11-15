@@ -207,7 +207,7 @@ Held copies count against **available** stock but remain on hand.
 
 **From [O-01](O-01-administer-the-organization.md):**
 
-- **Closing a Store abandons its Open Sales and releases its Held Sales** (O-01 d7, 2026-11-13). An Open Sale has no Sale number and moved no money, so nothing is reversed; a Held Sale's reservation against stock is released. A reopened Store keeps its Sale numbering, which is unique per Store (decision 22).
+- **Closing a Store Voids its Open Sales and cancels its Held Sales' holds** (O-01 d7, as amended by O-01 d10, 2026-11-14) — decision 5's Void and the Cancel Hold function, each recorded against the Owner who closed the Store. An Open Sale has no Sale number and moved no money, so nothing is reversed; a cancelled hold's copies go back to sellable stock. A reopened Store keeps its Sale numbering, which is unique per Store (decision 22).
 
 **From [M-04](M-04-manage-users.md):**
 

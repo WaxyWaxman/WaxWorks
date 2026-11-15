@@ -89,6 +89,7 @@ The shape decision 18 was built to protect held: actions are still attributed to
 
 **From [O-01](O-01-administer-the-organization.md):**
 
+- **Closing a Store stops its store account signing in, and reopening it lets it sign in again** (O-01 d7, 2026-11-13). Decision 24's store account is refused while its Store is closed; the account itself is kept, not deleted, so a reopened Store's terminals sign in with it as before.
 - **A closed Store is not offered in any Store pick, and a pick of one is refused `not_found`** (O-01 d8, 2026-11-13) — decision 27's pick list and decision 36's Create Store landing show active Stores only.
 - **Reaching another Store is by assignment only** (O-01 d9, 2026-11-13) — decision 27's *a Manager one of theirs* stands; there is no read-only reach.
 
