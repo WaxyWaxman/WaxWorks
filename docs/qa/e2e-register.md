@@ -11,7 +11,7 @@ numbered decisions, so "which flows are covered end to end" is a read of this
 table, not a search of the test tree.
 
 The unit and integration levels are **not** listed here; they trace through test
-names (`E-02 d9 / A-24 — …`), as the [`/qa`](../../.claude/skills/qa/SKILL.md)
+names (`E-02 d55 / A-49 — …`), as the [`/qa`](../../.claude/skills/qa/SKILL.md)
 skill describes. This register exists because an end-to-end scenario spans steps
 and decisions from several flows, and a test name cannot carry that.
 

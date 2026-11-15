@@ -35,12 +35,13 @@ Every numbered decision in a `Specified` flow should have a test that asserts it
 named so the link is visible:
 
 ```
-E-02 d9 / A-24 — .50 / .99 rounding is pre-filled as a default, not enforced
-A-15         — money is integer minor units; no float in the money path
+E-02 d55 / A-49 — a shelf price suggestion rounds to the nearest of one ending; a pre-fill, never enforced
+A-15            — money is integer minor units; no float in the money path
 ```
 
 Check both the flow decision and any A-n that amended it — the pair above is a live
-example of exactly that, where a rule became a default.
+example of exactly that: E-02 d9's `.50` / `.99` rule became a default (d32), then
+one configured ending rounded to the nearest (d55 superseding d9; A-49 amending A-24).
 
 Name the decision in the test name or a comment on it. Then "which decisions are
 untested" is a `grep`, and it survives refactoring.
