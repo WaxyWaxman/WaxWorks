@@ -36,7 +36,7 @@ Drafted 2026-11-13 and confirmed in outline by GimpyMatey; specified 2026-11-14.
 8. A Manager opens the finished count and sees its differences: expected but not found, found but not expected, and misplaced.
 9. The system **proposes a reason for each difference**: *Shrinkage* for a copy expected but not found, *Found* for one found but not expected. The Manager changes any of them before committing (decision 5). **A misplaced copy gets no reason and no adjustment**: it is listed to be put back on its own shelf (decision 6).
 10. **Commit.** The Manager commits the count (decision 2). For every difference except a misplaced copy, and except a copy another count has already adjusted (decision 12), the system writes one reason-coded adjustment per copy ([architecture](../architecture.md) A-81), each with its journal ([M-07](M-07-chart-of-accounts.md) d12), attributed to the committing Manager. **A copy brought on hand as *Found* while the system had it as sold also raises a review flag** (decision 11). A copy with no record here is brought in as a new copy at its Record's most recent cost, at the price and grade the counting Employee gave it (decisions 19, 21, 22).
-11. The count is **closed** and is not edited again. A later correction is an ordinary [E-04](E-04-manage-inventory.md) adjustment.
+11. The count is **committed** and is not edited again. A later correction is an ordinary [E-04](E-04-manage-inventory.md) adjustment.
 12. *(Rolling count only)* The system records that slice as counted on that date and moves the cycle on (decision 9).
 
 ## Requirements
@@ -66,7 +66,7 @@ Drafted 2026-11-13 and confirmed in outline by GimpyMatey; specified 2026-11-14.
   - Its cost is the Record's most recent cost (decision 21).
   - Its price and grade are set by the Employee counting (decision 22).
   - That price is a shelf price, so [E-04](E-04-manage-inventory.md) d16's below-cost flag and [E-04](E-04-manage-inventory.md) d31's suggested price ending apply.
-- **A committed count is closed and never edited.** A later correction is an [E-04](E-04-manage-inventory.md) adjustment.
+- **A committed count is never edited.** A later correction is an [E-04](E-04-manage-inventory.md) adjustment.
 
 ## Inherited from other flows
 
