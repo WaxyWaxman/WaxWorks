@@ -62,6 +62,7 @@ This is a policy choice, not a technical limitation — the system records who p
 
 **From [M-06](M-06-settings.md):**
 
+- **The receipt has its own refund-policy block** ([M-06](M-06-settings.md) d73, 2026-11-14), with its own on/off, so the policy decision 3 implies — no receipt, no time limit — is said on the receipt in a block of its own, not in a general footer.
 - **A line in a Section flagged `returnable = false` cannot be returned** ([M-06](M-06-settings.md) d30). This is **not** a gate and does not amend decision 3 — Returns stay ungated, with no receipt, no time limit and no approval, for everything else. It is a property of what is being sold: a gift card load returned under decision 3's terms is a cash-out dressed as a refund. Unwinding one is a **void of the original Sale** ([E-05](E-05-sell-a-record.md) d31) while that is still possible, and a Manager and an [M-05](M-05-accounts-payable.md) adjustment afterwards.
 
 **From [M-07](M-07-chart-of-accounts.md):**
