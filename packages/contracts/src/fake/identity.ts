@@ -545,6 +545,8 @@ export const identityHandlers: Record<string, Handler> = {
     };
     x.tx.stores.push(store);
     x.log("stores.log", store.store_id, "store_created", who, { after: { trading_name: store.trading_name, store_number, position, store_account_email: store.store_account_email } });
+    // O-01 d16: a Store's creation is the Organization's change too, so it is logged there as well.
+    x.log("organizations.log", org, "store_created", who, { after: { store_id: store.store_id, trading_name: store.trading_name, store_number, position } });
     x.log("settings_log", store.store_id, "defaults_written", who, { after: store.settings });
     // E-01 d36: the Store an Owner creates becomes their pick.
     if (x.s!.principal === "person") who.actor.selected_store_id = store.store_id;
@@ -557,6 +559,26 @@ export const identityHandlers: Record<string, Handler> = {
     // O-01 d3: logged as changed, never as a value.
     x.log("stores.log", store.store_id, "store_account_reset", who);
     return { store_id: store.store_id, store_account_email: store.store_account_email, auth_user_id: store.auth_user_id };
+  }),
+
+  store_account_email_set: handle((x) => {
+    // A-159, O-01 d17: a System Administrator corrects the store account email of a
+    // Store that has no store account yet; the Owner's store_account_reset then
+    // creates the account (O-01 d15). No Auth call is made here or after it.
+    const sys = x.sysadmin();
+    const id = (x.args.p_store_id as string | null) ?? x.refuse("invalid_input", "p_store_id");
+    const raw = x.args.p_store_account_email as unknown;
+    const email = typeof raw === "string" && /^[^@\s]+@[^@\s]+$/.test(raw) ? raw : x.refuse("invalid_input", "p_store_account_email");
+    // The sysadmin has no tenant claim; the Store's own row names its Organization.
+    const store = x.tx.stores.find((s) => s.store_id === id) ?? x.refuse("not_found");
+    // A-159: once a store account is linked, its address is the account's — refused as A-128 refuses a second link.
+    if (store.auth_user_id !== null) x.refuse("invalid_state", "linked");
+    const before = store.store_account_email;
+    store.store_account_email = email;
+    // O-01 d5, d16; S-01 d3: on the Store, and on the Organization where its Owners read it.
+    x.tx.log.push(x.row("stores.log", store.store_id, "store_account_email_set", sys, null, null, { before: { store_account_email: before }, after: { store_account_email: email } }));
+    x.tx.log.push(x.row("organizations.log", store.org_id, "store_account_email_set", sys, null, null, { before: { store_id: store.store_id, store_account_email: before }, after: { store_id: store.store_id, store_account_email: email } }));
+    return { store_id: store.store_id, store_account_email: email };
   }),
 
   organization_create: handle((x) => {

@@ -32,6 +32,7 @@ export * from "./identity/auth_user_link";
 export * from "./identity/organization_create";
 export * from "./identity/owner_recover";
 export * from "./identity/owner_reset_request";
+export * from "./identity/store_account_email_set";
 export * from "./catalog/record_upsert_from_provider";
 export * from "./catalog/mint_internal_barcode";
 export * from "./catalog/catalog_genre_map_add";

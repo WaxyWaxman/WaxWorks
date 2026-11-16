@@ -399,6 +399,91 @@ describe("A-112 — store_create writes the new Store's settings rows itself, at
   });
 });
 
+describe("A-155 — a Store's province is part of its address and may be null; the first shop's is AB", () => {
+  it("store_create's output schema takes a null province, and the fake writes AB", async () => {
+    const w = await world();
+    expect(w.A.settings.province).toBe("AB");
+    const parsed = c.StoreCreateOutput.parse({ ...w.A, settings: { ...w.A.settings, province: null } });
+    expect(parsed.settings.province).toBeNull();
+  });
+});
+
+describe("O-01 d16 — a Store's creation is logged on the Store and on the Organization, and the two agree", () => {
+  it("store_create writes one store_created entry to each log, both naming the Owner and the Store", async () => {
+    const w = await world();
+    const log = w.root.inspect().log;
+    const onStore = log.filter((l) => l.table === "stores.log" && l.subject_id === w.A.store_id && l.action === "store_created");
+    const onOrg = log.filter((l) => l.table === "organizations.log" && l.subject_id === w.org.org_id && l.action === "store_created"
+      && (l.after as { store_id: string }).store_id === w.A.store_id);
+    expect(onStore).toHaveLength(1);
+    expect(onOrg).toHaveLength(1);
+    expect(onOrg[0]!.actor_user_id).toBe(w.ownerId);
+    expect(onStore[0]!.actor_user_id).toBe(w.ownerId);
+    expect(onOrg[0]!.after).toMatchObject({ trading_name: "Home", store_number: w.A.store_number, position: w.A.position });
+    expect(onStore[0]!.after).toMatchObject({ trading_name: "Home", store_number: w.A.store_number, position: w.A.position });
+  });
+});
+
+describe("E-01 d43 — on a personal session the Store an Owner creates becomes their pick, even when they already hold one", () => {
+  it("an Owner holding Store A creates Store C and holds C; an Owner authorising Create Store by PIN on a store session keeps their own pick", async () => {
+    const w = await world();
+    const asOwner = { p_actor_user_id: w.ownerId, p_actor_initials: null, p_terminal_id: null };
+    await expect(c.session_select_store(w.owner, { ...asOwner, p_store_id: w.A.store_id })).resolves.toMatchObject({ selected_store_id: w.A.store_id });
+    const C = await c.store_create(w.owner, { ...w.asOwner, p_trading_name: "Annex", p_store_account_email: "annex@example.test" });
+    await expect(c.session_select_store(w.owner, { ...asOwner, p_store_id: null })).resolves.toMatchObject({ selected_store_id: C.store_id });
+    // On Store A's store session, by the Owner's PIN: nobody's personal pick moves (O-01-D-M1 row 23).
+    await c.store_create(w.storeA, { ...w.atA(w.t1, "1111"), p_trading_name: "Kiosk", p_store_account_email: "kiosk@example.test" });
+    expect(w.root.inspect().users.find((u) => u.user_id === w.ownerId)!.selected_store_id).toBe(C.store_id);
+  });
+});
+
+describe("A-159, O-01 d17 — a System Administrator corrects the store account email of a Store with no store account, and of no other", () => {
+  const sysCall = (w: Awaited<ReturnType<typeof world>>, store_id: string, email: string, client: FakeClient = w.root.withSession(sysadminSession)) =>
+    c.store_account_email_set(client, { p_actor_user_id: SYSADMIN, p_store_id: store_id, p_store_account_email: email });
+
+  it("an unlinked Store's email is corrected, logged before and after on the Store and the Organization; the Owner's reset then returns the new address (O-01 d15)", async () => {
+    const w = await world();
+    await expect(sysCall(w, w.A.store_id, "counter@example.test")).resolves.toEqual({ store_id: w.A.store_id, store_account_email: "counter@example.test" });
+    const st = w.root.inspect();
+    expect(st.stores.find((s) => s.store_id === w.A.store_id)!.store_account_email).toBe("counter@example.test");
+    const onStore = st.log.filter((l) => l.table === "stores.log" && l.subject_id === w.A.store_id && l.action === "store_account_email_set");
+    const onOrg = st.log.filter((l) => l.table === "organizations.log" && l.subject_id === w.org.org_id && l.action === "store_account_email_set");
+    expect(onStore).toHaveLength(1);
+    expect(onOrg).toHaveLength(1);
+    expect(onStore[0]).toMatchObject({ actor_user_id: SYSADMIN, principal: "sysadmin", before: { store_account_email: "home@example.test" }, after: { store_account_email: "counter@example.test" } });
+    expect(onOrg[0]).toMatchObject({ actor_user_id: SYSADMIN, after: { store_id: w.A.store_id, store_account_email: "counter@example.test" } });
+    // O-01 d15: no account linked, so the reset accepts and hands the Server Action the corrected address.
+    await expect(c.store_account_reset(w.owner, { ...w.asOwner, p_store_id: w.A.store_id }))
+      .resolves.toEqual({ store_id: w.A.store_id, store_account_email: "counter@example.test", auth_user_id: null });
+  });
+
+  it("refused invalid_state / linked once the Store has a store account, and nothing is written", async () => {
+    const w = await world();
+    await c.auth_user_link(w.root.withSession(serviceSession), { p_kind: "store", p_row_id: w.A.store_id, p_auth_user_id: crypto.randomUUID() });
+    const before = w.root.inspect().log.length;
+    const err = await refused(sysCall(w, w.A.store_id, "counter@example.test"), "invalid_state");
+    expect(err.detail).toBe("linked");
+    expect(w.root.inspect().stores.find((s) => s.store_id === w.A.store_id)!.store_account_email).toBe("home@example.test");
+    expect(w.root.inspect().log.length).toBe(before);
+  });
+
+  it("a Store that does not exist is not_found; a malformed email is refused by the wrapper", async () => {
+    const w = await world();
+    await refused(sysCall(w, crypto.randomUUID(), "counter@example.test"), "not_found");
+    await expect(sysCall(w, w.A.store_id, "not-an-email")).rejects.toBeInstanceOf(ContractError);
+    expect(w.root.inspect().stores.find((s) => s.store_id === w.A.store_id)!.store_account_email).toBe("home@example.test");
+  });
+
+  it("A-90 — only a System Administrator: an Owner, a store session and a service session are refused; the actor must be the signed-in System Administrator", async () => {
+    const w = await world();
+    await refused(sysCall(w, w.A.store_id, "counter@example.test", w.owner), "role_refused");
+    await refused(sysCall(w, w.A.store_id, "counter@example.test", w.storeA), "role_refused");
+    await refused(sysCall(w, w.A.store_id, "counter@example.test", w.root.withSession(serviceSession)), "role_refused");
+    await refused(c.store_account_email_set(w.root.withSession(sysadminSession), { p_actor_user_id: "5a5a5a5a-0000-4000-8000-000000000002", p_store_id: w.A.store_id, p_store_account_email: "counter@example.test" }), "actor_mismatch");
+    expect(w.root.inspect().stores.find((s) => s.store_id === w.A.store_id)!.store_account_email).toBe("home@example.test");
+  });
+});
+
 describe("M-04 d26 — the floor is the Organization's: at least one active Owner, always", () => {
   it("M-04-T8 and M-04-T9: the last active Owner can neither be deactivated nor demoted, by anyone including themselves", async () => {
     const w = await world();

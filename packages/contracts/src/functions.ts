@@ -48,6 +48,7 @@ export const FUNCTIONS: readonly FunctionEntry[] = [
   { domain: "identity", name: "organization_create", kind: "S", source: "§6 Identity; S-01 d2–d3" },
   { domain: "identity", name: "owner_recover", kind: "S", source: "§6 Identity; S-01 d2–d3" },
   { domain: "identity", name: "owner_reset_request", kind: "S", source: "§6 Identity; S-01 d2–d3" },
+  { domain: "identity", name: "store_account_email_set", kind: "S", source: "§6 Identity; A-159, O-01 d17" },
   { domain: "catalog", name: "record_upsert_from_provider", kind: "", source: "§6 Catalog" },
   { domain: "catalog", name: "mint_internal_barcode", kind: "", source: "§6 Catalog" },
   { domain: "catalog", name: "catalog_genre_map_add", kind: "", source: "§6 Catalog; A-59 — not M" },

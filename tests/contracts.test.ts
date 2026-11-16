@@ -14,7 +14,7 @@ const M1 = new Set([
   "terminal_register", "actor_resolve", "manager_authorize_pin", "session_select_store", "user_add", "user_change_role",
   "user_deactivate", "user_reactivate", "user_assign", "user_unassign", "user_correct", "user_set_pin", "store_create",
   "store_account_reset", "organization_create", "owner_recover", "owner_reset_request", "user_reset_request",
-  "user_invite_resend", "auth_user_link",
+  "user_invite_resend", "auth_user_link", "store_account_email_set",
 ]);
 
 // A-113: the uniform header has five named exceptions, and no others — three
@@ -58,8 +58,8 @@ describe("A-99 — the M0 contracts skeleton is every §6 function's name, argum
     },
   );
 
-  it("the 20 Identity entries of M1 are contracts, not stubs (A-99)", () => {
-    expect(M1.size).toBe(20);
+  it("the 21 Identity entries of M1 are contracts, not stubs (A-99; A-159 added store_account_email_set)", () => {
+    expect(M1.size).toBe(21);
     for (const name of M1) {
       const w = (contracts as Record<string, unknown>)[name] as { isStub?: boolean } | undefined;
       expect(w, `export ${name}`).toBeTruthy();
@@ -267,7 +267,8 @@ describe("A-113 — the uniform header has five named exceptions, and no others"
   it("the non-pure functions without the full header are exactly the five exceptions", () => {
     const without = FUNCTIONS.filter((f) => f.kind !== "pure" && !hasFullHeader(f.name)).map((f) => f.name).sort();
     expect(without).toEqual([...HEADER_EXCEPTIONS].sort());
-    expect([...S_FUNCTIONS].sort()).toEqual(["organization_create", "owner_recover", "owner_reset_request"]);
+    // A-90's S set at M1 — A-159 (2026-11-15) adds store_account_email_set; A-154's organization_rename is post-v1.
+    expect([...S_FUNCTIONS].sort()).toEqual(["organization_create", "owner_recover", "owner_reset_request", "store_account_email_set"]);
   });
 
   it("actor_resolve takes p_initials and p_terminal_id and no actor arguments", () => {
