@@ -484,6 +484,45 @@ describe("A-159, O-01 d17 — a System Administrator corrects the store account 
   });
 });
 
+describe("O-01 d18 — a store account email already held inside the Organization is refused before anything is written, at creation and at the correction", () => {
+  it("store_create refuses the Owner's own email in other case, a deactivated Manager's, and another Store's; nothing is written and no position is used", async () => {
+    const w = await world();
+    await c.user_deactivate(w.owner, { ...w.asOwner, p_user_id: w.jm.user_id });
+    const before = w.root.inspect();
+    for (const email of ["M.Chen@Example.TEST", "jm@example.test", "PLATEAU@example.test"]) {
+      const err = await refused(c.store_create(w.owner, { ...w.asOwner, p_trading_name: "Annex", p_store_account_email: email }), "invalid_input");
+      expect(err.detail, email).toBe("p_store_account_email");
+    }
+    const after = w.root.inspect();
+    expect(after.stores).toHaveLength(before.stores.length);
+    expect(after.log).toHaveLength(before.log.length);
+    // A-142: the next Store takes the position the refused attempts would have had.
+    const C = await c.store_create(w.owner, { ...w.asOwner, p_trading_name: "Annex", p_store_account_email: "annex@example.test" });
+    expect(C.position).toBe(3);
+  });
+
+  it("A-86 — an address held only in another Organization is not this check's: store_create accepts it, and Auth refuses it later (O-01 d14)", async () => {
+    const w = await world();
+    await c.organization_create(w.root.withSession(sysadminSession), { p_actor_user_id: SYSADMIN, p_name: "Elsewhere", p_owner_name: "R. Diaz", p_owner_email: "rd@example.test" });
+    await expect(c.store_create(w.owner, { ...w.asOwner, p_trading_name: "Annex", p_store_account_email: "rd@example.test" }))
+      .resolves.toMatchObject({ position: 3 });
+  });
+
+  it("the System Administrator's correction refuses the Owner's email and another Store's, writing nothing; its own current address in other case is not refused on that ground", async () => {
+    const w = await world();
+    const sys = w.root.withSession(sysadminSession);
+    const fix = (email: string) => c.store_account_email_set(sys, { p_actor_user_id: SYSADMIN, p_store_id: w.A.store_id, p_store_account_email: email });
+    const before = w.root.inspect().log.length;
+    for (const email of ["m.chen@example.test", "Plateau@Example.test"]) {
+      const err = await refused(fix(email), "invalid_input");
+      expect(err.detail, email).toBe("p_store_account_email");
+    }
+    expect(w.root.inspect().log.length).toBe(before);
+    expect(w.root.inspect().stores.find((s) => s.store_id === w.A.store_id)!.store_account_email).toBe("home@example.test");
+    await expect(fix("HOME@example.test")).resolves.toEqual({ store_id: w.A.store_id, store_account_email: "HOME@example.test" });
+  });
+});
+
 describe("M-04 d26 — the floor is the Organization's: at least one active Owner, always", () => {
   it("M-04-T8 and M-04-T9: the last active Owner can neither be deactivated nor demoted, by anyone including themselves", async () => {
     const w = await world();
