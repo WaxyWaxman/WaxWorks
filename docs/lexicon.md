@@ -367,3 +367,32 @@ inserted, so the existing section numbers stay stable.
 | **LedgerPosting** | The artifact a **Manager types by hand** — rent, utilities, a loan, depreciation, an owner's draw, tax ([M-08](flows/M-08-general-ledger.md) Phase 2, d47; `ledger_posting_create`). **Narrower than §14's *posting*,** which is any balanced set of debits and credits against GL accounts and includes the ones an artifact writes for itself ([M-07](flows/M-07-chart-of-accounts.md) d12, [architecture](architecture.md) A-67). The everyday word is *a posting*, and *a **typed** posting* wherever the distinction from an artifact's own journal matters — it is what makes [M-08](flows/M-08-general-ledger.md) d3's editability rule asymmetric | "manual ledger entry" (§14 — that is an accounts-payable row), "journal entry" for the typed one specifically |
 | **Reconciliation** | Entries within **one account**, marked together against an outside document or against each other ([M-08](flows/M-08-general-ledger.md) d25, d37, d43; `ledger_reconciliations`). It **moves no money and gates nothing** — an unreconciled account seals exactly as a reconciled one does, so the mark is evidence, never a gate. A set never spans accounts. The everyday word is *a reconciled set*. **It has two kinds, and they are not two names for one thing** (d37): **`matched`** — offsetting entries, balance-neutral **by construction**, the two halves of an undeposited-funds movement; and **`cleared`** — the entries that appear on an outside document, a bank statement, which **is not required to net**, because the remainder is outstanding cheques and deposits in transit and is *the point of the exercise rather than a failure*. **§14's *clearing* redirect does not reach this.** That row sends **clearing** to *undeposited funds*, and it is about **naming an account**; applied to a **cleared set** it would collapse d37's two kinds into one and undo what building it found — a correct bank reconciliation refused, out by 18,800 | "clearing" for the act or the set (§14, and it is [M-05](flows/M-05-accounts-payable.md) d15's word for a payables act); "cleared" as a bare adjective on a single entry — it is always a **kind of Reconciliation** |
 
+## 16. Stock-take (E-08)
+
+**Derived from [E-08](flows/E-08-take-stock.md)'s own wording, 2026-11-14.** Nothing here is newly decided; it
+records the words E-08 already uses so the next flow uses them too. Appended rather
+than inserted, so the existing section numbers stay stable. **Stock-take is post-v1**
+(E-08 d15).
+
+### The collisions this section exists to prevent
+
+| The obvious word | Already means | Use instead |
+|---|---|---|
+| **close** / **closed** | The end-of-day close (§11, §15; [M-03](flows/M-03-daily-summary.md)) | A count is **committed**, never *closed* |
+| **adjustment** | An **InventoryAdjustment**: one reason-coded correction to one copy (§3, [E-04](flows/E-04-manage-inventory.md)) | A count is not an adjustment; **committing** it writes one adjustment per differing copy (E-08 d2, d5) |
+| **found** | The **Found** reason code ([E-04](flows/E-04-manage-inventory.md) d4) | *Found* is the code; a copy on the shelf the count did not expect is **found but not expected** until a reason is committed |
+
+### Terms
+
+| Canonical | Meaning | Avoid |
+|---|---|---|
+| **stock-take** | The job of counting what is on the shelf against what the system holds, a part of one Store at a time ([E-08](flows/E-08-take-stock.md)) | "stocktake", "inventory audit", "physical inventory" |
+| **StockCount** / **count** | One count of part of one Store — a **Section count** or a **slice** of the **rolling count** (E-08 d1, d20). **Open** while it is being scanned and resumable by any Employee (d8); **finished** when the Employee is done, then waiting for a Manager; **committed** when a Manager commits it (d2), and never edited after; or **abandoned** by a Manager, recorded, nothing changed (d8) | "session", "audit", "closed count" |
+| **Section count** | A count of one Section, so the shop can be counted in stages (E-08 d1) | "department count" |
+| **rolling count** | Counting the whole shop a slice a day, then starting again (E-08 d1, d9) | "cycle count" (the trade's word, but E-08 says *rolling*), "perpetual inventory" |
+| **cycle** | One pass of the rolling count over every Record of the Store. Its slice size is fixed when it starts, and a skipped day lengthens it (E-08 d13) | "year" (a cycle is *about* a year, never exactly) |
+| **slice** | One day's portion of a cycle: a run of Records, oldest-counted first, ties by Section, genre, artist (E-08 d10, d16) | "shelf", "bay" (a slice is defined over Records, not furniture — E-03 d23) |
+| **expected list** | The copies a count expects to find, held, backroom and special-order copies included (E-08 d7); it **follows live trading** (d4) | "snapshot" (it is not frozen) |
+| **expected but not found** / **found but not expected** | The two differences a count can find; proposed as *Shrinkage* and *Found* at commit (E-08 d5) | "missing", "extra" (OK in prose) |
+| **misplaced** | A copy found in the shop in another Section than its own: reshelved, never adjusted (E-08 d6) | "found" (a misplaced copy is not *Found*) |
+| **set aside** | What happens to a copy whose Record this Store does not know, or whose sticker the system does not recognise: left out of the count, to come in through receiving or leave the shop (E-08 d23, d24) | "quarantine", "hold" (a **Hold** is a Sale state — §3) |

@@ -2,7 +2,7 @@
 
 **Actor:** Manager
 **Status:** Specified
-**Related:** [E-02 Receive inventory](E-02-receive-inventory.md) · [E-04 Manage the inventory](E-04-manage-inventory.md) · [E-05 Point of Sale](E-05-sell-a-record.md) · [E-06 Process a return](E-06-process-a-return.md) · [M-03 Daily summary](M-03-daily-summary.md) · [M-05 Accounts payable](M-05-accounts-payable.md) · [M-06 Configure the store](M-06-settings.md) · [M-08 Keep the general ledger](M-08-general-ledger.md)
+**Related:** [E-02 Receive inventory](E-02-receive-inventory.md) · [E-04 Manage the inventory](E-04-manage-inventory.md) · [E-05 Point of Sale](E-05-sell-a-record.md) · [E-06 Process a return](E-06-process-a-return.md) · [M-03 Daily summary](M-03-daily-summary.md) · [M-05 Accounts payable](M-05-accounts-payable.md) · [M-06 Configure the store](M-06-settings.md) · [M-08 Keep the general ledger](M-08-general-ledger.md) · [E-08 Take stock](E-08-take-stock.md)
 
 **Job:** As a manager, I need every movement of money to land in a named account I recognise, so that the books this system keeps and the file my accountant imports are both built from the shop's own chart rather than from one we imposed.
 
