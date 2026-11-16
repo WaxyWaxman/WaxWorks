@@ -1,6 +1,7 @@
 // Every database function docs/architecture.md §6 names, read on 2026-09-20
 // (lines 451–486), and again on 2026-10-13 for A-114's three additions, with
-// the §6 domain that places it and its kind:
+// the §6 domain that places it and its kind (and on 2026-11-15 for A-160 and
+// A-161's Customers domain):
 //   ""     any actor          "M" manager-only       "O" Owner-only
 //   "S"    System Administrator's                    "pure" no actor — takes values
 //   "service"  the service role's alone — A-91's Auth write-back (A-114)
@@ -10,7 +11,7 @@
 export type Kind = "" | "M" | "O" | "S" | "service" | "pure";
 export type Domain =
   | "helpers" | "identity" | "catalog" | "receiving" | "selling" | "stock"
-  | "close" | "ledger" | "governance" | "settings" | "payables" | "claims";
+  | "close" | "ledger" | "governance" | "settings" | "payables" | "claims" | "customers";
 
 export interface FunctionEntry {
   readonly domain: Domain;
@@ -92,6 +93,11 @@ export const FUNCTIONS: readonly FunctionEntry[] = [
   { domain: "ledger", name: "year_mark_filed", kind: "M", source: "§6 Ledger; A-74, A-77" },
   { domain: "ledger", name: "statement_issue", kind: "M", source: "§6 Ledger; A-74, A-77" },
   { domain: "ledger", name: "reconciliation_create", kind: "M", source: "§6 Ledger; A-74" },
+  { domain: "customers", name: "customer_create", kind: "", source: "§6 Customers; A-161; E-07 d18, d30" },
+  { domain: "customers", name: "customer_update", kind: "", source: "§6 Customers; A-161; E-07 d13" },
+  { domain: "customers", name: "customer_delete", kind: "", source: "§6 Customers; A-161, A-54, A-153; E-07 d32–d35" },
+  { domain: "customers", name: "customer_merge", kind: "", source: "§6 Customers; A-161; E-07 d28, d41" },
+  { domain: "customers", name: "customer_record_print", kind: "", source: "§6 Customers; A-160; E-07 d37–d40" },
   { domain: "governance", name: "review_flag_acknowledge", kind: "M", source: "§6 Governance" },
   { domain: "settings", name: "settings_store", kind: "M", source: "§6 Settings — derived group: store_settings" },
   { domain: "settings", name: "settings_tax_types", kind: "M", source: "§6 Settings — derived group: tax_types" },
