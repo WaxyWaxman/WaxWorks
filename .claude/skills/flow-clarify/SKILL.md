@@ -57,8 +57,11 @@ that actually bite for that step — a generic checklist dump is noise.
 - **Multi-store.** The system is multi-store. Is this data scoped to a store, shared
   across stores, or ambiguous? Ambiguous is an open question, not a default.
 - **Immutability and audit.** Once done, can it be undone? By whom? Is the reversal
-  an edit, or an appended counter-artifact? (E-02 decision 23 is the house pattern:
-  finalized things are immutable; corrections are appended.)
+  an edit, or an appended counter-artifact? (The house pattern: a record
+  of an act is voided by appending, not edited — architecture A-70, which allows a
+  delete only where nothing cites it and no money moved, and A-54, under which a
+  deletion never removes a historical row; for an Invoice, E-02 decision 40 and A-33
+  freeze it once paid.)
 - **Hardware.** Scanner, label printer, receipt printer, cash drawer, card terminal.
   Does this step assume one exists?
 - **Volume.** Does this step repeat per item? Then ask what makes it fast at fifty
