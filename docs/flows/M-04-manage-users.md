@@ -35,7 +35,7 @@ Everything in this table is something an Employee **cannot do at all**. It is di
 | **Delete** a Record that has no live references | [E-04](E-04-manage-inventory.md) | E-04's own rule, which survives [architecture](../architecture.md) A-54. Deletion *with* live references is refused at **every** role, and a Customer's Delete is not gated at all ([E-07](E-07-manage-customers.md) d12) — see decision 12 |
 | **Abandon or void** a SupplierClaim | [E-04](E-04-manage-inventory.md) d24, d27, d29 | Gated in E-04 and missing here; added to A-28a by A-54 |
 | **Merge** suppliers | [M-01](M-01-supplier-margin.md) | Reassigns history |
-| **Set supplier margin** | [E-02](E-02-receive-inventory.md) d3, [M-01](M-01-supplier-margin.md) | Employees may create suppliers, never price them |
+| **Set supplier margin** | [E-02](E-02-receive-inventory.md) d44 (restoring d3), [M-01](M-01-supplier-margin.md) | Employees may create suppliers, never price them |
 | **Settings** — all of it | [M-06](M-06-settings.md) | Tax, tenders, currency, Sections |
 | **Acknowledge** a ReviewFlag | this flow, decision 17 | The queue is the Manager's oversight surface; an Employee clearing their own flag empties it of meaning |
 | **Add** a User | [architecture](../architecture.md) A-55 | Creates an actor the system will attribute work to. A Manager adds Employees at their own Stores; adding a Manager or Owner is Owner-only (decision 30) |
@@ -48,7 +48,7 @@ Everything in this table is something an Employee **cannot do at all**. It is di
 
 - **Discounting a line below cost at the till** ([E-05](E-05-sell-a-record.md) d12). A till discount is a one-off on a single Sale; a shelf price persists. Employees are trusted with the former.
 - **Processing a Return** ([E-06](E-06-process-a-return.md) d3). No receipt, no time limit, no approval.
-- **Creating a supplier** ([E-02](E-02-receive-inventory.md) d3) — but not setting its margin.
+- **Creating a supplier** ([E-02](E-02-receive-inventory.md) d44, restoring d3) — but not setting its margin.
 
 ---
 
