@@ -362,7 +362,6 @@ is a pull request both humans review (§7, workflow §4).
 | Wrong PIN (E-01 d26) | `28P01` | `pin_refused` | — names nobody |
 | PIN line closed (E-01 d31) | `WX429` | `pin_line_closed` | `reopens_at` |
 | Clash — initials or PIN already held at this Store (M-04 d27, d32) | `23505` | `initials_clash`, `pin_clash` | the holder's name for initials; nothing for a PIN |
-| Clash — an account number already held by another Customer of the Organization (since A-161, 2026-11-15) | `23505` | `account_number_clash` | the holder's Primary ID |
 | Not found, or not visible to this principal | `WX404` | `not_found` | — |
 | The Owner floor (M-04 d26) | `23514` | `owner_floor` | — |
 | Required field for this role missing — a Manager's PIN or email (M-04 d35, d33); a new PIN at a promotion into Owner when the held one was set by a Manager, or when the PIN given equals the held one; a Set PIN equal to a Manager-set held PIN, by an Owner or the holder (M-04 d55, d61, d62); the first Owner's email at `organization_create` and a new Owner's at `owner_recover`, missing or blank after trim (S-01 D M1 finding 4, 2026-11-08) | `23502` | `pin_required`, `email_required`, `initials_required` | — |
