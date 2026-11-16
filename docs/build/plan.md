@@ -1,7 +1,7 @@
 # Wax Works — the build plan
 
 **Maintained by:** the coordinator, at the end of every build session. Read first by whoever picks up next.
-**Last updated:** 2026-11-15, sr-talbot's session — S-01 D M1 `Accepted` (#275); A-155–A-158 ratified (#290); O-01 D M1 approved, its contract pull request next
+**Last updated:** 2026-11-15, GimpyMatey's evening session — #292–#302 merged; O-01-D-M1 back to `Drafted` for rows 33–34; §2's first block is what waits on sr-talbot. *Before that:* 2026-11-15, sr-talbot's session — S-01 D M1 `Accepted` (#275); A-155–A-158 ratified (#290); O-01 D M1 approved, its contract pull request next
 
 The [workflow](workflow.md) says how an order moves; the [conventions](conventions.md)
 say what the code looks like; the [status table](status.md) says what has landed.
@@ -30,6 +30,28 @@ build: invented conventions, silent bugs, and context blown by reading everythin
 ---
 
 ## 2. Where we are — 2026-11-08
+
+### For sr-talbot — GimpyMatey's evening of 2026-11-15 (#292–#302, all merged)
+
+**Waiting on you, in this order:**
+
+1. **Re-approve [O-01-D-M1](orders/O-01-D-M1.md) rows 33 and 34** (#295, #298). Rows 1–32 and your approval stand; the order is `Drafted` only for these two. Row 33 is A-159's `store_account_email_set`; row 34 is O-01 d18's check in both functions. The contract base is now **`03b3151`** (#297). Then the order can be dispatched.
+2. **Review three contract PRs merged before your review** — the two-owner rule on `packages/contracts` was not kept for these, so the review is after the fact, and anything you would change is a follow-up contract PR: **#294** (`settings.province` nullable, A-155; creation also on `organizations.log`, O-01 d16; `store_account_email_set`), with four choices its description asks you to check — no `p_org_id`, what the creation entry carries, no clash check against other Stores (since added by d18), the output shape; **#297** (O-01 d18's check in both fakes); **#302** (the Customers domain's skeleton, five stubs, `account_number_clash`).
+3. **Joint assent** on what GimpyMatey ratified or decided alone this evening — §4's new row lists it: A-159, A-160, A-161; O-01 d14–d18; E-01 d43; E-07 d36–d41.
+
+**What changed, in one line each:**
+
+| PRs | What |
+|---|---|
+| #292, #293 | Your O-01-D-M1 approval settlements as O-01 d14–d16 and E-01 d43; **d16 reverses one** — a Store's creation is logged on `organizations.log` too; **A-159 / O-01 d17** — a System Administrator corrects an unlinked Store's email (a fifth **S** function, M1); register rows O-01-T13–T15, E-01-T25; O-01-T2 moved to M1 |
+| #294, #295 | The order's contract PR (as row 2 above) and row 33 |
+| #296–#299 | **O-01 d18** — `store_create` and the correction refuse an email already held inside the Organization (its people, active or not, or another Store), `invalid_input` / `p_store_account_email`, S-01 d15's precedent; contracts, row 34, register (O-01-T16, T17; T13 re-stated) |
+| #300 | **E-07 d36–d40, A-160** — Customer records kept until deleted (PRD §5 answered for them); a *Print customer record*, any Employee, logged, returned and logged in one call (`customer_record_print`); *Data protection* resolved |
+| #301, #302 | **A-161** — §6 never named a Customer write, so the skeleton had no Customers domain: `customer_create`, `customer_update` (changed fields only), `customer_delete`, `customer_merge`; `customer_ledger` is `sale_tender`'s under a lock on the Customer; **E-07 d41** — a merge deletes the absorbed record, its trace naming the survivor; the skeleton (#302) |
+
+**Slips found and fixed:** unrendered placeholders in A-154 and A-153 (fixed in #292 and #301; none left); #301's first push put `account_number_clash` in conventions §5 without `REFUSALS` and failed CI — moved to #302, where both land together.
+
+### The build, as of 2026-11-08
 
 **E-01 D is `Accepted`** (sr-talbot, 2026-10-31, verdict in #231). **M-04 D is `Accepted`**
 (sr-talbot, 2026-11-03, verdict in #255): built in #237, corrected in #241 (pass 1), #248
@@ -182,6 +204,7 @@ not so it is worked now. Every row points at the record; nothing here is a decis
 | ~~**Who is the second owner?** CLAUDE.md names WaxyWaxman; assents and verdicts this month came from GimpyMatey. Until answered, every decision since A-119 is one owner's~~ — **answered by sr-talbot, 2026-10-31: GimpyMatey.** CLAUDE.md and the documents' *Owners* lines now say so | this file | sr-talbot | — |
 | **What is WaxyWaxman?** The GitHub repository's owner, and one of the three System Administrators [runbook](runbook.md) §2 creates (from A-110's landing, #190), but not an owner of the documents and with no commits. A third person, GimpyMatey's other account, or an account no one signs in as — the runbook creates a `sysadmin` passkey for it, so the answer decides whether that row stays | [runbook](runbook.md) §2 | sr-talbot | Before the first System Administrator is created |
 | ~~**Joint assent on A-119 to A-134 and every A-n after, E-01 d38–d39, M-04 d39–d49, the A-91 amendment** — each ratified by sr-talbot alone~~ — **given 2026-11-14 by GimpyMatey**, all at once, on A-121 to A-150, E-01 d38–d41, M-04 d39–d63 and the A-91 amendment, read grouped as staff-visible PIN and role rules, setup and operations, and security internals. A-119 and A-120 were already GimpyMatey's (2026-10-13). The conventions §5 notes `invalid_input` = `22023` and `read_only` = `25006` were assented to the same day. **Not covered:** any decision sr-talbot ratifies alone after 2026-11-14 — *except* **A-155 to A-158** (#290), assented by GimpyMatey on 2026-11-15, reviewing #291. A-155's Canada-only `province` is accepted knowingly: the shops trade in Canada through v1, and expansion into the United States, when it comes, revisits A-155 with the rest of what that brings | `architecture.md` §2 rows; the flows | GimpyMatey | Before `/qa ready M1` |
+| **Joint assent on what GimpyMatey decided alone, 2026-11-15 evening:** A-159 (`store_account_email_set`, as O-01 d18 amends it), A-160 (`customer_record_print`), A-161 (the Customers domain); O-01 d14–d18; E-01 d43; E-07 d36–d41. Each row says *decided by GimpyMatey*; d14, d15 and E-01 d43 record your own settlements at approval, and d16 reverses one of them | `architecture.md` §2; the flows | sr-talbot | Before O-01 D M1 is dispatched (A-159, d16–d18 are in it); before M4's orders (A-160, A-161, E-07) |
 | **Production's PostgREST `db-tx-end`** must be `commit` (no client override), or `Prefer: tx=rollback` reopens the PIN oracle A-129 closed. Unrecorded. Draft decision in [E-01-D-M1](orders/E-01-D-M1.md) Needs a human — _recommended, not yet ratified_ | order finding 31 | `/architecture`, then an owner reads the dashboard | Before `supabase db push` |
 | ~~**A System Administrator's `enrolment_open_until` is never closed by enrolling**~~ — **A-134, ratified 2026-10-31** (cleared by hand, in the runbook); confirmed by A-143, 2026-11-03, with a one-hour window. ~~Still open: how a System Administrator obtains the link and on which page they enrol — S-01, with the E-01 **U** order~~ **Closed by A-147 / S-01 d13, 2026-11-08:** Supabase's invite, opened on the accept page; several passkeys, one window each; no recovery | order finding 30; A-131, A-134, A-143, A-147 | [runbook](runbook.md) §2 — two confirmations before the first entry | Before the first System Administrator enrols |
 | **Runbook §2's hand steps**: invite and recovery templates reworded (they promise a password that no longer exists); email provider on and sign-up off; link lifetime ≤ 24 h; hook enabled; `pin_pepper` created; three System Administrators with passkeys; `store_create`'s body carries the first shop's values | [runbook](runbook.md) §2 | sr-talbot | In the runbook's order, after M1 merges |
