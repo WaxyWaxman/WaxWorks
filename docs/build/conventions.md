@@ -362,6 +362,7 @@ is a pull request both humans review (§7, workflow §4).
 | Wrong PIN (E-01 d26) | `28P01` | `pin_refused` | — names nobody |
 | PIN line closed (E-01 d31) | `WX429` | `pin_line_closed` | `reopens_at` |
 | Clash — initials or PIN already held at this Store (M-04 d27, d32) | `23505` | `initials_clash`, `pin_clash` | the holder's name for initials; nothing for a PIN |
+| Clash — an account number already held by another Customer of the Organization (since A-161, 2026-11-15) | `23505` | `account_number_clash` | the holder's Primary ID |
 | Not found, or not visible to this principal | `WX404` | `not_found` | — |
 | The Owner floor (M-04 d26) | `23514` | `owner_floor` | — |
 | Required field for this role missing — a Manager's PIN or email (M-04 d35, d33); a new PIN at a promotion into Owner when the held one was set by a Manager, or when the PIN given equals the held one; a Set PIN equal to a Manager-set held PIN, by an Owner or the holder (M-04 d55, d61, d62); the first Owner's email at `organization_create` and a new Owner's at `owner_recover`, missing or blank after trim (S-01 D M1 finding 4, 2026-11-08) | `23502` | `pin_required`, `email_required`, `initials_required` | — |
@@ -376,7 +377,7 @@ is a pull request both humans review (§7, workflow §4).
 
 **The wrapper's input check has one key — decided 2026-11-08 by sr-talbot, from the S-01 D M1 pass-3 review (finding 38).** For a shape the wrapper refuses, the caller reads `invalid_input` even where the database would have answered another key (`owner_recover` with a name and no email: `email_required` from the database, `invalid_input` from the wrapper). A screen branches on the database's key only for what the wrapper lets through. **"Trim" means leading and trailing whitespace, as the wrapper's `.trim()` strips it** — space, tab, line feed, carriage return — in the database's argument checks and in S-01 d15's comparison (finding 48).
 
-**`invalid_state`'s detail is a closed list** (thirteen values since A-128 added `linked`, A-132 `auth_user_in_use` and M-04 d53 `email_not_needed`). A screen may branch on the key **and** the detail; **D** raises exactly these values and its pgTAP refusal tests assert SQLSTATE, key and detail; a new state is a new row here first. _Decided 2026-10-30 by sr-talbot (M1-contracts-3 finding 6); the values are the fake's at `19a49ed`._
+**`invalid_state`'s detail is a closed list** (sixteen values since A-161 added `balance`, `held_sale` and `order_lines`; thirteen since A-128 added `linked`, A-132 `auth_user_in_use` and M-04 d53 `email_not_needed`). A screen may branch on the key **and** the detail; **D** raises exactly these values and its pgTAP refusal tests assert SQLSTATE, key and detail; a new state is a new row here first. _Decided 2026-10-30 by sr-talbot (M1-contracts-3 finding 6); the values are the fake's at `19a49ed`._
 
 | Detail | The state | Raised by | Decision |
 |---|---|---|---|
@@ -393,6 +394,9 @@ is a pull request both humans review (§7, workflow §4).
 | `auth_user_mismatch` | A passkey enrolment for a row not linked to that Auth user | `auth_user_link` (`p_kind = 'passkey'`) | A-117 |
 | `employee` | A link sent to an Employee; linking an Employee's row to an Auth user | `user_reset_request`, `user_invite_resend`; `auth_user_link` (`user` kind) | A-114, A-87 |
 | `enrolled` | Re-sending an invite to someone already enrolled | `user_invite_resend` | A-114, A-117 |
+| `balance` | Deleting a Customer whose account balance is not zero (since A-161, 2026-11-15) | `customer_delete` | A-54, A-161; E-07 d33 |
+| `held_sale` | Deleting a Customer with a Held Sale in their name (since A-161) | `customer_delete` | A-54, A-161 |
+| `order_lines` | Deleting a Customer with open customer-attached order lines (since A-161) | `customer_delete` | A-54, A-161 |
 
 *`employee` means an Employee only.* ~~The fake also raises it for a Manager or Owner with no email, a state M-04 d33 and d35 make unreachable; the next contract change splits that branch or removes it.~~ Removed in the M1 review-keys contract change.
 
