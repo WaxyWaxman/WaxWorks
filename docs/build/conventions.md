@@ -388,7 +388,7 @@ is a pull request both humans review (§7, workflow §4).
 | `no_store` | An Employee or Manager with no Store, at Add or a demotion | `user_add`, `user_change_role` | M-04 d27 |
 | `last_store` | Unassigning an Employee's or Manager's last Store | `user_unassign` | M-04 d27 |
 | `active_owner` | Recovering an Organization that has an active Owner, with no Owner named to replace (since A-146, 2026-11-08) | `owner_recover` | A-90, A-146, M-04 d38 |
-| `linked` | Linking a row that is already linked to an Auth user | `auth_user_link` (`user`, `store` kinds) | A-128 |
+| `linked` | Linking a row that is already linked to an Auth user; correcting the store account email of a Store already linked (since A-159, 2026-11-15) | `auth_user_link` (`user`, `store` kinds); `store_account_email_set` | A-128; A-159 |
 | `auth_user_in_use` | Linking an Auth user already linked to another `users`, `stores` or `system_administrators` row | `auth_user_link` | A-132 |
 | `auth_user_mismatch` | A passkey enrolment for a row not linked to that Auth user | `auth_user_link` (`p_kind = 'passkey'`) | A-117 |
 | `employee` | A link sent to an Employee; linking an Employee's row to an Auth user | `user_reset_request`, `user_invite_resend`; `auth_user_link` (`user` kind) | A-114, A-87 |

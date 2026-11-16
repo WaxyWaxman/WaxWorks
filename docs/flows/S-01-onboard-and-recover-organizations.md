@@ -53,6 +53,7 @@
 
 - **Renaming an Organization is a System Administrator's act, on the Owner's request** (O-01 d12, 2026-11-14): an Owner does not edit the name. It is logged before and after where the Organization's Owners read it (decision 3). The function is `organization_rename`, added to A-90 by [architecture](../architecture.md) A-154.
 - **An Organization carries a contact email and phone** (O-01 d13, 2026-11-14): entered by the System Administrator at creation (decision 2) as **optional** fields, kept current by an Owner afterwards ([architecture](../architecture.md) A-154). Post-v1, with the Organization screen.
+- **A System Administrator corrects an unlinked Store's store account email** (O-01 d17, 2026-11-15), on the Owner's request, when Auth refused the one given at Create Store; refused once the Store has an account. Logged where the Owners read it (decision 3). The function is [architecture](../architecture.md) A-159's `store_account_email_set` **S**, at M1.
 
 **From [architecture](../architecture.md):**
 
