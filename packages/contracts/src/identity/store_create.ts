@@ -4,7 +4,8 @@
 // settings rows from defaults in its own body (A-112) and logs them to
 // settings_log; makes the new Store the caller's pick on a personal session
 // (E-01 d36 and d43). Nobody is assigned (O-01 d2). Logged on the Store and on
-// the Organization (O-01 d5, d16). The store account's password goes
+// the Organization (O-01 d5, d16). Refuses invalid_input / p_store_account_email
+// for an address already held inside the Organization, before writing (O-01 d18). The store account's password goes
 // from the Owner's form to the Server Action's Auth call and never reaches this
 // function (conventions §5, *What never reaches a definer function*).
 import { z } from "zod";

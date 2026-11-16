@@ -232,6 +232,18 @@ const norm = (initials: string | null | undefined) => (initials == null ? null :
 
 const uid = () => crypto.randomUUID();
 
+/**
+ * O-01 d18: a store account email already held inside the Organization — by any of
+ * its people, active or not, or by another of its Stores — compared trimmed and
+ * without regard to case (S-01 d15's comparison). Only this Organization's rows:
+ * another tenant's addresses are Auth's to refuse (O-01 d14), never this check's (A-86).
+ */
+const heldInOrg = (x: Ctx, org: string, email: string, exceptStore: string | null): boolean => {
+  const k = email.trim().toLowerCase();
+  return x.tx.users.some((u) => u.org_id === org && u.email != null && u.email.trim().toLowerCase() === k)
+    || x.tx.stores.some((s) => s.org_id === org && s.store_id !== exceptStore && s.store_account_email.trim().toLowerCase() === k);
+};
+
 const handle = (fn: (x: Ctx) => unknown): Handler => (call) => fn(new Ctx(call));
 
 /** Resolution among the active Users assigned to this Store, by exact normalised initials (E-01 d19, d25). */
@@ -534,6 +546,8 @@ export const identityHandlers: Record<string, Handler> = {
   store_create: handle((x) => {
     const who = x.authorize(true);
     const org = who.by.org_id;
+    // O-01 d18: refused before anything is written, so no Store is stranded and no position is used.
+    if (heldInOrg(x, org, x.args.p_store_account_email as string, null)) x.refuse("invalid_input", "p_store_account_email");
     const position = x.tx.stores.filter((s) => s.org_id === org).length + 1;
     // A-142: one global sequence from 1000001, unique across every Organization,
     // carried as seven-digit text; the position is max + 1 within the Organization.
@@ -571,6 +585,9 @@ export const identityHandlers: Record<string, Handler> = {
     const email = typeof raw === "string" && /^[^@\s]+@[^@\s]+$/.test(raw) ? raw : x.refuse("invalid_input", "p_store_account_email");
     // The sysadmin has no tenant claim; the Store's own row names its Organization.
     const store = x.tx.stores.find((s) => s.store_id === id) ?? x.refuse("not_found");
+    // O-01 d18 (amending A-159): the correction cannot repeat the slip it mends — an address
+    // held inside the Store's Organization is refused, the Store itself excepted, before the linked check.
+    if (heldInOrg(x, store.org_id, email, store.store_id)) x.refuse("invalid_input", "p_store_account_email");
     // A-159: once a store account is linked, its address is the account's — refused as A-128 refuses a second link.
     if (store.auth_user_id !== null) x.refuse("invalid_state", "linked");
     const before = store.store_account_email;
