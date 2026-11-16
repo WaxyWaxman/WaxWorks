@@ -22,6 +22,8 @@ export const REFUSALS = {
   pin_line_closed: "WX429",
   initials_clash: "23505",
   pin_clash: "23505",
+  /** A-161: an account number another Customer of the Organization holds; detail = the holder's Primary ID. */
+  account_number_clash: "23505",
   not_found: "WX404",
   owner_floor: "23514",
   pin_required: "23502",
@@ -55,7 +57,7 @@ export function isRefusal(key: string, code: string | undefined): key is Refusal
  * refusal's DETAIL is dropped by the real client, so a body that names a PIN's
  * holder in `pin_clash` cannot reach the screen (M-04 d32, A-93).
  */
-export const REFUSAL_DETAIL: ReadonlySet<RefusalKey> = new Set<RefusalKey>(["role_refused", "pin_line_closed", "initials_clash", "invalid_state", "invalid_input"]);
+export const REFUSAL_DETAIL: ReadonlySet<RefusalKey> = new Set<RefusalKey>(["role_refused", "pin_line_closed", "initials_clash", "account_number_clash", "invalid_state", "invalid_input"]);
 
 /**
  * What a WaxClient throws when the database (or the fake) refuses or fails: the
