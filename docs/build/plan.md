@@ -1,7 +1,7 @@
 # Wax Works — the build plan
 
 **Maintained by:** the coordinator, at the end of every build session. Read first by whoever picks up next.
-**Last updated:** 2026-11-03, sr-talbot's session — through #257; M-04 D `Accepted`; A-142 and A-143 ratified; S-01 D M1 and O-01 D M1 drafted and awaiting approval
+**Last updated:** 2026-11-15, sr-talbot's session — S-01 D M1 `Accepted` (#275); A-155–A-158 ratified (#290); O-01 D M1 approved, its contract pull request next
 
 The [workflow](workflow.md) says how an order moves; the [conventions](conventions.md)
 say what the code looks like; the [status table](status.md) says what has landed.
@@ -69,7 +69,7 @@ not this list.
 | [#267](https://github.com/WaxyWaxman/WaxWorks/pull/267) | **Pass 2 built and reviewed** — the correcting migration for the three **S** functions, `0043`, the S-01 race; qa-reviewer's runs: pgTAP 1066, `test:auth` 59 ×2, `pnpm test` 571; findings 16–35, nothing blocking. **A-148** (a deactivation closes the enrolment window), **A-149** (E-01 d41 is the shell's, the E-01 **U** order), **S-01 d15** (no new Owner at the replaced Owner's address); finding 20 kept as built; **pass 3 approved** (rows 34–37) |
 | [#268](https://github.com/WaxyWaxman/WaxWorks/pull/268)–[#271](https://github.com/WaxyWaxman/WaxWorks/pull/271) | The pass-2 decisions recorded; S-01 d15 in the fake (`b16cc99`); **pass 3 built and reviewed** — S-01 d15, A-148 in `owner_recover` and `user_deactivate`, `owner_recover`'s argument order; qa-reviewer's runs: pgTAP 1099, `test:auth` 60 ×2, `pnpm test` 571; findings 36–51, nothing blocking. **A-150** (a demotion to Employee closes the window); the contract tightens `owner_recover`'s shapes (#272); fourteen register rows `Stale`; **pass 4 approved** (rows 38–40) |
 
-**What M1's D track still needs:** **S-01 D M1 pass 4** (rows 38–40, against the contract at `1009b86`, #272) built and reviewed, then `/work-order accept`; **O-01 D M1** approved and built (drafted, #258; A-142's columns are its row 11); then the seed order (A-145 — `organization_create` under the fabricated System Administrator's claims). Then E-01 U M1 and M-04 U M1 against the fake at `0c1c173`, carrying
+**What M1's D track still needs:** ~~**S-01 D M1 pass 4** (rows 38–40, against the contract at `1009b86`, #272) built and reviewed, then `/work-order accept`~~ — **`Accepted` 2026-11-15** (#275); **O-01 D M1** — **approved 2026-11-15** by sr-talbot (rows 17–19 on A-155–A-158, #290); its contract pull request (A-155's `settings.province` → `string | null`) lands first, then it is built; then the seed order (A-145 — `organization_create` under the fabricated System Administrator's claims). Then E-01 U M1 and M-04 U M1 against the fake at `0c1c173`, carrying
 M-04 d60's screen half, the two refusals' text at d61/d62 (*a different PIN*), and the
 Windows harness item from M-04 D's verdict. `/qa ready M1` once both tracks' rows show
 in `status.md`.
