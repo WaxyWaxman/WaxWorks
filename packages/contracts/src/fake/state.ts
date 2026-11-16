@@ -10,7 +10,8 @@ export type Role = "employee" | "manager" | "owner";
 export interface OrgRow { org_id: string; name: string }
 
 export interface StoreSettings {
-  province: string;
+  /** A-155: part of the address, nullable. */
+  province: string | null;
   currency: string;
   fiscal_year_end: string;
   receipt_width: "80mm" | "58mm" | "letter";

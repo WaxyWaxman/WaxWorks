@@ -3,7 +3,8 @@
 // seven-digit Store ID and the next position (O-01 d2); writes the Store's
 // settings rows from defaults in its own body (A-112) and logs them to
 // settings_log; makes the new Store the caller's pick on a personal session
-// (E-01 d36). Nobody is assigned (O-01 d2). The store account's password goes
+// (E-01 d36 and d43). Nobody is assigned (O-01 d2). Logged on the Store and on
+// the Organization (O-01 d5, d16). The store account's password goes
 // from the Owner's form to the Server Action's Auth call and never reaches this
 // function (conventions §5, *What never reaches a definer function*).
 import { z } from "zod";
@@ -22,7 +23,8 @@ export const StoreCreateOutput = z.object({
   position: z.number().int().positive(),
   /** The M1 settings rows A-112 writes — the first shop's values (§11). */
   settings: z.object({
-    province: z.string(),
+    /** Part of the Store's address, a Canadian two-letter code; null when no address is held (A-155). */
+    province: z.string().nullable(),
     currency: z.string().length(3),
     /** MM-DD (M-06 d64; A-112 answers March 31). */
     fiscal_year_end: z.string().regex(/^[0-9]{2}-[0-9]{2}$/),
