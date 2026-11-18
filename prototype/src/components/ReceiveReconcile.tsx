@@ -6,6 +6,7 @@ import { money } from "../lib/money";
 import { dueFor } from "../lib/payables";
 import { invoiceIsPaid, round2 } from "../lib/totals";
 import { useApp } from "../store/AppStore";
+import { showDate, showDateTime } from "../lib/calendarDate";
 
 // Track 3 (E-02 d38) — the till's money track doing the receiving job.
 //
@@ -213,7 +214,7 @@ export function ReceiveReconcile({
               Save updates
             </button>
             <div className="recv-foot-sub">
-              Sellable since {invoice.finalizedAt?.slice(0, 16) ?? "finalize"} · corrections stay
+              Sellable since {invoice.finalizedAt ? showDateTime(invoice.finalizedAt) : "finalize"} · corrections stay
               open until this invoice is paid
             </div>
           </>
@@ -221,7 +222,7 @@ export function ReceiveReconcile({
         {locked && (
           <div className="recv-foot-sub">
             Immutable · settled in Accounts Payable (M-05)
-            {invoice.paidAt ? ` on ${invoice.paidAt}` : ""}
+            {invoice.paidAt ? ` on ${showDate(invoice.paidAt)}` : ""}
           </div>
         )}
         <button
@@ -406,13 +407,13 @@ function InvoiceTerms({
       <div className="totals-row">
         <span className="xsmall">Due</span>
         <strong className="num">
-          {due.dueDate ?? (terms ? terms : "—")}
+          {due.dueDate ? showDate(due.dueDate) : terms ? terms : "—"}
         </strong>
       </div>
       <span className="hint">
         {due.dueDate ? (
           <>
-            Derived from the <strong>invoice date</strong> ({invoice.invoiceDate}) plus the terms — never the received
+            Derived from the <strong>invoice date</strong> ({showDate(invoice.invoiceDate)}) plus the terms — never the received
             date (d45). This is the only thing that lets Accounts Payable call a balance overdue.
           </>
         ) : terms && !invoice.invoiceDate ? (

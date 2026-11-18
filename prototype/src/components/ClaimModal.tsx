@@ -7,6 +7,7 @@ import { invoiceForItem, provenanceLabel, supplierIdForItem } from "../lib/prove
 import { useApp } from "../store/AppStore";
 import { useActor } from "./Identify";
 import { Modal } from "./Modal";
+import { showDate } from "../lib/calendarDate";
 
 const CUSTOM_REASON = "Custom…";
 
@@ -117,7 +118,7 @@ export function ClaimModal({
             <select value={chosen} onChange={(e) => setAgainstId(e.target.value)}>
               {eligible.map((iv) => (
                 <option key={iv.id} value={iv.id}>
-                  {iv.invoiceNumber} · {iv.invoiceDate}
+                  {iv.invoiceNumber} · {showDate(iv.invoiceDate)}
                   {arrivedOn?.id === iv.id ? " — this copy arrived on it" : ""}
                 </option>
               ))}

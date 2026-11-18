@@ -16,6 +16,7 @@ import {
 import { money } from "../lib/money";
 import { useApp } from "../store/AppStore";
 import { useActor } from "../components/Identify";
+import { showDate } from "../lib/calendarDate";
 
 // Supplier Claims on three tracks — E-04 §"Supplier claims", decisions 9-12
 // and 20-27. Claiming credit from a supplier for stock that arrived short,
@@ -398,7 +399,7 @@ function SentCard({
             )}
           </span>
           <span className="meta">
-            Sent {claim.sentAt?.slice(0, 10)} · {claim.lines.length} line{claim.lines.length === 1 ? "" : "s"} ·{" "}
+            Sent {showDate(claim.sentAt)} · {claim.lines.length} line{claim.lines.length === 1 ? "" : "s"} ·{" "}
             {batchName(claim).toLowerCase()}
           </span>
         </span>

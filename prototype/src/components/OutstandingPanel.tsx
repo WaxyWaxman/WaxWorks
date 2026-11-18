@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import type { Invoice, PendingOrderLine, Supplier } from "../data/types";
 import { isOpenOrderLine, outstandingQty, receivedAgainst } from "../lib/orderLines";
 import { useApp } from "../store/AppStore";
+import { showDate } from "../lib/calendarDate";
 
 // The outstanding-orders worklist (E-02 d42). It lives here, in the Invoice
 // track, rather than in the left slab: the slab is Invoices, and mixing two
@@ -61,7 +62,7 @@ export function OutstandingPanel({
             (order.poNumber ? ` · ${order.poNumber}` : " · not on a PO") +
             (order.customerId ? " · customer hold" : "") +
             (order.status ? ` · ${order.status.toLowerCase()}` : "") +
-            (order.expectedDate ? ` due ${order.expectedDate}` : ""),
+            (order.expectedDate ? ` due ${showDate(order.expectedDate)}` : ""),
           art: record?.art,
         };
       })

@@ -4,6 +4,7 @@ import { money } from "../lib/money";
 import { invoiceChargesTotal, round2 } from "../lib/totals";
 import { useApp } from "../store/AppStore";
 import { ChevronLeft, ChevronRight } from "./Chevrons";
+import { showDate } from "../lib/calendarDate";
 
 // The receiving slab (E-02 d38, d42). Invoices, and only Invoices: the drafts
 // in flight and the ones received lately, searched by supplier, number, date,
@@ -303,7 +304,7 @@ function InvoiceRow({
       <span className="m">
         {draft
           ? `${supplier?.name} · ${invoice.intakeMode.toLowerCase()}`
-          : `${invoice.status.toLowerCase()} ${invoice.finalizedAt?.slice(0, 10) ?? ""} · ${copies} cop${copies === 1 ? "y" : "ies"}`}
+          : `${invoice.status.toLowerCase()} ${showDate(invoice.finalizedAt)} · ${copies} cop${copies === 1 ? "y" : "ies"}`}
       </span>
     </button>
   );

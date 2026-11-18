@@ -2,6 +2,7 @@ import { useState, type ReactNode } from "react";
 import { money } from "../lib/money";
 import type { DayBreakdown, SalesFigures, SalesFooter } from "../lib/dayBreakdown";
 import type { RangeReport } from "../lib/rangeReport";
+import { showDate } from "../lib/calendarDate";
 
 // M-03 d17 — the close's breakdown as EIGHT NAMED SECTIONS in a fixed order.
 // The order is the argument: File info first (a report with no stated bounds
@@ -538,7 +539,7 @@ export function RangeReportView({ data }: { data: RangeReport }) {
               <tr>
                 <td className="muted">Range</td>
                 <td className="num">
-                  {data.from} → {data.to}
+                  {showDate(data.from)} → {showDate(data.to)}
                 </td>
               </tr>
               <tr>

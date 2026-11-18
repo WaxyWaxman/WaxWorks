@@ -4,6 +4,7 @@ import type { Customer } from "../data/types";
 import type { CustomerFacts } from "../lib/customerFacts";
 import { money } from "../lib/money";
 import { useApp } from "../store/AppStore";
+import { showDate, showDateTime } from "../lib/calendarDate";
 
 // ---- Track 3: the account (E-07 d19, d20) ----
 //
@@ -176,7 +177,7 @@ export function CustomerAccount({
                 <span className="m">
                   {o.outstanding} × ·{" "}
                   {o.line.poNumber ? `PO ${o.line.poNumber}` : "no PO number yet"}
-                  {o.line.expectedDate ? ` · due ${o.line.expectedDate}` : ""}
+                  {o.line.expectedDate ? ` · due ${showDate(o.line.expectedDate)}` : ""}
                 </span>
               </div>
             ))
@@ -191,7 +192,7 @@ export function CustomerAccount({
             facts.recentSales.slice(0, 6).map((s) => (
               <div key={s.saleId} className="cust-salerow">
                 <span className="t">#{s.saleNumber}</span>
-                <span className="m">{s.at}</span>
+                <span className="m">{showDateTime(s.at)}</span>
                 <span className="v">{money(s.total)}</span>
               </div>
             ))
@@ -219,7 +220,7 @@ export function CustomerAccount({
                   {money(m.amount)}
                 </span>
                 <span className="when">
-                  {m.ref} · {m.at}
+                  {m.ref} · {showDateTime(m.at)}
                 </span>
               </div>
             ))}

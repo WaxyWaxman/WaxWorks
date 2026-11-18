@@ -5,6 +5,7 @@ import { daysAgo } from "../lib/totals";
 import { useApp } from "../store/AppStore";
 import { TitlecardPanel } from "./TitlecardPanel";
 import type { PlacedRow, StreamRow } from "./StreamSlab";
+import { showDate } from "../lib/calendarDate";
 
 // Track 3 of Order Processing. Five faces, one per thing the middle track can
 // be showing, and the same contract the other screens' third tracks keep: the
@@ -476,7 +477,7 @@ export function PlacedDossier({
         <div className={"op-figure" + (outstanding === 0 ? " ready" : "")}>{outstanding}</div>
         <div className="op-figure-say">units of {ordered} ordered</div>
         <div className="op-figure-sub">
-          {row.lines.length} line{row.lines.length === 1 ? "" : "s"} · placed {row.placedAt} ·{" "}
+          {row.lines.length} line{row.lines.length === 1 ? "" : "s"} · placed {showDate(row.placedAt)} ·{" "}
           {daysAgo(row.placedAt)} days ago
         </div>
       </div>
@@ -507,7 +508,7 @@ export function PlacedDossier({
                 {row.supplier?.name ?? "—"} · {row.supplier?.orderVia ?? "—"}
               </span>
               <span className="k">
-                Placed {row.placedAt}
+                Placed {showDate(row.placedAt)}
                 {row.external ? " · recorded, placed elsewhere" : ""}
               </span>
             </div>

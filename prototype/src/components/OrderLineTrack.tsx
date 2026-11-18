@@ -6,6 +6,7 @@ import { orderLineState, outstandingQty, receivedAgainst } from "../lib/orderLin
 import { daysAgo, followUpDueAt, isFollowUpOverdue } from "../lib/totals";
 import { useApp } from "../store/AppStore";
 import type { PoRow } from "./OrderSlab";
+import { showDate } from "../lib/calendarDate";
 
 // Track 3 of What's on Order: the line you picked, and the one thing to do
 // with it. Head and foot are fixed and only the middle scrolls, so the primary
@@ -109,7 +110,7 @@ export function OrderLineTrack({
           <div className="row wrap" style={{ gap: "var(--sp-2)", marginTop: 4 }}>
             <span className={"badge " + toneOf(state)}>{state}</span>
             {line.recordedAt && <span className="badge accent">their reference</span>}
-            {line.expectedDate && <span className="badge mono">due {line.expectedDate}</span>}
+            {line.expectedDate && <span className="badge mono">due {showDate(line.expectedDate)}</span>}
           </div>
         </div>
 

@@ -13,6 +13,7 @@ import { datesIn, isImbalanced } from "../lib/journal";
 import { useApp } from "../store/AppStore";
 import { ManagerAuthorize } from "./ManagerAuthorize";
 import { useActor } from "./Identify";
+import { showDate, showDateTime } from "../lib/calendarDate";
 
 // The things nobody touches with a customer waiting: past Sales, the holds
 // list, and the day close (M-03). They belong to the TILL rather than to the
@@ -266,7 +267,7 @@ export function SearchModal({ onClose }: { onClose: () => void }) {
                       </>
                     )}
                   </td>
-                  <td className="small mono">{sale.createdAt}</td>
+                  <td className="small mono">{showDateTime(sale.createdAt)}</td>
                   <td className="small">{cust?.name ?? "—"}</td>
                   <td className="small muted">
                     {sale.lines.length} line{sale.lines.length !== 1 ? "s" : ""}
@@ -443,7 +444,7 @@ export function OtherFunctionsModal({ onClose }: { onClose: () => void }) {
                   <div className="row" style={{ justifyContent: "space-between" }}>
                     <span className="small">
                       Batch <span className="mono">{b.id}</span> — {b.saleIds.length} Sale
-                      {b.saleIds.length === 1 ? "" : "s"} — {b.at} by {b.by}
+                      {b.saleIds.length === 1 ? "" : "s"} — {showDateTime(b.at)} by {b.by}
                     </span>
                     <button
                       className="btn sm danger"
@@ -523,7 +524,7 @@ function JournalNotice({
           {dates.length > 1 ? (
             <>
               {" "}
-              across <strong>{dates.length} business dates</strong> ({dates.join(", ")}), because this close swept more
+              across <strong>{dates.length} business dates</strong> ({dates.map(showDate).join(", ")}), because this close swept more
               than one day (d14). Each day is dated its own, not today.
             </>
           ) : (

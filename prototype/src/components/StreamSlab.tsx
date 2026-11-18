@@ -2,6 +2,7 @@ import { useEffect, useRef } from "react";
 import { ChevronLeft, ChevronRight } from "./Chevrons";
 import type { PendingOrderLine, Supplier } from "../data/types";
 import { daysAgo } from "../lib/totals";
+import { showDate } from "../lib/calendarDate";
 
 export type StreamChip = "all" | "ready" | "waiting" | "aging" | "email";
 export type StreamSort = "ready" | "age" | "supplier" | "cost";
@@ -146,7 +147,7 @@ export function StreamSlab({
                 role="listitem"
                 className={"po-tile" + (scope === `po:${p.poNumber}` ? " on" : "")}
                 onClick={() => onScopeChange(`po:${p.poNumber}`)}
-                title={`${p.poNumber} · ${p.supplier?.shortName ?? ""} · placed ${p.placedAt}${p.voided ? " · voided" : ""}`}
+                title={`${p.poNumber} · ${p.supplier?.shortName ?? ""} · placed ${showDate(p.placedAt)}${p.voided ? " · voided" : ""}`}
                 aria-label={`Purchase order ${p.poNumber}${p.voided ? ", voided" : ""}`}
               >
                 {poTail(p.poNumber)}
@@ -288,7 +289,7 @@ export function StreamSlab({
             </span>
             <span className="m">
               <span className={"ord-dot " + (p.voided ? "void" : "placed")} />{" "}
-              {p.supplier?.shortName ?? "—"} · placed {p.placedAt}
+              {p.supplier?.shortName ?? "—"} · placed {showDate(p.placedAt)}
             </span>
             <span className="n">{p.lines.length}</span>
             <span className="k">lines</span>

@@ -27,6 +27,7 @@ import { invoiceChargesTotal, invoiceIsPaid, round2 } from "../lib/totals";
 import { storeTaxTypes } from "../lib/tax";
 import { useApp } from "../store/AppStore";
 import { useActor } from "../components/Identify";
+import { showDate, showDateTime } from "../lib/calendarDate";
 
 // E-02 Receiving, on the till's three-track frame (d38): the worklist slab you
 // pick from, the Invoice, and the reconcile figures. The frame is pinned to the
@@ -602,11 +603,11 @@ function InvoiceEditor({
           <span>{supplier.name}</span>
           <span className="muted">·</span>
           <span>
-            dated <span className="mono">{invoice.invoiceDate || "—"}</span>
+            dated <span className="mono">{showDate(invoice.invoiceDate) || "—"}</span>
           </span>
           <span className="muted">·</span>
           <span>
-            received <span className="mono">{invoice.receivedDate}</span>
+            received <span className="mono">{showDate(invoice.receivedDate)}</span>
           </span>
           <span className="muted">·</span>
           <span>
@@ -632,7 +633,7 @@ function InvoiceEditor({
             <div className="recv-locked">
               <span className="lab">Locked</span>
               <div className="recv-locked-text">
-                Paid {invoice.paidAt ?? ""} {invoice.paidBy ? `by ${invoice.paidBy}` : ""} — this
+                Paid {showDate(invoice.paidAt)} {invoice.paidBy ? `by ${invoice.paidBy}` : ""} — this
                 Invoice is immutable. Amendments are manager-only, appended against the original in{" "}
                 <strong>E-04</strong> (d40).
               </div>
@@ -738,7 +739,7 @@ function InvoiceEditor({
           <div className="xsmall muted stack" style={{ margin: "var(--sp-3) 0" }}>
             {[...invoice.log].reverse().map((e, i) => (
               <div key={i}>
-                <span className="mono">{e.at}</span> — {e.text}
+                <span className="mono">{showDateTime(e.at)}</span> — {e.text}
               </div>
             ))}
           </div>

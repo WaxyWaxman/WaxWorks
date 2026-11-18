@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { isCalendarDate, toCalendarDate } from "./calendarDate";
+import { isCalendarDate, showDate, showDateTime, toCalendarDate } from "./calendarDate";
 import { dueFor } from "./payables";
 import { isBusinessDate } from "./journal";
 
@@ -103,5 +103,31 @@ describe("what the entry point hands the journal (M-07 d14, d19)", () => {
       expect(toCalendarDate(raw)).toBe("");
       expect(isBusinessDate(toCalendarDate(raw))).toBe(false);
     }
+  });
+});
+
+describe("E-02 d58 — a date is stored YYYY-MM-DD and shown MM-DD-YYYY", () => {
+  it("shows a calendar day month first", () => {
+    expect(showDate("2026-04-03")).toBe("04-03-2026");
+    expect(showDate("2026-11-17")).toBe("11-17-2026");
+  });
+  it("reads the day off a timestamp in either separator", () => {
+    expect(showDate("2026-09-02 11:00:00")).toBe("09-02-2026");
+    expect(showDate("2026-09-02T11:00:00.000Z")).toBe("09-02-2026");
+  });
+  it("keeps blank blank, and leaves a non-date visible as it is", () => {
+    expect(showDate("")).toBe("");
+    expect(showDate(undefined)).toBe("");
+    expect(showDate("not a date")).toBe("not a date");
+    expect(showDate("2026-02-31")).toBe("2026-02-31");
+  });
+  it("shows a timestamp as MM-DD-YYYY HH:MM, the seconds dropped", () => {
+    expect(showDateTime("2026-09-02 11:00:00")).toBe("09-02-2026 11:00");
+    expect(showDateTime("2026-09-02T16:05:59")).toBe("09-02-2026 16:05");
+    expect(showDateTime("2026-09-02")).toBe("09-02-2026");
+  });
+  it("never changes what is stored: the shown form is not a calendar day", () => {
+    expect(isCalendarDate(showDate("2026-04-03"))).toBe(false);
+    expect(toCalendarDate("2026-04-03")).toBe("2026-04-03");
   });
 });

@@ -6,6 +6,7 @@ import type { RecordEntry } from "../data/types";
 import { money } from "../lib/money";
 import { stockFacts } from "../lib/stockState";
 import { useApp } from "../store/AppStore";
+import { showDate } from "../lib/calendarDate";
 
 // One figure and its label. A zero stays visible and grey rather than being
 // hidden, so every row reads the same shape and a non-zero catches the eye on
@@ -474,7 +475,7 @@ export function BulkOrderBatch({
         <div className="wo-w-name">{supplier?.name}</div>
         <div className="wo-w-sub">
           {placed
-            ? `${ref ? `${ref} — their reference` : "No reference yet — ours will be minted"} · placed ${draft.placedOn}`
+            ? `${ref ? `${ref} — their reference` : "No reference yet — ours will be minted"} · placed ${showDate(draft.placedOn)}`
             : `Pending stream${draft.separator.trim() ? ` ${draft.separator.trim()}` : " — regular pile"} · no PO until it is processed`}
         </div>
       </div>
@@ -557,7 +558,7 @@ export function BulkOrderBatch({
                 (d25).
               </Step>
               <Step n={2}>
-                Stamps <span className="mono">{draft.placedOn}</span> as the placed date, so the
+                Stamps <span className="mono">{showDate(draft.placedOn)}</span> as the placed date, so the
                 follow-up window and the age sort are right from the first render (d26).
               </Step>
               <Step n={3}>

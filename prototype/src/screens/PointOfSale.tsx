@@ -13,6 +13,7 @@ import { availableOnHand, balanceDue, lineTaxComponents, saleTotals } from "../l
 import { giftCardAvailable, giftCardRedeemRefusal } from "../lib/giftCards";
 import { useApp } from "../store/AppStore";
 import { useIdentify, useActor } from "../components/Identify";
+import { showDateTime } from "../lib/calendarDate";
 
 // E-05 d36 — the pad is built from the store's CONFIGURED tenders, not from a
 // hardcoded list of behaviours. M-06 d4 always said the display name is
@@ -345,7 +346,7 @@ function SaleEditor() {
           <div className="xsmall muted stack" style={{ margin: "var(--sp-3) 0" }}>
             {sale.log.map((e, i) => (
               <div key={i}>
-                <span className="mono">{e.at}</span> — {e.text}
+                <span className="mono">{showDateTime(e.at)}</span> — {e.text}
               </div>
             ))}
           </div>
