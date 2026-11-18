@@ -25,6 +25,7 @@ import { readStored, writeStored } from "../lib/tillMemory";
 import { daysAgo, orderReady, separatorCounts } from "../lib/totals";
 import { useApp } from "../store/AppStore";
 import { useActor } from "../components/Identify";
+import { showDate } from "../lib/calendarDate";
 
 // Order Processing (M-02 Phase 2), laid out as the till's three tracks — the
 // same frame as Sell, Find, Receive, Customers, Suppliers and What's on Order
@@ -907,7 +908,7 @@ function PlacedFace({ row, statusMsg }: { row: PlacedRow; statusMsg: string | nu
           <h2 className="mono">{row.poNumber}</h2>
           <div className="row wrap" style={{ gap: "var(--sp-2)", marginTop: 6 }}>
             <span className="badge ink">{row.supplier?.name ?? "—"}</span>
-            <span className="badge">placed {row.placedAt}</span>
+            <span className="badge">placed {showDate(row.placedAt)}</span>
             <span className="badge mono">
               {row.lines.length} line{row.lines.length === 1 ? "" : "s"}
             </span>

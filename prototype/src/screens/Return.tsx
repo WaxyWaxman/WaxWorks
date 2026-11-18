@@ -13,6 +13,7 @@ import { defaultTenderRow } from "../lib/tenders";
 import { useApp } from "../store/AppStore";
 import { useActor } from "../components/Identify";
 import { ManagerAuthorize } from "../components/ManagerAuthorize";
+import { showDate, showDateTime } from "../lib/calendarDate";
 
 // Entered exclusively from the till rail's + New return (mirrors how
 // /sell/:saleId is never itself a nav item). A Return is a Sale with isReturn
@@ -266,7 +267,7 @@ function ReturnEditor({ saleId }: { saleId: string }) {
           <div className="xsmall muted stack" style={{ margin: "var(--sp-3) 0" }}>
             {sale.log.map((e, i) => (
               <div key={i}>
-                <span className="mono">{e.at}</span> — {e.text}
+                <span className="mono">{showDateTime(e.at)}</span> — {e.text}
               </div>
             ))}
           </div>
@@ -784,7 +785,7 @@ function AddReturnedItem({ saleId, onClose }: { saleId: string; onClose: () => v
                 {priorSales.map((s) => (
                   <option key={s.id} value={String(s.saleNumber)}>
                     #{s.saleNumber} · {app.customerFor(s.customerId)?.name ?? "walk-in"} ·{" "}
-                    {new Date(s.createdAt).toLocaleDateString()}
+                    {showDate(s.createdAt)}
                   </option>
                 ))}
               </select>

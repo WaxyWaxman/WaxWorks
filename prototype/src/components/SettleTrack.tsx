@@ -24,6 +24,7 @@ import {
 } from "../lib/payables";
 import { money } from "../lib/money";
 import { payableEntrySignedAmount, round2 } from "../lib/totals";
+import { showDate } from "../lib/calendarDate";
 
 /**
  * Track 3. Three states, in strict priority: the entry being composed, else
@@ -367,7 +368,7 @@ function Standing({
               <div className={"ap-batch" + (voided ? " voided" : "")} key={b.id}>
                 <button className="ap-batch-head" onClick={() => onOpenBatch(b.id)} aria-expanded={open}>
                   <span className="l">
-                    {b.date} — {cr > 0.005 && total - cr <= 0.005 ? "credit only" : b.method}{" "}
+                    {showDate(b.date)} — {cr > 0.005 && total - cr <= 0.005 ? "credit only" : b.method}{" "}
                     {b.reference && <span className="mono">{b.reference}</span>}
                   </span>
                   <span className={"badge " + (voided ? "danger" : "ok")}>{voided ? "voided" : money(total)}</span>
@@ -393,7 +394,7 @@ function Standing({
                     </div>
                     {voided ? (
                       <div className="by" style={{ color: "var(--c-danger)" }}>
-                        <strong>Voided</strong> {voided.voidedAt.slice(0, 10)} by {voided.voidedBy}. The batch is kept
+                        <strong>Voided</strong> {showDate(voided.voidedAt)} by {voided.voidedBy}. The batch is kept
                         as the record of what was recorded at the time — never deleted, never edited (d22).
                       </div>
                     ) : (
@@ -429,7 +430,7 @@ function Standing({
               <div className="ap-batch" key={c.id}>
                 <button className="ap-batch-head" onClick={() => onOpenBatch(c.id)} aria-expanded={open}>
                   <span className="l">
-                    {c.clearedAt.slice(0, 10)} — cleared{" "}
+                    {showDate(c.clearedAt)} — cleared{" "}
                     <span className="mono">{c.memberIds.length} entries</span>
                   </span>
                   <span className="badge">{money(0)}</span>
@@ -896,7 +897,7 @@ function Selection({
               re-record (d40) the repeat is expected, and the warning says so. */}
           {duplicateRef && (
             <div className={"wo-caveat" + (duplicateRef.voided ? "" : " warn")}>
-              <strong>{duplicateRef.reference}</strong> is already on a settlement dated {duplicateRef.date}
+              <strong>{duplicateRef.reference}</strong> is already on a settlement dated {showDate(duplicateRef.date)}
               {duplicateRef.voided ? (
                 <> — a <strong>voided</strong> one, so re-using it here is expected (d40).</>
               ) : (

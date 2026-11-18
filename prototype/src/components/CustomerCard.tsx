@@ -3,6 +3,7 @@ import { ACCOUNT_TYPES } from "./CustomerSlab";
 import type { Customer, CustomerAddress } from "../data/types";
 import { useApp } from "../store/AppStore";
 import { useScopedActor } from "./Identify";
+import { showDateTime } from "../lib/calendarDate";
 
 const CONTACT_PREFS: Customer["contactPreference"][] = ["Email", "Phone"];
 
@@ -110,7 +111,7 @@ export function CustomerCard({ customer }: { customer: Customer }) {
                   <tr key={i}>
                     <td className="small">{h.title}</td>
                     <td className="small mono">#{h.saleNumber}</td>
-                    <td className="small muted num">{h.at}</td>
+                    <td className="small muted num">{showDateTime(h.at)}</td>
                   </tr>
                 ))}
                 {history.length === 0 && (

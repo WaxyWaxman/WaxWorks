@@ -14,6 +14,7 @@ import { readStored, writeStored } from "../lib/tillMemory";
 import { daysAgo, followUpDueAt, isFollowUpOverdue } from "../lib/totals";
 import { useApp } from "../store/AppStore";
 import { useActor } from "../components/Identify";
+import { showDate } from "../lib/calendarDate";
 
 // What's on Order (M-02 Phase 3), laid out as the till's three tracks — the
 // same frame as Sell, Find, Receive, Customers and Suppliers (E-05 d29 by way
@@ -451,7 +452,7 @@ function LineRow({
         {sup?.shortName} · <span className="mono">{line.poNumber}</span>
         {rec?.catalogNo ? ` · ${rec.catalogNo}` : ""}
         {cust && <span className="who"> · {cust.name} waiting</span>}
-        {line.expectedDate ? ` · due ${line.expectedDate}` : ""}
+        {line.expectedDate ? ` · due ${showDate(line.expectedDate)}` : ""}
       </span>
       <span className="q">
         <span className="v">{out}</span>

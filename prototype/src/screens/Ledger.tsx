@@ -39,6 +39,7 @@ import {
   type OpeningPositionDraft,
 } from "../lib/ledgerOpeningPosition";
 import { accountEnquiry } from "../lib/ledgerBalances";
+import { showDate } from "../lib/calendarDate";
 import {
   balanceSheet,
   exportLines,
@@ -126,7 +127,7 @@ export function Ledger() {
           Authorised by {authorisedBy.name} ·{" "}
           {app.ledgerOpeningSealed ? (
             <>
-              books open from <strong>{app.ledgerOpening?.firstDay}</strong>
+              books open from <strong>{showDate(app.ledgerOpening?.firstDay)}</strong>
             </>
           ) : (
             <strong>no opening position yet</strong>
@@ -217,7 +218,7 @@ function OpeningPhase({ by }: { by: ManagerAuth }) {
             />
           </label>
           <p className="small muted">
-            The opening position is dated <strong>{openingDateOf(draft)}</strong> — the day before (step 2). A-73 refuses
+            The opening position is dated <strong>{showDate(openingDateOf(draft))}</strong> — the day before (step 2). A-73 refuses
             any posting dated on or before it.
           </p>
 
@@ -652,7 +653,7 @@ function PostPhase({ by }: { by: ManagerAuth }) {
                   {exceptionReport(app.ledgerPostings).map((p) =>
                     (p.overrides ?? []).map((o) => (
                       <tr key={`${p.id}-${o.accountId}`}>
-                        <td>{p.businessDate}</td>
+                        <td>{showDate(p.businessDate)}</td>
                         <td>{app.glAccounts.find((a) => a.id === o.accountId)?.name ?? o.accountId}</td>
                         <td className="small">{o.reason}</td>
                         <td>{p.authorizedByInitials}</td>
@@ -675,7 +676,7 @@ function PostPhase({ by }: { by: ManagerAuth }) {
                 <tbody>
                   {app.ledgerPostings.slice(0, 8).map((p) => (
                     <tr key={p.id}>
-                      <td>{p.businessDate}</td>
+                      <td>{showDate(p.businessDate)}</td>
                       <td className="small muted">{p.lines[0]?.memo}</td>
                       <td className="num">{money(postingBalance(p.lines).debits)}</td>
                     </tr>
@@ -834,7 +835,7 @@ function SealPhase({ by }: { by: ManagerAuth }) {
                 <tbody>
                   {app.ledgerUnseals.map((u) => (
                     <tr key={u.id}>
-                      <td>{u.unsealedAt.slice(0, 10)}</td>
+                      <td>{showDate(u.unsealedAt)}</td>
                       <td>{u.authorizedByInitials}</td>
                       <td className="small">{u.reason}</td>
                     </tr>
@@ -957,7 +958,7 @@ function ReadPhase({ by }: { by: ManagerAuth }) {
             <tbody>
               {enquiry.lines.map((l, i) => (
                 <tr key={i}>
-                  <td>{l.businessDate}</td>
+                  <td>{showDate(l.businessDate)}</td>
                   <td>{l.section ?? "—"}</td>
                   <td className="small">{l.memo}</td>
                   <td className="num">{l.debit ? money(l.debit) : ""}</td>
@@ -1009,7 +1010,7 @@ function ReadPhase({ by }: { by: ManagerAuth }) {
             {pl.later.count > 0 && (
               <p className="small muted">
                 {pl.later.count} line{pl.later.count === 1 ? "" : "s"} dated after {to} — the first on{" "}
-                {pl.later.firstDate} — are <strong>not</strong> in this (d30).
+                {showDate(pl.later.firstDate)} — are <strong>not</strong> in this (d30).
               </p>
             )}
             <button
@@ -1184,8 +1185,8 @@ function ReadPhase({ by }: { by: ManagerAuth }) {
                       <td>{i.kind}</td>
                       <td>
                         {i.scope.kind === "as-at"
-                          ? `as at ${i.scope.at}`
-                          : `${i.scope.from} → ${i.scope.toExclusive}`}
+                          ? `as at ${showDate(i.scope.at)}`
+                          : `${showDate(i.scope.from)} → ${showDate(i.scope.toExclusive)}`}
                       </td>
                       <td>{i.provisional ? <span className="badge">provisional</span> : ""}</td>
                       <td>{i.authorizedByInitials}</td>
@@ -1206,7 +1207,7 @@ function ReadPhase({ by }: { by: ManagerAuth }) {
                 <div className="card-body stack">
                   <p className="small muted">
                     <strong>The figures as issued, never a recomputation</strong> (d31). Issued{" "}
-                    {reopened.issuedAt.slice(0, 10)} by {reopened.authorizedByInitials}
+                    {showDate(reopened.issuedAt)} by {reopened.authorizedByInitials}
                     {reopened.provisional && (
                       <>
                         {" "}
@@ -1371,7 +1372,7 @@ function ReconcilePhase({ by }: { by: ManagerAuth }) {
                         }}
                       />
                     </td>
-                    <td>{e.line.businessDate}</td>
+                    <td>{showDate(e.line.businessDate)}</td>
                     <td className="small">{e.line.memo || "—"}</td>
                     <td className="num">{money(e.line.debit - e.line.credit)}</td>
                   </tr>
@@ -1461,7 +1462,7 @@ function ReconcilePhase({ by }: { by: ManagerAuth }) {
                   <tbody>
                     {outstanding.map((e) => (
                       <tr key={`${e.batchId}#${e.lineIndex}`}>
-                        <td>{e.line.businessDate}</td>
+                        <td>{showDate(e.line.businessDate)}</td>
                         <td className="small">{e.line.memo || "—"}</td>
                         <td className="num">{money(e.line.debit - e.line.credit)}</td>
                       </tr>
@@ -1534,7 +1535,7 @@ function IssuedFigures({ issuance }: { issuance: LedgerIssuance }) {
         <tbody>
           {lines.slice(0, 12).map((l, i) => (
             <tr key={i}>
-              <td>{l.businessDate}</td>
+              <td>{showDate(l.businessDate)}</td>
               <td className="small">{l.memo}</td>
               <td className="num">{l.debit ? money(l.debit) : ""}</td>
               <td className="num">{l.credit ? money(l.credit) : ""}</td>

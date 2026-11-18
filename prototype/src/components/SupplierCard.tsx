@@ -12,6 +12,7 @@ import type {
 } from "../data/types";
 import { useApp } from "../store/AppStore";
 import { useScopedActor } from "./Identify";
+import { showDateTime } from "../lib/calendarDate";
 
 const ORDER_VIA: SupplierOrderVia[] = ["Phone", "Email", "FTP", "Their Website", "Fax", "Rep"];
 const MIN_BASIS: SupplierMinBasis[] = ["Retail", "Net"];
@@ -322,7 +323,7 @@ export function SupplierCard({ supplier }: { supplier: Supplier }) {
               <tbody>
                 {supplier.log.slice().reverse().map((e, i) => (
                   <tr key={i}>
-                    <td className="mono xsmall">{e.at}</td>
+                    <td className="mono xsmall">{showDateTime(e.at)}</td>
                     <td className="small">{e.text}</td>
                   </tr>
                 ))}

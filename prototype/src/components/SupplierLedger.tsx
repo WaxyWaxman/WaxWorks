@@ -2,6 +2,7 @@ import { useNavigate } from "react-router-dom";
 import type { Supplier } from "../data/types";
 import { apState, groupFlight, type FlightKind, type SupplierFacts } from "../lib/supplierFacts";
 import { money } from "../lib/money";
+import { showDateTime } from "../lib/calendarDate";
 
 // ---- Track 3: the ledger (M-01 d14, d15, d18) ----
 //
@@ -171,7 +172,7 @@ export function SupplierLedger({
                 >
                   <span className="t">{r.invoiceNumber || "(unnumbered)"}</span>
                   <span className="m">
-                    {r.at} · {r.lines} {r.lines === 1 ? "line" : "lines"} · {r.copies}{" "}
+                    {showDateTime(r.at)} · {r.lines} {r.lines === 1 ? "line" : "lines"} · {r.copies}{" "}
                     {r.copies === 1 ? "copy" : "copies"}
                   </span>
                   <span className="v">{money(r.cogs)}</span>

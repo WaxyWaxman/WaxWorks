@@ -3,6 +3,7 @@ import { useApp } from "../store/AppStore";
 import { Modal } from "./Modal";
 import { ManagerAuthorize } from "./ManagerAuthorize";
 import type { ReviewFlagKind } from "../data/types";
+import { showDateTime } from "../lib/calendarDate";
 
 const KIND_LABEL: Record<ReviewFlagKind, string> = {
   "below-cost": "Below cost",
@@ -43,7 +44,7 @@ export function ReviewQueueBadge() {
                   <div className="btn-row" style={{ justifyContent: "space-between" }}>
                     <span>
                       <span className="badge">{KIND_LABEL[f.kind]}</span>{" "}
-                      <span className="small muted">{f.at}</span>
+                      <span className="small muted">{showDateTime(f.at)}</span>
                     </span>
                     {f.acknowledged ? (
                       <span className="badge ok">

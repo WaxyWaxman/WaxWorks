@@ -21,6 +21,7 @@ import { useApp } from "../store/AppStore";
 import { accountType } from "../lib/chart";
 import { useNavigate } from "react-router-dom";
 import { ManagerAuthorize } from "../components/ManagerAuthorize";
+import { showDate } from "../lib/calendarDate";
 
 // Accounts payable (M-05), laid out as the till's three tracks — the same
 // frame as Sell, Find, Receive, Customers, Suppliers and On Order (E-05 d29
@@ -637,14 +638,14 @@ function LedgerTable({
                 )}
               </td>
               <td>
-                <span className="num">{r.termsFrom}</span>
+                <span className="num">{showDate(r.termsFrom)}</span>
               </td>
               <td>
                 {r.terms ? (
                   r.dueDate ? (
                     <>
                       <span className={"due" + (over ? " over" : r.overdueBy != null && r.overdueBy > -7 ? " soon" : "")}>
-                        {r.dueDate}
+                        {showDate(r.dueDate)}
                       </span>
                       <span className="terms">
                         {r.terms} ·{" "}
@@ -685,7 +686,7 @@ function LedgerTable({
                 <span className="st">{r.status}</span>
                 {batches.map((b) => (
                   <span className="paid-by" key={b.id}>
-                    {b.date} · {b.method} <span className="mono">{b.reference}</span>
+                    {showDate(b.date)} · {b.method} <span className="mono">{b.reference}</span>
                   </span>
                 ))}
                 {r.canOpenInReceiving && (

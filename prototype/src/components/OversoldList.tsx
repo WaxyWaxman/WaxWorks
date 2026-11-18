@@ -1,6 +1,7 @@
 import type { InventoryItem } from "../data/types";
 import { money } from "../lib/money";
 import { useApp } from "../store/AppStore";
+import { showDateTime } from "../lib/calendarDate";
 
 /**
  * The copies sold before they were received — E-02 d21's negative inventory,
@@ -34,7 +35,7 @@ export function OversoldList({ copies }: { copies: InventoryItem[] }) {
               {/* A Sale with no number is still being rung up — it has not
                   been tendered, so there is nothing to cite yet. */}
               <td className="small">{sale?.saleNumber ? `Sale #${sale.saleNumber}` : "Sale in progress"}</td>
-              <td className="small muted">{i.oversoldAt}</td>
+              <td className="small muted">{showDateTime(i.oversoldAt)}</td>
               <td className="num small">{money(i.price)}</td>
             </tr>
           );
