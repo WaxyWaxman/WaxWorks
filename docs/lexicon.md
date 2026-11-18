@@ -273,7 +273,7 @@ example in [`reference/supplier-invoice-fab.md`](reference/supplier-invoice-fab.
 
 - **American spelling:** `catalog`, `finalize`, `behavior`, `normalize`. Not `catalogue`,
   `finalise`, `behaviour`.
-- **Dates** normalize to `DD/MM/YYYY` internally, regardless of the supplier's format.
+- **Dates** are ~~normalized to `DD/MM/YYYY` internally~~ *(retired by [E-02](flows/E-02-receive-inventory.md) d58, 2026-11-17)* **stored as a calendar day** — a `date` in the database, `YYYY-MM-DD` wherever carried as text — and **shown as `MM-DD-YYYY`** (`11-17-2026`) on every screen, receipt and printed page, regardless of the supplier's format. They are entered with a date picker. In documents, write the stored form, `2026-11-17`.
 - **Money** is written with a currency symbol and two decimals: `$27.99`. The reference
   invoice currency is **CAD**.
 - **Multiplication** in formulas is written with `x` (matching the existing docs), e.g.
